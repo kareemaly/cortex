@@ -273,3 +273,39 @@ make test
 - Don't add business logic yet - this is pure scaffolding
 - Keep .gitkeep files in empty directories so git tracks them
 - The cmd/*/main.go files are intentionally minimal
+
+## Implementation
+
+### Commits
+
+- `d32ec21` feat: add initial Go project scaffolding
+
+### Key Files Changed
+
+- `go.mod` - Module init (Go 1.24)
+- `pkg/version/version.go` - Version with ldflags support
+- `cmd/cortex/main.go` - CLI entry point
+- `cmd/cortexd/main.go` - Daemon entry point
+- `Makefile` - Build, lint, test, clean targets
+- `.golangci.yml` - Linter config (v2 format)
+- `lefthook.yml` - Pre-commit hooks
+- `.editorconfig` - Editor settings
+- `.gitignore` - Excludes bin/
+- `CLAUDE.md` - Developer reference
+- `internal/cli/{sdk,tui}/.gitkeep` - Placeholder directories
+- `internal/daemon/{api,mcp,config}/.gitkeep` - Placeholder directories
+
+### Decisions Made
+
+1. **Simplified version.go** - Used a simpler `String(name string)` function instead of the full `Info` struct. The struct can be added later when needed for JSON output.
+
+2. **Deferred dependencies** - Did not add the dependencies listed in requirements (cobra, chi, bubbletea, etc.) since they're not used yet. Will add when implementing actual functionality to avoid unused imports.
+
+3. **golangci-lint v2 format** - Used `formatters:` section for gofmt/goimports as required by v2, rather than listing them under `linters.enable`.
+
+4. **Added .gitignore** - Not in original spec but necessary to exclude `bin/` from version control.
+
+### Scope Changes
+
+- Dependencies deferred until actually needed (cleaner go.mod)
+- Simplified version package (Info struct can be added later)
