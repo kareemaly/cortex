@@ -3,6 +3,7 @@ agent: claude
 
 git:
   repos_path: "."
+  worktrees: true
 
 paths:
   tickets: tickets
