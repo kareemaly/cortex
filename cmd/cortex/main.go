@@ -1,11 +1,7 @@
 package main
 
-import (
-	"fmt"
-
-	"github.com/kareemaly/cortex1/pkg/version"
-)
+import "github.com/kareemaly/cortex1/cmd/cortex/commands"
 
 func main() {
-	fmt.Println(version.String("cortex"))
+	commands.Execute()
 }
