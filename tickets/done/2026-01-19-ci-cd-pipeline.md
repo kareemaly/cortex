@@ -216,3 +216,28 @@ grep "dist/" .gitignore
 - GoReleaser builds for darwin/linux on amd64/arm64
 - CGO_ENABLED=0 ensures static binaries
 - Changelog excludes docs/test/chore commits
+
+## Implementation
+
+### Commits Pushed
+
+- `ded018b` feat: add GitHub Actions CI/CD and GoReleaser configuration
+
+### Key Files Changed
+
+- `.github/workflows/ci.yml` - CI workflow with build, test, and lint jobs
+- `.github/workflows/release.yml` - Release workflow triggered on v* tags
+- `.goreleaser.yaml` - GoReleaser v2 configuration for both binaries
+- `.gitignore` - Extended with build artifacts, test outputs, and vendor patterns
+
+### Decisions Made
+
+1. **GoReleaser v2 syntax**: Used `version: 2` format with modern configuration
+2. **Changelog filtering**: Added `ci:` and `style:` to exclusion filters beyond the spec
+3. **LDFlags variable names**: Used `Commit` and `Date` (matching pkg/version) instead of `ShortCommit` and `BuildDate` from the ticket spec
+4. **Removed explicit release config**: Omitted the `release.github` block as GoReleaser auto-detects from git remote
+5. **Removed checksum algorithm**: Let GoReleaser use its default (sha256)
+
+### Scope Changes
+
+None - implemented as specified
