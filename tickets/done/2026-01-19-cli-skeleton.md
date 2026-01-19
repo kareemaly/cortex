@@ -365,3 +365,24 @@ make lint
 - SDK client only has Health() for now - more methods added as needed
 - No TUI yet - that's a separate ticket
 - Global flags (like --config) can be added to root.go later
+
+## Implementation
+
+### Commits
+- `803038b` feat: add CLI skeleton with Cobra commands and SDK client
+
+### Key Files Changed
+- `cmd/cortex/main.go` - Updated to use Cobra commands
+- `cmd/cortex/commands/*.go` - New command files (root, version, kanban, architect, spawn, list, session, install)
+- `pkg/version/version.go` - Added `Info` struct and `Get()` function for structured version info
+- `internal/cli/sdk/client.go` - HTTP client with `Health()` method for daemon communication
+- `go.mod` / `go.sum` - Added spf13/cobra dependency
+
+### Decisions
+- Simplified SDK client to return `error` from `Health()` instead of `*HealthResponse` (simpler API, response parsing can be added when needed)
+- Used `defer func() { _ = resp.Body.Close() }()` pattern to satisfy errcheck linter
+- Stub messages use format "not implemented yet" without command prefix (cleaner output)
+- Root command shows help by default via Cobra's built-in behavior (no explicit Run function needed)
+
+### Scope Changes
+- None - implemented as specified
