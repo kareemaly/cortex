@@ -1,0 +1,12 @@
+name: cortex1
+agent: claude
+
+git:
+  repos_path: "."
+
+paths:
+  tickets: tickets
+  workbench: workbench
+
+approve:
+  push: true
