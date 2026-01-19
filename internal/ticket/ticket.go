@@ -1,0 +1,83 @@
+package ticket
+
+import "time"
+
+// Status represents a ticket's workflow status.
+type Status string
+
+const (
+	StatusBacklog  Status = "backlog"
+	StatusProgress Status = "progress"
+	StatusDone     Status = "done"
+)
+
+// AgentStatus represents an agent's current activity status.
+type AgentStatus string
+
+const (
+	AgentStatusStarting          AgentStatus = "starting"
+	AgentStatusInProgress        AgentStatus = "in_progress"
+	AgentStatusIdle              AgentStatus = "idle"
+	AgentStatusWaitingPermission AgentStatus = "waiting_permission"
+	AgentStatusError             AgentStatus = "error"
+)
+
+// Ticket represents a work item with sessions and metadata.
+type Ticket struct {
+	ID       string    `json:"id"`
+	Title    string    `json:"title"`
+	Body     string    `json:"body"`
+	Dates    Dates     `json:"dates"`
+	Sessions []Session `json:"sessions"`
+}
+
+// Dates holds the timestamp metadata for a ticket.
+type Dates struct {
+	Created  time.Time  `json:"created"`
+	Updated  time.Time  `json:"updated"`
+	Approved *time.Time `json:"approved"`
+}
+
+// Session represents a work session on a ticket.
+type Session struct {
+	ID            string            `json:"id"`
+	StartedAt     time.Time         `json:"started_at"`
+	EndedAt       *time.Time        `json:"ended_at"`
+	Agent         string            `json:"agent"`
+	TmuxWindow    string            `json:"tmux_window"`
+	GitBase       map[string]string `json:"git_base"`
+	Report        Report            `json:"report"`
+	CurrentStatus *StatusEntry      `json:"current_status"`
+	StatusHistory []StatusEntry     `json:"status_history"`
+}
+
+// Report captures the outcome and changes made during a session.
+type Report struct {
+	Files        []string `json:"files"`
+	ScopeChanges *string  `json:"scope_changes"`
+	Decisions    []string `json:"decisions"`
+	Summary      string   `json:"summary"`
+}
+
+// StatusEntry represents a point-in-time status of an agent.
+type StatusEntry struct {
+	Status AgentStatus `json:"status"`
+	Tool   *string     `json:"tool"`
+	Work   *string     `json:"work"`
+	At     time.Time   `json:"at"`
+}
+
+// IsActive returns true if the session has not ended.
+func (s *Session) IsActive() bool {
+	return s.EndedAt == nil
+}
+
+// HasActiveSessions returns true if the ticket has any active sessions.
+func (t *Ticket) HasActiveSessions() bool {
+	for _, s := range t.Sessions {
+		if s.IsActive() {
+			return true
+		}
+	}
+	return false
+}
