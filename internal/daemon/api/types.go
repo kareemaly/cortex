@@ -97,6 +97,12 @@ type ListTicketsResponse struct {
 	Tickets []TicketSummary `json:"tickets"`
 }
 
+// SpawnResponse is the response for the spawn endpoint.
+type SpawnResponse struct {
+	Session SessionResponse `json:"session"`
+	Ticket  TicketResponse  `json:"ticket"`
+}
+
 // toTicketResponse converts a ticket to its API response form.
 func toTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 	sessions := make([]SessionResponse, len(t.Sessions))
