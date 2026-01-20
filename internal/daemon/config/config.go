@@ -9,15 +9,19 @@ import (
 
 // Config holds the daemon configuration.
 type Config struct {
-	Port     int    `yaml:"port"`
-	LogLevel string `yaml:"log_level"`
+	Port               int    `yaml:"port"`
+	LogLevel           string `yaml:"log_level"`
+	StatusHistoryLimit int    `yaml:"status_history_limit"`
+	GitDiffTool        string `yaml:"git_diff_tool"`
 }
 
 // DefaultConfig returns a Config with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		Port:     4200,
-		LogLevel: "info",
+		Port:               4200,
+		LogLevel:           "info",
+		StatusHistoryLimit: 10,
+		GitDiffTool:        "diff",
 	}
 }
 
