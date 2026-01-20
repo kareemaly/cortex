@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"context"
+	"log"
 
+	"github.com/kareemaly/cortex1/internal/lifecycle"
 	"github.com/kareemaly/cortex1/internal/ticket"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -60,7 +62,7 @@ func (s *Server) handlePickupTicket(
 	input EmptyInput,
 ) (*mcp.CallToolResult, PickupTicketOutput, error) {
 	// Check if ticket exists
-	_, currentStatus, err := s.store.Get(s.session.TicketID)
+	t, currentStatus, err := s.store.Get(s.session.TicketID)
 	if err != nil {
 		return nil, PickupTicketOutput{}, WrapTicketError(err)
 	}
@@ -84,9 +86,26 @@ func (s *Server) handlePickupTicket(
 		return nil, PickupTicketOutput{}, WrapTicketError(err)
 	}
 
+	// Execute on_pickup hooks (failures are logged but don't fail the operation)
+	var hooksOutput *HooksExecutionOutput
+	hooks := s.getHooksForType(lifecycle.HookOnPickup)
+	if len(hooks) > 0 && s.config.ProjectPath != "" {
+		vars := buildTemplateVars(t)
+		result, err := s.lifecycle.Execute(ctx, s.config.ProjectPath, lifecycle.HookOnPickup, hooks, vars)
+		if err != nil {
+			log.Printf("on_pickup hooks execution error: %v", err)
+		} else {
+			hooksOutput = convertExecutionResult(result)
+			if !result.Success {
+				log.Printf("on_pickup hooks failed (exit code non-zero)")
+			}
+		}
+	}
+
 	return nil, PickupTicketOutput{
 		Success: true,
 		Message: "Ticket moved to in_progress",
+		Hooks:   hooksOutput,
 	}, nil
 }
 
@@ -137,6 +156,22 @@ func (s *Server) handleSubmitReport(
 		return nil, SubmitReportOutput{}, WrapTicketError(err)
 	}
 
+	// Execute on_submit hooks (failures are logged but don't fail the operation)
+	var hooksOutput *HooksExecutionOutput
+	hooks := s.getHooksForType(lifecycle.HookOnSubmit)
+	if len(hooks) > 0 && s.config.ProjectPath != "" {
+		vars := buildTemplateVars(t)
+		result, err := s.lifecycle.Execute(ctx, s.config.ProjectPath, lifecycle.HookOnSubmit, hooks, vars)
+		if err != nil {
+			log.Printf("on_submit hooks execution error: %v", err)
+		} else {
+			hooksOutput = convertExecutionResult(result)
+			if !result.Success {
+				log.Printf("on_submit hooks failed (exit code non-zero)")
+			}
+		}
+	}
+
 	return nil, SubmitReportOutput{
 		Success: true,
 		Report: ReportOutput{
@@ -145,6 +180,7 @@ func (s *Server) handleSubmitReport(
 			Decisions:    report.Decisions,
 			Summary:      report.Summary,
 		},
+		Hooks: hooksOutput,
 	}, nil
 }
 
@@ -155,7 +191,7 @@ func (s *Server) handleApprove(
 	input ApproveInput,
 ) (*mcp.CallToolResult, ApproveOutput, error) {
 	// Get the ticket to find the active session
-	t, _, err := s.store.Get(s.session.TicketID)
+	t, currentStatus, err := s.store.Get(s.session.TicketID)
 	if err != nil {
 		return nil, ApproveOutput{}, WrapTicketError(err)
 	}
@@ -190,6 +226,34 @@ func (s *Server) handleApprove(
 		}
 	}
 
+	// Execute on_approve hooks - MUST succeed before moving to done
+	var hooksOutput *HooksExecutionOutput
+	hooks := s.getHooksForType(lifecycle.HookOnApprove)
+	if len(hooks) > 0 && s.config.ProjectPath != "" {
+		vars := buildTemplateVars(t).WithCommitMessage(input.CommitMessage)
+		result, err := s.lifecycle.Execute(ctx, s.config.ProjectPath, lifecycle.HookOnApprove, hooks, vars)
+		if err != nil {
+			log.Printf("on_approve hooks execution error: %v", err)
+			return nil, ApproveOutput{
+				Success:  false,
+				TicketID: s.session.TicketID,
+				Status:   string(currentStatus),
+				Message:  "on_approve hooks failed to execute: " + err.Error(),
+			}, nil
+		}
+		hooksOutput = convertExecutionResult(result)
+		if !result.Success {
+			// Hooks failed - keep ticket in progress
+			return nil, ApproveOutput{
+				Success:  false,
+				TicketID: s.session.TicketID,
+				Status:   string(currentStatus),
+				Message:  "on_approve hooks failed (non-zero exit code)",
+				Hooks:    hooksOutput,
+			}, nil
+		}
+	}
+
 	// End the session
 	err = s.store.EndSession(s.session.TicketID, activeSessionID)
 	if err != nil {
@@ -206,5 +270,6 @@ func (s *Server) handleApprove(
 		Success:  true,
 		TicketID: s.session.TicketID,
 		Status:   string(ticket.StatusDone),
+		Hooks:    hooksOutput,
 	}, nil
 }
