@@ -65,3 +65,25 @@ make lint    # No lint errors
 - Project config is per-project, global config is per-user
 - Handle missing config file gracefully (use defaults)
 - Consider caching loaded config
+
+## Implementation
+
+### Commits Pushed
+- `2c14940` feat: add project config package for loading .cortex/cortex.yaml
+- `6913e2d` Merge branch 'ticket/2026-01-19-project-config'
+
+### Key Files Changed
+- `internal/project/config/config.go` - Config structs (Config, GitConfig, RepoConfig, LifecycleConfig, HookConfig) and functions (DefaultConfig, FindProjectRoot, Load, LoadFromPath, Validate)
+- `internal/project/config/errors.go` - Error types (ProjectNotFoundError, ConfigParseError, ValidationError) with Is* helpers
+- `internal/project/config/config_test.go` - 12 test cases covering all functionality
+
+### Important Decisions
+- Package placed at `internal/project/config/` to separate from daemon config (`internal/daemon/config/`)
+- `FindProjectRoot` walks up directory tree using `os.Stat` to find `.cortex/` directory
+- Default config: agent=`claude`, repos=[`"."`], no lifecycle hooks
+- Missing config file returns defaults without error (graceful handling)
+- Agent type restricted to `claude` or `opencode`
+- Validation ensures non-empty repo paths and hook run commands
+
+### Scope Changes
+- None - implemented as specified in the plan

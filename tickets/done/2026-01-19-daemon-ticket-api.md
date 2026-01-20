@@ -55,3 +55,26 @@ curl -X POST http://localhost:4200/tickets -d '{"title":"Test","body":"Body"}'
 - Spawn endpoint is a stub - actual spawning is separate ticket
 - Project path detection needed (find .cortex/ directory)
 - Consider adding query params for filtering (e.g., ?status=backlog)
+
+## Implementation
+
+### Commits Pushed
+- `32ecdc3` feat: add REST API endpoints for ticket and session management
+- `67f366f` Merge branch 'ticket/2026-01-19-daemon-ticket-api'
+
+### Key Files Changed
+- `internal/daemon/api/types.go` - Request/response types (ErrorResponse, CreateTicketRequest, UpdateTicketRequest, MoveTicketRequest, TicketResponse, TicketSummary, ListAllTicketsResponse)
+- `internal/daemon/api/errors.go` - Helper functions (writeJSON, writeError, handleTicketError, validStatus)
+- `internal/daemon/api/tickets.go` - TicketHandlers struct with ListAll, ListByStatus, Create, Get, Update, Delete, Move, Spawn handlers
+- `internal/daemon/api/sessions.go` - SessionHandlers struct with Kill handler (stub)
+- `internal/daemon/api/server.go` - Added ticketStore parameter to NewServer, registered ticket and session routes
+- `cmd/cortexd/commands/serve.go` - Initialize ticket store from ~/.cortex/tickets and pass to NewServer
+
+### Important Decisions
+- Ticket store initialized at `~/.cortex/tickets` (user home directory)
+- Routes verify ticket exists in the specified status before operations
+- Spawn and Kill endpoints return 501 Not Implemented (stubs for future work)
+- Used chi router's nested routing for clean route organization
+
+### Scope Changes
+- None - implemented as specified in the plan

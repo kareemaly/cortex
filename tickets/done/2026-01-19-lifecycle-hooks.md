@@ -52,3 +52,24 @@ make lint    # No lint errors
 - MCP integration is a separate ticket
 - Commands run in project directory context
 - Handle missing commands gracefully
+
+## Implementation
+
+### Commits
+- `e7ec3a9` feat: add lifecycle hooks package for shell command execution at ticket lifecycle points
+
+### Key Files Changed
+- `internal/lifecycle/errors.go` - Error types (ExecutionError, TemplateError, InvalidVariableError) with Is* helpers
+- `internal/lifecycle/hooks.go` - Core types (Executor, HookDefinition, ExecutionResult, TemplateVars) and CommandRunner interface
+- `internal/lifecycle/template.go` - Template variable expansion using regex, validation for hook-specific variables
+- `internal/lifecycle/hooks_test.go` - 20 test functions with mock runner for comprehensive coverage
+
+### Key Decisions
+- Used `sh -c` for command execution to support shell features (pipes, redirects)
+- CommandRunner interface allows mock injection for testing without actual shell execution
+- Unknown template variables are left unchanged (graceful degradation) rather than erroring
+- Follows error pattern from `internal/git/errors.go` for consistency
+- Template validation ensures `{{commit_message}}` only used in `on_approve` hooks
+
+### Scope
+No changes from original ticket scope
