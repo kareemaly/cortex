@@ -36,3 +36,27 @@ make lint    # No lint errors
 - Moving to done should set `dates.approved`
 - Store should search all status folders when reading by ID
 - Include unit tests for ticket operations and store
+
+## Implementation
+
+### Commits
+
+- `f9ec5a5` feat: add ticket management package with JSON-based storage
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `internal/ticket/errors.go` | `NotFoundError`, `ValidationError` types and `IsNotFound()` helper |
+| `internal/ticket/slug.go` | `GenerateSlug()` - URL-friendly slugs (max 20 chars, word-boundary truncation) |
+| `internal/ticket/ticket.go` | Data structures: `Ticket`, `Session`, `Report`, `StatusEntry`, `Dates` |
+| `internal/ticket/store.go` | `Store` with CRUD + session management, file-based JSON storage |
+| `internal/ticket/*_test.go` | 24 tests covering all operations |
+
+### Decisions
+
+- Used `github.com/google/uuid` for ID generation
+- File naming: `{slug}-{shortID}.json` where shortID is first 8 chars of UUID
+- Status directories created on `NewStore()` initialization
+- `dates.approved` set automatically when moving ticket to done
+- Session status history appends on each update (full audit trail)
