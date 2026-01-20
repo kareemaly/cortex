@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/kareemaly/cortex1/internal/cli/sdk"
 	"github.com/kareemaly/cortex1/pkg/version"
 	"github.com/spf13/cobra"
 )
@@ -17,6 +18,17 @@ var versionCmd = &cobra.Command{
 		fmt.Printf("  Built:      %s\n", info.BuildDate)
 		fmt.Printf("  Go version: %s\n", info.GoVersion)
 		fmt.Printf("  Platform:   %s\n", info.Platform)
+
+		// Try to get daemon version
+		client := sdk.DefaultClient()
+		health, err := client.HealthWithVersion()
+		if err != nil {
+			fmt.Println()
+			fmt.Println("daemon: not running")
+		} else {
+			fmt.Println()
+			fmt.Printf("daemon: %s (status: %s)\n", health.Version, health.Status)
+		}
 	},
 }
 
