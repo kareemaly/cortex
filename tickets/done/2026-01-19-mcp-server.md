@@ -57,3 +57,41 @@ make lint    # No lint errors
 - Ticket session tools use CORTEX_TICKET_ID env var
 - Stub tmux/lifecycle hooks for now - those are separate tickets
 - Focus on tool registration and ticket store integration
+
+## Implementation
+
+### Commits
+
+- `037fb93` feat: add MCP server for AI agent integration with ticket management tools
+
+### Key Files Changed
+
+**New files in `internal/daemon/mcp/`:**
+- `types.go` - Input/output structs with jsonschema tags for schema generation
+- `errors.go` - ToolError type with error codes (NOT_FOUND, VALIDATION_ERROR, UNAUTHORIZED, INTERNAL_ERROR)
+- `server.go` - MCP server setup, session management, tool registration
+- `tools_architect.go` - 9 architect tools (listTickets, searchTickets, readTicket, createTicket, updateTicket, deleteTicket, moveTicket, spawnSession, getSessionStatus)
+- `tools_ticket.go` - 4 ticket tools (readTicket, pickupTicket, submitReport, approve)
+- `server_test.go` - Server initialization tests
+- `tools_test.go` - Comprehensive tool handler tests (26 tests)
+
+**New files in `cmd/cortexd/commands/`:**
+- `root.go` - Root Cobra command for cortexd
+- `serve.go` - HTTP server subcommand (default behavior)
+- `mcp.go` - MCP server subcommand with `--ticket-id` flag
+
+**Modified:**
+- `cmd/cortexd/main.go` - Simplified to call `commands.Execute()`
+- `go.mod` / `go.sum` - Added `github.com/modelcontextprotocol/go-sdk` v1.2.0
+
+### Decisions
+
+1. **Tool registration at startup**: Tools are registered based on session type at server creation, not filtered at runtime
+2. **Struct tags for schemas**: Using `json:"field"` and `jsonschema:"description"` tags for automatic JSON schema generation per MCP SDK conventions
+3. **spawnSession stub**: Returns "not implemented" message since tmux integration is a separate ticket
+4. **Cobra subcommands**: Refactored cortexd to use Cobra pattern matching `cmd/cortex/commands/` structure
+5. **Default behavior**: Running `cortexd` without subcommand defaults to `serve` (HTTP server) for backward compatibility
+
+### Scope
+
+No scope changes - implemented all requirements as specified.

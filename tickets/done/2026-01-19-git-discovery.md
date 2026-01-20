@@ -48,3 +48,32 @@ make lint    # No lint errors
 - Handle cases where git isn't installed gracefully
 - Parse git output carefully (porcelain formats where available)
 - Tests can use temporary git repos created in test setup
+
+## Implementation
+
+### Commits
+
+- `4dde860` feat: add git discovery package for repository detection and status
+- `069c29e` Merge branch 'ticket/2026-01-19-git-discovery'
+
+### Key Files
+
+| File | Description |
+|------|-------------|
+| `internal/git/errors.go` | Custom error types with helper functions |
+| `internal/git/git.go` | Core `Repo` type, discovery functions, git command helpers |
+| `internal/git/status.go` | State queries (branch, commit, clean status) |
+| `internal/git/diff.go` | Diff stats and changed file operations |
+| `internal/git/git_test.go` | Unit tests for all public functions |
+| `internal/git/testutil_test.go` | Test helpers for creating temp git repos |
+
+### Decisions
+
+- Used `exec.Command` to shell out to git rather than a Go git library for simplicity and reliability
+- Added `DiscoverRepos` with deduplication to support projects with multiple repos
+- Created typed errors (`GitNotInstalledError`, `NotARepoError`, `CommitNotFoundError`) with helper functions (`IsNotARepo()`, etc.) following existing codebase patterns
+- Tests use temporary git repos with full commit history for realistic testing
+
+### Scope
+
+Implemented as specified. No scope changes from original ticket.
