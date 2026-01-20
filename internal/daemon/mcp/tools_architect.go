@@ -2,10 +2,16 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/kareemaly/cortex1/internal/git"
 	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex1/internal/tmux"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -279,14 +285,143 @@ func (s *Server) handleMoveTicket(
 	}, nil
 }
 
-// handleSpawnSession is a stub that returns "not implemented".
+// mcpServerConfig represents the MCP server configuration for claude.
+type mcpServerConfig struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env,omitempty"`
+}
+
+// claudeMCPConfig represents the claude MCP configuration file format.
+type claudeMCPConfig struct {
+	MCPServers map[string]mcpServerConfig `json:"mcpServers"`
+}
+
+// handleSpawnSession spawns a new agent session for a ticket.
 func (s *Server) handleSpawnSession(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input SpawnSessionInput,
 ) (*mcp.CallToolResult, SpawnSessionOutput, error) {
+	if input.TicketID == "" {
+		return nil, SpawnSessionOutput{}, NewValidationError("ticket_id", "cannot be empty")
+	}
+
+	// Default agent to claude
+	agent := input.Agent
+	if agent == "" {
+		agent = "claude"
+	}
+
+	// Validate ticket exists
+	t, currentStatus, err := s.store.Get(input.TicketID)
+	if err != nil {
+		return nil, SpawnSessionOutput{}, WrapTicketError(err)
+	}
+
+	// Check if ticket already has active sessions
+	if t.HasActiveSessions() {
+		return nil, SpawnSessionOutput{
+			Success:  false,
+			TicketID: input.TicketID,
+			Message:  "ticket already has an active session",
+		}, nil
+	}
+
+	// Create tmux manager
+	tmuxMgr, err := tmux.NewManager()
+	if err != nil {
+		return nil, SpawnSessionOutput{
+			Success: false,
+			Message: "tmux is not available: " + err.Error(),
+		}, nil
+	}
+
+	// Generate window name from ticket slug
+	windowName := ticket.GenerateSlug(t.Title)
+
+	// Build git base map from configured repos
+	gitBase := make(map[string]string)
+	if s.projectConfig != nil && s.config.ProjectPath != "" {
+		for _, repo := range s.projectConfig.Git.Repos {
+			repoPath := repo.Path
+			if !filepath.IsAbs(repoPath) {
+				repoPath = filepath.Join(s.config.ProjectPath, repoPath)
+			}
+			sha, err := git.GetCommitSHA(repoPath, false)
+			if err == nil {
+				gitBase[repoPath] = sha
+			}
+		}
+	}
+
+	// Add session to ticket store
+	session, err := s.store.AddSession(input.TicketID, agent, windowName, gitBase)
+	if err != nil {
+		return nil, SpawnSessionOutput{}, WrapTicketError(err)
+	}
+
+	// Generate MCP config file
+	mcpConfigPath := filepath.Join(os.TempDir(), fmt.Sprintf("cortex-mcp-%s.json", input.TicketID))
+	mcpConfig := claudeMCPConfig{
+		MCPServers: map[string]mcpServerConfig{
+			"cortex": {
+				Command: "cortexd",
+				Args:    []string{"mcp", "--ticket", input.TicketID},
+				Env:     make(map[string]string),
+			},
+		},
+	}
+
+	// Add environment variables
+	if s.config.TicketsDir != "" {
+		mcpConfig.MCPServers["cortex"].Env["CORTEX_TICKETS_DIR"] = s.config.TicketsDir
+	}
+	if s.config.ProjectPath != "" {
+		mcpConfig.MCPServers["cortex"].Env["CORTEX_PROJECT_PATH"] = s.config.ProjectPath
+	}
+
+	mcpConfigData, err := json.MarshalIndent(mcpConfig, "", "  ")
+	if err != nil {
+		// Cleanup session on failure
+		_ = s.store.EndSession(input.TicketID, session.ID)
+		return nil, SpawnSessionOutput{}, NewInternalError("failed to marshal MCP config: " + err.Error())
+	}
+
+	if err := os.WriteFile(mcpConfigPath, mcpConfigData, 0644); err != nil {
+		// Cleanup session on failure
+		_ = s.store.EndSession(input.TicketID, session.ID)
+		return nil, SpawnSessionOutput{}, NewInternalError("failed to write MCP config: " + err.Error())
+	}
+
+	// Build claude command with ticket prompt (like cortex0: uses permission-mode plan for tickets)
+	// The agent can use the cortex MCP tools (readTicket, submitReport, approve) to interact
+	prompt := fmt.Sprintf("You are working on ticket: %s\n\n%s\n\nUse the cortex MCP tools to track your progress. When complete, use the approve tool.", t.Title, t.Body)
+	claudeCmd := fmt.Sprintf("claude --mcp-config %s --permission-mode plan %q", mcpConfigPath, prompt)
+
+	// Spawn agent in tmux
+	_, err = tmuxMgr.SpawnAgent(s.config.TmuxSession, windowName, claudeCmd)
+	if err != nil {
+		// Cleanup session and config on failure
+		_ = s.store.EndSession(input.TicketID, session.ID)
+		_ = os.Remove(mcpConfigPath)
+		return nil, SpawnSessionOutput{
+			Success: false,
+			Message: "failed to spawn agent in tmux: " + err.Error(),
+		}, nil
+	}
+
+	// Auto-move ticket to progress if in backlog
+	if currentStatus == ticket.StatusBacklog {
+		_ = s.store.Move(input.TicketID, ticket.StatusProgress)
+	}
+
 	return nil, SpawnSessionOutput{
-		Message: "spawnSession is not implemented yet. Tmux integration is tracked in a separate ticket.",
+		Success:    true,
+		TicketID:   input.TicketID,
+		SessionID:  session.ID,
+		TmuxWindow: windowName,
+		Message:    fmt.Sprintf("Agent session spawned in tmux window '%s'", windowName),
 	}, nil
 }
 

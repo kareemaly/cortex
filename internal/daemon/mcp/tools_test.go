@@ -257,16 +257,81 @@ func TestHandleSpawnSession(t *testing.T) {
 	server, cleanup := setupTestServer(t, "")
 	defer cleanup()
 
+	// Create a ticket first
+	created, err := server.Store().Create("Test Spawn Session", "Test body")
+	if err != nil {
+		t.Fatalf("failed to create ticket: %v", err)
+	}
+
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
-		TicketID: "test-ticket",
+		TicketID: created.ID,
 	})
 	if err != nil {
 		t.Fatalf("handleSpawnSession failed: %v", err)
 	}
 
-	// Should return "not implemented" message
+	// Output should have a message (either success or tmux not available)
 	if output.Message == "" {
 		t.Error("expected message")
+	}
+
+	// Should return the ticket ID
+	if output.TicketID != created.ID {
+		t.Errorf("expected ticket_id %s, got %s", created.ID, output.TicketID)
+	}
+}
+
+func TestHandleSpawnSessionEmptyTicketID(t *testing.T) {
+	server, cleanup := setupTestServer(t, "")
+	defer cleanup()
+
+	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: "",
+	})
+	if err == nil {
+		t.Error("expected error for empty ticket_id")
+	}
+}
+
+func TestHandleSpawnSessionTicketNotFound(t *testing.T) {
+	server, cleanup := setupTestServer(t, "")
+	defer cleanup()
+
+	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: "nonexistent-ticket",
+	})
+	if err == nil {
+		t.Error("expected error for nonexistent ticket")
+	}
+}
+
+func TestHandleSpawnSessionActiveSession(t *testing.T) {
+	server, cleanup := setupTestServer(t, "")
+	defer cleanup()
+
+	// Create a ticket with an active session
+	created, err := server.Store().Create("Test Active Session", "Test body")
+	if err != nil {
+		t.Fatalf("failed to create ticket: %v", err)
+	}
+	_, err = server.Store().AddSession(created.ID, "claude", "window", nil)
+	if err != nil {
+		t.Fatalf("failed to add session: %v", err)
+	}
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+	})
+	if err != nil {
+		t.Fatalf("handleSpawnSession failed: %v", err)
+	}
+
+	// Should fail because ticket already has active session
+	if output.Success {
+		t.Error("expected failure for ticket with active session")
+	}
+	if output.Message == "" {
+		t.Error("expected error message")
 	}
 }
 

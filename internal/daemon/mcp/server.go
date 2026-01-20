@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kareemaly/cortex1/internal/lifecycle"
+	"github.com/kareemaly/cortex1/internal/project/config"
 	"github.com/kareemaly/cortex1/internal/ticket"
 	"github.com/kareemaly/cortex1/pkg/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -19,14 +21,24 @@ type Config struct {
 	// TicketsDir is the directory where tickets are stored.
 	// Defaults to ~/.cortex/tickets if empty.
 	TicketsDir string
+
+	// ProjectPath is the project root for hook execution.
+	// If set, project config is loaded from this path.
+	ProjectPath string
+
+	// TmuxSession is the tmux session name for spawning agents.
+	// Defaults to "cortex" if empty.
+	TmuxSession string
 }
 
 // Server is the MCP server for ticket management.
 type Server struct {
-	mcpServer *mcp.Server
-	store     *ticket.Store
-	session   *Session
-	config    *Config
+	mcpServer     *mcp.Server
+	store         *ticket.Store
+	session       *Session
+	config        *Config
+	projectConfig *config.Config
+	lifecycle     *lifecycle.Executor
 }
 
 // NewServer creates a new MCP server with the given configuration.
@@ -43,6 +55,11 @@ func NewServer(cfg *Config) (*Server, error) {
 			return nil, err
 		}
 		ticketsDir = filepath.Join(homeDir, ".cortex", "tickets")
+	}
+
+	// Set default tmux session name
+	if cfg.TmuxSession == "" {
+		cfg.TmuxSession = "cortex"
 	}
 
 	// Create ticket store
@@ -64,6 +81,19 @@ func NewServer(cfg *Config) (*Server, error) {
 		}
 	}
 
+	// Load project config if ProjectPath is set
+	var projectCfg *config.Config
+	if cfg.ProjectPath != "" {
+		var err error
+		projectCfg, err = config.Load(cfg.ProjectPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Create lifecycle executor
+	lifecycleExec := lifecycle.NewExecutor()
+
 	// Create MCP server
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "cortex-mcp",
@@ -71,10 +101,12 @@ func NewServer(cfg *Config) (*Server, error) {
 	}, nil)
 
 	s := &Server{
-		mcpServer: mcpServer,
-		store:     store,
-		session:   session,
-		config:    cfg,
+		mcpServer:     mcpServer,
+		store:         store,
+		session:       session,
+		config:        cfg,
+		projectConfig: projectCfg,
+		lifecycle:     lifecycleExec,
 	}
 
 	// Register tools based on session type
