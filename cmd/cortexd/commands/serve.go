@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/kareemaly/cortex1/internal/daemon/api"
 	"github.com/kareemaly/cortex1/internal/daemon/config"
 	"github.com/kareemaly/cortex1/internal/daemon/logging"
+	"github.com/kareemaly/cortex1/internal/ticket"
 	"github.com/kareemaly/cortex1/pkg/version"
 	"github.com/spf13/cobra"
 )
@@ -56,7 +58,18 @@ func runServe(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
+	// Initialize ticket store
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+	ticketsDir := filepath.Join(homeDir, ".cortex", "tickets")
+	ticketStore, err := ticket.NewStore(ticketsDir)
+	if err != nil {
+		return fmt.Errorf("failed to create ticket store: %w", err)
+	}
+
 	// Create and run server
-	server := api.NewServer(cfg.Port, logger)
+	server := api.NewServer(cfg.Port, logger, ticketStore)
 	return server.Run(ctx)
 }
