@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/kareemaly/cortex1/internal/ticket"
 )
 
 // Server represents the HTTP server for the daemon.
@@ -18,7 +19,7 @@ type Server struct {
 }
 
 // NewServer creates a new Server with the given configuration.
-func NewServer(port int, logger *slog.Logger) *Server {
+func NewServer(port int, logger *slog.Logger, ticketStore *ticket.Store) *Server {
 	r := chi.NewRouter()
 
 	// Middleware stack
@@ -29,6 +30,25 @@ func NewServer(port int, logger *slog.Logger) *Server {
 
 	// Routes
 	r.Get("/health", HealthHandler())
+
+	// Ticket routes
+	ticketHandlers := NewTicketHandlers(ticketStore)
+	r.Route("/tickets", func(r chi.Router) {
+		r.Get("/", ticketHandlers.ListAll)
+		r.Post("/", ticketHandlers.Create)
+		r.Get("/{status}", ticketHandlers.ListByStatus)
+		r.Get("/{status}/{id}", ticketHandlers.Get)
+		r.Put("/{status}/{id}", ticketHandlers.Update)
+		r.Delete("/{status}/{id}", ticketHandlers.Delete)
+		r.Post("/{status}/{id}/move", ticketHandlers.Move)
+		r.Post("/{status}/{id}/spawn", ticketHandlers.Spawn)
+	})
+
+	// Session routes
+	sessionHandlers := NewSessionHandlers()
+	r.Route("/sessions", func(r chi.Router) {
+		r.Delete("/{id}", sessionHandlers.Kill)
+	})
 
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", port),
