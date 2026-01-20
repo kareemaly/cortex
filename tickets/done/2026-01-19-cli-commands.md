@@ -62,3 +62,26 @@ cortex session <session-id>
 - Consider adding --json flag for machine-readable output
 - Keep output concise for terminal use
 - architect, kanban, install commands remain stubs (separate tickets)
+
+## Implementation
+
+### Commits
+- `4f6bc2f` feat: implement CLI commands with daemon API integration
+
+### Key Files Changed
+- `internal/cli/sdk/client.go` - Added response types and client methods for all daemon API operations
+- `cmd/cortex/commands/list.go` - List tickets grouped by status with `--status` and `--json` flags
+- `cmd/cortex/commands/session.go` - Display session details with `--json` flag
+- `cmd/cortex/commands/spawn.go` - Spawn session for ticket with `--json` flag
+- `cmd/cortex/commands/version.go` - Show daemon version alongside CLI version
+
+### Decisions
+- Added `--json` flag to list, session, and spawn commands for machine-readable output
+- SDK client supports short ID prefix matching (e.g., `abc123` matches `abc123-full-uuid`)
+- `FindTicketByID` and `FindSession` search across all statuses to locate items by ID
+- Version command gracefully shows "daemon: not running" when daemon unavailable
+- Spawn command will return "not implemented" error until daemon handler is completed
+
+### Scope
+- All requirements implemented as specified
+- No scope changes from original ticket

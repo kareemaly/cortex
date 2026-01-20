@@ -64,3 +64,31 @@ curl -X POST http://localhost:4200/tickets/backlog/{id}/spawn
 - Session kill should be idempotent
 - Project path could be passed via flag or env var
 - Consider adding project path to config response
+
+## Implementation
+
+### Commits
+
+- `889a065` feat: wire project config and tmux into daemon API spawn/kill endpoints
+
+### Key Files Changed
+
+- `internal/daemon/api/deps.go` (new) - Dependencies struct centralizing handler dependencies
+- `cmd/cortexd/commands/serve.go` - Load project config, tmux manager, and lifecycle executor at startup
+- `internal/daemon/api/server.go` - Accept Dependencies instead of individual stores
+- `internal/daemon/api/tickets.go` - Implement Spawn handler with full workflow
+- `internal/daemon/api/sessions.go` - Implement Kill handler with session lookup
+- `internal/daemon/api/types.go` - Add SpawnResponse type
+
+### Key Decisions
+
+1. **Dependencies Struct**: Created centralized Dependencies struct to avoid passing many parameters to handlers
+2. **Graceful Degradation**: TmuxManager is nil if tmux not installed; Spawn returns 503 in this case
+3. **Project Config Fallback**: If no `.cortex` directory found, uses DefaultConfig with warning log
+4. **MCP Config**: Written to temp file with format `cortex-mcp-*.json`
+5. **Session Naming**: Tmux session uses project name (default: "cortex"), window uses slugified ticket title
+6. **Kill Idempotency**: Kill succeeds even if tmux window already closed; logs warning but doesn't fail
+
+### Scope Changes
+
+- Deferred lifecycle hook execution (on_pickup) to future work - the executor is initialized but hooks not wired into spawn flow yet
