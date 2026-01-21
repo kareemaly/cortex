@@ -17,8 +17,8 @@ type Server struct {
 	logger     *slog.Logger
 }
 
-// NewServer creates a new Server with the given configuration.
-func NewServer(port int, logger *slog.Logger, deps *Dependencies) *Server {
+// NewRouter creates a chi router with all API routes configured.
+func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 	r := chi.NewRouter()
 
 	// Middleware stack
@@ -48,6 +48,13 @@ func NewServer(port int, logger *slog.Logger, deps *Dependencies) *Server {
 	r.Route("/sessions", func(r chi.Router) {
 		r.Delete("/{id}", sessionHandlers.Kill)
 	})
+
+	return r
+}
+
+// NewServer creates a new Server with the given configuration.
+func NewServer(port int, logger *slog.Logger, deps *Dependencies) *Server {
+	r := NewRouter(deps, logger)
 
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", port),
