@@ -393,7 +393,7 @@ func (s *Server) handleSpawnSession(
 		MCPServers: map[string]mcpServerConfig{
 			"cortex": {
 				Command: cortexdPath,
-				Args:    []string{"mcp", "--ticket", input.TicketID},
+				Args:    []string{"mcp", "--ticket-id", input.TicketID},
 				Env:     make(map[string]string),
 			},
 		},

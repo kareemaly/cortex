@@ -58,3 +58,32 @@ cortex install --project  # Should create project setup
 - Use sensible defaults that work out of box
 - Consider --force flag to overwrite existing configs
 - Print clear messages about what was created
+
+## Implementation
+
+### Commits Pushed
+
+- `e185266` feat: implement cortex install command
+
+### Key Files Changed
+
+**New files:**
+- `internal/install/result.go` - Result types (`ItemStatus`, `SetupItem`, `DependencyResult`, `Result`)
+- `internal/install/deps.go` - Dependency checking via `exec.LookPath` for tmux, claude, git
+- `internal/install/detect.go` - Project name detection from git remote origin or directory name
+- `internal/install/install.go` - Core installation logic with `Run()`, `setupGlobal()`, `setupProject()`
+
+**Modified files:**
+- `cmd/cortex/commands/install.go` - Wired up command with `--project` and `--force` flags
+- `internal/daemon/config/config.go` - Added `StatusHistoryLimit` and `GitDiffTool` fields per DESIGN.md
+
+### Important Decisions
+
+1. **Separate package** - Core logic in `internal/install/` for testability and reusability
+2. **No prompts** - Pure flag-based interface (`--project`, `--force`) for simplicity and scriptability
+3. **Git detection** - Extract repo name from `git remote get-url origin`, fallback to directory name
+4. **Idempotent** - Uses `os.Stat` to check existence before creation; directories show "already exists", configs only overwritten with `--force`
+
+### Scope Changes
+
+None - implemented as specified in the ticket

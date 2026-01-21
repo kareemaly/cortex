@@ -65,3 +65,31 @@ cortex kanban  # Should show board
 - Start simple - basic navigation and display first
 - Actions (spawn, view) can shell out or call SDK
 - Handle terminal resize gracefully
+
+## Implementation
+
+### Commits Pushed
+
+- `1a23858` feat: implement kanban TUI with Bubbletea
+
+### Key Files Changed
+
+- `cmd/cortex/commands/kanban.go` - Updated to launch TUI with alt-screen mode
+- `internal/cli/tui/kanban/styles.go` - Lipgloss styles (backlog=gray, progress=yellow, done=green)
+- `internal/cli/tui/kanban/column.go` - Column component with cursor navigation
+- `internal/cli/tui/kanban/keys.go` - Key bindings (vim-style h/j/k/l)
+- `internal/cli/tui/kanban/model.go` - Main Bubbletea model with async loading
+- `go.mod`, `go.sum` - Added bubbletea and lipgloss dependencies
+
+### Important Decisions
+
+- Used vim-style keybindings as primary (h/j/k/l) with arrow key support
+- Active sessions shown with bullet indicator (●) next to ticket title
+- Architect mode (`a` key) returns placeholder error - to be implemented separately
+- Status messages auto-clear after 3 seconds
+- Columns have minimum width of 20 chars for readability
+
+### Scope Changes
+
+- Ticket details view (`Enter` key) not implemented - marked for future enhancement
+- Agent status display in Progress column deferred - shows active session indicator instead

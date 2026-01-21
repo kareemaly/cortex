@@ -60,3 +60,27 @@ cortex architect  # Should spawn or attach
 - Window 0 is reserved - don't use regular CreateWindow
 - Should work from any subdirectory of project
 - Consider adding --detach flag to spawn without attaching
+
+## Implementation
+
+### Commits Pushed
+
+- `019fcd6` feat: implement cortex architect command
+- `ac76a66` feat: add tickets for architect, kanban, and install commands
+
+### Key Files Changed
+
+- `cmd/cortex/commands/architect.go` - Main command implementation
+- `internal/tmux/command.go` - Added `SpawnArchitect()` helper for window 0
+
+### Important Decisions
+
+1. **git_base not needed for architect**: The ticket mentioned capturing git_base, but after analysis, this is only relevant for ticket sessions that write code. The architect manages tickets and spawns sessions—it doesn't write code directly. git_base is already captured when spawning ticket sessions in `tools_architect.go:343-359`.
+
+2. **--detach flag implemented**: Added support for `--detach` to spawn the architect without attaching to it immediately.
+
+3. **MCP config generation**: The architect gets an MCP config without `--ticket-id`, which enables the full architect toolset (ticket CRUD, session spawning) rather than the limited ticket-session toolset.
+
+### Scope Changes
+
+None - all original requirements were implemented as specified.
