@@ -6,7 +6,39 @@ import (
 	"testing"
 
 	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex1/internal/tmux"
 )
+
+// setupTestServerWithMockTmux creates a test server with a mock tmux manager.
+func setupTestServerWithMockTmux(t *testing.T, ticketID string) (*Server, func()) {
+	t.Helper()
+
+	tmpDir, err := os.MkdirTemp("", "mcp-server-test")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+
+	mockRunner := tmux.NewMockRunner()
+	tmuxMgr := tmux.NewManagerWithRunner(mockRunner)
+
+	cfg := &Config{
+		TicketID:    ticketID,
+		TicketsDir:  tmpDir,
+		TmuxManager: tmuxMgr,
+	}
+
+	server, err := NewServer(cfg)
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create server: %v", err)
+	}
+
+	cleanup := func() {
+		_ = os.RemoveAll(tmpDir)
+	}
+
+	return server, cleanup
+}
 
 // Architect tool tests
 
@@ -254,7 +286,7 @@ func TestHandleMoveTicketInvalidStatus(t *testing.T) {
 }
 
 func TestHandleSpawnSession(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
+	server, cleanup := setupTestServerWithMockTmux(t, "")
 	defer cleanup()
 
 	// Create a ticket first
@@ -270,14 +302,24 @@ func TestHandleSpawnSession(t *testing.T) {
 		t.Fatalf("handleSpawnSession failed: %v", err)
 	}
 
-	// Output should have a message (either success or tmux not available)
-	if output.Message == "" {
-		t.Error("expected message")
+	// With mock tmux, it should always succeed
+	if !output.Success {
+		t.Errorf("expected success, got message: %s", output.Message)
 	}
 
 	// Should return the ticket ID
 	if output.TicketID != created.ID {
 		t.Errorf("expected ticket_id %s, got %s", created.ID, output.TicketID)
+	}
+
+	// Should have a session ID
+	if output.SessionID == "" {
+		t.Error("expected session ID to be set")
+	}
+
+	// Should have a tmux window name
+	if output.TmuxWindow == "" {
+		t.Error("expected tmux window name")
 	}
 }
 

@@ -1,15 +1,40 @@
 package tmux
 
 import (
+	"os"
 	"os/exec"
 )
 
 // ArchitectWindowIndex is the reserved window index for the architect agent.
 const ArchitectWindowIndex = 0
 
+// TmuxRunner executes tmux commands.
+type TmuxRunner interface {
+	Run(args ...string) ([]byte, error)
+	RunInteractive(args ...string) error
+}
+
+// execRunner is the default implementation using exec.Command.
+type execRunner struct {
+	tmuxPath string
+}
+
+func (r *execRunner) Run(args ...string) ([]byte, error) {
+	cmd := exec.Command(r.tmuxPath, args...)
+	return cmd.CombinedOutput()
+}
+
+func (r *execRunner) RunInteractive(args ...string) error {
+	cmd := exec.Command(r.tmuxPath, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 // Manager handles tmux session and window operations.
 type Manager struct {
-	tmuxPath string
+	runner TmuxRunner
 }
 
 // NewManager creates a new tmux manager.
@@ -19,7 +44,12 @@ func NewManager() (*Manager, error) {
 	if err != nil {
 		return nil, &NotInstalledError{}
 	}
-	return &Manager{tmuxPath: path}, nil
+	return &Manager{runner: &execRunner{tmuxPath: path}}, nil
+}
+
+// NewManagerWithRunner creates a Manager with a custom runner (for testing).
+func NewManagerWithRunner(runner TmuxRunner) *Manager {
+	return &Manager{runner: runner}
 }
 
 // Available returns true if tmux is installed and available.
@@ -30,8 +60,7 @@ func Available() bool {
 
 // run executes a tmux command and returns output.
 func (m *Manager) run(args ...string) ([]byte, error) {
-	cmd := exec.Command(m.tmuxPath, args...)
-	return cmd.CombinedOutput()
+	return m.runner.Run(args...)
 }
 
 // runSilent executes a tmux command and discards output.

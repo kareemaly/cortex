@@ -8,6 +8,7 @@ import (
 	"github.com/kareemaly/cortex1/internal/lifecycle"
 	"github.com/kareemaly/cortex1/internal/project/config"
 	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex1/internal/tmux"
 	"github.com/kareemaly/cortex1/pkg/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -29,6 +30,11 @@ type Config struct {
 	// TmuxSession is the tmux session name for spawning agents.
 	// Defaults to "cortex" if empty.
 	TmuxSession string
+
+	// TmuxManager is an optional tmux manager for spawning agents.
+	// If nil, a new manager will be created when needed.
+	// This is primarily used for testing.
+	TmuxManager *tmux.Manager
 }
 
 // Server is the MCP server for ticket management.
@@ -39,6 +45,7 @@ type Server struct {
 	config        *Config
 	projectConfig *config.Config
 	lifecycle     *lifecycle.Executor
+	tmuxManager   *tmux.Manager
 }
 
 // NewServer creates a new MCP server with the given configuration.
@@ -107,6 +114,7 @@ func NewServer(cfg *Config) (*Server, error) {
 		config:        cfg,
 		projectConfig: projectCfg,
 		lifecycle:     lifecycleExec,
+		tmuxManager:   cfg.TmuxManager,
 	}
 
 	// Register tools based on session type
