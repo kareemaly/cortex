@@ -26,6 +26,7 @@ func setupTestServerWithMockTmux(t *testing.T, ticketID string) (*Server, func()
 		TicketsDir:  tmpDir,
 		TmuxSession: "test-session",
 		TmuxManager: tmuxMgr,
+		CortexdPath: "/mock/cortexd",
 	}
 
 	server, err := NewServer(cfg)

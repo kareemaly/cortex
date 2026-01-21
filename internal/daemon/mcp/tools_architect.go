@@ -376,15 +376,19 @@ func (s *Server) handleSpawnSession(
 		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}
 
-	// Find cortexd path
-	cortexdPath, err := binpath.FindCortexd()
-	if err != nil {
-		// Cleanup session on failure
-		_ = s.store.EndSession(input.TicketID, session.ID)
-		return nil, SpawnSessionOutput{
-			Success: false,
-			Message: "cortexd not found: " + err.Error(),
-		}, nil
+	// Find cortexd path - use injected path if provided (for testing)
+	cortexdPath := s.config.CortexdPath
+	if cortexdPath == "" {
+		var err error
+		cortexdPath, err = binpath.FindCortexd()
+		if err != nil {
+			// Cleanup session on failure
+			_ = s.store.EndSession(input.TicketID, session.ID)
+			return nil, SpawnSessionOutput{
+				Success: false,
+				Message: "cortexd not found: " + err.Error(),
+			}, nil
+		}
 	}
 
 	// Generate MCP config file

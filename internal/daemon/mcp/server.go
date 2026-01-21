@@ -36,6 +36,11 @@ type Config struct {
 	// If nil, a new manager will be created when needed.
 	// This is primarily used for testing.
 	TmuxManager *tmux.Manager
+
+	// CortexdPath is an optional path to the cortexd binary.
+	// If empty, binpath.FindCortexd() is used at runtime.
+	// This is primarily used for testing.
+	CortexdPath string
 }
 
 // Server is the MCP server for ticket management.
