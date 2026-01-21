@@ -1,4 +1,4 @@
-.PHONY: build lint test clean
+.PHONY: build lint test test-integration clean
 
 VERSION ?= dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -18,6 +18,9 @@ lint:
 
 test:
 	go test -v ./...
+
+test-integration:
+	go test -tags=integration -v ./internal/daemon/mcp/...
 
 clean:
 	rm -rf bin

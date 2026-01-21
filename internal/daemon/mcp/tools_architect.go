@@ -79,7 +79,8 @@ func (s *Server) handleListTickets(
 	req *mcp.CallToolRequest,
 	input ListTicketsInput,
 ) (*mcp.CallToolResult, ListTicketsOutput, error) {
-	var summaries []TicketSummary
+	// Initialize as empty slice (not nil) to ensure JSON marshals to [] not null
+	summaries := []TicketSummary{}
 
 	if input.Status != "" {
 		// List by specific status
@@ -144,7 +145,8 @@ func (s *Server) handleSearchTickets(
 	}
 
 	query := strings.ToLower(input.Query)
-	var summaries []TicketSummary
+	// Initialize as empty slice (not nil) to ensure JSON marshals to [] not null
+	summaries := []TicketSummary{}
 
 	for status, tickets := range allTickets {
 		for _, t := range tickets {

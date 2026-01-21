@@ -44,9 +44,15 @@ func runMCP(cmd *cobra.Command, args []string) error {
 		ticketID = os.Getenv("CORTEX_TICKET_ID")
 	}
 
+	// Get optional config from environment
+	ticketsDir := os.Getenv("CORTEX_TICKETS_DIR")
+	projectPath := os.Getenv("CORTEX_PROJECT_PATH")
+
 	// Create MCP server config
 	cfg := &mcp.Config{
-		TicketID: ticketID,
+		TicketID:    ticketID,
+		TicketsDir:  ticketsDir,
+		ProjectPath: projectPath,
 	}
 
 	// Create MCP server
