@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/kareemaly/cortex1/internal/daemon/api"
 	"github.com/kareemaly/cortex1/internal/daemon/config"
 	"github.com/kareemaly/cortex1/internal/daemon/logging"
 	"github.com/kareemaly/cortex1/internal/lifecycle"
-	projectconfig "github.com/kareemaly/cortex1/internal/project/config"
-	"github.com/kareemaly/cortex1/internal/ticket"
 	"github.com/kareemaly/cortex1/internal/tmux"
 	"github.com/kareemaly/cortex1/pkg/version"
 	"github.com/spf13/cobra"
@@ -71,38 +68,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	// Initialize ticket store
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
-	}
-	ticketsDir := filepath.Join(homeDir, ".cortex", "tickets")
-	ticketStore, err := ticket.NewStore(ticketsDir)
-	if err != nil {
-		return fmt.Errorf("failed to create ticket store: %w", err)
-	}
-
-	// Load project config
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	var projectCfg *projectconfig.Config
-	var projectRoot string
-
-	projectCfg, projectRoot, err = projectconfig.LoadFromPath(cwd)
-	if err != nil {
-		if projectconfig.IsProjectNotFound(err) {
-			logger.Warn("no .cortex directory found, using default config")
-			projectCfg = projectconfig.DefaultConfig()
-			projectRoot = cwd
-		} else {
-			return fmt.Errorf("failed to load project config: %w", err)
-		}
-	}
-
-	logger.Info("loaded project config", "root", projectRoot, "agent", projectCfg.Agent)
+	// Create StoreManager (stores are created per-project on demand)
+	storeManager := api.NewStoreManager(logger)
 
 	// Initialize tmux manager (nil if not installed)
 	var tmuxManager *tmux.Manager
@@ -120,12 +87,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Build dependencies
 	deps := &api.Dependencies{
-		TicketStore:   ticketStore,
-		ProjectConfig: projectCfg,
-		ProjectRoot:   projectRoot,
-		TmuxManager:   tmuxManager,
-		HookExecutor:  hookExecutor,
-		Logger:        logger,
+		StoreManager: storeManager,
+		TmuxManager:  tmuxManager,
+		HookExecutor: hookExecutor,
+		Logger:       logger,
 	}
 
 	// Create and run server

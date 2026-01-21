@@ -21,32 +21,37 @@ type Server struct {
 func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 	r := chi.NewRouter()
 
-	// Middleware stack
+	// Global middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(RequestLogger(logger))
 
-	// Routes
+	// Health endpoint (no project required)
 	r.Get("/health", HealthHandler())
 
-	// Ticket routes
-	ticketHandlers := NewTicketHandlers(deps)
-	r.Route("/tickets", func(r chi.Router) {
-		r.Get("/", ticketHandlers.ListAll)
-		r.Post("/", ticketHandlers.Create)
-		r.Get("/{status}", ticketHandlers.ListByStatus)
-		r.Get("/{status}/{id}", ticketHandlers.Get)
-		r.Put("/{status}/{id}", ticketHandlers.Update)
-		r.Delete("/{status}/{id}", ticketHandlers.Delete)
-		r.Post("/{status}/{id}/move", ticketHandlers.Move)
-		r.Post("/{status}/{id}/spawn", ticketHandlers.Spawn)
-	})
+	// Project-scoped routes
+	r.Group(func(r chi.Router) {
+		r.Use(ProjectRequired())
 
-	// Session routes
-	sessionHandlers := NewSessionHandlers(deps)
-	r.Route("/sessions", func(r chi.Router) {
-		r.Delete("/{id}", sessionHandlers.Kill)
+		// Ticket routes
+		ticketHandlers := NewTicketHandlers(deps)
+		r.Route("/tickets", func(r chi.Router) {
+			r.Get("/", ticketHandlers.ListAll)
+			r.Post("/", ticketHandlers.Create)
+			r.Get("/{status}", ticketHandlers.ListByStatus)
+			r.Get("/{status}/{id}", ticketHandlers.Get)
+			r.Put("/{status}/{id}", ticketHandlers.Update)
+			r.Delete("/{status}/{id}", ticketHandlers.Delete)
+			r.Post("/{status}/{id}/move", ticketHandlers.Move)
+			r.Post("/{status}/{id}/spawn", ticketHandlers.Spawn)
+		})
+
+		// Session routes
+		sessionHandlers := NewSessionHandlers(deps)
+		r.Route("/sessions", func(r chi.Router) {
+			r.Delete("/{id}", sessionHandlers.Kill)
+		})
 	})
 
 	return r

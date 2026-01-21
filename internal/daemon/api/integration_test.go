@@ -12,14 +12,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	projectconfig "github.com/kareemaly/cortex1/internal/project/config"
 	"github.com/kareemaly/cortex1/internal/ticket"
 )
 
 // testServer wraps httptest.Server with test dependencies.
 type testServer struct {
 	*httptest.Server
-	store *ticket.Store
+	store       *ticket.Store
+	projectRoot string
 }
 
 // setupTestServer creates a new test server with a temporary ticket store.
@@ -34,18 +34,22 @@ func setupTestServer(t *testing.T) *testServer {
 		t.Fatalf("failed to create ticket store: %v", err)
 	}
 
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storeManager := NewStoreManager(logger)
+	// Pre-populate the store manager with our test store
+	storeManager.stores[tmpDir] = store
+
 	deps := &Dependencies{
-		TicketStore:   store,
-		ProjectConfig: &projectconfig.Config{Name: "test"},
-		ProjectRoot:   tmpDir,
-		TmuxManager:   nil, // tmux not used in tests
-		HookExecutor:  nil,
-		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		StoreManager: storeManager,
+		TmuxManager:  nil, // tmux not used in tests
+		HookExecutor: nil,
+		Logger:       logger,
 	}
 
 	return &testServer{
-		Server: httptest.NewServer(NewRouter(deps, deps.Logger)),
-		store:  store,
+		Server:      httptest.NewServer(NewRouter(deps, deps.Logger)),
+		store:       store,
+		projectRoot: tmpDir,
 	}
 }
 
@@ -69,6 +73,11 @@ func (ts *testServer) request(t *testing.T, method, path string, body any) *http
 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+
+	// Add project header for non-health requests
+	if path != "/health" {
+		req.Header.Set(ProjectHeader, ts.projectRoot)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
@@ -202,6 +211,7 @@ func TestCreateTicketInvalidJSON(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/tickets", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(ProjectHeader, ts.projectRoot)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -399,5 +409,79 @@ func TestInvalidStatus(t *testing.T) {
 	result := decodeJSON[ErrorResponse](t, resp)
 	if result.Code != "invalid_status" {
 		t.Errorf("expected code 'invalid_status', got %q", result.Code)
+	}
+}
+
+func TestMissingProjectHeader(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	// Make request without project header
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/tickets", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	expectStatus(t, resp, http.StatusBadRequest)
+
+	result := decodeJSON[ErrorResponse](t, resp)
+	if result.Code != "missing_project_header" {
+		t.Errorf("expected code 'missing_project_header', got %q", result.Code)
+	}
+}
+
+func TestInvalidProjectPath(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	// Make request with relative path
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/tickets", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set(ProjectHeader, "relative/path")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	expectStatus(t, resp, http.StatusBadRequest)
+
+	result := decodeJSON[ErrorResponse](t, resp)
+	if result.Code != "invalid_project_path" {
+		t.Errorf("expected code 'invalid_project_path', got %q", result.Code)
+	}
+}
+
+func TestProjectNotFound(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	// Make request with non-existent path
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/tickets", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set(ProjectHeader, "/nonexistent/path/12345")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	expectStatus(t, resp, http.StatusNotFound)
+
+	result := decodeJSON[ErrorResponse](t, resp)
+	if result.Code != "project_not_found" {
+		t.Errorf("expected code 'project_not_found', got %q", result.Code)
 	}
 }

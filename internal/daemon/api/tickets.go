@@ -25,7 +25,14 @@ func NewTicketHandlers(deps *Dependencies) *TicketHandlers {
 
 // ListAll handles GET /tickets - lists all tickets grouped by status.
 func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
-	all, err := h.deps.TicketStore.ListAll()
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	all, err := store.ListAll()
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -48,7 +55,14 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tickets, err := h.deps.TicketStore.List(ticket.Status(status))
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	tickets, err := store.List(ticket.Status(status))
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -69,7 +83,14 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := h.deps.TicketStore.Create(req.Title, req.Body)
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	t, err := store.Create(req.Title, req.Body)
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -87,8 +108,15 @@ func (h *TicketHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
 	id := chi.URLParam(r, "id")
-	t, actualStatus, err := h.deps.TicketStore.Get(id)
+	t, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -112,10 +140,17 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
 	id := chi.URLParam(r, "id")
 
 	// Check ticket exists and is in the expected status
-	_, actualStatus, err := h.deps.TicketStore.Get(id)
+	_, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -131,7 +166,7 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := h.deps.TicketStore.Update(id, req.Title, req.Body)
+	t, err := store.Update(id, req.Title, req.Body)
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -149,10 +184,17 @@ func (h *TicketHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
 	id := chi.URLParam(r, "id")
 
 	// Check ticket exists and is in the expected status
-	_, actualStatus, err := h.deps.TicketStore.Get(id)
+	_, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -162,7 +204,7 @@ func (h *TicketHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.deps.TicketStore.Delete(id); err != nil {
+	if err := store.Delete(id); err != nil {
 		handleTicketError(w, err)
 		return
 	}
@@ -178,10 +220,17 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
 	id := chi.URLParam(r, "id")
 
 	// Check ticket exists and is in the expected status
-	_, actualStatus, err := h.deps.TicketStore.Get(id)
+	_, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -202,13 +251,13 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.deps.TicketStore.Move(id, ticket.Status(req.To)); err != nil {
+	if err := store.Move(id, ticket.Status(req.To)); err != nil {
 		handleTicketError(w, err)
 		return
 	}
 
 	// Fetch the updated ticket
-	t, newStatus, err := h.deps.TicketStore.Get(id)
+	t, newStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -226,10 +275,24 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	// Load project config for this specific project
+	projectCfg, err := projectconfig.Load(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
+		return
+	}
+
 	id := chi.URLParam(r, "id")
 
 	// Get ticket and verify status
-	t, actualStatus, err := h.deps.TicketStore.Get(id)
+	t, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -253,10 +316,10 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	// Capture git base for each repo in config
 	gitBase := make(map[string]string)
-	for _, repo := range h.deps.ProjectConfig.Git.Repos {
+	for _, repo := range projectCfg.Git.Repos {
 		repoPath := repo.Path
 		if !filepath.IsAbs(repoPath) {
-			repoPath = filepath.Join(h.deps.ProjectRoot, repoPath)
+			repoPath = filepath.Join(projectPath, repoPath)
 		}
 		sha, err := git.GetCommitSHA(repoPath, false)
 		if err != nil {
@@ -274,10 +337,10 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build agent command
-	agentCmd := h.buildAgentCommand(mcpConfigPath, t)
+	agentCmd := buildAgentCommand(projectCfg, mcpConfigPath, t)
 
 	// Get session name and window name
-	sessionName := h.deps.ProjectConfig.Name
+	sessionName := projectCfg.Name
 	if sessionName == "" {
 		sessionName = "cortex"
 	}
@@ -292,7 +355,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add session to ticket
-	session, err := h.deps.TicketStore.AddSession(id, string(h.deps.ProjectConfig.Agent), windowName, gitBase)
+	session, err := store.AddSession(id, string(projectCfg.Agent), windowName, gitBase)
 	if err != nil {
 		h.deps.Logger.Error("failed to add session", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to record session")
@@ -301,13 +364,13 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	// Move ticket to progress if in backlog
 	if actualStatus == ticket.StatusBacklog {
-		if err := h.deps.TicketStore.Move(id, ticket.StatusProgress); err != nil {
+		if err := store.Move(id, ticket.StatusProgress); err != nil {
 			h.deps.Logger.Warn("failed to move ticket to progress", "error", err)
 		}
 	}
 
 	// Fetch updated ticket
-	t, newStatus, err := h.deps.TicketStore.Get(id)
+	t, newStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err)
 		return
@@ -355,8 +418,8 @@ func (h *TicketHandlers) writeMCPConfig(ticketID string) (string, error) {
 }
 
 // buildAgentCommand builds the command to run the agent.
-func (h *TicketHandlers) buildAgentCommand(mcpConfigPath string, t *ticket.Ticket) string {
-	switch h.deps.ProjectConfig.Agent {
+func buildAgentCommand(projectCfg *projectconfig.Config, mcpConfigPath string, t *ticket.Ticket) string {
+	switch projectCfg.Agent {
 	case projectconfig.AgentOpenCode:
 		return fmt.Sprintf("opencode --mcp-config %s", mcpConfigPath)
 	case projectconfig.AgentClaude:

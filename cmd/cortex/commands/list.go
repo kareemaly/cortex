@@ -20,7 +20,13 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tickets",
 	Run: func(cmd *cobra.Command, args []string) {
-		client := sdk.DefaultClient()
+		projectPath, err := resolveProjectPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		client := sdk.DefaultClient(projectPath)
 
 		if listStatus != "" {
 			listByStatus(client, listStatus)

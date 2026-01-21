@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	projectconfig "github.com/kareemaly/cortex1/internal/project/config"
 	"github.com/kareemaly/cortex1/internal/ticket"
 	"github.com/kareemaly/cortex1/internal/tmux"
 )
@@ -22,8 +23,15 @@ func NewSessionHandlers(deps *Dependencies) *SessionHandlers {
 func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
 	// Search all tickets for the session
-	ticketID, session := h.findSession(sessionID)
+	ticketID, session := h.findSession(store, sessionID)
 	if ticketID == "" {
 		writeError(w, http.StatusNotFound, "not_found", "session not found")
 		return
@@ -31,12 +39,14 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 
 	// If session is active and tmux is available, kill the window
 	if session.IsActive() && h.deps.TmuxManager != nil {
-		sessionName := h.deps.ProjectConfig.Name
-		if sessionName == "" {
-			sessionName = "cortex"
+		// Load project config for session name
+		projectCfg, err := projectconfig.Load(projectPath)
+		sessionName := "cortex"
+		if err == nil && projectCfg.Name != "" {
+			sessionName = projectCfg.Name
 		}
 
-		err := h.deps.TmuxManager.KillWindow(sessionName, session.TmuxWindow)
+		err = h.deps.TmuxManager.KillWindow(sessionName, session.TmuxWindow)
 		if err != nil {
 			// Log but don't fail - window might already be closed
 			if !tmux.IsWindowNotFound(err) && !tmux.IsSessionNotFound(err) {
@@ -46,7 +56,7 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// End the session in the store
-	if err := h.deps.TicketStore.EndSession(ticketID, sessionID); err != nil {
+	if err := store.EndSession(ticketID, sessionID); err != nil {
 		if ticket.IsNotFound(err) {
 			writeError(w, http.StatusNotFound, "not_found", "session not found")
 			return
@@ -61,8 +71,8 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 
 // findSession searches all tickets for a session by ID.
 // Returns the ticket ID and session, or empty string and nil if not found.
-func (h *SessionHandlers) findSession(sessionID string) (string, *ticket.Session) {
-	all, err := h.deps.TicketStore.ListAll()
+func (h *SessionHandlers) findSession(store *ticket.Store, sessionID string) (string, *ticket.Session) {
+	all, err := store.ListAll()
 	if err != nil {
 		h.deps.Logger.Error("failed to list tickets", "error", err)
 		return "", nil

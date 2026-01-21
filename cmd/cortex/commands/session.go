@@ -17,8 +17,14 @@ var sessionCmd = &cobra.Command{
 	Short: "Show session details",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		projectPath, err := resolveProjectPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
 		sessionID := args[0]
-		client := sdk.DefaultClient()
+		client := sdk.DefaultClient(projectPath)
 
 		session, ticket, err := client.FindSession(sessionID)
 		if err != nil {

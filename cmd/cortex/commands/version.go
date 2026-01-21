@@ -19,8 +19,8 @@ var versionCmd = &cobra.Command{
 		fmt.Printf("  Go version: %s\n", info.GoVersion)
 		fmt.Printf("  Platform:   %s\n", info.Platform)
 
-		// Try to get daemon version
-		client := sdk.DefaultClient()
+		// Try to get daemon version (health doesn't need project path)
+		client := sdk.DefaultClient("")
 		health, err := client.HealthWithVersion()
 		if err != nil {
 			fmt.Println()

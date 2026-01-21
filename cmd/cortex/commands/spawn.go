@@ -16,8 +16,14 @@ var spawnCmd = &cobra.Command{
 	Short: "Spawn a session for a ticket",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		projectPath, err := resolveProjectPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
 		ticketID := args[0]
-		client := sdk.DefaultClient()
+		client := sdk.DefaultClient(projectPath)
 
 		// First find the ticket to get its status
 		ticket, err := client.FindTicketByID(ticketID)

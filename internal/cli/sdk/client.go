@@ -11,16 +11,21 @@ import (
 
 const defaultBaseURL = "http://localhost:4200"
 
+// ProjectHeader is the HTTP header name for specifying the project path.
+const ProjectHeader = "X-Cortex-Project"
+
 // Client is an HTTP client for communicating with the cortex daemon.
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL     string
+	httpClient  *http.Client
+	projectPath string
 }
 
-// NewClient creates a new client with the specified base URL.
-func NewClient(baseURL string) *Client {
+// NewClient creates a new client with the specified base URL and project path.
+func NewClient(baseURL, projectPath string) *Client {
 	return &Client{
-		baseURL: baseURL,
+		baseURL:     baseURL,
+		projectPath: projectPath,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -28,8 +33,16 @@ func NewClient(baseURL string) *Client {
 }
 
 // DefaultClient returns a client configured for the default daemon address.
-func DefaultClient() *Client {
-	return NewClient(defaultBaseURL)
+func DefaultClient(projectPath string) *Client {
+	return NewClient(defaultBaseURL, projectPath)
+}
+
+// doRequest executes an HTTP request with the project header.
+func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
+	if c.projectPath != "" {
+		req.Header.Set(ProjectHeader, c.projectPath)
+	}
+	return c.httpClient.Do(req)
 }
 
 // HealthResponse is the response from the health endpoint.
@@ -114,7 +127,12 @@ type ErrorResponse struct {
 
 // Health checks if the daemon is healthy.
 func (c *Client) Health() error {
-	resp, err := c.httpClient.Get(c.baseURL + "/health")
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/health", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req) // Health doesn't need project header
 	if err != nil {
 		return fmt.Errorf("failed to connect to daemon: %w", err)
 	}
@@ -129,7 +147,12 @@ func (c *Client) Health() error {
 
 // HealthWithVersion checks daemon health and returns version info.
 func (c *Client) HealthWithVersion() (*HealthResponse, error) {
-	resp, err := c.httpClient.Get(c.baseURL + "/health")
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/health", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req) // Health doesn't need project header
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
@@ -149,7 +172,12 @@ func (c *Client) HealthWithVersion() (*HealthResponse, error) {
 
 // ListAllTickets returns all tickets grouped by status.
 func (c *Client) ListAllTickets() (*ListAllTicketsResponse, error) {
-	resp, err := c.httpClient.Get(c.baseURL + "/tickets")
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tickets", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
@@ -169,7 +197,12 @@ func (c *Client) ListAllTickets() (*ListAllTicketsResponse, error) {
 
 // ListTicketsByStatus returns tickets with a specific status.
 func (c *Client) ListTicketsByStatus(status string) (*ListTicketsResponse, error) {
-	resp, err := c.httpClient.Get(c.baseURL + "/tickets/" + status)
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tickets/"+status, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
@@ -189,7 +222,12 @@ func (c *Client) ListTicketsByStatus(status string) (*ListTicketsResponse, error
 
 // GetTicket returns a specific ticket by status and ID.
 func (c *Client) GetTicket(status, id string) (*TicketResponse, error) {
-	resp, err := c.httpClient.Get(c.baseURL + "/tickets/" + status + "/" + id)
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tickets/"+status+"/"+id, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
@@ -215,7 +253,13 @@ func (c *Client) CreateTicket(title, body string) (*TicketResponse, error) {
 		return nil, fmt.Errorf("failed to encode request: %w", err)
 	}
 
-	resp, err := c.httpClient.Post(c.baseURL+"/tickets", "application/json", bytes.NewReader(jsonBody))
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
@@ -235,7 +279,13 @@ func (c *Client) CreateTicket(title, body string) (*TicketResponse, error) {
 
 // SpawnSession spawns a new session for a ticket.
 func (c *Client) SpawnSession(status, id string) (*SessionResponse, error) {
-	resp, err := c.httpClient.Post(c.baseURL+"/tickets/"+status+"/"+id+"/spawn", "application/json", nil)
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+status+"/"+id+"/spawn", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
@@ -260,7 +310,7 @@ func (c *Client) KillSession(id string) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return fmt.Errorf("failed to connect to daemon: %w", err)
 	}
