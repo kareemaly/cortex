@@ -5,9 +5,9 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kareemaly/cortex1/internal/cli/sdk"
-	"github.com/kareemaly/cortex1/internal/cli/tui/kanban"
-	projectconfig "github.com/kareemaly/cortex1/internal/project/config"
+	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/tui/kanban"
+	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/spf13/cobra"
 )
 

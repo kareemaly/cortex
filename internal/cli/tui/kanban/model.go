@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/kareemaly/cortex1/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
 // Model is the main Bubbletea model for the kanban board.

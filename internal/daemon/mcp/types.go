@@ -3,7 +3,7 @@ package mcp
 import (
 	"time"
 
-	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex/internal/ticket"
 )
 
 // SessionType indicates the type of MCP session.

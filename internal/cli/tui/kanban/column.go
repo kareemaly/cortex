@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/kareemaly/cortex1/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
 // Column represents a kanban column with tickets.

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex/internal/ticket"
 )
 
 // writeJSON writes a JSON response with the given status code.

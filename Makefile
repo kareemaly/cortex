@@ -4,9 +4,9 @@ VERSION ?= dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE    ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-LDFLAGS := -X github.com/kareemaly/cortex1/pkg/version.Version=$(VERSION) \
-           -X github.com/kareemaly/cortex1/pkg/version.Commit=$(COMMIT) \
-           -X github.com/kareemaly/cortex1/pkg/version.BuildDate=$(DATE)
+LDFLAGS := -X github.com/kareemaly/cortex/pkg/version.Version=$(VERSION) \
+           -X github.com/kareemaly/cortex/pkg/version.Commit=$(COMMIT) \
+           -X github.com/kareemaly/cortex/pkg/version.BuildDate=$(DATE)
 
 build:
 	@mkdir -p bin

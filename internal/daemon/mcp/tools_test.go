@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kareemaly/cortex1/internal/ticket"
-	"github.com/kareemaly/cortex1/internal/tmux"
+	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/tmux"
 )
 
 // setupTestServerWithMockTmux creates a test server with a mock tmux manager.

@@ -7,12 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kareemaly/cortex1/internal/daemon/api"
-	"github.com/kareemaly/cortex1/internal/daemon/config"
-	"github.com/kareemaly/cortex1/internal/daemon/logging"
-	"github.com/kareemaly/cortex1/internal/lifecycle"
-	"github.com/kareemaly/cortex1/internal/tmux"
-	"github.com/kareemaly/cortex1/pkg/version"
+	"github.com/kareemaly/cortex/internal/daemon/api"
+	"github.com/kareemaly/cortex/internal/daemon/config"
+	"github.com/kareemaly/cortex/internal/daemon/logging"
+	"github.com/kareemaly/cortex/internal/lifecycle"
+	"github.com/kareemaly/cortex/internal/tmux"
+	"github.com/kareemaly/cortex/pkg/version"
 	"github.com/spf13/cobra"
 )
 

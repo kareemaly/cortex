@@ -3,7 +3,7 @@ package api
 import (
 	"time"
 
-	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex/internal/ticket"
 )
 
 // ErrorResponse is the standard error response format.

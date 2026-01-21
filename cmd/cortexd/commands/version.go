@@ -3,7 +3,7 @@ package commands
 import (
 	"fmt"
 
-	"github.com/kareemaly/cortex1/pkg/version"
+	"github.com/kareemaly/cortex/pkg/version"
 	"github.com/spf13/cobra"
 )
 

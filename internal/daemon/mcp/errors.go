@@ -3,7 +3,7 @@ package mcp
 import (
 	"fmt"
 
-	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex/internal/ticket"
 )
 
 // ErrorCode represents MCP tool error codes.

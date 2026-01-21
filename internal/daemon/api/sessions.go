@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	projectconfig "github.com/kareemaly/cortex1/internal/project/config"
-	"github.com/kareemaly/cortex1/internal/ticket"
-	"github.com/kareemaly/cortex1/internal/tmux"
+	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/tmux"
 )
 
 // SessionHandlers provides HTTP handlers for session operations.

@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex/internal/ticket"
 )
 
 // testServer wraps httptest.Server with test dependencies.

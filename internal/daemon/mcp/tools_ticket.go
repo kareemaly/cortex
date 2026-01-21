@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"github.com/kareemaly/cortex1/internal/lifecycle"
-	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex/internal/lifecycle"
+	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

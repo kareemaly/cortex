@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kareemaly/cortex1/internal/install"
+	"github.com/kareemaly/cortex/internal/install"
 )
 
 var (

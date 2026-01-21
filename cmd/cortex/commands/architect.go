@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kareemaly/cortex1/internal/binpath"
-	"github.com/kareemaly/cortex1/internal/project/config"
-	"github.com/kareemaly/cortex1/internal/tmux"
+	"github.com/kareemaly/cortex/internal/binpath"
+	"github.com/kareemaly/cortex/internal/project/config"
+	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/spf13/cobra"
 )
 

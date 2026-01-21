@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kareemaly/cortex1/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/spf13/cobra"
 )
 

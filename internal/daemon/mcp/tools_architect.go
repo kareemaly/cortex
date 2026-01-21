@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kareemaly/cortex1/internal/binpath"
-	"github.com/kareemaly/cortex1/internal/git"
-	"github.com/kareemaly/cortex1/internal/ticket"
-	"github.com/kareemaly/cortex1/internal/tmux"
+	"github.com/kareemaly/cortex/internal/binpath"
+	"github.com/kareemaly/cortex/internal/git"
+	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kareemaly/cortex1/pkg/version"
+	"github.com/kareemaly/cortex/pkg/version"
 )
 
 // HealthResponse is the response structure for the health endpoint.

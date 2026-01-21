@@ -3,8 +3,8 @@ package api
 import (
 	"log/slog"
 
-	"github.com/kareemaly/cortex1/internal/lifecycle"
-	"github.com/kareemaly/cortex1/internal/tmux"
+	"github.com/kareemaly/cortex/internal/lifecycle"
+	"github.com/kareemaly/cortex/internal/tmux"
 )
 
 // Dependencies holds all dependencies required by API handlers.

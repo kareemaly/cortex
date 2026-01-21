@@ -1,9 +1,9 @@
 package mcp
 
 import (
-	"github.com/kareemaly/cortex1/internal/lifecycle"
-	"github.com/kareemaly/cortex1/internal/project/config"
-	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex/internal/lifecycle"
+	"github.com/kareemaly/cortex/internal/project/config"
+	"github.com/kareemaly/cortex/internal/ticket"
 )
 
 // convertHookConfigs converts project config hooks to lifecycle hook definitions.

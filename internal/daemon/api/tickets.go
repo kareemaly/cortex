@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kareemaly/cortex1/internal/git"
-	projectconfig "github.com/kareemaly/cortex1/internal/project/config"
-	"github.com/kareemaly/cortex1/internal/ticket"
+	"github.com/kareemaly/cortex/internal/git"
+	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	"github.com/kareemaly/cortex/internal/ticket"
 )
 
 // TicketHandlers provides HTTP handlers for ticket operations.
