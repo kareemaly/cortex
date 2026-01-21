@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kareemaly/cortex1/internal/binpath"
 	"github.com/kareemaly/cortex1/internal/project/config"
 	"github.com/kareemaly/cortex1/internal/tmux"
 	"github.com/spf13/cobra"
@@ -145,10 +146,15 @@ type mcpServerConfig struct {
 // generateArchitectMCPConfig creates the MCP config file for the architect session.
 // Returns the path to the generated config file.
 func generateArchitectMCPConfig(sessionName, projectPath string) (string, error) {
+	cortexdPath, err := binpath.FindCortexd()
+	if err != nil {
+		return "", fmt.Errorf("find cortexd: %w", err)
+	}
+
 	cfg := mcpConfig{
 		MCPServers: map[string]mcpServerConfig{
 			"cortex": {
-				Command: "cortexd",
+				Command: cortexdPath,
 				Args:    []string{"mcp"},
 				Env: map[string]string{
 					"CORTEX_PROJECT_PATH": projectPath,
