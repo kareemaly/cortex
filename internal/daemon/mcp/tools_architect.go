@@ -331,6 +331,14 @@ func (s *Server) handleSpawnSession(
 		}, nil
 	}
 
+	// Validate TmuxSession is configured
+	if s.config.TmuxSession == "" {
+		return nil, SpawnSessionOutput{
+			Success: false,
+			Message: "cannot spawn session: CORTEX_TMUX_SESSION not configured",
+		}, nil
+	}
+
 	// Use injected tmux manager or create a new one
 	tmuxMgr := s.tmuxManager
 	if tmuxMgr == nil {
@@ -397,6 +405,9 @@ func (s *Server) handleSpawnSession(
 	}
 	if s.config.ProjectPath != "" {
 		mcpConfig.MCPServers["cortex"].Env["CORTEX_PROJECT_PATH"] = s.config.ProjectPath
+	}
+	if s.config.TmuxSession != "" {
+		mcpConfig.MCPServers["cortex"].Env["CORTEX_TMUX_SESSION"] = s.config.TmuxSession
 	}
 
 	mcpConfigData, err := json.MarshalIndent(mcpConfig, "", "  ")

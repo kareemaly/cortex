@@ -73,7 +73,10 @@ func runInstall(cmd *cobra.Command, args []string) error {
 }
 
 func printItems(items []install.SetupItem) {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "" // Acceptable fallback for display purposes only
+	}
 
 	for _, item := range items {
 		path := item.Path

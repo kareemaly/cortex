@@ -24,6 +24,7 @@ func setupTestServerWithMockTmux(t *testing.T, ticketID string) (*Server, func()
 	cfg := &Config{
 		TicketID:    ticketID,
 		TicketsDir:  tmpDir,
+		TmuxSession: "test-session",
 		TmuxManager: tmuxMgr,
 	}
 

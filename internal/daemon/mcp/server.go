@@ -2,7 +2,7 @@ package mcp
 
 import (
 	"context"
-	"os"
+	"fmt"
 	"path/filepath"
 
 	"github.com/kareemaly/cortex1/internal/lifecycle"
@@ -20,15 +20,16 @@ type Config struct {
 	TicketID string
 
 	// TicketsDir is the directory where tickets are stored.
-	// Defaults to ~/.cortex/tickets if empty.
+	// If empty, derived from ProjectPath/.cortex/tickets.
 	TicketsDir string
 
 	// ProjectPath is the project root for hook execution.
 	// If set, project config is loaded from this path.
+	// Required if TicketsDir is not set.
 	ProjectPath string
 
 	// TmuxSession is the tmux session name for spawning agents.
-	// Defaults to "cortex" if empty.
+	// Required for spawn operations - no default value.
 	TmuxSession string
 
 	// TmuxManager is an optional tmux manager for spawning agents.
@@ -54,19 +55,14 @@ func NewServer(cfg *Config) (*Server, error) {
 		cfg = &Config{}
 	}
 
-	// Set default tickets directory
+	// Set tickets directory - derive from ProjectPath or require explicit setting
 	ticketsDir := cfg.TicketsDir
 	if ticketsDir == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
+		if cfg.ProjectPath != "" {
+			ticketsDir = filepath.Join(cfg.ProjectPath, ".cortex", "tickets")
+		} else {
+			return nil, fmt.Errorf("MCP server requires CORTEX_PROJECT_PATH or CORTEX_TICKETS_DIR to be set")
 		}
-		ticketsDir = filepath.Join(homeDir, ".cortex", "tickets")
-	}
-
-	// Set default tmux session name
-	if cfg.TmuxSession == "" {
-		cfg.TmuxSession = "cortex"
 	}
 
 	// Create ticket store

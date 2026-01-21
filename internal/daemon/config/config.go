@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -32,7 +33,7 @@ func Load() (*Config, error) {
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return cfg, nil
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
 	configPath := filepath.Join(homeDir, ".cortex", "settings.yaml")

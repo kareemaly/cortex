@@ -91,28 +91,37 @@ func TestNewServerDefaultConfig(t *testing.T) {
 }
 
 func TestNewServerNilConfig(t *testing.T) {
-	// This test depends on the user's home directory being accessible
-	// but we create a temp dir to avoid affecting real data
-	tmpDir, err := os.MkdirTemp("", "mcp-nil-config-test")
+	// With nil config (no ProjectPath or TicketsDir), NewServer should fail
+	_, err := NewServer(nil)
+	if err == nil {
+		t.Fatal("expected error with nil config (no ProjectPath or TicketsDir)")
+	}
+	expectedMsg := "MCP server requires CORTEX_PROJECT_PATH or CORTEX_TICKETS_DIR to be set"
+	if err.Error() != expectedMsg {
+		t.Errorf("error = %q, want %q", err.Error(), expectedMsg)
+	}
+}
+
+func TestNewServerWithProjectPath(t *testing.T) {
+	// Create a temp directory to act as project path
+	tmpDir, err := os.MkdirTemp("", "mcp-project-test")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	// Temporarily set HOME to our temp dir
-	oldHome := os.Getenv("HOME")
-	if err := os.Setenv("HOME", tmpDir); err != nil {
-		t.Fatalf("set HOME: %v", err)
+	cfg := &Config{
+		ProjectPath: tmpDir,
 	}
-	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
-	server, err := NewServer(nil)
+	server, err := NewServer(cfg)
 	if err != nil {
-		t.Fatalf("NewServer with nil config failed: %v", err)
+		t.Fatalf("NewServer failed: %v", err)
 	}
 
+	// Should default to architect session
 	if !server.IsArchitectSession() {
-		t.Error("expected architect session with nil config")
+		t.Error("expected architect session with project path")
 	}
 }
 
