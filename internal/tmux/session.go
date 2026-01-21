@@ -79,15 +79,8 @@ func (m *Manager) AttachSession(name string) error {
 	_, _ = m.run("select-window", "-t", target) // Non-fatal: window selection failing shouldn't prevent attach
 
 	// Choose command based on whether we're inside tmux
-	var cmd *exec.Cmd
 	if IsInsideTmux() {
-		cmd = exec.Command(m.tmuxPath, "switch-client", "-t", name)
-	} else {
-		cmd = exec.Command(m.tmuxPath, "attach-session", "-t", name)
+		return m.runner.RunInteractive("switch-client", "-t", name)
 	}
-
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return m.runner.RunInteractive("attach-session", "-t", name)
 }

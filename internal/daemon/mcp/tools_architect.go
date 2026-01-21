@@ -328,13 +328,17 @@ func (s *Server) handleSpawnSession(
 		}, nil
 	}
 
-	// Create tmux manager
-	tmuxMgr, err := tmux.NewManager()
-	if err != nil {
-		return nil, SpawnSessionOutput{
-			Success: false,
-			Message: "tmux is not available: " + err.Error(),
-		}, nil
+	// Use injected tmux manager or create a new one
+	tmuxMgr := s.tmuxManager
+	if tmuxMgr == nil {
+		var err error
+		tmuxMgr, err = tmux.NewManager()
+		if err != nil {
+			return nil, SpawnSessionOutput{
+				Success: false,
+				Message: "tmux is not available: " + err.Error(),
+			}, nil
+		}
 	}
 
 	// Generate window name from ticket slug
