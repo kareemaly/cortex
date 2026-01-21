@@ -19,6 +19,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var servePort int
+
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the HTTP API server",
@@ -29,6 +31,9 @@ var serveCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(serveCmd)
 
+	// Register flags
+	serveCmd.Flags().IntVar(&servePort, "port", 4200, "Port for the HTTP server")
+
 	// Set serve as the default command when no subcommand is specified
 	rootCmd.RunE = runServe
 }
@@ -38,6 +43,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override port if flag was set
+	if cmd.Flags().Changed("port") {
+		cfg.Port = servePort
 	}
 
 	// Setup logging
