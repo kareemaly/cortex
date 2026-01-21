@@ -1,10 +1,16 @@
 package tmux
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 )
+
+// IsInsideTmux returns true if running inside a tmux session.
+func IsInsideTmux() bool {
+	return os.Getenv("TMUX") != ""
+}
 
 // SessionExists checks if a tmux session with the given name exists.
 func (m *Manager) SessionExists(name string) (bool, error) {
@@ -57,7 +63,7 @@ func (m *Manager) KillSession(name string) error {
 }
 
 // AttachSession attaches to an existing tmux session interactively.
-// This replaces the current process with tmux attach-session.
+// If already inside tmux, it uses switch-client instead of attach-session.
 // Returns SessionNotFoundError if the session doesn't exist.
 func (m *Manager) AttachSession(name string) error {
 	exists, err := m.SessionExists(name)
@@ -68,8 +74,18 @@ func (m *Manager) AttachSession(name string) error {
 		return &SessionNotFoundError{Session: name}
 	}
 
-	// Use syscall exec to replace current process
-	cmd := exec.Command(m.tmuxPath, "attach-session", "-t", name)
+	// Select window 0 (architect window) before attaching/switching
+	target := fmt.Sprintf("%s:%d", name, ArchitectWindowIndex)
+	_, _ = m.run("select-window", "-t", target) // Non-fatal: window selection failing shouldn't prevent attach
+
+	// Choose command based on whether we're inside tmux
+	var cmd *exec.Cmd
+	if IsInsideTmux() {
+		cmd = exec.Command(m.tmuxPath, "switch-client", "-t", name)
+	} else {
+		cmd = exec.Command(m.tmuxPath, "attach-session", "-t", name)
+	}
+
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
