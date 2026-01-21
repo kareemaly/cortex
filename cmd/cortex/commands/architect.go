@@ -194,10 +194,10 @@ Start by listing current tickets to understand the project state.`, projectName)
 func buildAgentCommand(agent config.AgentType, mcpConfigPath, prompt string) string {
 	switch agent {
 	case config.AgentOpenCode:
-		return fmt.Sprintf("opencode --mcp-config %s %q", mcpConfigPath, prompt)
+		return fmt.Sprintf("opencode %q --mcp-config %s", prompt, mcpConfigPath)
 	case config.AgentClaude:
 		fallthrough
 	default:
-		return fmt.Sprintf("claude --mcp-config %s %q", mcpConfigPath, prompt)
+		return fmt.Sprintf("claude %q --mcp-config %s", prompt, mcpConfigPath)
 	}
 }

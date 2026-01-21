@@ -364,6 +364,6 @@ func (h *TicketHandlers) buildAgentCommand(mcpConfigPath string, t *ticket.Ticke
 	default:
 		// Build prompt from ticket
 		prompt := fmt.Sprintf("Work on the following ticket:\\n\\nTitle: %s\\n\\n%s", t.Title, t.Body)
-		return fmt.Sprintf("claude --mcp-config %s -p '%s'", mcpConfigPath, prompt)
+		return fmt.Sprintf("claude -p '%s' --mcp-config %s", prompt, mcpConfigPath)
 	}
 }

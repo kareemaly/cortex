@@ -413,7 +413,7 @@ func (s *Server) handleSpawnSession(
 	// Build claude command with ticket prompt (like cortex0: uses permission-mode plan for tickets)
 	// The agent can use the cortex MCP tools (readTicket, submitReport, approve) to interact
 	prompt := fmt.Sprintf("You are working on ticket: %s\n\n%s\n\nUse the cortex MCP tools to track your progress. When complete, use the approve tool.", t.Title, t.Body)
-	claudeCmd := fmt.Sprintf("claude --mcp-config %s --permission-mode plan %q", mcpConfigPath, prompt)
+	claudeCmd := fmt.Sprintf("claude %q --mcp-config %s --permission-mode plan", prompt, mcpConfigPath)
 
 	// Spawn agent in tmux
 	_, err = tmuxMgr.SpawnAgent(s.config.TmuxSession, windowName, claudeCmd)
