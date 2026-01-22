@@ -66,10 +66,11 @@ Global config at `~/.cortex/settings.yaml` (daemon port, log level).
 
 ## MCP Tools
 
-**Architect session** (full access):
-- `listTickets`, `searchTickets`, `readTicket`
+**Architect session** (full access, 7 tools):
+- `listTickets` - List tickets with optional status/query filters
+- `readTicket` - Read full ticket details
 - `createTicket`, `updateTicket`, `deleteTicket`, `moveTicket`
-- `spawnSession`, `getSessionStatus`
+- `spawnSession` - Spawn agent session for a ticket
 
 **Ticket session** (restricted to assigned ticket):
 - `readTicket` - Read assigned ticket

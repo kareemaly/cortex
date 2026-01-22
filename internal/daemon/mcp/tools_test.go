@@ -91,7 +91,7 @@ func TestHandleListTicketsWithStatus(t *testing.T) {
 	}
 }
 
-func TestHandleSearchTickets(t *testing.T) {
+func TestHandleListTicketsWithQuery(t *testing.T) {
 	server, cleanup := setupTestServer(t, "")
 	defer cleanup()
 
@@ -100,11 +100,11 @@ func TestHandleSearchTickets(t *testing.T) {
 	_, _ = server.Store().Create("Add feature", "New feature")
 
 	// Search for "login"
-	_, output, err := server.handleSearchTickets(context.Background(), nil, SearchTicketsInput{
+	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
 		Query: "login",
 	})
 	if err != nil {
-		t.Fatalf("handleSearchTickets failed: %v", err)
+		t.Fatalf("handleListTickets failed: %v", err)
 	}
 
 	if output.Total != 1 {
@@ -112,19 +112,50 @@ func TestHandleSearchTickets(t *testing.T) {
 	}
 }
 
-func TestHandleSearchTicketsEmptyQuery(t *testing.T) {
+func TestHandleListTicketsWithStatusAndQuery(t *testing.T) {
 	server, cleanup := setupTestServer(t, "")
 	defer cleanup()
 
-	_, _, err := server.handleSearchTickets(context.Background(), nil, SearchTicketsInput{
+	// Create tickets
+	t1, _ := server.Store().Create("Fix login bug", "Authentication issue")
+	t2, _ := server.Store().Create("Fix login feature", "Another login issue")
+	_ = server.Store().Move(t2.ID, ticket.StatusProgress)
+
+	// Search for "login" in backlog only
+	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
+		Status: "backlog",
+		Query:  "login",
+	})
+	if err != nil {
+		t.Fatalf("handleListTickets failed: %v", err)
+	}
+
+	if output.Total != 1 {
+		t.Errorf("total = %d, want 1", output.Total)
+	}
+	if output.Tickets[0].ID != t1.ID {
+		t.Errorf("wrong ticket returned, expected %s got %s", t1.ID, output.Tickets[0].ID)
+	}
+}
+
+func TestHandleListTicketsEmptyQuery(t *testing.T) {
+	server, cleanup := setupTestServer(t, "")
+	defer cleanup()
+
+	// Create tickets
+	_, _ = server.Store().Create("Ticket 1", "body 1")
+	_, _ = server.Store().Create("Ticket 2", "body 2")
+
+	// Empty query should return all tickets (not error like searchTickets did)
+	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
 		Query: "",
 	})
-
-	if err == nil {
-		t.Error("expected error for empty query")
+	if err != nil {
+		t.Fatalf("handleListTickets failed: %v", err)
 	}
-	if !IsToolError(err) {
-		t.Errorf("expected ToolError, got %T", err)
+
+	if output.Total != 2 {
+		t.Errorf("total = %d, want 2", output.Total)
 	}
 }
 
@@ -379,48 +410,43 @@ func TestHandleSpawnSessionActiveSession(t *testing.T) {
 	}
 }
 
-func TestHandleGetSessionStatus(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
+func TestHandleSpawnSessionNoAutoMove(t *testing.T) {
+	server, cleanup := setupTestServerWithMockTmux(t, "")
 	defer cleanup()
 
-	// Create ticket with active session
-	created, _ := server.Store().Create("Test", "")
-	session, _ := server.Store().AddSession(created.ID, "claude", "window")
+	// Create a ticket in backlog
+	created, err := server.Store().Create("Test No Auto Move", "Test body")
+	if err != nil {
+		t.Fatalf("failed to create ticket: %v", err)
+	}
 
-	_, output, err := server.handleGetSessionStatus(context.Background(), nil, GetSessionStatusInput{
+	// Verify ticket is in backlog before spawn
+	_, statusBefore, err := server.Store().Get(created.ID)
+	if err != nil {
+		t.Fatalf("failed to get ticket: %v", err)
+	}
+	if statusBefore != ticket.StatusBacklog {
+		t.Fatalf("ticket should be in backlog before spawn, got %v", statusBefore)
+	}
+
+	// Spawn a session
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 	})
 	if err != nil {
-		t.Fatalf("handleGetSessionStatus failed: %v", err)
+		t.Fatalf("handleSpawnSession failed: %v", err)
+	}
+	if !output.Success {
+		t.Fatalf("spawn should succeed, got message: %s", output.Message)
 	}
 
-	if output.Session == nil {
-		t.Fatal("session should not be nil")
-	}
-	if output.Session.ID != session.ID {
-		t.Errorf("session ID = %q, want %q", output.Session.ID, session.ID)
-	}
-}
-
-func TestHandleGetSessionStatusNoActive(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
-	defer cleanup()
-
-	// Create ticket without session
-	created, _ := server.Store().Create("Test", "")
-
-	_, output, err := server.handleGetSessionStatus(context.Background(), nil, GetSessionStatusInput{
-		TicketID: created.ID,
-	})
+	// Verify ticket stays in backlog (no auto-move)
+	_, statusAfter, err := server.Store().Get(created.ID)
 	if err != nil {
-		t.Fatalf("handleGetSessionStatus failed: %v", err)
+		t.Fatalf("failed to get ticket after spawn: %v", err)
 	}
-
-	if output.Session != nil {
-		t.Error("session should be nil when no active session")
-	}
-	if output.Message == "" {
-		t.Error("expected message about no active session")
+	if statusAfter != ticket.StatusBacklog {
+		t.Errorf("ticket should remain in backlog after spawn, got %v", statusAfter)
 	}
 }
 

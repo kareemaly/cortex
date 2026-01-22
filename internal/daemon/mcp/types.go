@@ -25,13 +25,7 @@ type Session struct {
 // ListTicketsInput is the input for the listTickets tool.
 type ListTicketsInput struct {
 	Status string `json:"status,omitempty" jsonschema:"Filter by status (backlog/progress/review/done). Leave empty for all tickets."`
-}
-
-// SearchTicketsInput is the input for the searchTickets tool.
-type SearchTicketsInput struct {
-	Query    string `json:"query" jsonschema:"Search term to match against title and body"`
-	FromDate string `json:"from_date,omitempty" jsonschema:"Filter tickets created on or after this date (RFC3339 format)"`
-	ToDate   string `json:"to_date,omitempty" jsonschema:"Filter tickets created on or before this date (RFC3339 format)"`
+	Query  string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
 }
 
 // ReadTicketInput is the input for the readTicket tool.
@@ -67,12 +61,6 @@ type MoveTicketInput struct {
 type SpawnSessionInput struct {
 	TicketID string `json:"ticket_id" jsonschema:"The ticket ID to spawn a session for"`
 	Agent    string `json:"agent,omitempty" jsonschema:"Agent name (default: claude)"`
-}
-
-// GetSessionStatusInput is the input for the getSessionStatus tool.
-type GetSessionStatusInput struct {
-	TicketID  string `json:"ticket_id" jsonschema:"The ticket ID to get session status for"`
-	SessionID string `json:"session_id,omitempty" jsonschema:"Specific session ID (optional, defaults to active session)"`
 }
 
 // Input types for ticket tools
@@ -216,12 +204,6 @@ type SpawnSessionOutput struct {
 	SessionID  string `json:"session_id,omitempty"`
 	TmuxWindow string `json:"tmux_window,omitempty"`
 	Message    string `json:"message,omitempty"`
-}
-
-// GetSessionStatusOutput is the output for the getSessionStatus tool.
-type GetSessionStatusOutput struct {
-	Session *SessionOutput `json:"session,omitempty"`
-	Message string         `json:"message,omitempty"`
 }
 
 // AddCommentOutput is the output for the addTicketComment tool.

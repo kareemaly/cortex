@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/ticket"
@@ -20,14 +19,8 @@ func (s *Server) registerArchitectTools() {
 	// List tickets
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "listTickets",
-		Description: "List tickets with optional status filter",
+		Description: "List tickets with optional status and query filters",
 	}, s.handleListTickets)
-
-	// Search tickets
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "searchTickets",
-		Description: "Search tickets by title/body with optional date filters",
-	}, s.handleSearchTickets)
 
 	// Read ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -64,15 +57,9 @@ func (s *Server) registerArchitectTools() {
 		Name:        "spawnSession",
 		Description: "Spawn a new agent session for a ticket",
 	}, s.handleSpawnSession)
-
-	// Get session status
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "getSessionStatus",
-		Description: "Get the status of an active session",
-	}, s.handleGetSessionStatus)
 }
 
-// handleListTickets lists tickets with optional status filter.
+// handleListTickets lists tickets with optional status and query filters.
 func (s *Server) handleListTickets(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -80,6 +67,9 @@ func (s *Server) handleListTickets(
 ) (*mcp.CallToolResult, ListTicketsOutput, error) {
 	// Initialize as empty slice (not nil) to ensure JSON marshals to [] not null
 	summaries := []TicketSummary{}
+
+	// Prepare query for case-insensitive matching
+	query := strings.ToLower(input.Query)
 
 	if input.Status != "" {
 		// List by specific status
@@ -89,6 +79,12 @@ func (s *Server) handleListTickets(
 			return nil, ListTicketsOutput{}, WrapTicketError(err)
 		}
 		for _, t := range tickets {
+			// Apply query filter if specified
+			if query != "" &&
+				!strings.Contains(strings.ToLower(t.Title), query) &&
+				!strings.Contains(strings.ToLower(t.Body), query) {
+				continue
+			}
 			summaries = append(summaries, ToTicketSummary(t, status))
 		}
 	} else {
@@ -99,71 +95,14 @@ func (s *Server) handleListTickets(
 		}
 		for status, tickets := range allTickets {
 			for _, t := range tickets {
+				// Apply query filter if specified
+				if query != "" &&
+					!strings.Contains(strings.ToLower(t.Title), query) &&
+					!strings.Contains(strings.ToLower(t.Body), query) {
+					continue
+				}
 				summaries = append(summaries, ToTicketSummary(t, status))
 			}
-		}
-	}
-
-	return nil, ListTicketsOutput{
-		Tickets: summaries,
-		Total:   len(summaries),
-	}, nil
-}
-
-// handleSearchTickets searches tickets by title/body with optional date filters.
-func (s *Server) handleSearchTickets(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	input SearchTicketsInput,
-) (*mcp.CallToolResult, ListTicketsOutput, error) {
-	if input.Query == "" {
-		return nil, ListTicketsOutput{}, NewValidationError("query", "cannot be empty")
-	}
-
-	// Parse optional date filters
-	var fromDate, toDate *time.Time
-	if input.FromDate != "" {
-		t, err := time.Parse(time.RFC3339, input.FromDate)
-		if err != nil {
-			return nil, ListTicketsOutput{}, NewValidationError("from_date", "invalid RFC3339 format")
-		}
-		fromDate = &t
-	}
-	if input.ToDate != "" {
-		t, err := time.Parse(time.RFC3339, input.ToDate)
-		if err != nil {
-			return nil, ListTicketsOutput{}, NewValidationError("to_date", "invalid RFC3339 format")
-		}
-		toDate = &t
-	}
-
-	// Get all tickets and filter
-	allTickets, err := s.store.ListAll()
-	if err != nil {
-		return nil, ListTicketsOutput{}, WrapTicketError(err)
-	}
-
-	query := strings.ToLower(input.Query)
-	// Initialize as empty slice (not nil) to ensure JSON marshals to [] not null
-	summaries := []TicketSummary{}
-
-	for status, tickets := range allTickets {
-		for _, t := range tickets {
-			// Check query match
-			if !strings.Contains(strings.ToLower(t.Title), query) &&
-				!strings.Contains(strings.ToLower(t.Body), query) {
-				continue
-			}
-
-			// Check date filters
-			if fromDate != nil && t.Dates.Created.Before(*fromDate) {
-				continue
-			}
-			if toDate != nil && t.Dates.Created.After(*toDate) {
-				continue
-			}
-
-			summaries = append(summaries, ToTicketSummary(t, status))
 		}
 	}
 
@@ -316,7 +255,7 @@ func (s *Server) handleSpawnSession(
 	}
 
 	// Validate ticket exists
-	t, currentStatus, err := s.store.Get(input.TicketID)
+	t, _, err := s.store.Get(input.TicketID)
 	if err != nil {
 		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}
@@ -431,65 +370,11 @@ func (s *Server) handleSpawnSession(
 		}, nil
 	}
 
-	// Auto-move ticket to progress if in backlog
-	if currentStatus == ticket.StatusBacklog {
-		_ = s.store.Move(input.TicketID, ticket.StatusProgress)
-	}
-
 	return nil, SpawnSessionOutput{
 		Success:    true,
 		TicketID:   input.TicketID,
 		SessionID:  session.ID,
 		TmuxWindow: windowName,
 		Message:    fmt.Sprintf("Agent session spawned in tmux window '%s'", windowName),
-	}, nil
-}
-
-// handleGetSessionStatus gets the status of an active session.
-func (s *Server) handleGetSessionStatus(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	input GetSessionStatusInput,
-) (*mcp.CallToolResult, GetSessionStatusOutput, error) {
-	if input.TicketID == "" {
-		return nil, GetSessionStatusOutput{}, NewValidationError("ticket_id", "cannot be empty")
-	}
-
-	t, _, err := s.store.Get(input.TicketID)
-	if err != nil {
-		return nil, GetSessionStatusOutput{}, WrapTicketError(err)
-	}
-
-	// Find the session
-	var session *ticket.Session
-	if input.SessionID != "" {
-		// Find specific session
-		for i := range t.Sessions {
-			if t.Sessions[i].ID == input.SessionID {
-				session = &t.Sessions[i]
-				break
-			}
-		}
-		if session == nil {
-			return nil, GetSessionStatusOutput{}, NewNotFoundError("session", input.SessionID)
-		}
-	} else {
-		// Find active session
-		for i := range t.Sessions {
-			if t.Sessions[i].IsActive() {
-				session = &t.Sessions[i]
-				break
-			}
-		}
-		if session == nil {
-			return nil, GetSessionStatusOutput{
-				Message: "No active session found for this ticket",
-			}, nil
-		}
-	}
-
-	output := ToSessionOutput(session)
-	return nil, GetSessionStatusOutput{
-		Session: &output,
 	}, nil
 }

@@ -624,7 +624,7 @@ func TestIntegration_MoveTicket_InvalidStatus(t *testing.T) {
 	}
 }
 
-func TestIntegration_SearchTickets(t *testing.T) {
+func TestIntegration_ListTickets_WithQuery(t *testing.T) {
 	skipIfCI(t)
 
 	env := setupTestEnv(t)
@@ -652,12 +652,12 @@ func TestIntegration_SearchTickets(t *testing.T) {
 		t.Fatalf("createTicket failed: %v", err)
 	}
 
-	// Search for "login"
-	result, err := client.callTool(ctx, "searchTickets", map[string]any{
+	// Search for "login" using query filter
+	result, err := client.callTool(ctx, "listTickets", map[string]any{
 		"query": "login",
 	})
 	if err != nil {
-		t.Fatalf("searchTickets failed: %v", err)
+		t.Fatalf("listTickets failed: %v", err)
 	}
 
 	output := parseToolOutput[ListTicketsOutput](t, result)
@@ -669,29 +669,7 @@ func TestIntegration_SearchTickets(t *testing.T) {
 	}
 }
 
-func TestIntegration_SearchTickets_EmptyQuery(t *testing.T) {
-	skipIfCI(t)
-
-	env := setupTestEnv(t)
-	defer env.cleanup()
-
-	client := newMCPTestClient(t, env)
-	defer client.Close()
-
-	ctx := context.Background()
-	result, err := client.callTool(ctx, "searchTickets", map[string]any{
-		"query": "",
-	})
-	if err != nil {
-		t.Fatalf("callTool failed: %v", err)
-	}
-
-	if !result.IsError {
-		t.Error("expected error for empty query")
-	}
-}
-
-func TestIntegration_SearchTickets_NoMatch(t *testing.T) {
+func TestIntegration_ListTickets_WithStatusAndQuery(t *testing.T) {
 	skipIfCI(t)
 
 	env := setupTestEnv(t)
@@ -702,25 +680,45 @@ func TestIntegration_SearchTickets_NoMatch(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create a ticket
+	// Create ticket in backlog
 	_, err := client.callTool(ctx, "createTicket", map[string]any{
-		"title": "Some ticket",
+		"title": "Fix login bug in backlog",
+		"body":  "Login issue",
 	})
 	if err != nil {
 		t.Fatalf("createTicket failed: %v", err)
 	}
 
-	// Search for non-matching term
-	result, err := client.callTool(ctx, "searchTickets", map[string]any{
-		"query": "xyznonexistent",
+	// Create ticket and move to progress
+	createResult, err := client.callTool(ctx, "createTicket", map[string]any{
+		"title": "Fix login bug in progress",
+		"body":  "Another login issue",
 	})
 	if err != nil {
-		t.Fatalf("searchTickets failed: %v", err)
+		t.Fatalf("createTicket failed: %v", err)
+	}
+	ticket2 := parseToolOutput[CreateTicketOutput](t, createResult)
+
+	_, err = client.callTool(ctx, "moveTicket", map[string]any{
+		"id":     ticket2.Ticket.ID,
+		"status": "progress",
+	})
+	if err != nil {
+		t.Fatalf("moveTicket failed: %v", err)
+	}
+
+	// Search for "login" in backlog only
+	result, err := client.callTool(ctx, "listTickets", map[string]any{
+		"status": "backlog",
+		"query":  "login",
+	})
+	if err != nil {
+		t.Fatalf("listTickets failed: %v", err)
 	}
 
 	output := parseToolOutput[ListTicketsOutput](t, result)
-	if output.Total != 0 {
-		t.Errorf("expected 0 matches, got %d", output.Total)
+	if output.Total != 1 {
+		t.Errorf("expected 1 match for 'login' in backlog, got %d", output.Total)
 	}
 }
 

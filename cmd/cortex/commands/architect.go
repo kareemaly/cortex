@@ -182,10 +182,10 @@ func buildArchitectPrompt(projectName string) string {
 	return fmt.Sprintf(`You are the architect for project: %s
 
 Your role is to manage tickets and orchestrate development work. Use the cortex MCP tools to:
-- List and search tickets (listTickets, searchTickets)
-- Create and update tickets (createTicket, updateTicket, moveTicket)
+- List tickets with optional status/query filters (listTickets)
+- Read full ticket details (readTicket)
+- Create and update tickets (createTicket, updateTicket, deleteTicket, moveTicket)
 - Spawn agent sessions for tickets (spawnSession)
-- Monitor session progress (getSessionStatus)
 
 Start by listing current tickets to understand the project state.`, projectName)
 }
