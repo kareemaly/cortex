@@ -260,11 +260,8 @@ func (s *Server) handleAddTicketComment(
 
 	// Find active session ID
 	var activeSessionID string
-	for _, sess := range t.Sessions {
-		if sess.IsActive() {
-			activeSessionID = sess.ID
-			break
-		}
+	if t.Session != nil && t.Session.IsActive() {
+		activeSessionID = t.Session.ID
 	}
 
 	// Validate comment type
@@ -322,18 +319,11 @@ func (s *Server) handleConcludeSession(
 		return nil, ConcludeSessionOutput{}, WrapTicketError(err)
 	}
 
-	// Find active session
-	var activeSessionID string
-	for _, sess := range t.Sessions {
-		if sess.IsActive() {
-			activeSessionID = sess.ID
-			break
-		}
-	}
-
-	if activeSessionID == "" {
+	// Get active session
+	if t.Session == nil || !t.Session.IsActive() {
 		return nil, ConcludeSessionOutput{}, NewValidationError("session", "no active session found")
 	}
+	activeSessionID := t.Session.ID
 
 	// Add summary as a comment if provided
 	if input.Summary != "" {
@@ -344,7 +334,7 @@ func (s *Server) handleConcludeSession(
 	}
 
 	// End the session
-	err = s.store.EndSession(s.session.TicketID, activeSessionID)
+	err = s.store.EndSession(s.session.TicketID)
 	if err != nil {
 		return nil, ConcludeSessionOutput{}, WrapTicketError(err)
 	}
@@ -391,18 +381,11 @@ func (s *Server) handleSubmitReport(
 		return nil, SubmitReportOutput{}, WrapTicketError(err)
 	}
 
-	// Find active session
-	var activeSessionID string
-	for _, sess := range t.Sessions {
-		if sess.IsActive() {
-			activeSessionID = sess.ID
-			break
-		}
-	}
-
-	if activeSessionID == "" {
+	// Get active session
+	if t.Session == nil || !t.Session.IsActive() {
 		return nil, SubmitReportOutput{}, NewValidationError("session", "no active session found")
 	}
+	activeSessionID := t.Session.ID
 
 	// Convert to comments
 	if input.ScopeChanges != nil && *input.ScopeChanges != "" {
@@ -457,18 +440,11 @@ func (s *Server) handleApprove(
 		return nil, ApproveOutput{}, WrapTicketError(err)
 	}
 
-	// Find active session
-	var activeSessionID string
-	for _, sess := range t.Sessions {
-		if sess.IsActive() {
-			activeSessionID = sess.ID
-			break
-		}
-	}
-
-	if activeSessionID == "" {
+	// Get active session
+	if t.Session == nil || !t.Session.IsActive() {
 		return nil, ApproveOutput{}, NewValidationError("session", "no active session found")
 	}
+	activeSessionID := t.Session.ID
 
 	// Add summary as comment if provided
 	if input.Summary != "" {
@@ -506,7 +482,7 @@ func (s *Server) handleApprove(
 	}
 
 	// End the session
-	err = s.store.EndSession(s.session.TicketID, activeSessionID)
+	err = s.store.EndSession(s.session.TicketID)
 	if err != nil {
 		return nil, ApproveOutput{}, WrapTicketError(err)
 	}

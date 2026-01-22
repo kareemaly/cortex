@@ -53,11 +53,11 @@ type HealthResponse struct {
 
 // TicketSummary is a brief view of a ticket.
 type TicketSummary struct {
-	ID                string    `json:"id"`
-	Title             string    `json:"title"`
-	Status            string    `json:"status"`
-	Created           time.Time `json:"created"`
-	HasActiveSessions bool      `json:"has_active_sessions"`
+	ID               string    `json:"id"`
+	Title            string    `json:"title"`
+	Status           string    `json:"status"`
+	Created          time.Time `json:"created"`
+	HasActiveSession bool      `json:"has_active_session"`
 }
 
 // ListAllTicketsResponse groups tickets by status.
@@ -101,13 +101,14 @@ type StatusEntryResponse struct {
 
 // SessionResponse is a session in a ticket response.
 type SessionResponse struct {
-	ID            string                `json:"id"`
-	StartedAt     time.Time             `json:"started_at"`
-	EndedAt       *time.Time            `json:"ended_at,omitempty"`
-	Agent         string                `json:"agent"`
-	TmuxWindow    string                `json:"tmux_window"`
-	CurrentStatus *StatusEntryResponse  `json:"current_status,omitempty"`
-	StatusHistory []StatusEntryResponse `json:"status_history"`
+	ID              string                `json:"id"`
+	ClaudeSessionID string                `json:"claude_session_id,omitempty"`
+	StartedAt       time.Time             `json:"started_at"`
+	EndedAt         *time.Time            `json:"ended_at,omitempty"`
+	Agent           string                `json:"agent"`
+	TmuxWindow      string                `json:"tmux_window"`
+	CurrentStatus   *StatusEntryResponse  `json:"current_status,omitempty"`
+	StatusHistory   []StatusEntryResponse `json:"status_history"`
 }
 
 // TicketResponse is the full ticket response with status.
@@ -118,7 +119,7 @@ type TicketResponse struct {
 	Status   string            `json:"status"`
 	Dates    DatesResponse     `json:"dates"`
 	Comments []CommentResponse `json:"comments"`
-	Sessions []SessionResponse `json:"sessions"`
+	Session  *SessionResponse  `json:"session,omitempty"`
 }
 
 // ErrorResponse is the standard error response format.
@@ -372,11 +373,8 @@ func (c *Client) FindSession(sessionID string) (*SessionResponse, *TicketRespons
 			if err != nil {
 				continue
 			}
-			for i := range ticket.Sessions {
-				s := &ticket.Sessions[i]
-				if s.ID == sessionID || hasPrefix(s.ID, sessionID) {
-					return s, ticket, nil
-				}
+			if ticket.Session != nil && (ticket.Session.ID == sessionID || hasPrefix(ticket.Session.ID, sessionID)) {
+				return ticket.Session, ticket, nil
 			}
 		}
 		return nil, nil, nil

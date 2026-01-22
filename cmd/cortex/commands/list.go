@@ -129,7 +129,7 @@ func printTicketTable(w *tabwriter.Writer, tickets []sdk.TicketSummary) {
 			title = title[:37] + "..."
 		}
 		active := ""
-		if t.HasActiveSessions {
+		if t.HasActiveSession {
 			active = "yes"
 		}
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", shortID, title, formatTime(t.Created), active)

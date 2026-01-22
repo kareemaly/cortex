@@ -35,22 +35,21 @@ func TestTicketJSONRoundTrip(t *testing.T) {
 				CreatedAt: now,
 			},
 		},
-		Sessions: []Session{
-			{
-				ID:         "session-1",
-				StartedAt:  now,
-				EndedAt:    &ended,
-				Agent:      "claude",
-				TmuxWindow: "test-window",
-				CurrentStatus: &StatusEntry{
-					Status: AgentStatusInProgress,
-					Tool:   &tool,
-					Work:   &work,
-					At:     now,
-				},
-				StatusHistory: []StatusEntry{
-					{Status: AgentStatusStarting, At: now},
-				},
+		Session: &Session{
+			ID:              "session-1",
+			ClaudeSessionID: "claude-session-123",
+			StartedAt:       now,
+			EndedAt:         &ended,
+			Agent:           "claude",
+			TmuxWindow:      "test-window",
+			CurrentStatus: &StatusEntry{
+				Status: AgentStatusInProgress,
+				Tool:   &tool,
+				Work:   &work,
+				At:     now,
+			},
+			StatusHistory: []StatusEntry{
+				{Status: AgentStatusStarting, At: now},
 			},
 		},
 	}
@@ -71,8 +70,11 @@ func TestTicketJSONRoundTrip(t *testing.T) {
 	if decoded.Title != original.Title {
 		t.Errorf("Title mismatch: got %q, want %q", decoded.Title, original.Title)
 	}
-	if len(decoded.Sessions) != 1 {
-		t.Errorf("Sessions count: got %d, want 1", len(decoded.Sessions))
+	if decoded.Session == nil {
+		t.Fatal("Session should not be nil")
+	}
+	if decoded.Session.ClaudeSessionID != "claude-session-123" {
+		t.Errorf("ClaudeSessionID mismatch: got %q, want %q", decoded.Session.ClaudeSessionID, "claude-session-123")
 	}
 	if len(decoded.Comments) != 1 {
 		t.Errorf("Comments count: got %d, want 1", len(decoded.Comments))
@@ -96,32 +98,26 @@ func TestSessionIsActive(t *testing.T) {
 	}
 }
 
-func TestTicketHasActiveSessions(t *testing.T) {
+func TestTicketHasActiveSession(t *testing.T) {
 	now := time.Now()
 
 	ticketWithActive := Ticket{
-		Sessions: []Session{
-			{EndedAt: &now},
-			{EndedAt: nil},
-		},
+		Session: &Session{EndedAt: nil},
 	}
-	if !ticketWithActive.HasActiveSessions() {
-		t.Error("Ticket with one active session should return true")
+	if !ticketWithActive.HasActiveSession() {
+		t.Error("Ticket with active session should return true")
 	}
 
-	ticketAllEnded := Ticket{
-		Sessions: []Session{
-			{EndedAt: &now},
-			{EndedAt: &now},
-		},
+	ticketEnded := Ticket{
+		Session: &Session{EndedAt: &now},
 	}
-	if ticketAllEnded.HasActiveSessions() {
-		t.Error("Ticket with all ended sessions should return false")
+	if ticketEnded.HasActiveSession() {
+		t.Error("Ticket with ended session should return false")
 	}
 
-	ticketNoSessions := Ticket{Sessions: []Session{}}
-	if ticketNoSessions.HasActiveSessions() {
-		t.Error("Ticket with no sessions should return false")
+	ticketNoSession := Ticket{Session: nil}
+	if ticketNoSession.HasActiveSession() {
+		t.Error("Ticket with no session should return false")
 	}
 }
 

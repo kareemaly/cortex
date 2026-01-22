@@ -261,8 +261,8 @@ func (s *Server) handleSpawnSession(
 		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}
 
-	// Check if ticket already has active sessions
-	if t.HasActiveSessions() {
+	// Check if ticket already has an active session
+	if t.HasActiveSession() {
 		return nil, SpawnSessionOutput{
 			Success:  false,
 			TicketID: input.TicketID,
@@ -294,8 +294,8 @@ func (s *Server) handleSpawnSession(
 	// Generate window name from ticket slug
 	windowName := ticket.GenerateSlug(t.Title)
 
-	// Add session to ticket store
-	session, err := s.store.AddSession(input.TicketID, agent, windowName)
+	// Set session on ticket store
+	session, err := s.store.SetSession(input.TicketID, agent, windowName, "")
 	if err != nil {
 		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}
@@ -307,7 +307,7 @@ func (s *Server) handleSpawnSession(
 		cortexdPath, err = binpath.FindCortexd()
 		if err != nil {
 			// Cleanup session on failure
-			_ = s.store.EndSession(input.TicketID, session.ID)
+			_ = s.store.EndSession(input.TicketID)
 			return nil, SpawnSessionOutput{
 				Success: false,
 				Message: "cortexd not found: " + err.Error(),
@@ -341,13 +341,13 @@ func (s *Server) handleSpawnSession(
 	mcpConfigData, err := json.MarshalIndent(mcpConfig, "", "  ")
 	if err != nil {
 		// Cleanup session on failure
-		_ = s.store.EndSession(input.TicketID, session.ID)
+		_ = s.store.EndSession(input.TicketID)
 		return nil, SpawnSessionOutput{}, NewInternalError("failed to marshal MCP config: " + err.Error())
 	}
 
 	if err := os.WriteFile(mcpConfigPath, mcpConfigData, 0644); err != nil {
 		// Cleanup session on failure
-		_ = s.store.EndSession(input.TicketID, session.ID)
+		_ = s.store.EndSession(input.TicketID)
 		return nil, SpawnSessionOutput{}, NewInternalError("failed to write MCP config: " + err.Error())
 	}
 
@@ -361,7 +361,7 @@ func (s *Server) handleSpawnSession(
 	})
 	if err != nil {
 		// Cleanup session on failure
-		_ = s.store.EndSession(input.TicketID, session.ID)
+		_ = s.store.EndSession(input.TicketID)
 		_ = os.Remove(mcpConfigPath)
 		return nil, SpawnSessionOutput{
 			Success: false,
@@ -377,7 +377,7 @@ func (s *Server) handleSpawnSession(
 	_, err = tmuxMgr.SpawnAgent(s.config.TmuxSession, windowName, claudeCmd)
 	if err != nil {
 		// Cleanup session and config on failure
-		_ = s.store.EndSession(input.TicketID, session.ID)
+		_ = s.store.EndSession(input.TicketID)
 		_ = os.Remove(mcpConfigPath)
 		return nil, SpawnSessionOutput{
 			Success: false,

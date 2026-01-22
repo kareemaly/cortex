@@ -106,7 +106,7 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 				line = selectedTicketStyle.Width(width - 2).Render("> " + title)
 			} else {
 				prefix := "  "
-				if t.HasActiveSessions {
+				if t.HasActiveSession {
 					prefix = activeSessionStyle.Render("● ")
 				}
 				line = ticketStyle.Width(width - 2).Render(prefix + title)

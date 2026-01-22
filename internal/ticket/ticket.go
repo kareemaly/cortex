@@ -52,7 +52,7 @@ type Ticket struct {
 	Body     string    `json:"body"`
 	Dates    Dates     `json:"dates"`
 	Comments []Comment `json:"comments"`
-	Sessions []Session `json:"sessions"`
+	Session  *Session  `json:"session,omitempty"`
 }
 
 // Dates holds the timestamp metadata for a ticket.
@@ -66,13 +66,14 @@ type Dates struct {
 
 // Session represents a work session on a ticket.
 type Session struct {
-	ID            string        `json:"id"`
-	StartedAt     time.Time     `json:"started_at"`
-	EndedAt       *time.Time    `json:"ended_at,omitempty"`
-	Agent         string        `json:"agent"`
-	TmuxWindow    string        `json:"tmux_window"`
-	CurrentStatus *StatusEntry  `json:"current_status,omitempty"`
-	StatusHistory []StatusEntry `json:"status_history"`
+	ID              string        `json:"id"`
+	ClaudeSessionID string        `json:"claude_session_id,omitempty"`
+	StartedAt       time.Time     `json:"started_at"`
+	EndedAt         *time.Time    `json:"ended_at,omitempty"`
+	Agent           string        `json:"agent"`
+	TmuxWindow      string        `json:"tmux_window"`
+	CurrentStatus   *StatusEntry  `json:"current_status,omitempty"`
+	StatusHistory   []StatusEntry `json:"status_history"`
 }
 
 // StatusEntry represents a point-in-time status of an agent.
@@ -88,12 +89,7 @@ func (s *Session) IsActive() bool {
 	return s.EndedAt == nil
 }
 
-// HasActiveSessions returns true if the ticket has any active sessions.
-func (t *Ticket) HasActiveSessions() bool {
-	for _, s := range t.Sessions {
-		if s.IsActive() {
-			return true
-		}
-	}
-	return false
+// HasActiveSession returns true if the ticket has an active session.
+func (t *Ticket) HasActiveSession() bool {
+	return t.Session != nil && t.Session.IsActive()
 }

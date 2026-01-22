@@ -38,7 +38,7 @@ type TicketResponse struct {
 	Status   string            `json:"status"`
 	Dates    DatesResponse     `json:"dates"`
 	Comments []CommentResponse `json:"comments"`
-	Sessions []SessionResponse `json:"sessions"`
+	Session  *SessionResponse  `json:"session,omitempty"`
 }
 
 // DatesResponse is the dates portion of a ticket response.
@@ -61,13 +61,14 @@ type CommentResponse struct {
 
 // SessionResponse is a session in a ticket response.
 type SessionResponse struct {
-	ID            string                `json:"id"`
-	StartedAt     time.Time             `json:"started_at"`
-	EndedAt       *time.Time            `json:"ended_at,omitempty"`
-	Agent         string                `json:"agent"`
-	TmuxWindow    string                `json:"tmux_window"`
-	CurrentStatus *StatusEntryResponse  `json:"current_status,omitempty"`
-	StatusHistory []StatusEntryResponse `json:"status_history"`
+	ID              string                `json:"id"`
+	ClaudeSessionID string                `json:"claude_session_id,omitempty"`
+	StartedAt       time.Time             `json:"started_at"`
+	EndedAt         *time.Time            `json:"ended_at,omitempty"`
+	Agent           string                `json:"agent"`
+	TmuxWindow      string                `json:"tmux_window"`
+	CurrentStatus   *StatusEntryResponse  `json:"current_status,omitempty"`
+	StatusHistory   []StatusEntryResponse `json:"status_history"`
 }
 
 // StatusEntryResponse is a status entry in a session response.
@@ -80,11 +81,11 @@ type StatusEntryResponse struct {
 
 // TicketSummary is a brief view of a ticket for lists.
 type TicketSummary struct {
-	ID                string    `json:"id"`
-	Title             string    `json:"title"`
-	Status            string    `json:"status"`
-	Created           time.Time `json:"created"`
-	HasActiveSessions bool      `json:"has_active_sessions"`
+	ID               string    `json:"id"`
+	Title            string    `json:"title"`
+	Status           string    `json:"status"`
+	Created          time.Time `json:"created"`
+	HasActiveSession bool      `json:"has_active_session"`
 }
 
 // ListAllTicketsResponse groups tickets by status.
@@ -108,9 +109,10 @@ type SpawnResponse struct {
 
 // toTicketResponse converts a ticket to its API response form.
 func toTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
-	sessions := make([]SessionResponse, len(t.Sessions))
-	for i, s := range t.Sessions {
-		sessions[i] = toSessionResponse(s)
+	var session *SessionResponse
+	if t.Session != nil {
+		s := toSessionResponse(*t.Session)
+		session = &s
 	}
 
 	comments := make([]CommentResponse, len(t.Comments))
@@ -137,7 +139,7 @@ func toTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 			Done:     t.Dates.Done,
 		},
 		Comments: comments,
-		Sessions: sessions,
+		Session:  session,
 	}
 }
 
@@ -164,13 +166,14 @@ func toSessionResponse(s ticket.Session) SessionResponse {
 	}
 
 	return SessionResponse{
-		ID:            s.ID,
-		StartedAt:     s.StartedAt,
-		EndedAt:       s.EndedAt,
-		Agent:         s.Agent,
-		TmuxWindow:    s.TmuxWindow,
-		CurrentStatus: currentStatus,
-		StatusHistory: history,
+		ID:              s.ID,
+		ClaudeSessionID: s.ClaudeSessionID,
+		StartedAt:       s.StartedAt,
+		EndedAt:         s.EndedAt,
+		Agent:           s.Agent,
+		TmuxWindow:      s.TmuxWindow,
+		CurrentStatus:   currentStatus,
+		StatusHistory:   history,
 	}
 }
 
@@ -179,11 +182,11 @@ func toSummaryList(tickets []*ticket.Ticket, status ticket.Status) []TicketSumma
 	summaries := make([]TicketSummary, len(tickets))
 	for i, t := range tickets {
 		summaries[i] = TicketSummary{
-			ID:                t.ID,
-			Title:             t.Title,
-			Status:            string(status),
-			Created:           t.Dates.Created,
-			HasActiveSessions: t.HasActiveSessions(),
+			ID:               t.ID,
+			Title:            t.Title,
+			Status:           string(status),
+			Created:          t.Dates.Created,
+			HasActiveSession: t.HasActiveSession(),
 		}
 	}
 	return summaries

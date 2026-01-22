@@ -403,9 +403,9 @@ func TestHandleSpawnSessionActiveSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
-	_, err = server.Store().AddSession(created.ID, "claude", "window")
+	_, err = server.Store().SetSession(created.ID, "claude", "window", "")
 	if err != nil {
-		t.Fatalf("failed to add session: %v", err)
+		t.Fatalf("failed to set session: %v", err)
 	}
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -488,11 +488,11 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 		t.Fatalf("create ticket: %v", err)
 	}
 
-	// Add a session to the ticket
-	_, err = store.AddSession(tk.ID, "claude", "window")
+	// Set a session on the ticket
+	_, err = store.SetSession(tk.ID, "claude", "window", "")
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("add session: %v", err)
+		t.Fatalf("set session: %v", err)
 	}
 
 	// Now create server with ticket session
@@ -762,8 +762,8 @@ func TestHandleConcludeSession(t *testing.T) {
 
 	// Verify session is ended
 	tk, _, _ := server.Store().Get(server.Session().TicketID)
-	if tk.HasActiveSessions() {
-		t.Error("ticket should not have active sessions")
+	if tk.HasActiveSession() {
+		t.Error("ticket should not have active session")
 	}
 
 	// Verify summary was added as comment

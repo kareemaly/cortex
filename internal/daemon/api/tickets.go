@@ -307,8 +307,8 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check no active sessions exist
-	if t.HasActiveSessions() {
+	// Check no active session exists
+	if t.HasActiveSession() {
 		writeError(w, http.StatusConflict, "session_active", "ticket already has an active session")
 		return
 	}
@@ -338,10 +338,10 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add session to ticket
-	session, err := store.AddSession(id, string(projectCfg.Agent), windowName)
+	// Set session on ticket (generates a new claude session ID)
+	session, err := store.SetSession(id, string(projectCfg.Agent), windowName, "")
 	if err != nil {
-		h.deps.Logger.Error("failed to add session", "error", err)
+		h.deps.Logger.Error("failed to set session", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to record session")
 		return
 	}

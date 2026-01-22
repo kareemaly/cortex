@@ -56,7 +56,7 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// End the session in the store
-	if err := store.EndSession(ticketID, sessionID); err != nil {
+	if err := store.EndSession(ticketID); err != nil {
 		if ticket.IsNotFound(err) {
 			writeError(w, http.StatusNotFound, "not_found", "session not found")
 			return
@@ -80,10 +80,8 @@ func (h *SessionHandlers) findSession(store *ticket.Store, sessionID string) (st
 
 	for _, tickets := range all {
 		for _, t := range tickets {
-			for i := range t.Sessions {
-				if t.Sessions[i].ID == sessionID {
-					return t.ID, &t.Sessions[i]
-				}
+			if t.Session != nil && t.Session.ID == sessionID {
+				return t.ID, t.Session
 			}
 		}
 	}

@@ -47,7 +47,7 @@ func (s *Store) Create(title, body string) (*Ticket, error) {
 			Updated: now,
 		},
 		Comments: []Comment{},
-		Sessions: []Session{},
+		Session:  nil,
 	}
 
 	if err := s.save(ticket, StatusBacklog); err != nil {
@@ -199,20 +199,21 @@ func (s *Store) Move(id string, to Status) error {
 	return nil
 }
 
-// AddSession adds a new session to a ticket.
-func (s *Store) AddSession(ticketID, agent, tmuxWindow string) (*Session, error) {
+// SetSession sets the session for a ticket (replaces any existing session).
+func (s *Store) SetSession(ticketID, agent, tmuxWindow, claudeSessionID string) (*Session, error) {
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return nil, err
 	}
 
 	now := time.Now().UTC()
-	session := Session{
-		ID:         uuid.New().String(),
-		StartedAt:  now,
-		EndedAt:    nil,
-		Agent:      agent,
-		TmuxWindow: tmuxWindow,
+	session := &Session{
+		ID:              uuid.New().String(),
+		ClaudeSessionID: claudeSessionID,
+		StartedAt:       now,
+		EndedAt:         nil,
+		Agent:           agent,
+		TmuxWindow:      tmuxWindow,
 		CurrentStatus: &StatusEntry{
 			Status: AgentStatusStarting,
 			At:     now,
@@ -222,37 +223,29 @@ func (s *Store) AddSession(ticketID, agent, tmuxWindow string) (*Session, error)
 		},
 	}
 
-	ticket.Sessions = append(ticket.Sessions, session)
+	ticket.Session = session
 	ticket.Dates.Updated = now
 
 	if err := s.save(ticket, status); err != nil {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
-	return &session, nil
+	return session, nil
 }
 
-// EndSession marks a session as ended.
-func (s *Store) EndSession(ticketID, sessionID string) error {
+// EndSession marks the ticket's session as ended.
+func (s *Store) EndSession(ticketID string) error {
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return err
 	}
 
-	found := false
+	if ticket.Session == nil {
+		return &NotFoundError{Resource: "session", ID: ticketID}
+	}
+
 	now := time.Now().UTC()
-	for i := range ticket.Sessions {
-		if ticket.Sessions[i].ID == sessionID {
-			ticket.Sessions[i].EndedAt = &now
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return &NotFoundError{Resource: "session", ID: sessionID}
-	}
-
+	ticket.Session.EndedAt = &now
 	ticket.Dates.Updated = now
 
 	if err := s.save(ticket, status); err != nil {
@@ -262,34 +255,26 @@ func (s *Store) EndSession(ticketID, sessionID string) error {
 	return nil
 }
 
-// UpdateSessionStatus updates the current status of a session.
-func (s *Store) UpdateSessionStatus(ticketID, sessionID string, agentStatus AgentStatus, tool, work *string) error {
+// UpdateSessionStatus updates the current status of the ticket's session.
+func (s *Store) UpdateSessionStatus(ticketID string, agentStatus AgentStatus, tool, work *string) error {
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return err
 	}
 
+	if ticket.Session == nil {
+		return &NotFoundError{Resource: "session", ID: ticketID}
+	}
+
 	now := time.Now().UTC()
-	found := false
-	for i := range ticket.Sessions {
-		if ticket.Sessions[i].ID == sessionID {
-			entry := StatusEntry{
-				Status: agentStatus,
-				Tool:   tool,
-				Work:   work,
-				At:     now,
-			}
-			ticket.Sessions[i].CurrentStatus = &entry
-			ticket.Sessions[i].StatusHistory = append(ticket.Sessions[i].StatusHistory, entry)
-			found = true
-			break
-		}
+	entry := StatusEntry{
+		Status: agentStatus,
+		Tool:   tool,
+		Work:   work,
+		At:     now,
 	}
-
-	if !found {
-		return &NotFoundError{Resource: "session", ID: sessionID}
-	}
-
+	ticket.Session.CurrentStatus = &entry
+	ticket.Session.StatusHistory = append(ticket.Session.StatusHistory, entry)
 	ticket.Dates.Updated = now
 
 	if err := s.save(ticket, status); err != nil {

@@ -108,11 +108,11 @@ type HooksExecutionOutput struct {
 
 // TicketSummary is a brief ticket representation for list views.
 type TicketSummary struct {
-	ID                string    `json:"id"`
-	Title             string    `json:"title"`
-	Status            string    `json:"status"`
-	Created           time.Time `json:"created"`
-	HasActiveSessions bool      `json:"has_active_sessions"`
+	ID               string    `json:"id"`
+	Title            string    `json:"title"`
+	Status           string    `json:"status"`
+	Created          time.Time `json:"created"`
+	HasActiveSession bool      `json:"has_active_session"`
 }
 
 // TicketOutput is the full ticket representation.
@@ -123,7 +123,7 @@ type TicketOutput struct {
 	Status   string          `json:"status"`
 	Dates    DatesOutput     `json:"dates"`
 	Comments []CommentOutput `json:"comments"`
-	Sessions []SessionOutput `json:"sessions"`
+	Session  *SessionOutput  `json:"session,omitempty"`
 }
 
 // DatesOutput represents ticket date information.
@@ -146,13 +146,14 @@ type CommentOutput struct {
 
 // SessionOutput represents a work session.
 type SessionOutput struct {
-	ID            string        `json:"id"`
-	StartedAt     time.Time     `json:"started_at"`
-	EndedAt       *time.Time    `json:"ended_at,omitempty"`
-	Agent         string        `json:"agent"`
-	TmuxWindow    string        `json:"tmux_window"`
-	CurrentStatus *StatusOutput `json:"current_status,omitempty"`
-	IsActive      bool          `json:"is_active"`
+	ID              string        `json:"id"`
+	ClaudeSessionID string        `json:"claude_session_id,omitempty"`
+	StartedAt       time.Time     `json:"started_at"`
+	EndedAt         *time.Time    `json:"ended_at,omitempty"`
+	Agent           string        `json:"agent"`
+	TmuxWindow      string        `json:"tmux_window"`
+	CurrentStatus   *StatusOutput `json:"current_status,omitempty"`
+	IsActive        bool          `json:"is_active"`
 }
 
 // StatusOutput represents agent status.
@@ -247,9 +248,10 @@ type PickupTicketOutput struct {
 
 // ToTicketOutput converts a ticket and status to output format.
 func ToTicketOutput(t *ticket.Ticket, status ticket.Status) TicketOutput {
-	sessions := make([]SessionOutput, len(t.Sessions))
-	for i, s := range t.Sessions {
-		sessions[i] = ToSessionOutput(&s)
+	var session *SessionOutput
+	if t.Session != nil {
+		s := ToSessionOutput(t.Session)
+		session = &s
 	}
 
 	comments := make([]CommentOutput, len(t.Comments))
@@ -270,18 +272,18 @@ func ToTicketOutput(t *ticket.Ticket, status ticket.Status) TicketOutput {
 			Done:     t.Dates.Done,
 		},
 		Comments: comments,
-		Sessions: sessions,
+		Session:  session,
 	}
 }
 
 // ToTicketSummary converts a ticket and status to summary format.
 func ToTicketSummary(t *ticket.Ticket, status ticket.Status) TicketSummary {
 	return TicketSummary{
-		ID:                t.ID,
-		Title:             t.Title,
-		Status:            string(status),
-		Created:           t.Dates.Created,
-		HasActiveSessions: t.HasActiveSessions(),
+		ID:               t.ID,
+		Title:            t.Title,
+		Status:           string(status),
+		Created:          t.Dates.Created,
+		HasActiveSession: t.HasActiveSession(),
 	}
 }
 
@@ -298,13 +300,14 @@ func ToSessionOutput(s *ticket.Session) SessionOutput {
 	}
 
 	return SessionOutput{
-		ID:            s.ID,
-		StartedAt:     s.StartedAt,
-		EndedAt:       s.EndedAt,
-		Agent:         s.Agent,
-		TmuxWindow:    s.TmuxWindow,
-		CurrentStatus: currentStatus,
-		IsActive:      s.IsActive(),
+		ID:              s.ID,
+		ClaudeSessionID: s.ClaudeSessionID,
+		StartedAt:       s.StartedAt,
+		EndedAt:         s.EndedAt,
+		Agent:           s.Agent,
+		TmuxWindow:      s.TmuxWindow,
+		CurrentStatus:   currentStatus,
+		IsActive:        s.IsActive(),
 	}
 }
 

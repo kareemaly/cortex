@@ -284,15 +284,15 @@ func TestStoreMoveToReviewSetsReviewedDate(t *testing.T) {
 	}
 }
 
-func TestStoreAddSession(t *testing.T) {
+func TestStoreSetSession(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
 
-	session, err := store.AddSession(ticket.ID, "claude", "test-window")
+	session, err := store.SetSession(ticket.ID, "claude", "test-window", "claude-session-123")
 	if err != nil {
-		t.Fatalf("AddSession failed: %v", err)
+		t.Fatalf("SetSession failed: %v", err)
 	}
 
 	if session.ID == "" {
@@ -301,13 +301,19 @@ func TestStoreAddSession(t *testing.T) {
 	if session.Agent != "claude" {
 		t.Errorf("agent = %q, want %q", session.Agent, "claude")
 	}
+	if session.ClaudeSessionID != "claude-session-123" {
+		t.Errorf("claude_session_id = %q, want %q", session.ClaudeSessionID, "claude-session-123")
+	}
 	if !session.IsActive() {
 		t.Error("new session should be active")
 	}
 
 	retrieved, _, _ := store.Get(ticket.ID)
-	if len(retrieved.Sessions) != 1 {
-		t.Errorf("sessions count = %d, want 1", len(retrieved.Sessions))
+	if retrieved.Session == nil {
+		t.Error("session should not be nil")
+	}
+	if retrieved.Session.ID != session.ID {
+		t.Errorf("session ID = %q, want %q", retrieved.Session.ID, session.ID)
 	}
 }
 
@@ -316,14 +322,14 @@ func TestStoreEndSession(t *testing.T) {
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
-	session, _ := store.AddSession(ticket.ID, "claude", "window")
+	_, _ = store.SetSession(ticket.ID, "claude", "window", "")
 
-	if err := store.EndSession(ticket.ID, session.ID); err != nil {
+	if err := store.EndSession(ticket.ID); err != nil {
 		t.Fatalf("EndSession failed: %v", err)
 	}
 
 	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Sessions[0].IsActive() {
+	if retrieved.Session.IsActive() {
 		t.Error("session should not be active after ending")
 	}
 }
@@ -333,21 +339,21 @@ func TestStoreUpdateSessionStatus(t *testing.T) {
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
-	session, _ := store.AddSession(ticket.ID, "claude", "window")
+	_, _ = store.SetSession(ticket.ID, "claude", "window", "")
 
 	tool := "Edit"
 	work := "Writing code"
-	err := store.UpdateSessionStatus(ticket.ID, session.ID, AgentStatusInProgress, &tool, &work)
+	err := store.UpdateSessionStatus(ticket.ID, AgentStatusInProgress, &tool, &work)
 	if err != nil {
 		t.Fatalf("UpdateSessionStatus failed: %v", err)
 	}
 
 	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Sessions[0].CurrentStatus.Status != AgentStatusInProgress {
+	if retrieved.Session.CurrentStatus.Status != AgentStatusInProgress {
 		t.Error("status should be updated")
 	}
-	if len(retrieved.Sessions[0].StatusHistory) != 2 {
-		t.Errorf("history count = %d, want 2", len(retrieved.Sessions[0].StatusHistory))
+	if len(retrieved.Session.StatusHistory) != 2 {
+		t.Errorf("history count = %d, want 2", len(retrieved.Session.StatusHistory))
 	}
 }
 
@@ -356,7 +362,7 @@ func TestStoreAddComment(t *testing.T) {
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
-	session, _ := store.AddSession(ticket.ID, "claude", "window")
+	session, _ := store.SetSession(ticket.ID, "claude", "window", "")
 
 	comment, err := store.AddComment(ticket.ID, session.ID, CommentDecision, "Test decision")
 	if err != nil {
@@ -388,7 +394,8 @@ func TestStoreSessionNotFound(t *testing.T) {
 
 	ticket, _ := store.Create("Test Ticket", "body")
 
-	err := store.EndSession(ticket.ID, "nonexistent")
+	// Ticket has no session, so EndSession should return NotFoundError
+	err := store.EndSession(ticket.ID)
 	if !IsNotFound(err) {
 		t.Errorf("expected NotFoundError, got %T", err)
 	}
