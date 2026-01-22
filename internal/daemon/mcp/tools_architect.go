@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kareemaly/cortex/internal/binpath"
+	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -352,10 +353,24 @@ func (s *Server) handleSpawnSession(
 
 	// Build claude command with ticket prompt (like cortex0: uses permission-mode plan for tickets)
 	// The agent can use the cortex MCP tools (readTicket, submitReport, approve) to interact
-	prompt := fmt.Sprintf("You are working on ticket: %s\n\n%s\n\nUse the cortex MCP tools to track your progress. When complete, use the approve tool.", t.Title, t.Body)
+	promptText, err := prompt.LoadTicketAgent(s.config.ProjectPath, prompt.TicketVars{
+		TicketID: input.TicketID,
+		Title:    t.Title,
+		Body:     t.Body,
+		Slug:     ticket.GenerateSlug(t.Title),
+	})
+	if err != nil {
+		// Cleanup session on failure
+		_ = s.store.EndSession(input.TicketID, session.ID)
+		_ = os.Remove(mcpConfigPath)
+		return nil, SpawnSessionOutput{
+			Success: false,
+			Message: "failed to load ticket agent prompt: " + err.Error(),
+		}, nil
+	}
 	// Use single quotes to prevent shell expansion (backticks, $vars, etc.)
 	// Escape any single quotes in the prompt using POSIX pattern: ' -> '\''
-	escapedPrompt := strings.ReplaceAll(prompt, "'", "'\\''")
+	escapedPrompt := strings.ReplaceAll(promptText, "'", "'\\''")
 	claudeCmd := fmt.Sprintf("claude '%s' --mcp-config %s --permission-mode plan", escapedPrompt, mcpConfigPath)
 
 	// Spawn agent in tmux

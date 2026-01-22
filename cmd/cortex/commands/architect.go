@@ -8,6 +8,7 @@ import (
 
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/project/config"
+	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/spf13/cobra"
 )
@@ -93,8 +94,15 @@ func runArchitect(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	prompt := buildArchitectPrompt(sessionName)
-	agentCmd := buildAgentCommand(cfg.Agent, mcpConfigPath, prompt)
+	promptText, err := prompt.LoadArchitect(projectRoot, prompt.ArchitectVars{
+		ProjectName: sessionName,
+		TmuxSession: sessionName,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to load architect prompt: %v\n", err)
+		os.Exit(1)
+	}
+	agentCmd := buildAgentCommand(cfg.Agent, mcpConfigPath, promptText)
 
 	if err := manager.SpawnArchitect(sessionName, "architect", agentCmd); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to spawn architect: %v\n", err)
@@ -177,27 +185,14 @@ func generateArchitectMCPConfig(sessionName, projectPath string) (string, error)
 	return configPath, nil
 }
 
-// buildArchitectPrompt creates the initial prompt for the architect agent.
-func buildArchitectPrompt(projectName string) string {
-	return fmt.Sprintf(`You are the architect for project: %s
-
-Your role is to manage tickets and orchestrate development work. Use the cortex MCP tools to:
-- List tickets with optional status/query filters (listTickets)
-- Read full ticket details (readTicket)
-- Create and update tickets (createTicket, updateTicket, deleteTicket, moveTicket)
-- Spawn agent sessions for tickets (spawnSession)
-
-Start by listing current tickets to understand the project state.`, projectName)
-}
-
 // buildAgentCommand constructs the command to run the AI agent.
-func buildAgentCommand(agent config.AgentType, mcpConfigPath, prompt string) string {
+func buildAgentCommand(agent config.AgentType, mcpConfigPath, promptText string) string {
 	switch agent {
 	case config.AgentOpenCode:
-		return fmt.Sprintf("opencode %q --mcp-config %s", prompt, mcpConfigPath)
+		return fmt.Sprintf("opencode %q --mcp-config %s", promptText, mcpConfigPath)
 	case config.AgentClaude:
 		fallthrough
 	default:
-		return fmt.Sprintf("claude %q --mcp-config %s", prompt, mcpConfigPath)
+		return fmt.Sprintf("claude %q --mcp-config %s", promptText, mcpConfigPath)
 	}
 }

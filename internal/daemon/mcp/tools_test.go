@@ -3,8 +3,10 @@ package mcp
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 )
@@ -18,12 +20,24 @@ func setupTestServerWithMockTmux(t *testing.T, ticketID string) (*Server, func()
 		t.Fatalf("create temp dir: %v", err)
 	}
 
+	// Create the prompts directory and default templates for the project
+	promptsDir := filepath.Join(tmpDir, ".cortex", "prompts")
+	if err := os.MkdirAll(promptsDir, 0755); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create prompts dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-agent.md"), []byte(prompt.DefaultTicketAgentPrompt), 0644); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create ticket-agent.md: %v", err)
+	}
+
 	mockRunner := tmux.NewMockRunner()
 	tmuxMgr := tmux.NewManagerWithRunner(mockRunner)
 
 	cfg := &Config{
 		TicketID:    ticketID,
 		TicketsDir:  tmpDir,
+		ProjectPath: tmpDir,
 		TmuxSession: "test-session",
 		TmuxManager: tmuxMgr,
 		CortexdPath: "/mock/cortexd",

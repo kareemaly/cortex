@@ -3,6 +3,8 @@ package install
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/kareemaly/cortex/internal/prompt"
 )
 
 // Options configures the installation.
@@ -122,6 +124,28 @@ git:
     - path: "."
 `
 	item := ensureConfigFile(configPath, configContent, force)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	// Create prompts directory and default templates
+	promptsDir := prompt.PromptsDir(absPath)
+	item = ensureDir(promptsDir)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	architectPath := prompt.ArchitectPath(absPath)
+	item = ensureConfigFile(architectPath, prompt.DefaultArchitectPrompt, force)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	ticketAgentPath := prompt.TicketAgentPath(absPath)
+	item = ensureConfigFile(ticketAgentPath, prompt.DefaultTicketAgentPrompt, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
