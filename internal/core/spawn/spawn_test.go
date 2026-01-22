@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kareemaly/cortex/internal/project/architect"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -621,4 +622,180 @@ func containsSubstr(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Architect state tests
+
+func TestDetectArchitectState_Normal(t *testing.T) {
+	info, err := DetectArchitectState(nil, "test-session", nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.State != StateNormal {
+		t.Errorf("expected StateNormal, got: %s", info.State)
+	}
+	if info.Session != nil {
+		t.Error("expected nil session")
+	}
+}
+
+func TestDetectArchitectState_Active(t *testing.T) {
+	tmuxMgr := newMockTmuxManager()
+	tmuxMgr.windowExists = true
+
+	session := &architect.Session{
+		ID:          "arch-session-1",
+		TmuxSession: "cortex",
+		TmuxWindow:  "architect",
+		StartedAt:   time.Now(),
+	}
+
+	info, err := DetectArchitectState(session, "cortex", tmuxMgr)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.State != StateActive {
+		t.Errorf("expected StateActive, got: %s", info.State)
+	}
+	if !info.WindowExists {
+		t.Error("expected WindowExists to be true")
+	}
+}
+
+func TestDetectArchitectState_Orphaned(t *testing.T) {
+	tmuxMgr := newMockTmuxManager()
+	tmuxMgr.windowExists = false
+
+	session := &architect.Session{
+		ID:          "arch-session-2",
+		TmuxSession: "cortex",
+		TmuxWindow:  "architect",
+		StartedAt:   time.Now(),
+	}
+
+	info, err := DetectArchitectState(session, "cortex", tmuxMgr)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.State != StateOrphaned {
+		t.Errorf("expected StateOrphaned, got: %s", info.State)
+	}
+	if info.WindowExists {
+		t.Error("expected WindowExists to be false")
+	}
+}
+
+func TestDetectArchitectState_Ended(t *testing.T) {
+	now := time.Now()
+	session := &architect.Session{
+		ID:        "arch-session-3",
+		StartedAt: now.Add(-time.Hour),
+		EndedAt:   &now,
+	}
+
+	info, err := DetectArchitectState(session, "test-session", nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.State != StateEnded {
+		t.Errorf("expected StateEnded, got: %s", info.State)
+	}
+}
+
+func TestArchitectStateInfo_CanSpawn(t *testing.T) {
+	tests := []struct {
+		state    SessionState
+		expected bool
+	}{
+		{StateNormal, true},
+		{StateActive, false},
+		{StateOrphaned, true},
+		{StateEnded, true},
+	}
+
+	for _, tc := range tests {
+		info := &ArchitectStateInfo{State: tc.state}
+		if info.CanSpawn() != tc.expected {
+			t.Errorf("CanSpawn() for %s: expected %v", tc.state, tc.expected)
+		}
+	}
+}
+
+func TestArchitectStateInfo_CanResume(t *testing.T) {
+	tests := []struct {
+		name     string
+		info     ArchitectStateInfo
+		expected bool
+	}{
+		{
+			name: "orphaned with session ID",
+			info: ArchitectStateInfo{
+				State:   StateOrphaned,
+				Session: &architect.Session{ID: "abc"},
+			},
+			expected: true,
+		},
+		{
+			name: "orphaned without session",
+			info: ArchitectStateInfo{
+				State:   StateOrphaned,
+				Session: nil,
+			},
+			expected: false,
+		},
+		{
+			name: "orphaned with empty session ID",
+			info: ArchitectStateInfo{
+				State:   StateOrphaned,
+				Session: &architect.Session{ID: ""},
+			},
+			expected: false,
+		},
+		{
+			name: "active",
+			info: ArchitectStateInfo{
+				State:   StateActive,
+				Session: &architect.Session{ID: "abc"},
+			},
+			expected: false,
+		},
+		{
+			name: "normal",
+			info: ArchitectStateInfo{
+				State: StateNormal,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.info.CanResume() != tc.expected {
+				t.Errorf("expected %v", tc.expected)
+			}
+		})
+	}
+}
+
+func TestArchitectStateInfo_NeedsCleanup(t *testing.T) {
+	tests := []struct {
+		state    SessionState
+		expected bool
+	}{
+		{StateNormal, false},
+		{StateActive, false},
+		{StateOrphaned, true},
+		{StateEnded, true},
+	}
+
+	for _, tc := range tests {
+		info := &ArchitectStateInfo{State: tc.state}
+		if info.NeedsCleanup() != tc.expected {
+			t.Errorf("NeedsCleanup() for %s: expected %v", tc.state, tc.expected)
+		}
+	}
 }
