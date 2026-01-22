@@ -142,6 +142,9 @@ func TestListAllTicketsEmpty(t *testing.T) {
 	if len(result.Progress) != 0 {
 		t.Errorf("expected 0 progress tickets, got %d", len(result.Progress))
 	}
+	if len(result.Review) != 0 {
+		t.Errorf("expected 0 review tickets, got %d", len(result.Review))
+	}
 	if len(result.Done) != 0 {
 		t.Errorf("expected 0 done tickets, got %d", len(result.Done))
 	}
@@ -154,10 +157,12 @@ func TestListAllTicketsWithData(t *testing.T) {
 	// Create tickets in different statuses
 	_, _ = ts.store.Create("Backlog Ticket", "body1")
 	ticket2, _ := ts.store.Create("Progress Ticket", "body2")
-	ticket3, _ := ts.store.Create("Done Ticket", "body3")
+	ticket3, _ := ts.store.Create("Review Ticket", "body3")
+	ticket4, _ := ts.store.Create("Done Ticket", "body4")
 
 	_ = ts.store.Move(ticket2.ID, ticket.StatusProgress)
-	_ = ts.store.Move(ticket3.ID, ticket.StatusDone)
+	_ = ts.store.Move(ticket3.ID, ticket.StatusReview)
+	_ = ts.store.Move(ticket4.ID, ticket.StatusDone)
 
 	resp := ts.request(t, http.MethodGet, "/tickets", nil)
 	defer resp.Body.Close()
@@ -170,6 +175,9 @@ func TestListAllTicketsWithData(t *testing.T) {
 	}
 	if len(result.Progress) != 1 {
 		t.Errorf("expected 1 progress ticket, got %d", len(result.Progress))
+	}
+	if len(result.Review) != 1 {
+		t.Errorf("expected 1 review ticket, got %d", len(result.Review))
 	}
 	if len(result.Done) != 1 {
 		t.Errorf("expected 1 done ticket, got %d", len(result.Done))
@@ -348,6 +356,32 @@ func TestMoveTicket(t *testing.T) {
 	_, status, _ := ts.store.Get(created.ID)
 	if status != ticket.StatusProgress {
 		t.Errorf("expected store status 'progress', got %q", status)
+	}
+}
+
+func TestMoveTicketToReview(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	created, _ := ts.store.Create("Review Ticket", "body")
+	_ = ts.store.Move(created.ID, ticket.StatusProgress)
+
+	body := MoveTicketRequest{To: "review"}
+
+	resp := ts.request(t, http.MethodPost, "/tickets/progress/"+created.ID+"/move", body)
+	defer resp.Body.Close()
+
+	expectStatus(t, resp, http.StatusOK)
+
+	result := decodeJSON[TicketResponse](t, resp)
+	if result.Status != "review" {
+		t.Errorf("expected status 'review', got %q", result.Status)
+	}
+
+	// Verify in store
+	_, status, _ := ts.store.Get(created.ID)
+	if status != ticket.StatusReview {
+		t.Errorf("expected store status 'review', got %q", status)
 	}
 }
 

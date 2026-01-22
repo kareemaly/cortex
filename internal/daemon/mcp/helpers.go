@@ -21,6 +21,7 @@ func buildTemplateVars(t *ticket.Ticket) lifecycle.TemplateVars {
 		t.ID,
 		ticket.GenerateSlug(t.Title),
 		t.Title,
+		t.Body,
 	)
 }
 
@@ -37,6 +38,16 @@ func (s *Server) getHooksForType(hookType lifecycle.HookType) []lifecycle.HookDe
 		return convertHookConfigs(s.projectConfig.Lifecycle.OnSubmit)
 	case lifecycle.HookOnApprove:
 		return convertHookConfigs(s.projectConfig.Lifecycle.OnApprove)
+	case lifecycle.HookMovedToProgress:
+		return convertHookConfigs(s.projectConfig.Lifecycle.MovedToProgress)
+	case lifecycle.HookMovedToReview:
+		return convertHookConfigs(s.projectConfig.Lifecycle.MovedToReview)
+	case lifecycle.HookMovedToDone:
+		return convertHookConfigs(s.projectConfig.Lifecycle.MovedToDone)
+	case lifecycle.HookCommentAdded:
+		return convertHookConfigs(s.projectConfig.Lifecycle.CommentAdded)
+	case lifecycle.HookSessionEnded:
+		return convertHookConfigs(s.projectConfig.Lifecycle.SessionEnded)
 	default:
 		return nil
 	}

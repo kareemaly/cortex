@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/spf13/cobra"
@@ -80,18 +79,17 @@ var sessionCmd = &cobra.Command{
 			fmt.Println()
 		}
 
-		// Print report summary
-		if session.Report.Summary != "" {
-			fmt.Println("Report:")
-			fmt.Printf("  Summary: %s\n", session.Report.Summary)
-			if len(session.Report.Files) > 0 {
-				fmt.Printf("  Files:   %s\n", strings.Join(session.Report.Files, ", "))
+		// Print comments for this session
+		sessionComments := []sdk.CommentResponse{}
+		for _, c := range ticket.Comments {
+			if c.SessionID == session.ID {
+				sessionComments = append(sessionComments, c)
 			}
-			if len(session.Report.Decisions) > 0 {
-				fmt.Println("  Decisions:")
-				for _, d := range session.Report.Decisions {
-					fmt.Printf("    - %s\n", d)
-				}
+		}
+		if len(sessionComments) > 0 {
+			fmt.Println("Comments:")
+			for _, c := range sessionComments {
+				fmt.Printf("  [%s] %s\n", c.Type, c.Content)
 			}
 		}
 	},

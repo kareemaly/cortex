@@ -37,6 +37,7 @@ type TicketResponse struct {
 	Body     string            `json:"body"`
 	Status   string            `json:"status"`
 	Dates    DatesResponse     `json:"dates"`
+	Comments []CommentResponse `json:"comments"`
 	Sessions []SessionResponse `json:"sessions"`
 }
 
@@ -44,7 +45,18 @@ type TicketResponse struct {
 type DatesResponse struct {
 	Created  time.Time  `json:"created"`
 	Updated  time.Time  `json:"updated"`
-	Approved *time.Time `json:"approved"`
+	Progress *time.Time `json:"progress,omitempty"`
+	Reviewed *time.Time `json:"reviewed,omitempty"`
+	Done     *time.Time `json:"done,omitempty"`
+}
+
+// CommentResponse is a comment in a ticket response.
+type CommentResponse struct {
+	ID        string    `json:"id"`
+	SessionID string    `json:"session_id,omitempty"`
+	Type      string    `json:"type"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // SessionResponse is a session in a ticket response.
@@ -54,18 +66,8 @@ type SessionResponse struct {
 	EndedAt       *time.Time            `json:"ended_at,omitempty"`
 	Agent         string                `json:"agent"`
 	TmuxWindow    string                `json:"tmux_window"`
-	GitBase       map[string]string     `json:"git_base"`
-	Report        ReportResponse        `json:"report"`
 	CurrentStatus *StatusEntryResponse  `json:"current_status,omitempty"`
 	StatusHistory []StatusEntryResponse `json:"status_history"`
-}
-
-// ReportResponse is the report portion of a session response.
-type ReportResponse struct {
-	Files        []string `json:"files"`
-	ScopeChanges *string  `json:"scope_changes,omitempty"`
-	Decisions    []string `json:"decisions"`
-	Summary      string   `json:"summary"`
 }
 
 // StatusEntryResponse is a status entry in a session response.
@@ -89,6 +91,7 @@ type TicketSummary struct {
 type ListAllTicketsResponse struct {
 	Backlog  []TicketSummary `json:"backlog"`
 	Progress []TicketSummary `json:"progress"`
+	Review   []TicketSummary `json:"review"`
 	Done     []TicketSummary `json:"done"`
 }
 
@@ -110,6 +113,17 @@ func toTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 		sessions[i] = toSessionResponse(s)
 	}
 
+	comments := make([]CommentResponse, len(t.Comments))
+	for i, c := range t.Comments {
+		comments[i] = CommentResponse{
+			ID:        c.ID,
+			SessionID: c.SessionID,
+			Type:      string(c.Type),
+			Content:   c.Content,
+			CreatedAt: c.CreatedAt,
+		}
+	}
+
 	return TicketResponse{
 		ID:     t.ID,
 		Title:  t.Title,
@@ -118,8 +132,11 @@ func toTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 		Dates: DatesResponse{
 			Created:  t.Dates.Created,
 			Updated:  t.Dates.Updated,
-			Approved: t.Dates.Approved,
+			Progress: t.Dates.Progress,
+			Reviewed: t.Dates.Reviewed,
+			Done:     t.Dates.Done,
 		},
+		Comments: comments,
 		Sessions: sessions,
 	}
 }
@@ -147,18 +164,11 @@ func toSessionResponse(s ticket.Session) SessionResponse {
 	}
 
 	return SessionResponse{
-		ID:         s.ID,
-		StartedAt:  s.StartedAt,
-		EndedAt:    s.EndedAt,
-		Agent:      s.Agent,
-		TmuxWindow: s.TmuxWindow,
-		GitBase:    s.GitBase,
-		Report: ReportResponse{
-			Files:        s.Report.Files,
-			ScopeChanges: s.Report.ScopeChanges,
-			Decisions:    s.Report.Decisions,
-			Summary:      s.Report.Summary,
-		},
+		ID:            s.ID,
+		StartedAt:     s.StartedAt,
+		EndedAt:       s.EndedAt,
+		Agent:         s.Agent,
+		TmuxWindow:    s.TmuxWindow,
 		CurrentStatus: currentStatus,
 		StatusHistory: history,
 	}

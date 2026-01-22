@@ -21,7 +21,7 @@ func NewStore(ticketsDir string) (*Store, error) {
 	s := &Store{ticketsDir: ticketsDir}
 
 	// Create status directories
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
 		dir := filepath.Join(ticketsDir, string(status))
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("create directory %s: %w", dir, err)
@@ -43,10 +43,10 @@ func (s *Store) Create(title, body string) (*Ticket, error) {
 		Title: title,
 		Body:  body,
 		Dates: Dates{
-			Created:  now,
-			Updated:  now,
-			Approved: nil,
+			Created: now,
+			Updated: now,
 		},
+		Comments: []Comment{},
 		Sessions: []Session{},
 	}
 
@@ -59,7 +59,7 @@ func (s *Store) Create(title, body string) (*Ticket, error) {
 
 // Get retrieves a ticket by ID, searching all status directories.
 func (s *Store) Get(id string) (*Ticket, Status, error) {
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
 		ticket, err := s.getFromStatus(id, status)
 		if err == nil {
 			return ticket, status, nil
@@ -99,7 +99,7 @@ func (s *Store) Update(id string, title, body *string) (*Ticket, error) {
 
 // Delete removes a ticket.
 func (s *Store) Delete(id string) error {
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
 		path, err := s.findTicketPath(id, status)
 		if err != nil {
 			if IsNotFound(err) {
@@ -145,7 +145,7 @@ func (s *Store) List(status Status) ([]*Ticket, error) {
 func (s *Store) ListAll() (map[Status][]*Ticket, error) {
 	result := make(map[Status][]*Ticket)
 
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
 		tickets, err := s.List(status)
 		if err != nil {
 			return nil, err
@@ -176,13 +176,20 @@ func (s *Store) Move(id string, to Status) error {
 		return fmt.Errorf("remove old ticket file: %w", err)
 	}
 
-	// Set approved date when moving to done
-	if to == StatusDone && ticket.Dates.Approved == nil {
-		now := time.Now().UTC()
-		ticket.Dates.Approved = &now
+	// Set date fields based on target status
+	now := time.Now().UTC()
+	switch to {
+	case StatusProgress:
+		if ticket.Dates.Progress == nil {
+			ticket.Dates.Progress = &now
+		}
+	case StatusReview:
+		ticket.Dates.Reviewed = &now
+	case StatusDone:
+		ticket.Dates.Done = &now
 	}
 
-	ticket.Dates.Updated = time.Now().UTC()
+	ticket.Dates.Updated = now
 
 	// Save to new location
 	if err := s.save(ticket, to); err != nil {
@@ -193,7 +200,7 @@ func (s *Store) Move(id string, to Status) error {
 }
 
 // AddSession adds a new session to a ticket.
-func (s *Store) AddSession(ticketID, agent, tmuxWindow string, gitBase map[string]string) (*Session, error) {
+func (s *Store) AddSession(ticketID, agent, tmuxWindow string) (*Session, error) {
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return nil, err
@@ -206,11 +213,6 @@ func (s *Store) AddSession(ticketID, agent, tmuxWindow string, gitBase map[strin
 		EndedAt:    nil,
 		Agent:      agent,
 		TmuxWindow: tmuxWindow,
-		GitBase:    gitBase,
-		Report: Report{
-			Files:     []string{},
-			Decisions: []string{},
-		},
 		CurrentStatus: &StatusEntry{
 			Status: AgentStatusStarting,
 			At:     now,
@@ -297,33 +299,30 @@ func (s *Store) UpdateSessionStatus(ticketID, sessionID string, agentStatus Agen
 	return nil
 }
 
-// UpdateSessionReport updates the report of a session.
-func (s *Store) UpdateSessionReport(ticketID, sessionID string, report Report) error {
+// AddComment adds a comment to a ticket.
+func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, content string) (*Comment, error) {
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	found := false
-	for i := range ticket.Sessions {
-		if ticket.Sessions[i].ID == sessionID {
-			ticket.Sessions[i].Report = report
-			found = true
-			break
-		}
+	now := time.Now().UTC()
+	comment := Comment{
+		ID:        uuid.New().String(),
+		SessionID: sessionID,
+		Type:      commentType,
+		Content:   content,
+		CreatedAt: now,
 	}
 
-	if !found {
-		return &NotFoundError{Resource: "session", ID: sessionID}
-	}
-
-	ticket.Dates.Updated = time.Now().UTC()
+	ticket.Comments = append(ticket.Comments, comment)
+	ticket.Dates.Updated = now
 
 	if err := s.save(ticket, status); err != nil {
-		return fmt.Errorf("save ticket: %w", err)
+		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
-	return nil
+	return &comment, nil
 }
 
 // filename generates the filename for a ticket: {slug}-{id}.json

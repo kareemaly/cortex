@@ -358,7 +358,7 @@ func TestHandleSpawnSessionActiveSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
-	_, err = server.Store().AddSession(created.ID, "claude", "window", nil)
+	_, err = server.Store().AddSession(created.ID, "claude", "window")
 	if err != nil {
 		t.Fatalf("failed to add session: %v", err)
 	}
@@ -385,7 +385,7 @@ func TestHandleGetSessionStatus(t *testing.T) {
 
 	// Create ticket with active session
 	created, _ := server.Store().Create("Test", "")
-	session, _ := server.Store().AddSession(created.ID, "claude", "window", nil)
+	session, _ := server.Store().AddSession(created.ID, "claude", "window")
 
 	_, output, err := server.handleGetSessionStatus(context.Background(), nil, GetSessionStatusInput{
 		TicketID: created.ID,
@@ -449,7 +449,7 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	}
 
 	// Add a session to the ticket
-	_, err = store.AddSession(tk.ID, "claude", "window", nil)
+	_, err = store.AddSession(tk.ID, "claude", "window")
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("add session: %v", err)
@@ -547,8 +547,15 @@ func TestHandleSubmitReport(t *testing.T) {
 	if !output.Success {
 		t.Error("submit should succeed")
 	}
-	if len(output.Report.Files) != 2 {
-		t.Errorf("files count = %d, want 2", len(output.Report.Files))
+	if output.Message != "Report submitted as comments" {
+		t.Errorf("message = %q, want 'Report submitted as comments'", output.Message)
+	}
+
+	// Verify comments were added to the ticket
+	tk, _, _ := server.Store().Get(server.Session().TicketID)
+	// Should have 3 comments: scope_change, decision, progress (summary)
+	if len(tk.Comments) != 3 {
+		t.Errorf("comments count = %d, want 3", len(tk.Comments))
 	}
 }
 
@@ -577,6 +584,151 @@ func TestHandleApprove(t *testing.T) {
 	_, status, _ := server.Store().Get(ticketID)
 	if status != ticket.StatusDone {
 		t.Errorf("ticket status = %q, want %q", status, ticket.StatusDone)
+	}
+}
+
+// New tool tests
+
+func TestHandleAddTicketComment(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, output, err := server.handleAddTicketComment(context.Background(), nil, AddCommentInput{
+		Type:    "decision",
+		Content: "Decided to use new API",
+	})
+	if err != nil {
+		t.Fatalf("handleAddTicketComment failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Error("add comment should succeed")
+	}
+	if output.Comment.ID == "" {
+		t.Error("comment ID should not be empty")
+	}
+	if output.Comment.Type != "decision" {
+		t.Errorf("comment type = %q, want 'decision'", output.Comment.Type)
+	}
+	if output.Comment.Content != "Decided to use new API" {
+		t.Errorf("comment content = %q, want 'Decided to use new API'", output.Comment.Content)
+	}
+
+	// Verify comment was added
+	tk, _, _ := server.Store().Get(server.Session().TicketID)
+	if len(tk.Comments) != 1 {
+		t.Errorf("comments count = %d, want 1", len(tk.Comments))
+	}
+}
+
+func TestHandleAddTicketCommentInvalidType(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, _, err := server.handleAddTicketComment(context.Background(), nil, AddCommentInput{
+		Type:    "invalid_type",
+		Content: "Test content",
+	})
+	if err == nil {
+		t.Error("expected error for invalid comment type")
+	}
+}
+
+func TestHandleMoveTicketToReview(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	// First move to progress
+	_ = server.Store().Move(server.Session().TicketID, ticket.StatusProgress)
+
+	_, output, err := server.handleMoveTicketToReview(context.Background(), nil, EmptyInput{})
+	if err != nil {
+		t.Fatalf("handleMoveTicketToReview failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Error("move to review should succeed")
+	}
+	if output.Message != "Ticket moved to review" {
+		t.Errorf("message = %q, want 'Ticket moved to review'", output.Message)
+	}
+
+	// Verify status
+	_, status, _ := server.Store().Get(server.Session().TicketID)
+	if status != ticket.StatusReview {
+		t.Errorf("status = %q, want %q", status, ticket.StatusReview)
+	}
+}
+
+func TestHandleMoveTicketToReviewAlreadyInReview(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_ = server.Store().Move(server.Session().TicketID, ticket.StatusReview)
+
+	_, output, err := server.handleMoveTicketToReview(context.Background(), nil, EmptyInput{})
+	if err != nil {
+		t.Fatalf("handleMoveTicketToReview failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Error("should still succeed")
+	}
+	if output.Message != "Ticket is already in review" {
+		t.Errorf("message = %q, want 'Ticket is already in review'", output.Message)
+	}
+}
+
+func TestHandleMoveTicketToDone(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, output, err := server.handleMoveTicketToDone(context.Background(), nil, EmptyInput{})
+	if err != nil {
+		t.Fatalf("handleMoveTicketToDone failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Error("move to done should succeed")
+	}
+	if output.Status != "done" {
+		t.Errorf("status = %q, want 'done'", output.Status)
+	}
+
+	// Verify status
+	_, status, _ := server.Store().Get(server.Session().TicketID)
+	if status != ticket.StatusDone {
+		t.Errorf("status = %q, want %q", status, ticket.StatusDone)
+	}
+}
+
+func TestHandleConcludeSession(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, output, err := server.handleConcludeSession(context.Background(), nil, ConcludeSessionInput{
+		Summary: "Session ended early due to blocker",
+	})
+	if err != nil {
+		t.Fatalf("handleConcludeSession failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Error("conclude session should succeed")
+	}
+	if output.Message != "Session ended successfully" {
+		t.Errorf("message = %q, want 'Session ended successfully'", output.Message)
+	}
+
+	// Verify session is ended
+	tk, _, _ := server.Store().Get(server.Session().TicketID)
+	if tk.HasActiveSessions() {
+		t.Error("ticket should not have active sessions")
+	}
+
+	// Verify summary was added as comment
+	if len(tk.Comments) != 1 {
+		t.Errorf("comments count = %d, want 1", len(tk.Comments))
 	}
 }
 

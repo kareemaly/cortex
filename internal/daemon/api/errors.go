@@ -37,7 +37,7 @@ func handleTicketError(w http.ResponseWriter, err error) {
 // validStatus returns true if the status is valid.
 func validStatus(status string) bool {
 	switch ticket.Status(status) {
-	case ticket.StatusBacklog, ticket.StatusProgress, ticket.StatusDone:
+	case ticket.StatusBacklog, ticket.StatusProgress, ticket.StatusReview, ticket.StatusDone:
 		return true
 	default:
 		return false

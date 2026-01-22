@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/kareemaly/cortex/internal/binpath"
-	"github.com/kareemaly/cortex/internal/git"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -355,23 +354,8 @@ func (s *Server) handleSpawnSession(
 	// Generate window name from ticket slug
 	windowName := ticket.GenerateSlug(t.Title)
 
-	// Build git base map from configured repos
-	gitBase := make(map[string]string)
-	if s.projectConfig != nil && s.config.ProjectPath != "" {
-		for _, repo := range s.projectConfig.Git.Repos {
-			repoPath := repo.Path
-			if !filepath.IsAbs(repoPath) {
-				repoPath = filepath.Join(s.config.ProjectPath, repoPath)
-			}
-			sha, err := git.GetCommitSHA(repoPath, false)
-			if err == nil {
-				gitBase[repoPath] = sha
-			}
-		}
-	}
-
 	// Add session to ticket store
-	session, err := s.store.AddSession(input.TicketID, agent, windowName, gitBase)
+	session, err := s.store.AddSession(input.TicketID, agent, windowName)
 	if err != nil {
 		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}

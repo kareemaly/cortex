@@ -51,7 +51,7 @@ func TestExecutor_Execute_AllHooksSucceed(t *testing.T) {
 		{Run: "npm run lint"},
 		{Run: "npm run test"},
 	}
-	vars := NewTemplateVars("123", "my-ticket", "My Ticket")
+	vars := NewTemplateVars("123", "my-ticket", "My Ticket", "")
 
 	result, err := executor.Execute(context.Background(), "/project", HookOnSubmit, hooks, vars)
 	if err != nil {
@@ -92,7 +92,7 @@ func TestExecutor_Execute_StopsOnFirstFailure(t *testing.T) {
 		{Run: "npm run lint"},
 		{Run: "npm run test"},
 	}
-	vars := NewTemplateVars("123", "my-ticket", "My Ticket")
+	vars := NewTemplateVars("123", "my-ticket", "My Ticket", "")
 
 	result, err := executor.Execute(context.Background(), "/project", HookOnSubmit, hooks, vars)
 	if err != nil {
@@ -126,7 +126,7 @@ func TestExecutor_Execute_TemplateExpansion(t *testing.T) {
 	hooks := []HookDefinition{
 		{Run: "echo '{{ticket_id}} - {{ticket_slug}} - {{ticket_title}}'"},
 	}
-	vars := NewTemplateVars("abc-123", "fix-login", "Fix Login Bug")
+	vars := NewTemplateVars("abc-123", "fix-login", "Fix Login Bug", "")
 
 	_, err := executor.Execute(context.Background(), "/project", HookOnSubmit, hooks, vars)
 	if err != nil {
@@ -152,7 +152,7 @@ func TestExecutor_Execute_CommitMessageInApprove(t *testing.T) {
 	hooks := []HookDefinition{
 		{Run: "git commit -m '{{commit_message}}'"},
 	}
-	vars := NewTemplateVars("123", "feat", "Feature").WithCommitMessage("Add new feature")
+	vars := NewTemplateVars("123", "feat", "Feature", "").WithCommitMessage("Add new feature")
 
 	_, err := executor.Execute(context.Background(), "/project", HookOnApprove, hooks, vars)
 	if err != nil {
@@ -172,7 +172,7 @@ func TestExecutor_Execute_CommitMessageInNonApproveHook(t *testing.T) {
 	hooks := []HookDefinition{
 		{Run: "echo '{{commit_message}}'"},
 	}
-	vars := NewTemplateVars("123", "feat", "Feature")
+	vars := NewTemplateVars("123", "feat", "Feature", "")
 
 	_, err := executor.Execute(context.Background(), "/project", HookOnSubmit, hooks, vars)
 	if err == nil {
@@ -193,7 +193,7 @@ func TestExecutor_Execute_ExecutionError(t *testing.T) {
 	hooks := []HookDefinition{
 		{Run: "nonexistent-command"},
 	}
-	vars := NewTemplateVars("123", "feat", "Feature")
+	vars := NewTemplateVars("123", "feat", "Feature", "")
 
 	_, err := executor.Execute(context.Background(), "/project", HookOnSubmit, hooks, vars)
 	if err == nil {
@@ -209,7 +209,7 @@ func TestExecutor_Execute_EmptyHooks(t *testing.T) {
 	runner := newMockRunner()
 	executor := NewExecutorWithRunner(runner)
 
-	vars := NewTemplateVars("123", "feat", "Feature")
+	vars := NewTemplateVars("123", "feat", "Feature", "")
 
 	result, err := executor.Execute(context.Background(), "/project", HookOnSubmit, []HookDefinition{}, vars)
 	if err != nil {
@@ -229,7 +229,7 @@ func TestExecutor_Execute_NilHooks(t *testing.T) {
 	runner := newMockRunner()
 	executor := NewExecutorWithRunner(runner)
 
-	vars := NewTemplateVars("123", "feat", "Feature")
+	vars := NewTemplateVars("123", "feat", "Feature", "")
 
 	result, err := executor.Execute(context.Background(), "/project", HookOnSubmit, nil, vars)
 	if err != nil {
@@ -251,37 +251,37 @@ func TestExpandTemplate(t *testing.T) {
 		{
 			name:     "no variables",
 			command:  "npm run test",
-			vars:     NewTemplateVars("123", "slug", "Title"),
+			vars:     NewTemplateVars("123", "slug", "Title", ""),
 			expected: "npm run test",
 		},
 		{
 			name:     "single variable",
 			command:  "echo {{ticket_id}}",
-			vars:     NewTemplateVars("abc-123", "slug", "Title"),
+			vars:     NewTemplateVars("abc-123", "slug", "Title", ""),
 			expected: "echo abc-123",
 		},
 		{
 			name:     "multiple variables",
 			command:  "{{ticket_id}}-{{ticket_slug}}-{{ticket_title}}",
-			vars:     NewTemplateVars("id", "slug", "title"),
+			vars:     NewTemplateVars("id", "slug", "title", ""),
 			expected: "id-slug-title",
 		},
 		{
 			name:     "unknown variable left unchanged",
 			command:  "echo {{unknown_var}}",
-			vars:     NewTemplateVars("123", "slug", "Title"),
+			vars:     NewTemplateVars("123", "slug", "Title", ""),
 			expected: "echo {{unknown_var}}",
 		},
 		{
 			name:     "commit message",
 			command:  "git commit -m '{{commit_message}}'",
-			vars:     NewTemplateVars("123", "slug", "Title").WithCommitMessage("Fix bug"),
+			vars:     NewTemplateVars("123", "slug", "Title", "").WithCommitMessage("Fix bug"),
 			expected: "git commit -m 'Fix bug'",
 		},
 		{
 			name:     "repeated variable",
 			command:  "{{ticket_id}} and {{ticket_id}}",
-			vars:     NewTemplateVars("123", "slug", "Title"),
+			vars:     NewTemplateVars("123", "slug", "Title", ""),
 			expected: "123 and 123",
 		},
 	}
@@ -512,7 +512,7 @@ func TestEscapeForShell(t *testing.T) {
 }
 
 func TestNewTemplateVars(t *testing.T) {
-	vars := NewTemplateVars("id-123", "my-slug", "My Title")
+	vars := NewTemplateVars("id-123", "my-slug", "My Title", "")
 	if vars.TicketID != "id-123" {
 		t.Errorf("expected TicketID 'id-123', got %q", vars.TicketID)
 	}
@@ -528,7 +528,7 @@ func TestNewTemplateVars(t *testing.T) {
 }
 
 func TestTemplateVars_WithCommitMessage(t *testing.T) {
-	vars := NewTemplateVars("id", "slug", "title")
+	vars := NewTemplateVars("id", "slug", "title", "")
 	vars2 := vars.WithCommitMessage("my message")
 
 	// Original should be unchanged

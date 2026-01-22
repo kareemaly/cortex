@@ -10,9 +10,16 @@ import (
 type HookType string
 
 const (
+	// Legacy hook types
 	HookOnPickup  HookType = "on_pickup"
 	HookOnSubmit  HookType = "on_submit"
 	HookOnApprove HookType = "on_approve"
+	// New hook types
+	HookMovedToProgress HookType = "moved_to_progress"
+	HookMovedToReview   HookType = "moved_to_review"
+	HookMovedToDone     HookType = "moved_to_done"
+	HookCommentAdded    HookType = "comment_added"
+	HookSessionEnded    HookType = "session_ended"
 )
 
 // HookDefinition represents a single hook command.
@@ -38,22 +45,42 @@ type TemplateVars struct {
 	TicketID      string // All hooks
 	TicketSlug    string // All hooks
 	TicketTitle   string // All hooks
-	CommitMessage string // on_approve only
+	TicketBody    string // All hooks
+	SessionID     string // All hooks
+	Agent         string // All hooks
+	CommitMessage string // on_approve/moved_to_done only
+	CommentType   string // comment_added only
+	Comment       string // comment_added only
 }
 
 // NewTemplateVars creates a TemplateVars with the given ticket information.
 // Use ticket.GenerateSlug() to generate the slug from the title.
-func NewTemplateVars(ticketID, ticketSlug, ticketTitle string) TemplateVars {
+func NewTemplateVars(ticketID, ticketSlug, ticketTitle, ticketBody string) TemplateVars {
 	return TemplateVars{
 		TicketID:    ticketID,
 		TicketSlug:  ticketSlug,
 		TicketTitle: ticketTitle,
+		TicketBody:  ticketBody,
 	}
 }
 
 // WithCommitMessage returns a copy of TemplateVars with the commit message set.
 func (v TemplateVars) WithCommitMessage(message string) TemplateVars {
 	v.CommitMessage = message
+	return v
+}
+
+// WithSession returns a copy of TemplateVars with session information set.
+func (v TemplateVars) WithSession(sessionID, agent string) TemplateVars {
+	v.SessionID = sessionID
+	v.Agent = agent
+	return v
+}
+
+// WithComment returns a copy of TemplateVars with comment information set.
+func (v TemplateVars) WithComment(commentType, comment string) TemplateVars {
+	v.CommentType = commentType
+	v.Comment = comment
 	return v
 }
 

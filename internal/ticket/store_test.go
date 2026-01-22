@@ -31,7 +31,7 @@ func TestNewStore(t *testing.T) {
 	defer cleanup()
 
 	// Verify directories were created
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
 		dir := filepath.Join(store.ticketsDir, string(status))
 		info, err := os.Stat(dir)
 		if err != nil {
@@ -64,8 +64,8 @@ func TestStoreCreate(t *testing.T) {
 	if ticket.Dates.Created.IsZero() {
 		t.Error("created date should be set")
 	}
-	if ticket.Dates.Approved != nil {
-		t.Error("approved date should be nil")
+	if ticket.Dates.Done != nil {
+		t.Error("done date should be nil")
 	}
 }
 
@@ -235,7 +235,7 @@ func TestStoreMove(t *testing.T) {
 	}
 }
 
-func TestStoreMoveToDoneSetsApproved(t *testing.T) {
+func TestStoreMoveToDoneSetsDoneDate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
@@ -246,8 +246,41 @@ func TestStoreMoveToDoneSetsApproved(t *testing.T) {
 	}
 
 	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Dates.Approved == nil {
-		t.Error("approved date should be set when moving to done")
+	if retrieved.Dates.Done == nil {
+		t.Error("done date should be set when moving to done")
+	}
+}
+
+func TestStoreMoveToProgressSetsProgressDate(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Test Ticket", "body")
+
+	if err := store.Move(ticket.ID, StatusProgress); err != nil {
+		t.Fatalf("Move failed: %v", err)
+	}
+
+	retrieved, _, _ := store.Get(ticket.ID)
+	if retrieved.Dates.Progress == nil {
+		t.Error("progress date should be set when moving to progress")
+	}
+}
+
+func TestStoreMoveToReviewSetsReviewedDate(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Test Ticket", "body")
+	_ = store.Move(ticket.ID, StatusProgress)
+
+	if err := store.Move(ticket.ID, StatusReview); err != nil {
+		t.Fatalf("Move failed: %v", err)
+	}
+
+	retrieved, _, _ := store.Get(ticket.ID)
+	if retrieved.Dates.Reviewed == nil {
+		t.Error("reviewed date should be set when moving to review")
 	}
 }
 
@@ -257,8 +290,7 @@ func TestStoreAddSession(t *testing.T) {
 
 	ticket, _ := store.Create("Test Ticket", "body")
 
-	gitBase := map[string]string{".": "abc123"}
-	session, err := store.AddSession(ticket.ID, "claude", "test-window", gitBase)
+	session, err := store.AddSession(ticket.ID, "claude", "test-window")
 	if err != nil {
 		t.Fatalf("AddSession failed: %v", err)
 	}
@@ -284,7 +316,7 @@ func TestStoreEndSession(t *testing.T) {
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
-	session, _ := store.AddSession(ticket.ID, "claude", "window", nil)
+	session, _ := store.AddSession(ticket.ID, "claude", "window")
 
 	if err := store.EndSession(ticket.ID, session.ID); err != nil {
 		t.Fatalf("EndSession failed: %v", err)
@@ -301,7 +333,7 @@ func TestStoreUpdateSessionStatus(t *testing.T) {
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
-	session, _ := store.AddSession(ticket.ID, "claude", "window", nil)
+	session, _ := store.AddSession(ticket.ID, "claude", "window")
 
 	tool := "Edit"
 	work := "Writing code"
@@ -319,26 +351,34 @@ func TestStoreUpdateSessionStatus(t *testing.T) {
 	}
 }
 
-func TestStoreUpdateSessionReport(t *testing.T) {
+func TestStoreAddComment(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
-	session, _ := store.AddSession(ticket.ID, "claude", "window", nil)
+	session, _ := store.AddSession(ticket.ID, "claude", "window")
 
-	report := Report{
-		Files:     []string{"file1.go"},
-		Decisions: []string{"Decision 1"},
-		Summary:   "Test summary",
-	}
-	err := store.UpdateSessionReport(ticket.ID, session.ID, report)
+	comment, err := store.AddComment(ticket.ID, session.ID, CommentDecision, "Test decision")
 	if err != nil {
-		t.Fatalf("UpdateSessionReport failed: %v", err)
+		t.Fatalf("AddComment failed: %v", err)
+	}
+
+	if comment.ID == "" {
+		t.Error("comment ID should not be empty")
+	}
+	if comment.Type != CommentDecision {
+		t.Errorf("type = %q, want %q", comment.Type, CommentDecision)
+	}
+	if comment.Content != "Test decision" {
+		t.Errorf("content = %q, want %q", comment.Content, "Test decision")
+	}
+	if comment.SessionID != session.ID {
+		t.Errorf("session_id = %q, want %q", comment.SessionID, session.ID)
 	}
 
 	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Sessions[0].Report.Summary != "Test summary" {
-		t.Error("report should be updated")
+	if len(retrieved.Comments) != 1 {
+		t.Errorf("comments count = %d, want 1", len(retrieved.Comments))
 	}
 }
 

@@ -8,11 +8,12 @@ import (
 
 func TestTicketJSONRoundTrip(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	approved := now.Add(time.Hour)
+	progress := now.Add(time.Hour)
+	reviewed := now.Add(2 * time.Hour)
+	done := now.Add(3 * time.Hour)
 	ended := now.Add(30 * time.Minute)
 	tool := "Edit"
 	work := "Writing code"
-	scope := "Added extra feature"
 
 	original := Ticket{
 		ID:    "test-id",
@@ -21,7 +22,18 @@ func TestTicketJSONRoundTrip(t *testing.T) {
 		Dates: Dates{
 			Created:  now,
 			Updated:  now,
-			Approved: &approved,
+			Progress: &progress,
+			Reviewed: &reviewed,
+			Done:     &done,
+		},
+		Comments: []Comment{
+			{
+				ID:        "comment-1",
+				SessionID: "session-1",
+				Type:      CommentDecision,
+				Content:   "Test decision",
+				CreatedAt: now,
+			},
 		},
 		Sessions: []Session{
 			{
@@ -30,13 +42,6 @@ func TestTicketJSONRoundTrip(t *testing.T) {
 				EndedAt:    &ended,
 				Agent:      "claude",
 				TmuxWindow: "test-window",
-				GitBase:    map[string]string{".": "abc123"},
-				Report: Report{
-					Files:        []string{"file1.go", "file2.go"},
-					ScopeChanges: &scope,
-					Decisions:    []string{"Decision 1"},
-					Summary:      "Test summary",
-				},
 				CurrentStatus: &StatusEntry{
 					Status: AgentStatusInProgress,
 					Tool:   &tool,
@@ -69,8 +74,11 @@ func TestTicketJSONRoundTrip(t *testing.T) {
 	if len(decoded.Sessions) != 1 {
 		t.Errorf("Sessions count: got %d, want 1", len(decoded.Sessions))
 	}
-	if decoded.Dates.Approved == nil {
-		t.Error("Approved date should not be nil")
+	if len(decoded.Comments) != 1 {
+		t.Errorf("Comments count: got %d, want 1", len(decoded.Comments))
+	}
+	if decoded.Dates.Done == nil {
+		t.Error("Done date should not be nil")
 	}
 }
 
@@ -123,6 +131,9 @@ func TestStatusConstants(t *testing.T) {
 	}
 	if StatusProgress != "progress" {
 		t.Error("StatusProgress should be 'progress'")
+	}
+	if StatusReview != "review" {
+		t.Error("StatusReview should be 'review'")
 	}
 	if StatusDone != "done" {
 		t.Error("StatusDone should be 'done'")

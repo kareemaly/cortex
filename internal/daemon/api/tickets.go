@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kareemaly/cortex/internal/git"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
@@ -41,6 +39,7 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	resp := ListAllTicketsResponse{
 		Backlog:  toSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog),
 		Progress: toSummaryList(all[ticket.StatusProgress], ticket.StatusProgress),
+		Review:   toSummaryList(all[ticket.StatusReview], ticket.StatusReview),
 		Done:     toSummaryList(all[ticket.StatusDone], ticket.StatusDone),
 	}
 
@@ -314,21 +313,6 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Capture git base for each repo in config
-	gitBase := make(map[string]string)
-	for _, repo := range projectCfg.Git.Repos {
-		repoPath := repo.Path
-		if !filepath.IsAbs(repoPath) {
-			repoPath = filepath.Join(projectPath, repoPath)
-		}
-		sha, err := git.GetCommitSHA(repoPath, false)
-		if err != nil {
-			h.deps.Logger.Warn("failed to capture git base", "repo", repoPath, "error", err)
-			continue
-		}
-		gitBase[repo.Path] = sha
-	}
-
 	// Generate MCP config file
 	mcpConfigPath, err := h.writeMCPConfig(id)
 	if err != nil {
@@ -355,7 +339,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add session to ticket
-	session, err := store.AddSession(id, string(projectCfg.Agent), windowName, gitBase)
+	session, err := store.AddSession(id, string(projectCfg.Agent), windowName)
 	if err != nil {
 		h.deps.Logger.Error("failed to add session", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to record session")

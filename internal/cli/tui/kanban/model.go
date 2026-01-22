@@ -12,7 +12,7 @@ import (
 
 // Model is the main Bubbletea model for the kanban board.
 type Model struct {
-	columns      [3]Column
+	columns      [4]Column
 	client       *sdk.Client
 	activeColumn int
 	width        int
@@ -52,9 +52,10 @@ type ClearStatusMsg struct{}
 // New creates a new kanban model with the given client.
 func New(client *sdk.Client) Model {
 	return Model{
-		columns: [3]Column{
+		columns: [4]Column{
 			NewColumn("Backlog", "backlog"),
 			NewColumn("Progress", "progress"),
+			NewColumn("Review", "review"),
 			NewColumn("Done", "done"),
 		},
 		client:  client,
@@ -84,7 +85,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.columns[0].SetTickets(msg.Response.Backlog)
 		m.columns[1].SetTickets(msg.Response.Progress)
-		m.columns[2].SetTickets(msg.Response.Done)
+		m.columns[2].SetTickets(msg.Response.Review)
+		m.columns[3].SetTickets(msg.Response.Done)
 		return m, nil
 
 	case TicketsErrorMsg:
@@ -148,7 +150,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if isKey(msg, KeyRight, KeyL) {
-		if m.activeColumn < 2 {
+		if m.activeColumn < 3 {
 			m.activeColumn++
 		}
 		return m, nil
@@ -214,14 +216,14 @@ func (m Model) View() string {
 	}
 
 	// Calculate column width.
-	columnWidth := max((m.width-6)/3, 20) // -6 for padding/borders
+	columnWidth := max((m.width-8)/4, 20) // -8 for padding/borders
 
 	// Calculate available height for columns.
 	// Header (1) + newlines (2) + status bar (1) + help bar (1) + margins (2) = ~7 lines overhead
 	columnHeight := max(m.height-7, 5)
 
 	// Render columns side by side.
-	cols := make([]string, 3)
+	cols := make([]string, 4)
 	for i := range m.columns {
 		cols[i] = m.columns[i].View(columnWidth, i == m.activeColumn, columnHeight)
 	}

@@ -35,9 +35,16 @@ type RepoConfig struct {
 
 // LifecycleConfig holds lifecycle hook configuration.
 type LifecycleConfig struct {
-	OnPickup  []HookConfig `yaml:"on_pickup"`
-	OnSubmit  []HookConfig `yaml:"on_submit"`
-	OnApprove []HookConfig `yaml:"on_approve"`
+	// Legacy hooks (kept for backward compatibility)
+	OnPickup  []HookConfig `yaml:"on_pickup,omitempty"`
+	OnSubmit  []HookConfig `yaml:"on_submit,omitempty"`
+	OnApprove []HookConfig `yaml:"on_approve,omitempty"`
+	// New hooks
+	MovedToProgress []HookConfig `yaml:"moved_to_progress,omitempty"`
+	MovedToReview   []HookConfig `yaml:"moved_to_review,omitempty"`
+	MovedToDone     []HookConfig `yaml:"moved_to_done,omitempty"`
+	CommentAdded    []HookConfig `yaml:"comment_added,omitempty"`
+	SessionEnded    []HookConfig `yaml:"session_ended,omitempty"`
 }
 
 // HookConfig holds configuration for a single hook.
@@ -149,6 +156,21 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := validateHooks("lifecycle.on_approve", c.Lifecycle.OnApprove); err != nil {
+		return err
+	}
+	if err := validateHooks("lifecycle.moved_to_progress", c.Lifecycle.MovedToProgress); err != nil {
+		return err
+	}
+	if err := validateHooks("lifecycle.moved_to_review", c.Lifecycle.MovedToReview); err != nil {
+		return err
+	}
+	if err := validateHooks("lifecycle.moved_to_done", c.Lifecycle.MovedToDone); err != nil {
+		return err
+	}
+	if err := validateHooks("lifecycle.comment_added", c.Lifecycle.CommentAdded); err != nil {
+		return err
+	}
+	if err := validateHooks("lifecycle.session_ended", c.Lifecycle.SessionEnded); err != nil {
 		return err
 	}
 

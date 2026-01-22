@@ -64,6 +64,7 @@ type TicketSummary struct {
 type ListAllTicketsResponse struct {
 	Backlog  []TicketSummary `json:"backlog"`
 	Progress []TicketSummary `json:"progress"`
+	Review   []TicketSummary `json:"review"`
 	Done     []TicketSummary `json:"done"`
 }
 
@@ -76,15 +77,18 @@ type ListTicketsResponse struct {
 type DatesResponse struct {
 	Created  time.Time  `json:"created"`
 	Updated  time.Time  `json:"updated"`
-	Approved *time.Time `json:"approved"`
+	Progress *time.Time `json:"progress,omitempty"`
+	Reviewed *time.Time `json:"reviewed,omitempty"`
+	Done     *time.Time `json:"done,omitempty"`
 }
 
-// ReportResponse is the report portion of a session response.
-type ReportResponse struct {
-	Files        []string `json:"files"`
-	ScopeChanges *string  `json:"scope_changes,omitempty"`
-	Decisions    []string `json:"decisions"`
-	Summary      string   `json:"summary"`
+// CommentResponse is a comment in a ticket response.
+type CommentResponse struct {
+	ID        string    `json:"id"`
+	SessionID string    `json:"session_id,omitempty"`
+	Type      string    `json:"type"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // StatusEntryResponse is a status entry in a session response.
@@ -102,8 +106,6 @@ type SessionResponse struct {
 	EndedAt       *time.Time            `json:"ended_at,omitempty"`
 	Agent         string                `json:"agent"`
 	TmuxWindow    string                `json:"tmux_window"`
-	GitBase       map[string]string     `json:"git_base"`
-	Report        ReportResponse        `json:"report"`
 	CurrentStatus *StatusEntryResponse  `json:"current_status,omitempty"`
 	StatusHistory []StatusEntryResponse `json:"status_history"`
 }
@@ -115,6 +117,7 @@ type TicketResponse struct {
 	Body     string            `json:"body"`
 	Status   string            `json:"status"`
 	Dates    DatesResponse     `json:"dates"`
+	Comments []CommentResponse `json:"comments"`
 	Sessions []SessionResponse `json:"sessions"`
 }
 
@@ -341,6 +344,11 @@ func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
 			return c.GetTicket("progress", summary.ID)
 		}
 	}
+	for _, summary := range all.Review {
+		if summary.ID == ticketID || hasPrefix(summary.ID, ticketID) {
+			return c.GetTicket("review", summary.ID)
+		}
+	}
 	for _, summary := range all.Done {
 		if summary.ID == ticketID || hasPrefix(summary.ID, ticketID) {
 			return c.GetTicket("done", summary.ID)
@@ -383,6 +391,13 @@ func (c *Client) FindSession(sessionID string) (*SessionResponse, *TicketRespons
 
 	// Search progress
 	if session, ticket, err := searchStatus(all.Progress, "progress"); err != nil {
+		return nil, nil, err
+	} else if session != nil {
+		return session, ticket, nil
+	}
+
+	// Search review
+	if session, ticket, err := searchStatus(all.Review, "review"); err != nil {
 		return nil, nil, err
 	} else if session != nil {
 		return session, ticket, nil

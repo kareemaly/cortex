@@ -6,6 +6,7 @@ import "github.com/charmbracelet/lipgloss"
 var (
 	backlogColor  = lipgloss.Color("245") // gray
 	progressColor = lipgloss.Color("214") // yellow/orange
+	reviewColor   = lipgloss.Color("39")  // blue
 	doneColor     = lipgloss.Color("82")  // green
 	activeColor   = lipgloss.Color("212") // pink/magenta for active selection
 	errorColor    = lipgloss.Color("196") // red for errors
@@ -35,6 +36,13 @@ var (
 				BorderStyle(lipgloss.NormalBorder()).
 				BorderBottom(true).
 				BorderForeground(progressColor)
+
+	reviewHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(reviewColor).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderBottom(true).
+				BorderForeground(reviewColor)
 
 	doneHeaderStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -90,6 +98,8 @@ func columnHeaderStyle(status string) lipgloss.Style {
 		return backlogHeaderStyle
 	case "progress":
 		return progressHeaderStyle
+	case "review":
+		return reviewHeaderStyle
 	case "done":
 		return doneHeaderStyle
 	default:
