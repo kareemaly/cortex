@@ -2,14 +2,9 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/kareemaly/cortex/internal/binpath"
-	"github.com/kareemaly/cortex/internal/prompt"
+	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -227,18 +222,6 @@ func (s *Server) handleMoveTicket(
 	}, nil
 }
 
-// mcpServerConfig represents the MCP server configuration for claude.
-type mcpServerConfig struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args"`
-	Env     map[string]string `json:"env,omitempty"`
-}
-
-// claudeMCPConfig represents the claude MCP configuration file format.
-type claudeMCPConfig struct {
-	MCPServers map[string]mcpServerConfig `json:"mcpServers"`
-}
-
 // handleSpawnSession spawns a new agent session for a ticket.
 func (s *Server) handleSpawnSession(
 	ctx context.Context,
@@ -261,15 +244,6 @@ func (s *Server) handleSpawnSession(
 		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}
 
-	// Check if ticket already has an active session
-	if t.HasActiveSession() {
-		return nil, SpawnSessionOutput{
-			Success:  false,
-			TicketID: input.TicketID,
-			Message:  "ticket already has an active session",
-		}, nil
-	}
-
 	// Validate TmuxSession is configured
 	if s.config.TmuxSession == "" {
 		return nil, SpawnSessionOutput{
@@ -281,7 +255,6 @@ func (s *Server) handleSpawnSession(
 	// Use injected tmux manager or create a new one
 	tmuxMgr := s.tmuxManager
 	if tmuxMgr == nil {
-		var err error
 		tmuxMgr, err = tmux.NewManager()
 		if err != nil {
 			return nil, SpawnSessionOutput{
@@ -291,105 +264,38 @@ func (s *Server) handleSpawnSession(
 		}
 	}
 
-	// Generate window name from ticket slug
-	windowName := ticket.GenerateSlug(t.Title)
+	// Create spawner with dependencies
+	spawner := spawn.NewSpawner(spawn.Dependencies{
+		Store:       s.store,
+		TmuxManager: tmuxMgr,
+		CortexdPath: s.config.CortexdPath,
+	})
 
-	// Set session on ticket store
-	session, err := s.store.SetSession(input.TicketID, agent, windowName, "")
+	// Spawn the session
+	result, err := spawner.Spawn(spawn.SpawnRequest{
+		AgentType:   spawn.AgentTypeTicketAgent,
+		Agent:       agent,
+		TmuxSession: s.config.TmuxSession,
+		ProjectPath: s.config.ProjectPath,
+		TicketsDir:  s.config.TicketsDir,
+		TicketID:    input.TicketID,
+		Ticket:      t,
+	})
 	if err != nil {
+		if spawn.IsConfigError(err) || spawn.IsBinaryNotFoundError(err) {
+			return nil, SpawnSessionOutput{
+				Success: false,
+				Message: err.Error(),
+			}, nil
+		}
 		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}
 
-	// Find cortexd path - use injected path if provided (for testing)
-	cortexdPath := s.config.CortexdPath
-	if cortexdPath == "" {
-		var err error
-		cortexdPath, err = binpath.FindCortexd()
-		if err != nil {
-			// Cleanup session on failure
-			_ = s.store.EndSession(input.TicketID)
-			return nil, SpawnSessionOutput{
-				Success: false,
-				Message: "cortexd not found: " + err.Error(),
-			}, nil
-		}
-	}
-
-	// Generate MCP config file
-	mcpConfigPath := filepath.Join(os.TempDir(), fmt.Sprintf("cortex-mcp-%s.json", input.TicketID))
-	mcpConfig := claudeMCPConfig{
-		MCPServers: map[string]mcpServerConfig{
-			"cortex": {
-				Command: cortexdPath,
-				Args:    []string{"mcp", "--ticket-id", input.TicketID},
-				Env:     make(map[string]string),
-			},
-		},
-	}
-
-	// Add environment variables
-	if s.config.TicketsDir != "" {
-		mcpConfig.MCPServers["cortex"].Env["CORTEX_TICKETS_DIR"] = s.config.TicketsDir
-	}
-	if s.config.ProjectPath != "" {
-		mcpConfig.MCPServers["cortex"].Env["CORTEX_PROJECT_PATH"] = s.config.ProjectPath
-	}
-	if s.config.TmuxSession != "" {
-		mcpConfig.MCPServers["cortex"].Env["CORTEX_TMUX_SESSION"] = s.config.TmuxSession
-	}
-
-	mcpConfigData, err := json.MarshalIndent(mcpConfig, "", "  ")
-	if err != nil {
-		// Cleanup session on failure
-		_ = s.store.EndSession(input.TicketID)
-		return nil, SpawnSessionOutput{}, NewInternalError("failed to marshal MCP config: " + err.Error())
-	}
-
-	if err := os.WriteFile(mcpConfigPath, mcpConfigData, 0644); err != nil {
-		// Cleanup session on failure
-		_ = s.store.EndSession(input.TicketID)
-		return nil, SpawnSessionOutput{}, NewInternalError("failed to write MCP config: " + err.Error())
-	}
-
-	// Build claude command with ticket prompt (like cortex0: uses permission-mode plan for tickets)
-	// The agent can use the cortex MCP tools (readTicket, submitReport, approve) to interact
-	promptText, err := prompt.LoadTicketAgent(s.config.ProjectPath, prompt.TicketVars{
-		TicketID: input.TicketID,
-		Title:    t.Title,
-		Body:     t.Body,
-		Slug:     ticket.GenerateSlug(t.Title),
-	})
-	if err != nil {
-		// Cleanup session on failure
-		_ = s.store.EndSession(input.TicketID)
-		_ = os.Remove(mcpConfigPath)
-		return nil, SpawnSessionOutput{
-			Success: false,
-			Message: "failed to load ticket agent prompt: " + err.Error(),
-		}, nil
-	}
-	// Use single quotes to prevent shell expansion (backticks, $vars, etc.)
-	// Escape any single quotes in the prompt using POSIX pattern: ' -> '\''
-	escapedPrompt := strings.ReplaceAll(promptText, "'", "'\\''")
-	claudeCmd := fmt.Sprintf("claude '%s' --mcp-config %s --permission-mode plan", escapedPrompt, mcpConfigPath)
-
-	// Spawn agent in tmux
-	_, err = tmuxMgr.SpawnAgent(s.config.TmuxSession, windowName, claudeCmd)
-	if err != nil {
-		// Cleanup session and config on failure
-		_ = s.store.EndSession(input.TicketID)
-		_ = os.Remove(mcpConfigPath)
-		return nil, SpawnSessionOutput{
-			Success: false,
-			Message: "failed to spawn agent in tmux: " + err.Error(),
-		}, nil
-	}
-
 	return nil, SpawnSessionOutput{
-		Success:    true,
+		Success:    result.Success,
 		TicketID:   input.TicketID,
-		SessionID:  session.ID,
-		TmuxWindow: windowName,
-		Message:    fmt.Sprintf("Agent session spawned in tmux window '%s'", windowName),
+		SessionID:  result.SessionID,
+		TmuxWindow: result.TmuxWindow,
+		Message:    result.Message,
 	}, nil
 }
