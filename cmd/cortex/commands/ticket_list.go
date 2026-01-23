@@ -12,13 +12,15 @@ import (
 )
 
 var (
-	listStatus   string
-	listJSONFlag bool
+	ticketListStatus   string
+	ticketListQuery    string
+	ticketListJSONFlag bool
 )
 
-var listCmd = &cobra.Command{
+var ticketListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tickets",
+	Long:  `List tickets, optionally filtered by status or search query.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		projectPath, err := resolveProjectPath()
 		if err != nil {
@@ -28,28 +30,28 @@ var listCmd = &cobra.Command{
 
 		client := sdk.DefaultClient(projectPath)
 
-		if listStatus != "" {
-			listByStatus(client, listStatus)
+		if ticketListStatus != "" {
+			ticketListByStatus(client, ticketListStatus, ticketListQuery)
 		} else {
-			listAll(client)
+			ticketListAll(client, ticketListQuery)
 		}
 	},
 }
 
 func init() {
-	listCmd.Flags().StringVar(&listStatus, "status", "", "Filter tickets by status (backlog, progress, done)")
-	listCmd.Flags().BoolVar(&listJSONFlag, "json", false, "Output as JSON")
-	rootCmd.AddCommand(listCmd)
+	ticketListCmd.Flags().StringVar(&ticketListStatus, "status", "", "Filter tickets by status (backlog, progress, done)")
+	ticketListCmd.Flags().StringVar(&ticketListQuery, "query", "", "Filter tickets by title or body (case-insensitive)")
+	ticketListCmd.Flags().BoolVar(&ticketListJSONFlag, "json", false, "Output as JSON")
 }
 
-func listAll(client *sdk.Client) {
-	resp, err := client.ListAllTickets()
+func ticketListAll(client *sdk.Client, query string) {
+	resp, err := client.ListAllTickets(query)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	if listJSONFlag {
+	if ticketListJSONFlag {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(resp); err != nil {
@@ -64,21 +66,21 @@ func listAll(client *sdk.Client) {
 	// Print backlog
 	if len(resp.Backlog) > 0 {
 		_, _ = fmt.Fprintln(w, "BACKLOG")
-		printTicketTable(w, resp.Backlog)
+		ticketPrintTable(w, resp.Backlog)
 		_, _ = fmt.Fprintln(w)
 	}
 
 	// Print progress
 	if len(resp.Progress) > 0 {
 		_, _ = fmt.Fprintln(w, "PROGRESS")
-		printTicketTable(w, resp.Progress)
+		ticketPrintTable(w, resp.Progress)
 		_, _ = fmt.Fprintln(w)
 	}
 
 	// Print done
 	if len(resp.Done) > 0 {
 		_, _ = fmt.Fprintln(w, "DONE")
-		printTicketTable(w, resp.Done)
+		ticketPrintTable(w, resp.Done)
 		_, _ = fmt.Fprintln(w)
 	}
 
@@ -90,14 +92,14 @@ func listAll(client *sdk.Client) {
 	}
 }
 
-func listByStatus(client *sdk.Client, status string) {
-	resp, err := client.ListTicketsByStatus(status)
+func ticketListByStatus(client *sdk.Client, status, query string) {
+	resp, err := client.ListTicketsByStatus(status, query)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	if listJSONFlag {
+	if ticketListJSONFlag {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(resp); err != nil {
@@ -113,11 +115,11 @@ func listByStatus(client *sdk.Client, status string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	printTicketTable(w, resp.Tickets)
+	ticketPrintTable(w, resp.Tickets)
 	_ = w.Flush()
 }
 
-func printTicketTable(w *tabwriter.Writer, tickets []sdk.TicketSummary) {
+func ticketPrintTable(w *tabwriter.Writer, tickets []sdk.TicketSummary) {
 	_, _ = fmt.Fprintln(w, "ID\tTITLE\tCREATED\tACTIVE")
 	for _, t := range tickets {
 		shortID := t.ID
@@ -132,11 +134,11 @@ func printTicketTable(w *tabwriter.Writer, tickets []sdk.TicketSummary) {
 		if t.HasActiveSession {
 			active = "yes"
 		}
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", shortID, title, formatTime(t.Created), active)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", shortID, title, ticketFormatTime(t.Created), active)
 	}
 }
 
-func formatTime(t time.Time) string {
+func ticketFormatTime(t time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}

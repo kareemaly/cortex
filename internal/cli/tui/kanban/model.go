@@ -248,7 +248,7 @@ func (m Model) View() string {
 // loadTickets returns a command to load all tickets.
 func (m Model) loadTickets() tea.Cmd {
 	return func() tea.Msg {
-		resp, err := m.client.ListAllTickets()
+		resp, err := m.client.ListAllTickets("")
 		if err != nil {
 			return TicketsErrorMsg{Err: err}
 		}

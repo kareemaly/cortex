@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kareemaly/cortex/internal/core/spawn"
@@ -36,11 +37,14 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Apply query filter if specified
+	query := strings.ToLower(r.URL.Query().Get("query"))
+
 	resp := ListAllTicketsResponse{
-		Backlog:  toSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog),
-		Progress: toSummaryList(all[ticket.StatusProgress], ticket.StatusProgress),
-		Review:   toSummaryList(all[ticket.StatusReview], ticket.StatusReview),
-		Done:     toSummaryList(all[ticket.StatusDone], ticket.StatusDone),
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query),
+		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query),
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -67,8 +71,11 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Apply query filter if specified
+	query := strings.ToLower(r.URL.Query().Get("query"))
+
 	resp := ListTicketsResponse{
-		Tickets: toSummaryList(tickets, ticket.Status(status)),
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query),
 	}
 
 	writeJSON(w, http.StatusOK, resp)

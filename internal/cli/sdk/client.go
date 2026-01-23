@@ -198,8 +198,14 @@ func (c *Client) HealthWithVersion() (*HealthResponse, error) {
 }
 
 // ListAllTickets returns all tickets grouped by status.
-func (c *Client) ListAllTickets() (*ListAllTicketsResponse, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tickets", nil)
+// If query is non-empty, filters tickets by title or body (case-insensitive).
+func (c *Client) ListAllTickets(query string) (*ListAllTicketsResponse, error) {
+	url := c.baseURL + "/tickets"
+	if query != "" {
+		url += "?query=" + query
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -223,8 +229,14 @@ func (c *Client) ListAllTickets() (*ListAllTicketsResponse, error) {
 }
 
 // ListTicketsByStatus returns tickets with a specific status.
-func (c *Client) ListTicketsByStatus(status string) (*ListTicketsResponse, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tickets/"+status, nil)
+// If query is non-empty, filters tickets by title or body (case-insensitive).
+func (c *Client) ListTicketsByStatus(status, query string) (*ListTicketsResponse, error) {
+	url := c.baseURL + "/tickets/" + status
+	if query != "" {
+		url += "?query=" + query
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -412,7 +424,7 @@ func (c *Client) KillSession(id string) error {
 
 // FindTicketByID searches for a ticket by ID across all statuses.
 func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
-	all, err := c.ListAllTickets()
+	all, err := c.ListAllTickets("")
 	if err != nil {
 		return nil, err
 	}

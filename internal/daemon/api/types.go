@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"time"
 
 	"github.com/kareemaly/cortex/internal/ticket"
@@ -200,17 +201,27 @@ func toSessionResponse(s ticket.Session) SessionResponse {
 	}
 }
 
-// toSummaryList converts a slice of tickets to summaries.
-func toSummaryList(tickets []*ticket.Ticket, status ticket.Status) []TicketSummary {
-	summaries := make([]TicketSummary, len(tickets))
-	for i, t := range tickets {
-		summaries[i] = TicketSummary{
+// filterSummaryList converts tickets to summaries with optional query filter.
+// Query is matched case-insensitively against title or body.
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string) []TicketSummary {
+	var summaries []TicketSummary
+	for _, t := range tickets {
+		// Apply query filter if specified
+		if query != "" &&
+			!strings.Contains(strings.ToLower(t.Title), query) &&
+			!strings.Contains(strings.ToLower(t.Body), query) {
+			continue
+		}
+		summaries = append(summaries, TicketSummary{
 			ID:               t.ID,
 			Title:            t.Title,
 			Status:           string(status),
 			Created:          t.Dates.Created,
 			HasActiveSession: t.HasActiveSession(),
-		}
+		})
+	}
+	if summaries == nil {
+		summaries = []TicketSummary{}
 	}
 	return summaries
 }
