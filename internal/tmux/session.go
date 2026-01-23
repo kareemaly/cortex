@@ -28,7 +28,8 @@ func (m *Manager) SessionExists(name string) (bool, error) {
 // CreateSession creates a new tmux session with the given name.
 // If the session already exists, this is a no-op.
 // The session is created detached (-d flag).
-func (m *Manager) CreateSession(name string) error {
+// If workingDir is specified, the session starts in that directory.
+func (m *Manager) CreateSession(name, workingDir string) error {
 	exists, err := m.SessionExists(name)
 	if err != nil {
 		return err
@@ -37,7 +38,11 @@ func (m *Manager) CreateSession(name string) error {
 		return nil
 	}
 
-	output, err := m.run("new-session", "-d", "-s", name)
+	args := []string{"new-session", "-d", "-s", name}
+	if workingDir != "" {
+		args = append(args, "-c", workingDir)
+	}
+	output, err := m.run(args...)
 	if err != nil {
 		return &CommandError{Command: "new-session", Output: strings.TrimSpace(string(output))}
 	}
