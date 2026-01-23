@@ -23,8 +23,9 @@ var (
 
 // General colors.
 var (
-	mutedColor = lipgloss.Color("240") // muted gray
-	errorColor = lipgloss.Color("196") // red
+	mutedColor   = lipgloss.Color("240") // muted gray
+	errorColor   = lipgloss.Color("196") // red
+	warningColor = lipgloss.Color("214") // yellow/orange
 )
 
 // Styles for the ticket detail view.
@@ -71,6 +72,11 @@ var (
 	loadingStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241")).
 			Italic(true)
+
+	// Warning style for confirmation dialogs.
+	warningStyle = lipgloss.NewStyle().
+			Foreground(warningColor).
+			Bold(true)
 )
 
 // statusStyle returns the appropriate style for a ticket status.

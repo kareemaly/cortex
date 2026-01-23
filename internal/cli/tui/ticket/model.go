@@ -12,15 +12,17 @@ import (
 
 // Model is the main Bubbletea model for the ticket detail view.
 type Model struct {
-	client   *sdk.Client
-	ticketID string
-	ticket   *sdk.TicketResponse
-	viewport viewport.Model
-	width    int
-	height   int
-	ready    bool
-	loading  bool
-	err      error
+	client        *sdk.Client
+	ticketID      string
+	ticket        *sdk.TicketResponse
+	viewport      viewport.Model
+	width         int
+	height        int
+	ready         bool
+	loading       bool
+	err           error
+	showKillModal bool
+	killing       bool
 }
 
 // Message types for async operations.
@@ -32,6 +34,14 @@ type TicketLoadedMsg struct {
 
 // TicketErrorMsg is sent when fetching a ticket fails.
 type TicketErrorMsg struct {
+	Err error
+}
+
+// SessionKilledMsg is sent when a session is successfully killed.
+type SessionKilledMsg struct{}
+
+// SessionKillErrorMsg is sent when killing a session fails.
+type SessionKillErrorMsg struct {
 	Err error
 }
 
@@ -92,6 +102,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = msg.Err
 		return m, nil
+
+	case SessionKilledMsg:
+		m.killing = false
+		m.showKillModal = false
+		// Refresh ticket to show updated session state.
+		m.loading = true
+		return m, m.loadTicket()
+
+	case SessionKillErrorMsg:
+		m.killing = false
+		m.showKillModal = false
+		m.err = msg.Err
+		return m, nil
 	}
 
 	// Handle viewport scroll messages.
@@ -102,13 +125,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg handles keyboard input.
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Modal takes priority when visible.
+	if m.showKillModal {
+		return m.handleKillModalKey(msg)
+	}
+
 	// Quit.
 	if isKey(msg, KeyQuit, KeyCtrlC) {
 		return m, tea.Quit
 	}
 
-	// If loading, don't process other keys.
-	if m.loading {
+	// If loading or killing, don't process other keys.
+	if m.loading || m.killing {
 		return m, nil
 	}
 
@@ -126,6 +154,14 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if isKey(msg, KeyRefresh) {
 		m.loading = true
 		return m, m.loadTicket()
+	}
+
+	// Kill session.
+	if isKey(msg, KeyKillSession) {
+		if m.hasActiveSession() {
+			m.showKillModal = true
+		}
+		return m, nil
 	}
 
 	// Scroll navigation.
@@ -160,6 +196,38 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// handleKillModalKey handles keyboard input when the kill confirmation modal is shown.
+func (m Model) handleKillModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if isKey(msg, KeyYes) {
+		m.killing = true
+		return m, m.killSession()
+	}
+	if isKey(msg, KeyNo, KeyEscape) {
+		m.showKillModal = false
+		return m, nil
+	}
+	return m, nil
+}
+
+// hasActiveSession returns true if there's an active (not ended) session.
+func (m Model) hasActiveSession() bool {
+	return m.ticket != nil && m.ticket.Session != nil && m.ticket.Session.EndedAt == nil
+}
+
+// killSession returns a command to kill the current session.
+func (m Model) killSession() tea.Cmd {
+	return func() tea.Msg {
+		if m.ticket == nil || m.ticket.Session == nil {
+			return SessionKillErrorMsg{Err: fmt.Errorf("no session to kill")}
+		}
+		err := m.client.KillSession(m.ticket.Session.ID)
+		if err != nil {
+			return SessionKillErrorMsg{Err: err}
+		}
+		return SessionKilledMsg{}
+	}
+}
+
 // View renders the ticket detail view.
 func (m Model) View() string {
 	if !m.ready {
@@ -191,12 +259,37 @@ func (m Model) View() string {
 		return b.String()
 	}
 
+	// Handle killing state.
+	if m.killing {
+		b.WriteString(loadingStyle.Render("Killing session..."))
+		return b.String()
+	}
+
+	// Kill confirmation modal.
+	if m.showKillModal {
+		b.WriteString(m.renderKillModal())
+		return b.String()
+	}
+
 	// Scrollable content.
 	b.WriteString(m.viewport.View())
 	b.WriteString("\n")
 
 	// Help bar.
-	b.WriteString(helpBarStyle.Render(helpText(int(m.viewport.ScrollPercent() * 100))))
+	b.WriteString(helpBarStyle.Render(helpText(int(m.viewport.ScrollPercent()*100), m.hasActiveSession())))
+
+	return b.String()
+}
+
+// renderKillModal renders the kill session confirmation modal.
+func (m Model) renderKillModal() string {
+	var b strings.Builder
+
+	b.WriteString("\n")
+	b.WriteString(warningStyle.Render("Kill active session?"))
+	b.WriteString("\n\n")
+	b.WriteString("This will terminate the agent session and close the tmux window.\n\n")
+	b.WriteString("[y]es  [n]o")
 
 	return b.String()
 }
