@@ -36,12 +36,11 @@ func TestTicketJSONRoundTrip(t *testing.T) {
 			},
 		},
 		Session: &Session{
-			ID:              "session-1",
-			ClaudeSessionID: "claude-session-123",
-			StartedAt:       now,
-			EndedAt:         &ended,
-			Agent:           "claude",
-			TmuxWindow:      "test-window",
+			ID:         "session-1",
+			StartedAt:  now,
+			EndedAt:    &ended,
+			Agent:      "claude",
+			TmuxWindow: "test-window",
 			CurrentStatus: &StatusEntry{
 				Status: AgentStatusInProgress,
 				Tool:   &tool,
@@ -73,8 +72,8 @@ func TestTicketJSONRoundTrip(t *testing.T) {
 	if decoded.Session == nil {
 		t.Fatal("Session should not be nil")
 	}
-	if decoded.Session.ClaudeSessionID != "claude-session-123" {
-		t.Errorf("ClaudeSessionID mismatch: got %q, want %q", decoded.Session.ClaudeSessionID, "claude-session-123")
+	if decoded.Session.ID != "session-1" {
+		t.Errorf("Session ID mismatch: got %q, want %q", decoded.Session.ID, "session-1")
 	}
 	if len(decoded.Comments) != 1 {
 		t.Errorf("Comments count: got %d, want 1", len(decoded.Comments))

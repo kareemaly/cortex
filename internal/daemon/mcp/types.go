@@ -147,14 +147,13 @@ type CommentOutput struct {
 
 // SessionOutput represents a work session.
 type SessionOutput struct {
-	ID              string        `json:"id"`
-	ClaudeSessionID string        `json:"claude_session_id,omitempty"`
-	StartedAt       time.Time     `json:"started_at"`
-	EndedAt         *time.Time    `json:"ended_at,omitempty"`
-	Agent           string        `json:"agent"`
-	TmuxWindow      string        `json:"tmux_window"`
-	CurrentStatus   *StatusOutput `json:"current_status,omitempty"`
-	IsActive        bool          `json:"is_active"`
+	ID            string        `json:"id"`
+	StartedAt     time.Time     `json:"started_at"`
+	EndedAt       *time.Time    `json:"ended_at,omitempty"`
+	Agent         string        `json:"agent"`
+	TmuxWindow    string        `json:"tmux_window"`
+	CurrentStatus *StatusOutput `json:"current_status,omitempty"`
+	IsActive      bool          `json:"is_active"`
 }
 
 // StatusOutput represents agent status.
@@ -302,14 +301,13 @@ func ToSessionOutput(s *ticket.Session) SessionOutput {
 	}
 
 	return SessionOutput{
-		ID:              s.ID,
-		ClaudeSessionID: s.ClaudeSessionID,
-		StartedAt:       s.StartedAt,
-		EndedAt:         s.EndedAt,
-		Agent:           s.Agent,
-		TmuxWindow:      s.TmuxWindow,
-		CurrentStatus:   currentStatus,
-		IsActive:        s.IsActive(),
+		ID:            s.ID,
+		StartedAt:     s.StartedAt,
+		EndedAt:       s.EndedAt,
+		Agent:         s.Agent,
+		TmuxWindow:    s.TmuxWindow,
+		CurrentStatus: currentStatus,
+		IsActive:      s.IsActive(),
 	}
 }
 

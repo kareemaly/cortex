@@ -18,7 +18,7 @@ const (
 // StoreInterface defines the ticket store operations needed for spawning.
 type StoreInterface interface {
 	Get(id string) (*ticket.Ticket, ticket.Status, error)
-	SetSession(ticketID, agent, tmuxWindow, claudeSessionID string) (*ticket.Session, error)
+	SetSession(ticketID, agent, tmuxWindow string) (*ticket.Session, error)
 	EndSession(ticketID string) error
 }
 
@@ -65,12 +65,12 @@ type SpawnRequest struct {
 
 // ResumeRequest contains parameters for resuming an orphaned session.
 type ResumeRequest struct {
-	AgentType       AgentType
-	TmuxSession     string
-	ProjectPath     string
-	TicketsDir      string
-	ClaudeSessionID string
-	WindowName      string
+	AgentType   AgentType
+	TmuxSession string
+	ProjectPath string
+	TicketsDir  string
+	SessionID   string
+	WindowName  string
 
 	// For ticket agents
 	TicketID string
@@ -121,7 +121,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 	// Create session in store (ticket agents only)
 	var sessionID string
 	if req.AgentType == AgentTypeTicketAgent {
-		session, err := s.deps.Store.SetSession(req.TicketID, req.Agent, windowName, "")
+		session, err := s.deps.Store.SetSession(req.TicketID, req.Agent, windowName)
 		if err != nil {
 			return nil, err
 		}
@@ -163,6 +163,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		Prompt:         promptText,
 		MCPConfigPath:  mcpConfigPath,
 		PermissionMode: "plan",
+		SessionID:      sessionID,
 	})
 
 	// Spawn in tmux
@@ -187,8 +188,8 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 
 // Resume resumes an orphaned session.
 func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
-	if req.ClaudeSessionID == "" {
-		return nil, &ConfigError{Field: "ClaudeSessionID", Message: "cannot be empty for resume"}
+	if req.SessionID == "" {
+		return nil, &ConfigError{Field: "SessionID", Message: "cannot be empty for resume"}
 	}
 
 	// Find cortexd path
@@ -221,7 +222,7 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 		Prompt:         "",
 		MCPConfigPath:  mcpConfigPath,
 		PermissionMode: "plan",
-		ResumeID:       req.ClaudeSessionID,
+		ResumeID:       req.SessionID,
 	})
 
 	// Spawn in tmux

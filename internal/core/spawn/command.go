@@ -14,6 +14,7 @@ type ClaudeCommandParams struct {
 	MCPConfigPath  string
 	PermissionMode string // "plan" or "full" or empty (default)
 	ResumeID       string // optional claude session ID to resume
+	SessionID      string // optional session ID for --session-id flag
 }
 
 // EscapePromptForShell escapes a prompt for safe shell inclusion.
@@ -45,6 +46,11 @@ func BuildClaudeCommand(params ClaudeCommandParams) string {
 	// Add resume flag
 	if params.ResumeID != "" {
 		parts = append(parts, "--resume", params.ResumeID)
+	}
+
+	// Add session ID flag
+	if params.SessionID != "" {
+		parts = append(parts, "--session-id", params.SessionID)
 	}
 
 	return strings.Join(parts, " ")
