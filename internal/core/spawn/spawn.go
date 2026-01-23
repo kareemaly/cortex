@@ -1,6 +1,8 @@
 package spawn
 
 import (
+	"fmt"
+
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
@@ -322,7 +324,9 @@ func (s *Spawner) buildPrompt(req SpawnRequest) (string, error) {
 func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd string) (int, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, claudeCmd, req.ProjectPath)
+		// Prefix command with CORTEX_TICKET_ID env var so child processes can identify the ticket
+		cmdWithEnv := fmt.Sprintf("CORTEX_TICKET_ID=%s %s", req.TicketID, claudeCmd)
+		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, cmdWithEnv, req.ProjectPath)
 	case AgentTypeArchitect:
 		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, claudeCmd, req.ProjectPath)
 		return 0, err
