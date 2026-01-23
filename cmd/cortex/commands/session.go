@@ -12,8 +12,8 @@ import (
 var sessionJSONFlag bool
 
 var sessionCmd = &cobra.Command{
-	Use:   "session <id>",
-	Short: "Show session details",
+	Use:   "session <ticket-id>",
+	Short: "Show session details for a ticket",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		projectPath, err := resolveProjectPath()
@@ -22,14 +22,20 @@ var sessionCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		sessionID := args[0]
+		ticketID := args[0]
 		client := sdk.DefaultClient(projectPath)
 
-		session, ticket, err := client.FindSession(sessionID)
+		ticket, err := client.FindTicketByID(ticketID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+
+		if ticket.Session == nil {
+			fmt.Fprintf(os.Stderr, "Error: ticket %s has no active session\n", ticket.ID)
+			os.Exit(1)
+		}
+		session := ticket.Session
 
 		if sessionJSONFlag {
 			output := struct {

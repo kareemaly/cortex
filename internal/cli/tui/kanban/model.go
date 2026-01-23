@@ -259,7 +259,7 @@ func (m Model) loadTickets() tea.Cmd {
 // spawnSession returns a command to spawn a session for a ticket.
 func (m Model) spawnSession(ticket *sdk.TicketSummary) tea.Cmd {
 	return func() tea.Msg {
-		session, err := m.client.SpawnSession(ticket.Status, ticket.ID)
+		session, err := m.client.SpawnSession(ticket.Status, ticket.ID, "")
 		if err != nil {
 			return SessionErrorMsg{Err: err}
 		}
@@ -270,8 +270,18 @@ func (m Model) spawnSession(ticket *sdk.TicketSummary) tea.Cmd {
 // openArchitect returns a command to open an architect session.
 func (m Model) openArchitect() tea.Cmd {
 	return func() tea.Msg {
-		// For now, just show a message. The architect command will be implemented separately.
-		return SessionErrorMsg{Err: fmt.Errorf("architect mode not yet implemented")}
+		resp, err := m.client.SpawnArchitect("")
+		if err != nil {
+			return SessionErrorMsg{Err: err}
+		}
+		return SessionSpawnedMsg{
+			Session: &sdk.SessionResponse{
+				ID:         resp.Session.ID,
+				TmuxWindow: resp.Session.TmuxWindow,
+				StartedAt:  resp.Session.StartedAt,
+			},
+			Ticket: nil,
+		}
 	}
 }
 

@@ -33,7 +33,7 @@ var spawnCmd = &cobra.Command{
 		}
 
 		// Spawn a session
-		session, err := client.SpawnSession(ticket.Status, ticket.ID)
+		session, err := client.SpawnSession(ticket.Status, ticket.ID, "")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

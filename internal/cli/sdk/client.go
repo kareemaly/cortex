@@ -111,6 +111,29 @@ type SessionResponse struct {
 	StatusHistory   []StatusEntryResponse `json:"status_history"`
 }
 
+// ArchitectSessionResponse is a session response for architect endpoints.
+type ArchitectSessionResponse struct {
+	ID          string     `json:"id"`
+	TmuxSession string     `json:"tmux_session"`
+	TmuxWindow  string     `json:"tmux_window"`
+	StartedAt   time.Time  `json:"started_at"`
+	EndedAt     *time.Time `json:"ended_at,omitempty"`
+}
+
+// ArchitectStateResponse is the response from GET /architect.
+type ArchitectStateResponse struct {
+	State   string                    `json:"state"`
+	Session *ArchitectSessionResponse `json:"session,omitempty"`
+}
+
+// ArchitectSpawnResponse is the response from POST /architect/spawn.
+type ArchitectSpawnResponse struct {
+	State       string                   `json:"state"`
+	Session     ArchitectSessionResponse `json:"session"`
+	TmuxSession string                   `json:"tmux_session"`
+	TmuxWindow  string                   `json:"tmux_window"`
+}
+
 // TicketResponse is the full ticket response with status.
 type TicketResponse struct {
 	ID       string            `json:"id"`
@@ -281,9 +304,69 @@ func (c *Client) CreateTicket(title, body string) (*TicketResponse, error) {
 	return &result, nil
 }
 
+// GetArchitect returns the current architect state.
+func (c *Client) GetArchitect() (*ArchitectStateResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/architect", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ArchitectStateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// SpawnArchitect spawns or reattaches to an architect session.
+func (c *Client) SpawnArchitect(mode string) (*ArchitectSpawnResponse, error) {
+	url := c.baseURL + "/architect/spawn"
+	if mode != "" {
+		url += "?mode=" + mode
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, c.parseError(resp)
+	}
+
+	var result ArchitectSpawnResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // SpawnSession spawns a new session for a ticket.
-func (c *Client) SpawnSession(status, id string) (*SessionResponse, error) {
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+status+"/"+id+"/spawn", nil)
+func (c *Client) SpawnSession(status, id, mode string) (*SessionResponse, error) {
+	url := c.baseURL + "/tickets/" + status + "/" + id + "/spawn"
+	if mode != "" {
+		url += "?mode=" + mode
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -357,58 +440,6 @@ func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
 	}
 
 	return nil, fmt.Errorf("ticket not found: %s", ticketID)
-}
-
-// FindSession searches for a session by ID across all tickets.
-func (c *Client) FindSession(sessionID string) (*SessionResponse, *TicketResponse, error) {
-	all, err := c.ListAllTickets()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Helper to search in a status
-	searchStatus := func(summaries []TicketSummary, status string) (*SessionResponse, *TicketResponse, error) {
-		for _, summary := range summaries {
-			ticket, err := c.GetTicket(status, summary.ID)
-			if err != nil {
-				continue
-			}
-			if ticket.Session != nil && (ticket.Session.ID == sessionID || hasPrefix(ticket.Session.ID, sessionID)) {
-				return ticket.Session, ticket, nil
-			}
-		}
-		return nil, nil, nil
-	}
-
-	// Search backlog
-	if session, ticket, err := searchStatus(all.Backlog, "backlog"); err != nil {
-		return nil, nil, err
-	} else if session != nil {
-		return session, ticket, nil
-	}
-
-	// Search progress
-	if session, ticket, err := searchStatus(all.Progress, "progress"); err != nil {
-		return nil, nil, err
-	} else if session != nil {
-		return session, ticket, nil
-	}
-
-	// Search review
-	if session, ticket, err := searchStatus(all.Review, "review"); err != nil {
-		return nil, nil, err
-	} else if session != nil {
-		return session, ticket, nil
-	}
-
-	// Search done
-	if session, ticket, err := searchStatus(all.Done, "done"); err != nil {
-		return nil, nil, err
-	} else if session != nil {
-		return session, ticket, nil
-	}
-
-	return nil, nil, fmt.Errorf("session not found: %s", sessionID)
 }
 
 // parseError extracts an error message from a non-OK response.
