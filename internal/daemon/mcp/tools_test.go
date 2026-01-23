@@ -528,105 +528,6 @@ func TestHandleReadOwnTicket(t *testing.T) {
 	}
 }
 
-func TestHandlePickupTicket(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	_, output, err := server.handlePickupTicket(context.Background(), nil, EmptyInput{})
-	if err != nil {
-		t.Fatalf("handlePickupTicket failed: %v", err)
-	}
-
-	if !output.Success {
-		t.Error("pickup should succeed")
-	}
-
-	// Verify ticket moved to progress
-	tk, status, _ := server.Store().Get(server.Session().TicketID)
-	if status != ticket.StatusProgress {
-		t.Errorf("status = %q, want %q", status, ticket.StatusProgress)
-	}
-	_ = tk
-}
-
-func TestHandlePickupTicketAlreadyInProgress(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	// Move to progress first
-	_ = server.Store().Move(server.Session().TicketID, ticket.StatusProgress)
-
-	_, output, err := server.handlePickupTicket(context.Background(), nil, EmptyInput{})
-	if err != nil {
-		t.Fatalf("handlePickupTicket failed: %v", err)
-	}
-
-	if !output.Success {
-		t.Error("should still succeed")
-	}
-	if output.Message != "Ticket is already in progress" {
-		t.Errorf("unexpected message: %q", output.Message)
-	}
-}
-
-func TestHandleSubmitReport(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	scopeChange := "Added new feature"
-	_, output, err := server.handleSubmitReport(context.Background(), nil, SubmitReportInput{
-		Files:        []string{"file1.go", "file2.go"},
-		ScopeChanges: &scopeChange,
-		Decisions:    []string{"Decision 1"},
-		Summary:      "Completed work",
-	})
-	if err != nil {
-		t.Fatalf("handleSubmitReport failed: %v", err)
-	}
-
-	if !output.Success {
-		t.Error("submit should succeed")
-	}
-	if output.Message != "Report submitted as comments" {
-		t.Errorf("message = %q, want 'Report submitted as comments'", output.Message)
-	}
-
-	// Verify comments were added to the ticket
-	tk, _, _ := server.Store().Get(server.Session().TicketID)
-	// Should have 3 comments: scope_change, decision, progress (summary)
-	if len(tk.Comments) != 3 {
-		t.Errorf("comments count = %d, want 3", len(tk.Comments))
-	}
-}
-
-func TestHandleApprove(t *testing.T) {
-	server, ticketID, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	_, output, err := server.handleApprove(context.Background(), nil, ApproveInput{
-		Summary: "Work completed",
-	})
-	if err != nil {
-		t.Fatalf("handleApprove failed: %v", err)
-	}
-
-	if !output.Success {
-		t.Error("approve should succeed")
-	}
-	if output.TicketID != ticketID {
-		t.Errorf("ticket ID = %q, want %q", output.TicketID, ticketID)
-	}
-	if output.Status != "done" {
-		t.Errorf("status = %q, want %q", output.Status, "done")
-	}
-
-	// Verify ticket is done
-	_, status, _ := server.Store().Get(ticketID)
-	if status != ticket.StatusDone {
-		t.Errorf("ticket status = %q, want %q", status, ticket.StatusDone)
-	}
-}
-
 // New tool tests
 
 func TestHandleAddTicketComment(t *testing.T) {
@@ -723,7 +624,7 @@ func TestHandleMoveTicketToDone(t *testing.T) {
 	server, _, cleanup := setupTicketSession(t)
 	defer cleanup()
 
-	_, output, err := server.handleMoveTicketToDone(context.Background(), nil, EmptyInput{})
+	_, output, err := server.handleMoveTicketToDone(context.Background(), nil, MoveTicketToDoneInput{})
 	if err != nil {
 		t.Fatalf("handleMoveTicketToDone failed: %v", err)
 	}
@@ -742,33 +643,41 @@ func TestHandleMoveTicketToDone(t *testing.T) {
 	}
 }
 
-func TestHandleConcludeSession(t *testing.T) {
+func TestHandleMoveTicketToDone_WithSummary(t *testing.T) {
 	server, _, cleanup := setupTicketSession(t)
 	defer cleanup()
 
-	_, output, err := server.handleConcludeSession(context.Background(), nil, ConcludeSessionInput{
-		Summary: "Session ended early due to blocker",
+	_, output, err := server.handleMoveTicketToDone(context.Background(), nil, MoveTicketToDoneInput{
+		Summary: "Completed all tasks successfully",
 	})
 	if err != nil {
-		t.Fatalf("handleConcludeSession failed: %v", err)
+		t.Fatalf("handleMoveTicketToDone failed: %v", err)
 	}
 
 	if !output.Success {
-		t.Error("conclude session should succeed")
+		t.Error("move to done should succeed")
 	}
-	if output.Message != "Session ended successfully" {
-		t.Errorf("message = %q, want 'Session ended successfully'", output.Message)
-	}
-
-	// Verify session is ended
-	tk, _, _ := server.Store().Get(server.Session().TicketID)
-	if tk.HasActiveSession() {
-		t.Error("ticket should not have active session")
+	if output.Status != "done" {
+		t.Errorf("status = %q, want 'done'", output.Status)
 	}
 
-	// Verify summary was added as comment
+	// Verify status
+	tk, status, _ := server.Store().Get(server.Session().TicketID)
+	if status != ticket.StatusDone {
+		t.Errorf("status = %q, want %q", status, ticket.StatusDone)
+	}
+
+	// Verify summary was added as ticket_done comment
 	if len(tk.Comments) != 1 {
 		t.Errorf("comments count = %d, want 1", len(tk.Comments))
+	}
+	if len(tk.Comments) > 0 {
+		if tk.Comments[0].Type != ticket.CommentTicketDone {
+			t.Errorf("comment type = %q, want %q", tk.Comments[0].Type, ticket.CommentTicketDone)
+		}
+		if tk.Comments[0].Content != "Completed all tasks successfully" {
+			t.Errorf("comment content = %q, want 'Completed all tasks successfully'", tk.Comments[0].Content)
+		}
 	}
 }
 
