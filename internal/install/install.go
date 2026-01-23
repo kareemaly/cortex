@@ -57,22 +57,15 @@ func setupGlobal(force bool) ([]SetupItem, error) {
 	}
 
 	cortexDir := filepath.Join(homeDir, ".cortex")
-	ticketsDir := filepath.Join(cortexDir, "tickets")
-	backlogDir := filepath.Join(ticketsDir, "backlog")
-	progressDir := filepath.Join(ticketsDir, "progress")
-	doneDir := filepath.Join(ticketsDir, "done")
 	configPath := filepath.Join(cortexDir, "settings.yaml")
 
 	var items []SetupItem
 
-	// Create directories
-	dirs := []string{cortexDir, ticketsDir, backlogDir, progressDir, doneDir}
-	for _, dir := range dirs {
-		item := ensureDir(dir)
-		items = append(items, item)
-		if item.Error != nil {
-			return items, item.Error
-		}
+	// Create cortex directory
+	item := ensureDir(cortexDir)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
 	}
 
 	// Create config file
@@ -81,7 +74,7 @@ log_level: info
 status_history_limit: 10
 git_diff_tool: diff
 `
-	item := ensureConfigFile(configPath, configContent, force)
+	item = ensureConfigFile(configPath, configContent, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error

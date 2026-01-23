@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	installProject bool
-	installForce   bool
+	installGlobalOnly bool
+	installForce      bool
 )
 
 var installCmd = &cobra.Command{
@@ -20,13 +20,13 @@ var installCmd = &cobra.Command{
 	Short: "Run initial setup",
 	Long: `Run initial setup for Cortex.
 
-Creates the global ~/.cortex/ configuration directory and settings file.
-Use --project to also set up a project .cortex/ directory in the current directory.`,
+Creates the global ~/.cortex/settings.yaml and sets up a project .cortex/
+directory in the current directory. Use --global-only to skip project setup.`,
 	RunE: runInstall,
 }
 
 func init() {
-	installCmd.Flags().BoolVarP(&installProject, "project", "p", false, "Also set up project .cortex/ in current directory")
+	installCmd.Flags().BoolVarP(&installGlobalOnly, "global-only", "g", false, "Only set up global ~/.cortex/, skip project setup")
 	installCmd.Flags().BoolVarP(&installForce, "force", "f", false, "Overwrite existing config files")
 	rootCmd.AddCommand(installCmd)
 }
@@ -36,7 +36,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		Force: installForce,
 	}
 
-	if installProject {
+	if !installGlobalOnly {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
