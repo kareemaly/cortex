@@ -65,7 +65,7 @@ func TestIntegrationSessionLifecycle(t *testing.T) {
 	}
 
 	// Create session
-	if err := m.CreateSession(session); err != nil {
+	if err := m.CreateSession(session, ""); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestIntegrationSessionLifecycle(t *testing.T) {
 	}
 
 	// Creating again should be no-op
-	if err := m.CreateSession(session); err != nil {
+	if err := m.CreateSession(session, ""); err != nil {
 		t.Fatalf("CreateSession (idempotent) failed: %v", err)
 	}
 
@@ -127,7 +127,7 @@ func TestIntegrationWindowLifecycle(t *testing.T) {
 		_ = m.KillSession(session)
 	}()
 
-	if err := m.CreateSession(session); err != nil {
+	if err := m.CreateSession(session, ""); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
@@ -142,7 +142,7 @@ func TestIntegrationWindowLifecycle(t *testing.T) {
 
 	// Create new window
 	windowName := "test-window"
-	index, err := m.CreateWindow(session, windowName)
+	index, err := m.CreateWindow(session, windowName, "")
 	if err != nil {
 		t.Fatalf("CreateWindow failed: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestIntegrationCreateArchitectWindow(t *testing.T) {
 		_ = m.KillSession(session)
 	}()
 
-	if err := m.CreateSession(session); err != nil {
+	if err := m.CreateSession(session, ""); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
@@ -242,13 +242,13 @@ func TestIntegrationFocusWindow(t *testing.T) {
 		_ = m.KillSession(session)
 	}()
 
-	if err := m.CreateSession(session); err != nil {
+	if err := m.CreateSession(session, ""); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
 	// Create second window
 	windowName := "second-window"
-	_, err = m.CreateWindow(session, windowName)
+	_, err = m.CreateWindow(session, windowName, "")
 	if err != nil {
 		t.Fatalf("CreateWindow failed: %v", err)
 	}
@@ -286,12 +286,12 @@ func TestIntegrationRunCommand(t *testing.T) {
 		_ = m.KillSession(session)
 	}()
 
-	if err := m.CreateSession(session); err != nil {
+	if err := m.CreateSession(session, ""); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
 	windowName := "cmd-window"
-	_, err = m.CreateWindow(session, windowName)
+	_, err = m.CreateWindow(session, windowName, "")
 	if err != nil {
 		t.Fatalf("CreateWindow failed: %v", err)
 	}
@@ -316,12 +316,12 @@ func TestIntegrationSendKeys(t *testing.T) {
 		_ = m.KillSession(session)
 	}()
 
-	if err := m.CreateSession(session); err != nil {
+	if err := m.CreateSession(session, ""); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
 	windowName := "keys-window"
-	_, err = m.CreateWindow(session, windowName)
+	_, err = m.CreateWindow(session, windowName, "")
 	if err != nil {
 		t.Fatalf("CreateWindow failed: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestIntegrationSpawnAgent(t *testing.T) {
 	}()
 
 	windowName := "agent-window"
-	index, err := m.SpawnAgent(session, windowName, "echo agent started")
+	index, err := m.SpawnAgent(session, windowName, "echo agent started", "")
 	if err != nil {
 		t.Fatalf("SpawnAgent failed: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestIntegrationSpawnArchitect(t *testing.T) {
 	}()
 
 	windowName := "architect"
-	if err := m.SpawnArchitect(session, windowName, "echo architect started"); err != nil {
+	if err := m.SpawnArchitect(session, windowName, "echo architect started", ""); err != nil {
 		t.Fatalf("SpawnArchitect failed: %v", err)
 	}
 
@@ -423,7 +423,7 @@ func TestIntegrationWindowNotFoundError(t *testing.T) {
 		_ = m.KillSession(session)
 	}()
 
-	if err := m.CreateSession(session); err != nil {
+	if err := m.CreateSession(session, ""); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 

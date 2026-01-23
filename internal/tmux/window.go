@@ -27,7 +27,8 @@ func (m *Manager) WindowExists(session, windowName string) (bool, error) {
 
 // CreateWindow creates a new window in the session with the given name.
 // Returns the window index.
-func (m *Manager) CreateWindow(session, windowName string) (int, error) {
+// If workingDir is specified, the window starts in that directory.
+func (m *Manager) CreateWindow(session, windowName, workingDir string) (int, error) {
 	exists, err := m.SessionExists(session)
 	if err != nil {
 		return 0, err
@@ -37,7 +38,11 @@ func (m *Manager) CreateWindow(session, windowName string) (int, error) {
 	}
 
 	// Create window and capture its index
-	output, err := m.run("new-window", "-t", session, "-n", windowName, "-P", "-F", "#{window_index}")
+	args := []string{"new-window", "-t", session, "-n", windowName, "-P", "-F", "#{window_index}"}
+	if workingDir != "" {
+		args = append(args, "-c", workingDir)
+	}
+	output, err := m.run(args...)
 	if err != nil {
 		return 0, &CommandError{Command: "new-window", Output: strings.TrimSpace(string(output))}
 	}

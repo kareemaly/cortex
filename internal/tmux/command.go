@@ -47,14 +47,15 @@ func (m *Manager) SendKeysToIndex(session string, index int, keys ...string) err
 
 // SpawnAgent creates a session (if needed), creates a new window, and runs the agent command.
 // Returns the window index.
-func (m *Manager) SpawnAgent(session, windowName, agentCommand string) (int, error) {
+// If workingDir is specified, both the session and window start in that directory.
+func (m *Manager) SpawnAgent(session, windowName, agentCommand, workingDir string) (int, error) {
 	// Ensure session exists
-	if err := m.CreateSession(session); err != nil {
+	if err := m.CreateSession(session, workingDir); err != nil {
 		return 0, err
 	}
 
 	// Create window for the agent
-	index, err := m.CreateWindow(session, windowName)
+	index, err := m.CreateWindow(session, windowName, workingDir)
 	if err != nil {
 		return 0, err
 	}
@@ -69,10 +70,19 @@ func (m *Manager) SpawnAgent(session, windowName, agentCommand string) (int, err
 
 // SpawnArchitect creates a session (if needed), renames window 0, and runs the architect command.
 // Window 0 is reserved for the architect agent.
-func (m *Manager) SpawnArchitect(session, windowName, agentCommand string) error {
-	// Ensure session exists
-	if err := m.CreateSession(session); err != nil {
+// If workingDir is specified, the session starts in that directory.
+// For existing sessions, the command is prefixed with a cd to ensure correct directory.
+func (m *Manager) SpawnArchitect(session, windowName, agentCommand, workingDir string) error {
+	// Check if session exists first
+	exists, err := m.SessionExists(session)
+	if err != nil {
 		return err
+	}
+
+	if !exists {
+		if err := m.CreateSession(session, workingDir); err != nil {
+			return err
+		}
 	}
 
 	// Rename window 0 for the architect
@@ -80,6 +90,12 @@ func (m *Manager) SpawnArchitect(session, windowName, agentCommand string) error
 		return err
 	}
 
+	// If session existed, prepend cd to ensure correct directory
+	cmdToRun := agentCommand
+	if exists && workingDir != "" {
+		cmdToRun = fmt.Sprintf("cd %q && %s", workingDir, agentCommand)
+	}
+
 	// Run the architect command
-	return m.RunCommandInIndex(session, ArchitectWindowIndex, agentCommand)
+	return m.RunCommandInIndex(session, ArchitectWindowIndex, cmdToRun)
 }
