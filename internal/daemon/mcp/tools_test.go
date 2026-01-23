@@ -812,3 +812,384 @@ func TestWrapTicketError(t *testing.T) {
 		})
 	}
 }
+
+// SpawnSession state/mode matrix tests
+
+func TestHandleSpawnSession_StateNormal_ModeNormal(t *testing.T) {
+	server, cleanup := setupTestServerWithMockTmux(t, "")
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "normal",
+	})
+	if err != nil {
+		t.Fatalf("handleSpawnSession failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Errorf("expected success, got message: %s", output.Message)
+	}
+	if output.State != "normal" {
+		t.Errorf("expected state 'normal', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_StateNormal_ModeResume(t *testing.T) {
+	server, cleanup := setupTestServerWithMockTmux(t, "")
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "resume",
+	})
+
+	if err == nil {
+		t.Fatal("expected STATE_CONFLICT error")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeStateConflict {
+		t.Errorf("expected STATE_CONFLICT, got: %s", toolErr.Code)
+	}
+	if output.State != "normal" {
+		t.Errorf("expected state 'normal', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_StateNormal_ModeFresh(t *testing.T) {
+	server, cleanup := setupTestServerWithMockTmux(t, "")
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "fresh",
+	})
+
+	if err == nil {
+		t.Fatal("expected STATE_CONFLICT error")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeStateConflict {
+		t.Errorf("expected STATE_CONFLICT, got: %s", toolErr.Code)
+	}
+	if output.State != "normal" {
+		t.Errorf("expected state 'normal', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_StateActive_AllModes(t *testing.T) {
+	modes := []string{"normal", "resume", "fresh"}
+
+	for _, mode := range modes {
+		t.Run("mode="+mode, func(t *testing.T) {
+			server, cleanup := setupTestServerWithMockTmux(t, "")
+			defer cleanup()
+
+			// Create ticket with active session (window exists because mock defaults to true for existing sessions)
+			created, _ := server.Store().Create("Test Ticket", "body")
+			_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+
+			_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+				TicketID: created.ID,
+				Mode:     mode,
+			})
+
+			if err == nil {
+				t.Fatal("expected STATE_CONFLICT error")
+			}
+			toolErr, ok := err.(*ToolError)
+			if !ok {
+				t.Fatalf("expected ToolError, got %T", err)
+			}
+			if toolErr.Code != ErrorCodeStateConflict {
+				t.Errorf("expected STATE_CONFLICT, got: %s", toolErr.Code)
+			}
+			if output.State != "active" {
+				t.Errorf("expected state 'active', got: %s", output.State)
+			}
+		})
+	}
+}
+
+func TestHandleSpawnSession_StateOrphaned_ModeNormal(t *testing.T) {
+	server, cleanup := setupTestServerWithOrphanedSession(t)
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "normal",
+	})
+
+	if err == nil {
+		t.Fatal("expected STATE_CONFLICT error")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeStateConflict {
+		t.Errorf("expected STATE_CONFLICT, got: %s", toolErr.Code)
+	}
+	if output.State != "orphaned" {
+		t.Errorf("expected state 'orphaned', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_StateOrphaned_ModeResume(t *testing.T) {
+	server, cleanup := setupTestServerWithOrphanedSession(t)
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "resume",
+	})
+	if err != nil {
+		t.Fatalf("handleSpawnSession failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Errorf("expected success, got message: %s", output.Message)
+	}
+	if output.State != "orphaned" {
+		t.Errorf("expected state 'orphaned', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_StateOrphaned_ModeResumeNoSessionID(t *testing.T) {
+	server, cleanup := setupTestServerWithOrphanedSession(t)
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+	// Session without ClaudeSessionID
+	_, _ = server.Store().SetSession(created.ID, "claude", "window", "")
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "resume",
+	})
+
+	if err == nil {
+		t.Fatal("expected STATE_CONFLICT error")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeStateConflict {
+		t.Errorf("expected STATE_CONFLICT, got: %s", toolErr.Code)
+	}
+	if output.State != "orphaned" {
+		t.Errorf("expected state 'orphaned', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_StateOrphaned_ModeFresh(t *testing.T) {
+	server, cleanup := setupTestServerWithOrphanedSession(t)
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "fresh",
+	})
+	if err != nil {
+		t.Fatalf("handleSpawnSession failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Errorf("expected success, got message: %s", output.Message)
+	}
+	if output.State != "orphaned" {
+		t.Errorf("expected state 'orphaned', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_StateEnded_ModeNormal(t *testing.T) {
+	server, cleanup := setupTestServerWithMockTmux(t, "")
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+	_ = server.Store().EndSession(created.ID)
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "normal",
+	})
+	if err != nil {
+		t.Fatalf("handleSpawnSession failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Errorf("expected success, got message: %s", output.Message)
+	}
+	if output.State != "ended" {
+		t.Errorf("expected state 'ended', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_StateEnded_ModeResume(t *testing.T) {
+	server, cleanup := setupTestServerWithMockTmux(t, "")
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+	_ = server.Store().EndSession(created.ID)
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "resume",
+	})
+
+	if err == nil {
+		t.Fatal("expected STATE_CONFLICT error")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeStateConflict {
+		t.Errorf("expected STATE_CONFLICT, got: %s", toolErr.Code)
+	}
+	if output.State != "ended" {
+		t.Errorf("expected state 'ended', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_StateEnded_ModeFresh(t *testing.T) {
+	server, cleanup := setupTestServerWithMockTmux(t, "")
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+	_ = server.Store().EndSession(created.ID)
+
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "fresh",
+	})
+	if err != nil {
+		t.Fatalf("handleSpawnSession failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Errorf("expected success, got message: %s", output.Message)
+	}
+	if output.State != "ended" {
+		t.Errorf("expected state 'ended', got: %s", output.State)
+	}
+}
+
+func TestHandleSpawnSession_InvalidMode(t *testing.T) {
+	server, cleanup := setupTestServerWithMockTmux(t, "")
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+
+	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "invalid",
+	})
+
+	if err == nil {
+		t.Fatal("expected VALIDATION_ERROR")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("expected VALIDATION_ERROR, got: %s", toolErr.Code)
+	}
+}
+
+func TestHandleSpawnSession_DefaultMode(t *testing.T) {
+	server, cleanup := setupTestServerWithMockTmux(t, "")
+	defer cleanup()
+
+	created, _ := server.Store().Create("Test Ticket", "body")
+
+	// Empty mode should default to "normal" and succeed
+	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
+		TicketID: created.ID,
+		Mode:     "", // empty mode
+	})
+	if err != nil {
+		t.Fatalf("handleSpawnSession failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Errorf("expected success, got message: %s", output.Message)
+	}
+	if output.State != "normal" {
+		t.Errorf("expected state 'normal', got: %s", output.State)
+	}
+}
+
+// setupTestServerWithOrphanedSession creates a test server with a mock tmux manager
+// that reports windows do not exist (simulating orphaned state).
+func setupTestServerWithOrphanedSession(t *testing.T) (*Server, func()) {
+	t.Helper()
+
+	tmpDir, err := os.MkdirTemp("", "mcp-server-test")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+
+	// Create the prompts directory and default templates for the project
+	promptsDir := filepath.Join(tmpDir, ".cortex", "prompts")
+	if err := os.MkdirAll(promptsDir, 0755); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create prompts dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-agent.md"), []byte(prompt.DefaultTicketAgentPrompt), 0644); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create ticket-agent.md: %v", err)
+	}
+
+	// Create mock runner that reports window does NOT exist
+	mockRunner := tmux.NewMockRunner()
+	mockRunner.SetWindowExists(false)
+	tmuxMgr := tmux.NewManagerWithRunner(mockRunner)
+
+	cfg := &Config{
+		TicketID:    "",
+		TicketsDir:  tmpDir,
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+		TmuxManager: tmuxMgr,
+		CortexdPath: "/mock/cortexd",
+	}
+
+	server, err := NewServer(cfg)
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create server: %v", err)
+	}
+
+	cleanup := func() {
+		_ = os.RemoveAll(tmpDir)
+	}
+
+	return server, cleanup
+}

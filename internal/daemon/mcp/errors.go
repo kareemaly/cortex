@@ -10,10 +10,11 @@ import (
 type ErrorCode string
 
 const (
-	ErrorCodeNotFound     ErrorCode = "NOT_FOUND"
-	ErrorCodeValidation   ErrorCode = "VALIDATION_ERROR"
-	ErrorCodeUnauthorized ErrorCode = "UNAUTHORIZED"
-	ErrorCodeInternal     ErrorCode = "INTERNAL_ERROR"
+	ErrorCodeNotFound      ErrorCode = "NOT_FOUND"
+	ErrorCodeValidation    ErrorCode = "VALIDATION_ERROR"
+	ErrorCodeUnauthorized  ErrorCode = "UNAUTHORIZED"
+	ErrorCodeInternal      ErrorCode = "INTERNAL_ERROR"
+	ErrorCodeStateConflict ErrorCode = "STATE_CONFLICT"
 )
 
 // ToolError represents an error returned from an MCP tool.
@@ -56,6 +57,14 @@ func NewInternalError(message string) *ToolError {
 	return &ToolError{
 		Code:    ErrorCodeInternal,
 		Message: message,
+	}
+}
+
+// NewStateConflictError creates a STATE_CONFLICT error.
+func NewStateConflictError(state, mode, message string) *ToolError {
+	return &ToolError{
+		Code:    ErrorCodeStateConflict,
+		Message: fmt.Sprintf("state=%s mode=%s: %s", state, mode, message),
 	}
 }
 
