@@ -41,17 +41,16 @@ func (m *mockStore) Get(id string) (*ticket.Ticket, ticket.Status, error) {
 	return t, ticket.StatusBacklog, nil
 }
 
-func (m *mockStore) SetSession(ticketID, agent, tmuxWindow, claudeSessionID string) (*ticket.Session, error) {
+func (m *mockStore) SetSession(ticketID, agent, tmuxWindow string) (*ticket.Session, error) {
 	if m.setErr != nil {
 		return nil, m.setErr
 	}
 	m.lastSetID = ticketID
 	session := &ticket.Session{
-		ID:              "session-123",
-		ClaudeSessionID: claudeSessionID,
-		StartedAt:       time.Now(),
-		Agent:           agent,
-		TmuxWindow:      tmuxWindow,
+		ID:         "session-123",
+		StartedAt:  time.Now(),
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
 	}
 	m.sessions[ticketID] = session
 	if t, ok := m.tickets[ticketID]; ok {
@@ -291,13 +290,13 @@ func TestResume_Success(t *testing.T) {
 
 	// Execute
 	result, err := spawner.Resume(ResumeRequest{
-		AgentType:       AgentTypeTicketAgent,
-		TmuxSession:     "test-session",
-		ProjectPath:     tmpDir,
-		TicketsDir:      filepath.Join(tmpDir, "tickets"),
-		ClaudeSessionID: "claude-session-abc",
-		WindowName:      "test-ticket",
-		TicketID:        "ticket-1",
+		AgentType:   AgentTypeTicketAgent,
+		TmuxSession: "test-session",
+		ProjectPath: tmpDir,
+		TicketsDir:  filepath.Join(tmpDir, "tickets"),
+		SessionID:   "session-abc",
+		WindowName:  "test-ticket",
+		TicketID:    "ticket-1",
 	})
 
 	// Verify
@@ -403,10 +402,9 @@ func TestDetectTicketState_Active(t *testing.T) {
 
 	testTicket := createTestTicket("ticket-1", "Test", "Body")
 	testTicket.Session = &ticket.Session{
-		ID:              "session-1",
-		ClaudeSessionID: "claude-123",
-		TmuxWindow:      "test-window",
-		StartedAt:       time.Now(),
+		ID:         "session-1",
+		TmuxWindow: "test-window",
+		StartedAt:  time.Now(),
 	}
 
 	info, err := DetectTicketState(testTicket, "test-session", tmuxMgr)
@@ -428,10 +426,9 @@ func TestDetectTicketState_Orphaned(t *testing.T) {
 
 	testTicket := createTestTicket("ticket-1", "Test", "Body")
 	testTicket.Session = &ticket.Session{
-		ID:              "session-1",
-		ClaudeSessionID: "claude-123",
-		TmuxWindow:      "test-window",
-		StartedAt:       time.Now(),
+		ID:         "session-1",
+		TmuxWindow: "test-window",
+		StartedAt:  time.Now(),
 	}
 
 	info, err := DetectTicketState(testTicket, "test-session", tmuxMgr)
@@ -595,9 +592,10 @@ func TestStateInfo_CanResume(t *testing.T) {
 		info     StateInfo
 		expected bool
 	}{
-		{"orphaned with session ID", StateInfo{State: StateOrphaned, ClaudeSessionID: "abc"}, true},
-		{"orphaned without session ID", StateInfo{State: StateOrphaned}, false},
-		{"active", StateInfo{State: StateActive, ClaudeSessionID: "abc"}, false},
+		{"orphaned with session ID", StateInfo{State: StateOrphaned, Session: &ticket.Session{ID: "abc"}}, true},
+		{"orphaned without session", StateInfo{State: StateOrphaned}, false},
+		{"orphaned with empty session ID", StateInfo{State: StateOrphaned, Session: &ticket.Session{ID: ""}}, false},
+		{"active", StateInfo{State: StateActive, Session: &ticket.Session{ID: "abc"}}, false},
 		{"normal", StateInfo{State: StateNormal}, false},
 	}
 

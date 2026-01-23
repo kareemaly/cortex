@@ -399,13 +399,13 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	if mode == "resume" {
 		// Resume orphaned session
 		result, err = spawner.Resume(spawn.ResumeRequest{
-			AgentType:       spawn.AgentTypeTicketAgent,
-			TmuxSession:     sessionName,
-			ProjectPath:     projectPath,
-			TicketsDir:      ticketsDir,
-			ClaudeSessionID: stateInfo.ClaudeSessionID,
-			WindowName:      stateInfo.Session.TmuxWindow,
-			TicketID:        id,
+			AgentType:   spawn.AgentTypeTicketAgent,
+			TmuxSession: sessionName,
+			ProjectPath: projectPath,
+			TicketsDir:  ticketsDir,
+			SessionID:   stateInfo.Session.ID,
+			WindowName:  stateInfo.Session.TmuxWindow,
+			TicketID:    id,
 		})
 	} else {
 		// Fresh mode: end existing session first

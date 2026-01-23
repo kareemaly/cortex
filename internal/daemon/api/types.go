@@ -62,14 +62,13 @@ type CommentResponse struct {
 
 // SessionResponse is a session in a ticket response.
 type SessionResponse struct {
-	ID              string                `json:"id"`
-	ClaudeSessionID string                `json:"claude_session_id,omitempty"`
-	StartedAt       time.Time             `json:"started_at"`
-	EndedAt         *time.Time            `json:"ended_at,omitempty"`
-	Agent           string                `json:"agent"`
-	TmuxWindow      string                `json:"tmux_window"`
-	CurrentStatus   *StatusEntryResponse  `json:"current_status,omitempty"`
-	StatusHistory   []StatusEntryResponse `json:"status_history"`
+	ID            string                `json:"id"`
+	StartedAt     time.Time             `json:"started_at"`
+	EndedAt       *time.Time            `json:"ended_at,omitempty"`
+	Agent         string                `json:"agent"`
+	TmuxWindow    string                `json:"tmux_window"`
+	CurrentStatus *StatusEntryResponse  `json:"current_status,omitempty"`
+	StatusHistory []StatusEntryResponse `json:"status_history"`
 }
 
 // StatusEntryResponse is a status entry in a session response.
@@ -190,14 +189,13 @@ func toSessionResponse(s ticket.Session) SessionResponse {
 	}
 
 	return SessionResponse{
-		ID:              s.ID,
-		ClaudeSessionID: s.ClaudeSessionID,
-		StartedAt:       s.StartedAt,
-		EndedAt:         s.EndedAt,
-		Agent:           s.Agent,
-		TmuxWindow:      s.TmuxWindow,
-		CurrentStatus:   currentStatus,
-		StatusHistory:   history,
+		ID:            s.ID,
+		StartedAt:     s.StartedAt,
+		EndedAt:       s.EndedAt,
+		Agent:         s.Agent,
+		TmuxWindow:    s.TmuxWindow,
+		CurrentStatus: currentStatus,
+		StatusHistory: history,
 	}
 }
 

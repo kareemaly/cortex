@@ -21,10 +21,9 @@ const (
 
 // StateInfo contains information about a ticket's session state.
 type StateInfo struct {
-	State           SessionState
-	Session         *ticket.Session
-	WindowExists    bool
-	ClaudeSessionID string
+	State        SessionState
+	Session      *ticket.Session
+	WindowExists bool
 }
 
 // TmuxChecker provides the ability to check tmux window existence.
@@ -43,8 +42,6 @@ func DetectTicketState(t *ticket.Ticket, tmuxSession string, tmuxChecker TmuxChe
 	if t.Session == nil {
 		return info, nil
 	}
-
-	info.ClaudeSessionID = t.Session.ClaudeSessionID
 
 	// Session ended explicitly
 	if t.Session.EndedAt != nil {
@@ -81,7 +78,7 @@ func (s *StateInfo) CanSpawn() bool {
 
 // CanResume returns true if an existing session can be resumed.
 func (s *StateInfo) CanResume() bool {
-	return s.State == StateOrphaned && s.ClaudeSessionID != ""
+	return s.State == StateOrphaned && s.Session != nil && s.Session.ID != ""
 }
 
 // NeedsCleanup returns true if the session should be cleaned up before spawning.

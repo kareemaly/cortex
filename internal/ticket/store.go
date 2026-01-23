@@ -200,7 +200,7 @@ func (s *Store) Move(id string, to Status) error {
 }
 
 // SetSession sets the session for a ticket (replaces any existing session).
-func (s *Store) SetSession(ticketID, agent, tmuxWindow, claudeSessionID string) (*Session, error) {
+func (s *Store) SetSession(ticketID, agent, tmuxWindow string) (*Session, error) {
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return nil, err
@@ -208,12 +208,11 @@ func (s *Store) SetSession(ticketID, agent, tmuxWindow, claudeSessionID string) 
 
 	now := time.Now().UTC()
 	session := &Session{
-		ID:              uuid.New().String(),
-		ClaudeSessionID: claudeSessionID,
-		StartedAt:       now,
-		EndedAt:         nil,
-		Agent:           agent,
-		TmuxWindow:      tmuxWindow,
+		ID:         uuid.New().String(),
+		StartedAt:  now,
+		EndedAt:    nil,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
 		CurrentStatus: &StatusEntry{
 			Status: AgentStatusStarting,
 			At:     now,

@@ -182,12 +182,12 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	if mode == "resume" {
 		// Resume orphaned session
 		result, err = spawner.Resume(spawn.ResumeRequest{
-			AgentType:       spawn.AgentTypeArchitect,
-			TmuxSession:     sessionName,
-			ProjectPath:     projectPath,
-			TicketsDir:      ticketsDir,
-			ClaudeSessionID: stateInfo.Session.ID,
-			WindowName:      stateInfo.Session.TmuxWindow,
+			AgentType:   spawn.AgentTypeArchitect,
+			TmuxSession: sessionName,
+			ProjectPath: projectPath,
+			TicketsDir:  ticketsDir,
+			SessionID:   stateInfo.Session.ID,
+			WindowName:  stateInfo.Session.TmuxWindow,
 		})
 	} else {
 		// Fresh mode: clear first

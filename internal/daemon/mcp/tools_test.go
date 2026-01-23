@@ -403,7 +403,7 @@ func TestHandleSpawnSessionActiveSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
-	_, err = server.Store().SetSession(created.ID, "claude", "window", "")
+	_, err = server.Store().SetSession(created.ID, "claude", "window")
 	if err != nil {
 		t.Fatalf("failed to set session: %v", err)
 	}
@@ -489,7 +489,7 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	}
 
 	// Set a session on the ticket
-	_, err = store.SetSession(tk.ID, "claude", "window", "")
+	_, err = store.SetSession(tk.ID, "claude", "window")
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("set session: %v", err)
@@ -899,7 +899,7 @@ func TestHandleSpawnSession_StateActive_AllModes(t *testing.T) {
 
 			// Create ticket with active session (window exists because mock defaults to true for existing sessions)
 			created, _ := server.Store().Create("Test Ticket", "body")
-			_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+			_, _ = server.Store().SetSession(created.ID, "claude", "window")
 
 			_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 				TicketID: created.ID,
@@ -928,7 +928,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeNormal(t *testing.T) {
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
-	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window")
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -955,7 +955,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeResume(t *testing.T) {
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
-	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window")
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -973,40 +973,12 @@ func TestHandleSpawnSession_StateOrphaned_ModeResume(t *testing.T) {
 	}
 }
 
-func TestHandleSpawnSession_StateOrphaned_ModeResumeNoSessionID(t *testing.T) {
-	server, cleanup := setupTestServerWithOrphanedSession(t)
-	defer cleanup()
-
-	created, _ := server.Store().Create("Test Ticket", "body")
-	// Session without ClaudeSessionID
-	_, _ = server.Store().SetSession(created.ID, "claude", "window", "")
-
-	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
-		TicketID: created.ID,
-		Mode:     "resume",
-	})
-
-	if err == nil {
-		t.Fatal("expected STATE_CONFLICT error")
-	}
-	toolErr, ok := err.(*ToolError)
-	if !ok {
-		t.Fatalf("expected ToolError, got %T", err)
-	}
-	if toolErr.Code != ErrorCodeStateConflict {
-		t.Errorf("expected STATE_CONFLICT, got: %s", toolErr.Code)
-	}
-	if output.State != "orphaned" {
-		t.Errorf("expected state 'orphaned', got: %s", output.State)
-	}
-}
-
 func TestHandleSpawnSession_StateOrphaned_ModeFresh(t *testing.T) {
 	server, cleanup := setupTestServerWithOrphanedSession(t)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
-	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window")
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -1029,7 +1001,7 @@ func TestHandleSpawnSession_StateEnded_ModeNormal(t *testing.T) {
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
-	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window")
 	_ = server.Store().EndSession(created.ID)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -1053,7 +1025,7 @@ func TestHandleSpawnSession_StateEnded_ModeResume(t *testing.T) {
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
-	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window")
 	_ = server.Store().EndSession(created.ID)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -1081,7 +1053,7 @@ func TestHandleSpawnSession_StateEnded_ModeFresh(t *testing.T) {
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
-	_, _ = server.Store().SetSession(created.ID, "claude", "window", "claude-123")
+	_, _ = server.Store().SetSession(created.ID, "claude", "window")
 	_ = server.Store().EndSession(created.ID)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{

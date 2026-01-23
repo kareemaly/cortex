@@ -66,14 +66,13 @@ type Dates struct {
 
 // Session represents a work session on a ticket.
 type Session struct {
-	ID              string        `json:"id"`
-	ClaudeSessionID string        `json:"claude_session_id,omitempty"`
-	StartedAt       time.Time     `json:"started_at"`
-	EndedAt         *time.Time    `json:"ended_at,omitempty"`
-	Agent           string        `json:"agent"`
-	TmuxWindow      string        `json:"tmux_window"`
-	CurrentStatus   *StatusEntry  `json:"current_status,omitempty"`
-	StatusHistory   []StatusEntry `json:"status_history"`
+	ID            string        `json:"id"`
+	StartedAt     time.Time     `json:"started_at"`
+	EndedAt       *time.Time    `json:"ended_at,omitempty"`
+	Agent         string        `json:"agent"`
+	TmuxWindow    string        `json:"tmux_window"`
+	CurrentStatus *StatusEntry  `json:"current_status,omitempty"`
+	StatusHistory []StatusEntry `json:"status_history"`
 }
 
 // StatusEntry represents a point-in-time status of an agent.

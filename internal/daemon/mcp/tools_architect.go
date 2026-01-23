@@ -316,17 +316,17 @@ func (s *Server) handleSpawnSession(
 		case "normal":
 			return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "session was orphaned (tmux window closed). Use mode='resume' to continue or mode='fresh' to start over")
 		case "resume":
-			if stateInfo.ClaudeSessionID == "" {
-				return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot resume - no claude session ID stored")
+			if stateInfo.Session == nil || stateInfo.Session.ID == "" {
+				return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot resume - no session ID stored")
 			}
 			result, err = spawner.Resume(spawn.ResumeRequest{
-				AgentType:       spawn.AgentTypeTicketAgent,
-				TmuxSession:     s.config.TmuxSession,
-				ProjectPath:     s.config.ProjectPath,
-				TicketsDir:      s.config.TicketsDir,
-				ClaudeSessionID: stateInfo.ClaudeSessionID,
-				WindowName:      stateInfo.Session.TmuxWindow,
-				TicketID:        input.TicketID,
+				AgentType:   spawn.AgentTypeTicketAgent,
+				TmuxSession: s.config.TmuxSession,
+				ProjectPath: s.config.ProjectPath,
+				TicketsDir:  s.config.TicketsDir,
+				SessionID:   stateInfo.Session.ID,
+				WindowName:  stateInfo.Session.TmuxWindow,
+				TicketID:    input.TicketID,
 			})
 		case "fresh":
 			result, err = spawner.Fresh(spawn.SpawnRequest{
