@@ -61,6 +61,7 @@ type MoveTicketInput struct {
 type SpawnSessionInput struct {
 	TicketID string `json:"ticket_id" jsonschema:"The ticket ID to spawn a session for"`
 	Agent    string `json:"agent,omitempty" jsonschema:"Agent name (default: claude)"`
+	Mode     string `json:"mode,omitempty" jsonschema:"Spawn mode: 'normal' (default), 'resume', or 'fresh'"`
 }
 
 // Input types for ticket tools
@@ -204,6 +205,7 @@ type SpawnSessionOutput struct {
 	TicketID   string `json:"ticket_id,omitempty"`
 	SessionID  string `json:"session_id,omitempty"`
 	TmuxWindow string `json:"tmux_window,omitempty"`
+	State      string `json:"state,omitempty"`
 	Message    string `json:"message,omitempty"`
 }
 

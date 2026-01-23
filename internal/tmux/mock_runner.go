@@ -5,6 +5,7 @@ type MockRunner struct {
 	RunFunc            func(args ...string) ([]byte, error)
 	RunInteractiveFunc func(args ...string) error
 	Calls              [][]string
+	windowExists       bool
 }
 
 // Run executes a tmux command and returns output.
@@ -25,26 +26,55 @@ func (m *MockRunner) RunInteractive(args ...string) error {
 	return nil
 }
 
+// SetWindowExists configures whether the mock reports windows as existing.
+func (m *MockRunner) SetWindowExists(exists bool) {
+	m.windowExists = exists
+	m.RunFunc = func(args ...string) ([]byte, error) {
+		if len(args) > 0 {
+			switch args[0] {
+			case "list-windows":
+				if exists {
+					return []byte("0:window:1"), nil
+				}
+				return []byte{}, nil // No windows
+			case "has-session":
+				return []byte{}, nil // Session exists
+			case "new-session", "new-window", "rename-window", "send-keys", "select-window":
+				if args[0] == "new-window" {
+					return []byte("1"), nil
+				}
+				return []byte{}, nil
+			}
+		}
+		return []byte{}, nil
+	}
+}
+
 // NewMockRunner creates a MockRunner that succeeds by default.
 func NewMockRunner() *MockRunner {
-	return &MockRunner{
-		RunFunc: func(args ...string) ([]byte, error) {
-			// Handle common tmux commands for testing
-			if len(args) > 0 {
-				switch args[0] {
-				case "list-windows":
-					return []byte("0:bash:1"), nil
-				case "has-session":
-					return []byte{}, nil // Session exists
-				case "new-session", "new-window", "rename-window", "send-keys", "select-window":
-					// Return window index for new-window
-					if args[0] == "new-window" {
-						return []byte("1"), nil
-					}
-					return []byte{}, nil
-				}
-			}
-			return []byte{}, nil
-		},
+	runner := &MockRunner{
+		windowExists: true,
 	}
+	runner.RunFunc = func(args ...string) ([]byte, error) {
+		// Handle common tmux commands for testing
+		if len(args) > 0 {
+			switch args[0] {
+			case "list-windows":
+				if runner.windowExists {
+					return []byte("0:window:1"), nil
+				}
+				return []byte{}, nil // No windows
+			case "has-session":
+				return []byte{}, nil // Session exists
+			case "new-session", "new-window", "rename-window", "send-keys", "select-window":
+				// Return window index for new-window
+				if args[0] == "new-window" {
+					return []byte("1"), nil
+				}
+				return []byte{}, nil
+			}
+		}
+		return []byte{}, nil
+	}
+	return runner
 }
