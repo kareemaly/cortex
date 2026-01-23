@@ -73,12 +73,13 @@ func (m *mockStore) EndSession(ticketID string) error {
 
 // mockTmuxManager implements TmuxManagerInterface for testing.
 type mockTmuxManager struct {
-	windows        map[string]bool // window existence by name
-	spawnErr       error
-	windowExists   bool
-	spawnCalls     int
-	lastCommand    string
-	lastWorkingDir string
+	windows          map[string]bool // window existence by name
+	spawnErr         error
+	windowExists     bool
+	spawnCalls       int
+	lastCommand      string
+	lastCompanionCmd string
+	lastWorkingDir   string
 }
 
 func newMockTmuxManager() *mockTmuxManager {
@@ -92,23 +93,25 @@ func (m *mockTmuxManager) WindowExists(session, windowName string) (bool, error)
 	return m.windowExists, nil
 }
 
-func (m *mockTmuxManager) SpawnAgent(session, windowName, agentCommand, workingDir string) (int, error) {
+func (m *mockTmuxManager) SpawnAgent(session, windowName, agentCommand, companionCommand, workingDir string) (int, error) {
 	if m.spawnErr != nil {
 		return 0, m.spawnErr
 	}
 	m.spawnCalls++
 	m.lastCommand = agentCommand
+	m.lastCompanionCmd = companionCommand
 	m.lastWorkingDir = workingDir
 	m.windows[windowName] = true
 	return 1, nil
 }
 
-func (m *mockTmuxManager) SpawnArchitect(session, windowName, agentCommand, workingDir string) error {
+func (m *mockTmuxManager) SpawnArchitect(session, windowName, agentCommand, companionCommand, workingDir string) error {
 	if m.spawnErr != nil {
 		return m.spawnErr
 	}
 	m.spawnCalls++
 	m.lastCommand = agentCommand
+	m.lastCompanionCmd = companionCommand
 	m.lastWorkingDir = workingDir
 	m.windows[windowName] = true
 	return nil

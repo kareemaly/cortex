@@ -27,8 +27,8 @@ type StoreInterface interface {
 // TmuxManagerInterface defines the tmux operations needed for spawning.
 type TmuxManagerInterface interface {
 	WindowExists(session, windowName string) (bool, error)
-	SpawnAgent(session, windowName, agentCommand, workingDir string) (int, error)
-	SpawnArchitect(session, windowName, agentCommand, workingDir string) error
+	SpawnAgent(session, windowName, agentCommand, companionCommand, workingDir string) (int, error)
+	SpawnArchitect(session, windowName, agentCommand, companionCommand, workingDir string) error
 }
 
 // Dependencies contains the external dependencies for the Spawner.
@@ -227,8 +227,16 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 		ResumeID:       req.SessionID,
 	})
 
+	// Determine companion command based on agent type
+	var companionCmd string
+	if req.TicketID != "" {
+		companionCmd = fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
+	} else {
+		companionCmd = "cortex kanban"
+	}
+
 	// Spawn in tmux
-	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, claudeCmd, req.ProjectPath)
+	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, claudeCmd, companionCmd, req.ProjectPath)
 	if err != nil {
 		_ = RemoveMCPConfig(mcpConfigPath)
 		return &SpawnResult{
@@ -326,9 +334,12 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd string) (i
 	case AgentTypeTicketAgent:
 		// Prefix command with CORTEX_TICKET_ID env var so child processes can identify the ticket
 		cmdWithEnv := fmt.Sprintf("CORTEX_TICKET_ID=%s %s", req.TicketID, claudeCmd)
-		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, cmdWithEnv, req.ProjectPath)
+		// Companion command shows ticket details
+		companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
+		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, cmdWithEnv, companionCmd, req.ProjectPath)
 	case AgentTypeArchitect:
-		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, claudeCmd, req.ProjectPath)
+		// Companion command shows kanban board
+		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, claudeCmd, "cortex kanban", req.ProjectPath)
 		return 0, err
 	default:
 		return 0, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}

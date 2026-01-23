@@ -5,6 +5,7 @@ package tmux
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -347,7 +348,7 @@ func TestIntegrationSpawnAgent(t *testing.T) {
 	}()
 
 	windowName := "agent-window"
-	index, err := m.SpawnAgent(session, windowName, "echo agent started", "")
+	index, err := m.SpawnAgent(session, windowName, "echo agent started", "", "")
 	if err != nil {
 		t.Fatalf("SpawnAgent failed: %v", err)
 	}
@@ -371,6 +372,56 @@ func TestIntegrationSpawnAgent(t *testing.T) {
 	}
 }
 
+func TestIntegrationSpawnAgentWithCompanion(t *testing.T) {
+	skipIfCI(t)
+	skipIfNoTmux(t)
+
+	m, err := NewManager()
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+
+	session := testSessionName(t)
+	defer func() {
+		_ = m.KillSession(session)
+	}()
+
+	windowName := "agent-with-companion"
+	index, err := m.SpawnAgent(session, windowName, "echo agent", "echo companion", "")
+	if err != nil {
+		t.Fatalf("SpawnAgent with companion failed: %v", err)
+	}
+
+	// Session should exist
+	exists, err := m.SessionExists(session)
+	if err != nil {
+		t.Fatalf("SessionExists failed: %v", err)
+	}
+	if !exists {
+		t.Error("session should exist after SpawnAgent")
+	}
+
+	// Window should exist
+	window, err := m.GetWindowByName(session, windowName)
+	if err != nil {
+		t.Fatalf("GetWindowByName failed: %v", err)
+	}
+	if window.Index != index {
+		t.Errorf("window index = %d, want %d", window.Index, index)
+	}
+
+	// Verify panes exist by listing them
+	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:%d", session, index))
+	if err != nil {
+		t.Fatalf("list-panes failed: %v", err)
+	}
+	// Should have 2 panes (original + split)
+	paneCount := len(strings.Split(strings.TrimSpace(string(output)), "\n"))
+	if paneCount != 2 {
+		t.Errorf("expected 2 panes, got %d", paneCount)
+	}
+}
+
 func TestIntegrationSpawnArchitect(t *testing.T) {
 	skipIfCI(t)
 	skipIfNoTmux(t)
@@ -386,7 +437,7 @@ func TestIntegrationSpawnArchitect(t *testing.T) {
 	}()
 
 	windowName := "architect"
-	if err := m.SpawnArchitect(session, windowName, "echo architect started", ""); err != nil {
+	if err := m.SpawnArchitect(session, windowName, "echo architect started", "", ""); err != nil {
 		t.Fatalf("SpawnArchitect failed: %v", err)
 	}
 
@@ -406,6 +457,157 @@ func TestIntegrationSpawnArchitect(t *testing.T) {
 	}
 	if window.Index != ArchitectWindowIndex {
 		t.Errorf("architect window index = %d, want %d", window.Index, ArchitectWindowIndex)
+	}
+}
+
+func TestIntegrationSpawnArchitectWithCompanion(t *testing.T) {
+	skipIfCI(t)
+	skipIfNoTmux(t)
+
+	m, err := NewManager()
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+
+	session := testSessionName(t)
+	defer func() {
+		_ = m.KillSession(session)
+	}()
+
+	windowName := "architect"
+	if err := m.SpawnArchitect(session, windowName, "echo architect", "echo kanban", ""); err != nil {
+		t.Fatalf("SpawnArchitect with companion failed: %v", err)
+	}
+
+	// Session should exist
+	exists, err := m.SessionExists(session)
+	if err != nil {
+		t.Fatalf("SessionExists failed: %v", err)
+	}
+	if !exists {
+		t.Error("session should exist after SpawnArchitect")
+	}
+
+	// Window 0 should be the architect
+	window, err := m.GetWindowByName(session, windowName)
+	if err != nil {
+		t.Fatalf("GetWindowByName failed: %v", err)
+	}
+	if window.Index != ArchitectWindowIndex {
+		t.Errorf("architect window index = %d, want %d", window.Index, ArchitectWindowIndex)
+	}
+
+	// Verify panes exist by listing them
+	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:%d", session, ArchitectWindowIndex))
+	if err != nil {
+		t.Fatalf("list-panes failed: %v", err)
+	}
+	// Should have 2 panes (original + split)
+	paneCount := len(strings.Split(strings.TrimSpace(string(output)), "\n"))
+	if paneCount != 2 {
+		t.Errorf("expected 2 panes, got %d", paneCount)
+	}
+}
+
+func TestIntegrationSplitWindowHorizontal(t *testing.T) {
+	skipIfCI(t)
+	skipIfNoTmux(t)
+
+	m, err := NewManager()
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+
+	session := testSessionName(t)
+	defer func() {
+		_ = m.KillSession(session)
+	}()
+
+	if err := m.CreateSession(session, ""); err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	// Split the default window (index 0)
+	if err := m.SplitWindowHorizontal(session, 0, ""); err != nil {
+		t.Fatalf("SplitWindowHorizontal failed: %v", err)
+	}
+
+	// Verify we now have 2 panes
+	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:0", session))
+	if err != nil {
+		t.Fatalf("list-panes failed: %v", err)
+	}
+	paneCount := len(strings.Split(strings.TrimSpace(string(output)), "\n"))
+	if paneCount != 2 {
+		t.Errorf("expected 2 panes after split, got %d", paneCount)
+	}
+}
+
+func TestIntegrationRunCommandInPane(t *testing.T) {
+	skipIfCI(t)
+	skipIfNoTmux(t)
+
+	m, err := NewManager()
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+
+	session := testSessionName(t)
+	defer func() {
+		_ = m.KillSession(session)
+	}()
+
+	if err := m.CreateSession(session, ""); err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	// Split the window first
+	if err := m.SplitWindowHorizontal(session, 0, ""); err != nil {
+		t.Fatalf("SplitWindowHorizontal failed: %v", err)
+	}
+
+	// Run command in pane 0
+	if err := m.RunCommandInPane(session, 0, 0, "echo pane0"); err != nil {
+		t.Fatalf("RunCommandInPane (pane 0) failed: %v", err)
+	}
+
+	// Run command in pane 1
+	if err := m.RunCommandInPane(session, 0, 1, "echo pane1"); err != nil {
+		t.Fatalf("RunCommandInPane (pane 1) failed: %v", err)
+	}
+}
+
+func TestIntegrationSelectPane(t *testing.T) {
+	skipIfCI(t)
+	skipIfNoTmux(t)
+
+	m, err := NewManager()
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+
+	session := testSessionName(t)
+	defer func() {
+		_ = m.KillSession(session)
+	}()
+
+	if err := m.CreateSession(session, ""); err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	// Split the window first
+	if err := m.SplitWindowHorizontal(session, 0, ""); err != nil {
+		t.Fatalf("SplitWindowHorizontal failed: %v", err)
+	}
+
+	// Select pane 0
+	if err := m.SelectPane(session, 0, 0); err != nil {
+		t.Fatalf("SelectPane (pane 0) failed: %v", err)
+	}
+
+	// Select pane 1
+	if err := m.SelectPane(session, 0, 1); err != nil {
+		t.Fatalf("SelectPane (pane 1) failed: %v", err)
 	}
 }
 
