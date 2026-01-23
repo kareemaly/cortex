@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 
 	"github.com/kareemaly/cortex/internal/lifecycle"
@@ -151,4 +152,22 @@ func (s *Server) IsArchitectSession() bool {
 // IsTicketSession returns true if this is a ticket session.
 func (s *Server) IsTicketSession() bool {
 	return s.session.Type == SessionTypeTicket
+}
+
+// killSessionWindow attempts to kill the tmux window for a session.
+// Errors are logged but not returned since window cleanup is best-effort.
+func (s *Server) killSessionWindow(session *ticket.Session) {
+	if s.tmuxManager == nil || s.config.TmuxSession == "" {
+		return
+	}
+	if session == nil || session.TmuxWindow == "" {
+		return
+	}
+
+	err := s.tmuxManager.KillWindow(s.config.TmuxSession, session.TmuxWindow)
+	if err != nil {
+		if !tmux.IsWindowNotFound(err) && !tmux.IsSessionNotFound(err) {
+			log.Printf("failed to kill tmux window %s: %v", session.TmuxWindow, err)
+		}
+	}
 }

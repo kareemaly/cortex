@@ -207,6 +207,12 @@ func (s *Server) handleMoveTicketToDone(
 		}, nil
 	}
 
+	// Save session reference before potential ending (for tmux window cleanup)
+	var sessionToClose *ticket.Session
+	if t.Session != nil && t.Session.IsActive() {
+		sessionToClose = t.Session
+	}
+
 	// Execute moved_to_done hooks - MUST succeed before moving
 	var hooksOutput *HooksExecutionOutput
 	hooks := s.getHooksForType(lifecycle.HookMovedToDone)
@@ -234,10 +240,21 @@ func (s *Server) handleMoveTicketToDone(
 		}
 	}
 
+	// End any active session before moving to done
+	if sessionToClose != nil {
+		err = s.store.EndSession(s.session.TicketID)
+		if err != nil {
+			return nil, ApproveOutput{}, WrapTicketError(err)
+		}
+	}
+
 	err = s.store.Move(s.session.TicketID, ticket.StatusDone)
 	if err != nil {
 		return nil, ApproveOutput{}, WrapTicketError(err)
 	}
+
+	// Kill tmux window (best-effort cleanup)
+	s.killSessionWindow(sessionToClose)
 
 	return nil, ApproveOutput{
 		Success:  true,
@@ -325,6 +342,9 @@ func (s *Server) handleConcludeSession(
 	}
 	activeSessionID := t.Session.ID
 
+	// Save session reference before ending (for tmux window cleanup)
+	sessionToClose := t.Session
+
 	// Add summary as a comment if provided
 	if input.Summary != "" {
 		_, err = s.store.AddComment(s.session.TicketID, activeSessionID, ticket.CommentProgress, input.Summary)
@@ -351,6 +371,9 @@ func (s *Server) handleConcludeSession(
 			hooksOutput = convertExecutionResult(result)
 		}
 	}
+
+	// Kill tmux window (best-effort cleanup)
+	s.killSessionWindow(sessionToClose)
 
 	return nil, ConcludeSessionOutput{
 		Success: true,
@@ -446,6 +469,9 @@ func (s *Server) handleApprove(
 	}
 	activeSessionID := t.Session.ID
 
+	// Save session reference before ending (for tmux window cleanup)
+	sessionToClose := t.Session
+
 	// Add summary as comment if provided
 	if input.Summary != "" {
 		_, err = s.store.AddComment(s.session.TicketID, activeSessionID, ticket.CommentProgress, input.Summary)
@@ -492,6 +518,9 @@ func (s *Server) handleApprove(
 	if err != nil {
 		return nil, ApproveOutput{}, WrapTicketError(err)
 	}
+
+	// Kill tmux window (best-effort cleanup)
+	s.killSessionWindow(sessionToClose)
 
 	return nil, ApproveOutput{
 		Success:  true,
