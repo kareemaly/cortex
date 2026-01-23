@@ -21,6 +21,10 @@ type Model struct {
 	err          error
 	statusMsg    string
 	loading      bool
+
+	// Modal state for orphaned session handling
+	showOrphanModal bool
+	orphanedTicket  *sdk.TicketSummary
 }
 
 // Message types for async operations.
@@ -48,6 +52,11 @@ type SessionErrorMsg struct {
 
 // ClearStatusMsg is sent to clear the status message after a delay.
 type ClearStatusMsg struct{}
+
+// OrphanedSessionMsg is sent when spawn encounters an orphaned session.
+type OrphanedSessionMsg struct {
+	Ticket *sdk.TicketSummary
+}
 
 // New creates a new kanban model with the given client.
 func New(client *sdk.Client) Model {
@@ -102,6 +111,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = fmt.Sprintf("Error: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
+	case OrphanedSessionMsg:
+		m.showOrphanModal = true
+		m.orphanedTicket = msg.Ticket
+		m.statusMsg = ""
+		return m, nil
+
 	case ClearStatusMsg:
 		m.statusMsg = ""
 		return m, nil
@@ -115,6 +130,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Quit.
 	if isKey(msg, KeyQuit, KeyCtrlC) {
 		return m, tea.Quit
+	}
+
+	// Modal state takes priority.
+	if m.showOrphanModal {
+		return m.handleOrphanModalKey(msg)
 	}
 
 	// Don't process other keys while loading or if there's an error.
@@ -166,18 +186,34 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Architect mode.
-	if isKey(msg, KeyArchitect) {
-		m.statusMsg = "Opening architect session..."
-		return m, m.openArchitect()
-	}
-
 	// Refresh.
 	if isKey(msg, KeyRefresh) {
 		m.loading = true
 		return m, m.loadTickets()
 	}
 
+	return m, nil
+}
+
+// handleOrphanModalKey handles keyboard input when the orphan modal is shown.
+func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case isKey(msg, KeyRefresh): // 'r' for resume
+		m.showOrphanModal = false
+		m.statusMsg = fmt.Sprintf("Resuming session for: %s...", m.orphanedTicket.Title)
+		return m, m.spawnSessionWithMode(m.orphanedTicket, "resume")
+
+	case isKey(msg, KeyFresh): // 'f' for fresh
+		m.showOrphanModal = false
+		m.statusMsg = fmt.Sprintf("Starting fresh session for: %s...", m.orphanedTicket.Title)
+		return m, m.spawnSessionWithMode(m.orphanedTicket, "fresh")
+
+	case isKey(msg, KeyCancel, KeyEscape): // 'c' or Esc for cancel
+		m.showOrphanModal = false
+		m.orphanedTicket = nil
+		m.statusMsg = "Spawn cancelled"
+		return m, m.clearStatusAfterDelay()
+	}
 	return m, nil
 }
 
@@ -191,9 +227,8 @@ func (m Model) View() string {
 
 	// Header.
 	headerLeft := headerStyle.Render("cortex1")
-	headerRight := headerStyle.Render("[a]rchitect")
-	headerPadding := max(m.width-lipgloss.Width(headerLeft)-lipgloss.Width(headerRight), 0)
-	header := headerLeft + strings.Repeat(" ", headerPadding) + headerRight
+	headerPadding := max(m.width-lipgloss.Width(headerLeft), 0)
+	header := headerLeft + strings.Repeat(" ", headerPadding)
 	b.WriteString(header)
 	b.WriteString("\n\n")
 
@@ -231,16 +266,18 @@ func (m Model) View() string {
 	b.WriteString(columnsView)
 	b.WriteString("\n")
 
-	// Status bar.
-	if m.statusMsg != "" {
-		b.WriteString(statusBarStyle.Render(m.statusMsg))
-		b.WriteString("\n")
+	// Status bar / Modal.
+	if m.showOrphanModal {
+		b.WriteString(m.renderOrphanModal())
 	} else {
-		b.WriteString("\n")
+		if m.statusMsg != "" {
+			b.WriteString(statusBarStyle.Render(m.statusMsg))
+			b.WriteString("\n")
+		} else {
+			b.WriteString("\n")
+		}
+		b.WriteString(helpBarStyle.Render(helpText()))
 	}
-
-	// Help bar.
-	b.WriteString(helpBarStyle.Render(helpText()))
 
 	return b.String()
 }
@@ -259,29 +296,25 @@ func (m Model) loadTickets() tea.Cmd {
 // spawnSession returns a command to spawn a session for a ticket.
 func (m Model) spawnSession(ticket *sdk.TicketSummary) tea.Cmd {
 	return func() tea.Msg {
-		session, err := m.client.SpawnSession(ticket.Status, ticket.ID, "")
+		session, err := m.client.SpawnSession(ticket.Status, ticket.ID, "normal")
 		if err != nil {
+			if apiErr, ok := err.(*sdk.APIError); ok && apiErr.IsOrphanedSession() {
+				return OrphanedSessionMsg{Ticket: ticket}
+			}
 			return SessionErrorMsg{Err: err}
 		}
 		return SessionSpawnedMsg{Session: session, Ticket: ticket}
 	}
 }
 
-// openArchitect returns a command to open an architect session.
-func (m Model) openArchitect() tea.Cmd {
+// spawnSessionWithMode returns a command to spawn a session with a specific mode.
+func (m Model) spawnSessionWithMode(ticket *sdk.TicketSummary, mode string) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := m.client.SpawnArchitect("")
+		session, err := m.client.SpawnSession(ticket.Status, ticket.ID, mode)
 		if err != nil {
 			return SessionErrorMsg{Err: err}
 		}
-		return SessionSpawnedMsg{
-			Session: &sdk.SessionResponse{
-				ID:         resp.Session.ID,
-				TmuxWindow: resp.Session.TmuxWindow,
-				StartedAt:  resp.Session.StartedAt,
-			},
-			Ticket: nil,
-		}
+		return SessionSpawnedMsg{Session: session, Ticket: ticket}
 	}
 }
 
@@ -290,4 +323,15 @@ func (m Model) clearStatusAfterDelay() tea.Cmd {
 	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
 		return ClearStatusMsg{}
 	})
+}
+
+// renderOrphanModal renders the orphaned session modal prompt.
+func (m Model) renderOrphanModal() string {
+	title := m.orphanedTicket.Title
+	if len(title) > 30 {
+		title = title[:27] + "..."
+	}
+	prompt := fmt.Sprintf("Orphaned session found for \"%s\"", title)
+	options := "[r]esume  [f]resh  [c]ancel"
+	return statusBarStyle.Render(prompt) + "\n" + helpBarStyle.Render(options)
 }

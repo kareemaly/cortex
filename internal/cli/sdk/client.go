@@ -152,6 +152,22 @@ type ErrorResponse struct {
 	Details string `json:"details,omitempty"`
 }
 
+// APIError represents an error response from the API with its code preserved.
+type APIError struct {
+	Code    string
+	Message string
+	Status  int
+}
+
+func (e *APIError) Error() string {
+	return e.Message
+}
+
+// IsOrphanedSession returns true if this error indicates an orphaned session.
+func (e *APIError) IsOrphanedSession() bool {
+	return e.Code == "session_orphaned"
+}
+
 // Health checks if the daemon is healthy.
 func (c *Client) Health() error {
 	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/health", nil)
@@ -458,21 +474,33 @@ func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
 func (c *Client) parseError(resp *http.Response) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("request failed with status %d", resp.StatusCode)
+		return &APIError{
+			Message: fmt.Sprintf("request failed with status %d", resp.StatusCode),
+			Status:  resp.StatusCode,
+		}
 	}
 
 	var errResp ErrorResponse
 	if err := json.Unmarshal(body, &errResp); err != nil {
-		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+		return &APIError{
+			Message: fmt.Sprintf("request failed with status %d: %s", resp.StatusCode, string(body)),
+			Status:  resp.StatusCode,
+		}
 	}
 
-	if errResp.Details != "" {
-		return fmt.Errorf("%s", errResp.Details)
+	message := errResp.Details
+	if message == "" {
+		message = errResp.Error
 	}
-	if errResp.Error != "" {
-		return fmt.Errorf("%s", errResp.Error)
+	if message == "" {
+		message = fmt.Sprintf("request failed with status %d", resp.StatusCode)
 	}
-	return fmt.Errorf("request failed with status %d", resp.StatusCode)
+
+	return &APIError{
+		Code:    errResp.Code,
+		Message: message,
+		Status:  resp.StatusCode,
+	}
 }
 
 // hasPrefix checks if id starts with prefix (for short ID matching).
