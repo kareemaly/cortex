@@ -83,8 +83,28 @@ Your role is to manage tickets and orchestrate development work. Use the cortex 
 Start by listing current tickets to understand the project state.`
 
 // DefaultTicketAgentPrompt is the default ticket agent prompt template.
-const DefaultTicketAgentPrompt = `You are working on ticket: {{.Title}}
+const DefaultTicketAgentPrompt = `# Ticket: {{.Title}}
 
 {{.Body}}
 
-Use the cortex MCP tools to track your progress. When complete, use the approve tool.`
+## Cortex MCP Tools
+
+- moveTicketToProgress - Move ticket to in_progress
+- moveTicketToReview - Move ticket to review
+- addTicketComment - Add a comment to the ticket
+
+## Workflow
+
+1. Call moveTicketToProgress to start
+2. Do the work
+3. Call moveTicketToReview when complete
+
+## Hooks
+
+Status changes may trigger project hooks (git branch, tests, etc). Hook output is returned in the tool response. Read it and react accordingly.
+
+## Comments
+
+Use addTicketComment with type "decision" for key implementation decisions.
+
+Other types available when relevant: scope_change, blocker, question.`
