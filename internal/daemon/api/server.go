@@ -47,6 +47,13 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Post("/{status}/{id}/spawn", ticketHandlers.Spawn)
 		})
 
+		// Architect routes
+		architectHandlers := NewArchitectHandlers(deps)
+		r.Route("/architect", func(r chi.Router) {
+			r.Get("/", architectHandlers.GetState)
+			r.Post("/spawn", architectHandlers.Spawn)
+		})
+
 		// Session routes
 		sessionHandlers := NewSessionHandlers(deps)
 		r.Route("/sessions", func(r chi.Router) {

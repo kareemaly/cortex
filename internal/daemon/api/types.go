@@ -107,6 +107,29 @@ type SpawnResponse struct {
 	Ticket  TicketResponse  `json:"ticket"`
 }
 
+// ArchitectStateResponse is the response for GET /architect.
+type ArchitectStateResponse struct {
+	State   string                    `json:"state"`
+	Session *ArchitectSessionResponse `json:"session,omitempty"`
+}
+
+// ArchitectSessionResponse is the session details in an architect response.
+type ArchitectSessionResponse struct {
+	ID          string     `json:"id"`
+	TmuxSession string     `json:"tmux_session"`
+	TmuxWindow  string     `json:"tmux_window"`
+	StartedAt   time.Time  `json:"started_at"`
+	EndedAt     *time.Time `json:"ended_at,omitempty"`
+}
+
+// ArchitectSpawnResponse is the response for POST /architect/spawn.
+type ArchitectSpawnResponse struct {
+	State       string                   `json:"state"`
+	Session     ArchitectSessionResponse `json:"session"`
+	TmuxSession string                   `json:"tmux_session"`
+	TmuxWindow  string                   `json:"tmux_window"`
+}
+
 // toTicketResponse converts a ticket to its API response form.
 func toTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 	var session *SessionResponse

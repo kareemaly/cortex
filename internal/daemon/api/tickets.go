@@ -2,11 +2,11 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
+	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kareemaly/cortex/internal/core/spawn"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
@@ -274,6 +274,16 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse mode parameter
+	mode := r.URL.Query().Get("mode")
+	if mode == "" {
+		mode = "normal"
+	}
+	if mode != "normal" && mode != "resume" && mode != "fresh" {
+		writeError(w, http.StatusBadRequest, "invalid_mode", "mode must be normal, resume, or fresh")
+		return
+	}
+
 	projectPath := GetProjectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
@@ -307,42 +317,117 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check no active session exists
-	if t.HasActiveSession() {
-		writeError(w, http.StatusConflict, "session_active", "ticket already has an active session")
-		return
-	}
-
-	// Generate MCP config file
-	mcpConfigPath, err := h.writeMCPConfig(id)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "mcp_config_error", "failed to write MCP config")
-		return
-	}
-
-	// Build agent command
-	agentCmd := buildAgentCommand(projectCfg, mcpConfigPath, t)
-
-	// Get session name and window name
+	// Get session name
 	sessionName := projectCfg.Name
 	if sessionName == "" {
 		sessionName = "cortex"
 	}
-	windowName := ticket.GenerateSlug(t.Title)
 
-	// Spawn agent in tmux
-	_, err = h.deps.TmuxManager.SpawnAgent(sessionName, windowName, agentCmd)
+	// Detect session state
+	stateInfo, err := spawn.DetectTicketState(t, sessionName, h.deps.TmuxManager)
 	if err != nil {
-		h.deps.Logger.Error("failed to spawn agent", "error", err)
-		writeError(w, http.StatusInternalServerError, "tmux_error", "failed to spawn tmux window")
+		writeError(w, http.StatusInternalServerError, "state_error", "failed to detect session state")
 		return
 	}
 
-	// Set session on ticket (generates a new claude session ID)
-	session, err := store.SetSession(id, string(projectCfg.Agent), windowName, "")
+	// Apply mode/state matrix
+	switch mode {
+	case "normal":
+		switch stateInfo.State {
+		case spawn.StateNormal, spawn.StateEnded:
+			// Spawn new - continue
+		case spawn.StateActive:
+			// Focus window and return existing
+			if err := h.deps.TmuxManager.FocusWindow(sessionName, stateInfo.Session.TmuxWindow); err != nil {
+				h.deps.Logger.Warn("failed to focus window", "error", err)
+			}
+			resp := SpawnResponse{
+				Session: toSessionResponse(*stateInfo.Session),
+				Ticket:  toTicketResponse(t, actualStatus),
+			}
+			writeJSON(w, http.StatusOK, resp)
+			return
+		case spawn.StateOrphaned:
+			writeError(w, http.StatusConflict, "session_orphaned", "ticket has an orphaned session; use mode=resume or mode=fresh")
+			return
+		}
+
+	case "resume":
+		switch stateInfo.State {
+		case spawn.StateOrphaned:
+			// Resume - handled below
+		case spawn.StateNormal:
+			writeError(w, http.StatusBadRequest, "no_session_to_resume", "no session to resume")
+			return
+		case spawn.StateActive:
+			writeError(w, http.StatusConflict, "session_active", "ticket already has an active session")
+			return
+		case spawn.StateEnded:
+			writeError(w, http.StatusBadRequest, "session_ended", "session has ended; cannot resume")
+			return
+		}
+
+	case "fresh":
+		switch stateInfo.State {
+		case spawn.StateOrphaned, spawn.StateEnded:
+			// Clear and spawn new - handled below
+		case spawn.StateNormal:
+			writeError(w, http.StatusBadRequest, "no_session_to_clear", "no session to clear")
+			return
+		case spawn.StateActive:
+			writeError(w, http.StatusConflict, "session_active", "ticket has an active session; cannot clear")
+			return
+		}
+	}
+
+	// Create spawner
+	ticketsDir := filepath.Join(projectPath, ".cortex", "tickets")
+	spawner := spawn.NewSpawner(spawn.Dependencies{
+		Store:       store,
+		TmuxManager: h.deps.TmuxManager,
+	})
+
+	var result *spawn.SpawnResult
+
+	if mode == "resume" {
+		// Resume orphaned session
+		result, err = spawner.Resume(spawn.ResumeRequest{
+			AgentType:       spawn.AgentTypeTicketAgent,
+			TmuxSession:     sessionName,
+			ProjectPath:     projectPath,
+			TicketsDir:      ticketsDir,
+			ClaudeSessionID: stateInfo.ClaudeSessionID,
+			WindowName:      stateInfo.Session.TmuxWindow,
+			TicketID:        id,
+		})
+	} else {
+		// Fresh mode: end existing session first
+		if mode == "fresh" && stateInfo.Session != nil {
+			if err := store.EndSession(id); err != nil {
+				h.deps.Logger.Warn("failed to end session", "error", err)
+			}
+		}
+
+		// Spawn new
+		result, err = spawner.Spawn(spawn.SpawnRequest{
+			AgentType:   spawn.AgentTypeTicketAgent,
+			Agent:       string(projectCfg.Agent),
+			TmuxSession: sessionName,
+			ProjectPath: projectPath,
+			TicketsDir:  ticketsDir,
+			TicketID:    id,
+			Ticket:      t,
+		})
+	}
+
 	if err != nil {
-		h.deps.Logger.Error("failed to set session", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to record session")
+		h.deps.Logger.Error("failed to spawn agent", "error", err)
+		writeError(w, http.StatusInternalServerError, "spawn_error", "failed to spawn agent session")
+		return
+	}
+
+	if !result.Success {
+		writeError(w, http.StatusInternalServerError, "spawn_error", result.Message)
 		return
 	}
 
@@ -361,56 +446,8 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := SpawnResponse{
-		Session: toSessionResponse(*session),
+		Session: toSessionResponse(*t.Session),
 		Ticket:  toTicketResponse(t, newStatus),
 	}
 	writeJSON(w, http.StatusCreated, resp)
-}
-
-// writeMCPConfig writes the MCP configuration to a temp file.
-func (h *TicketHandlers) writeMCPConfig(ticketID string) (string, error) {
-	mcpConfig := map[string]any{
-		"mcpServers": map[string]any{
-			"cortex": map[string]any{
-				"command": "cortexd",
-				"args":    []string{"mcp", "--ticket-id", ticketID},
-			},
-		},
-	}
-
-	data, err := json.Marshal(mcpConfig)
-	if err != nil {
-		return "", fmt.Errorf("marshal mcp config: %w", err)
-	}
-
-	// Write to temp file
-	tmpFile, err := os.CreateTemp("", "cortex-mcp-*.json")
-	if err != nil {
-		return "", fmt.Errorf("create temp file: %w", err)
-	}
-
-	if _, err := tmpFile.Write(data); err != nil {
-		_ = tmpFile.Close()
-		return "", fmt.Errorf("write temp file: %w", err)
-	}
-
-	if err := tmpFile.Close(); err != nil {
-		return "", fmt.Errorf("close temp file: %w", err)
-	}
-
-	return tmpFile.Name(), nil
-}
-
-// buildAgentCommand builds the command to run the agent.
-func buildAgentCommand(projectCfg *projectconfig.Config, mcpConfigPath string, t *ticket.Ticket) string {
-	switch projectCfg.Agent {
-	case projectconfig.AgentOpenCode:
-		return fmt.Sprintf("opencode --mcp-config %s", mcpConfigPath)
-	case projectconfig.AgentClaude:
-		fallthrough
-	default:
-		// Build prompt from ticket
-		prompt := fmt.Sprintf("Work on the following ticket:\\n\\nTitle: %s\\n\\n%s", t.Title, t.Body)
-		return fmt.Sprintf("claude -p '%s' --mcp-config %s", prompt, mcpConfigPath)
-	}
 }
