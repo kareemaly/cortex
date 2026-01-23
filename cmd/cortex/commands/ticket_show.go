@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/tui/ticket"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -26,75 +29,98 @@ var ticketShowCmd = &cobra.Command{
 		ticketID := args[0]
 		client := sdk.DefaultClient(projectPath)
 
-		ticket, err := client.FindTicketByID(ticketID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
+		// JSON output: fetch and print.
 		if ticketShowJSONFlag {
+			t, err := client.FindTicketByID(ticketID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
-			if err := enc.Encode(ticket); err != nil {
+			if err := enc.Encode(t); err != nil {
 				fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
 				os.Exit(1)
 			}
 			return
 		}
 
-		// Print ticket info
-		fmt.Printf("Ticket: %s\n", ticket.ID)
-		fmt.Printf("  Title:  %s\n", ticket.Title)
-		fmt.Printf("  Status: %s\n", ticket.Status)
-		fmt.Printf("  Created: %s\n", ticket.Dates.Created.Format("Jan 02 15:04:05"))
-		fmt.Printf("  Updated: %s\n", ticket.Dates.Updated.Format("Jan 02 15:04:05"))
-		fmt.Println()
-
-		// Print body
-		if ticket.Body != "" {
-			fmt.Println("Body:")
-			fmt.Println(ticket.Body)
-			fmt.Println()
+		// Non-TTY: print plain text output.
+		if !isatty.IsTerminal(os.Stdout.Fd()) && !isatty.IsCygwinTerminal(os.Stdout.Fd()) {
+			printTicketPlainText(client, ticketID)
+			return
 		}
 
-		// Print session info if present
-		if ticket.Session != nil {
-			session := ticket.Session
-			fmt.Printf("Session: %s\n", session.ID)
-			fmt.Printf("  Agent:       %s\n", session.Agent)
-			fmt.Printf("  Started:     %s\n", session.StartedAt.Format("Jan 02 15:04:05"))
-			if session.EndedAt != nil {
-				fmt.Printf("  Ended:       %s\n", session.EndedAt.Format("Jan 02 15:04:05"))
-			} else {
-				fmt.Printf("  Ended:       (active)\n")
-			}
-			fmt.Printf("  Tmux Window: %s\n", session.TmuxWindow)
-			fmt.Println()
-
-			// Print current status
-			if session.CurrentStatus != nil {
-				fmt.Println("Current Status:")
-				fmt.Printf("  Status: %s\n", session.CurrentStatus.Status)
-				if session.CurrentStatus.Tool != nil {
-					fmt.Printf("  Tool:   %s\n", *session.CurrentStatus.Tool)
-				}
-				if session.CurrentStatus.Work != nil {
-					fmt.Printf("  Work:   %s\n", *session.CurrentStatus.Work)
-				}
-				fmt.Println()
-			}
-		}
-
-		// Print comments
-		if len(ticket.Comments) > 0 {
-			fmt.Println("Comments:")
-			for _, c := range ticket.Comments {
-				fmt.Printf("  [%s] %s\n", c.Type, c.Content)
-			}
+		// TTY: launch interactive TUI.
+		model := ticket.New(client, ticketID)
+		p := tea.NewProgram(model, tea.WithAltScreen())
+		if _, err := p.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+			os.Exit(1)
 		}
 	},
 }
 
 func init() {
 	ticketShowCmd.Flags().BoolVar(&ticketShowJSONFlag, "json", false, "Output as JSON")
+}
+
+// printTicketPlainText fetches and prints ticket details in plain text format.
+func printTicketPlainText(client *sdk.Client, ticketID string) {
+	t, err := client.FindTicketByID(ticketID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Print ticket info.
+	fmt.Printf("Ticket: %s\n", t.ID)
+	fmt.Printf("  Title:  %s\n", t.Title)
+	fmt.Printf("  Status: %s\n", t.Status)
+	fmt.Printf("  Created: %s\n", t.Dates.Created.Format("Jan 02 15:04:05"))
+	fmt.Printf("  Updated: %s\n", t.Dates.Updated.Format("Jan 02 15:04:05"))
+	fmt.Println()
+
+	// Print body.
+	if t.Body != "" {
+		fmt.Println("Body:")
+		fmt.Println(t.Body)
+		fmt.Println()
+	}
+
+	// Print session info if present.
+	if t.Session != nil {
+		session := t.Session
+		fmt.Printf("Session: %s\n", session.ID)
+		fmt.Printf("  Agent:       %s\n", session.Agent)
+		fmt.Printf("  Started:     %s\n", session.StartedAt.Format("Jan 02 15:04:05"))
+		if session.EndedAt != nil {
+			fmt.Printf("  Ended:       %s\n", session.EndedAt.Format("Jan 02 15:04:05"))
+		} else {
+			fmt.Printf("  Ended:       (active)\n")
+		}
+		fmt.Printf("  Tmux Window: %s\n", session.TmuxWindow)
+		fmt.Println()
+
+		// Print current status.
+		if session.CurrentStatus != nil {
+			fmt.Println("Current Status:")
+			fmt.Printf("  Status: %s\n", session.CurrentStatus.Status)
+			if session.CurrentStatus.Tool != nil {
+				fmt.Printf("  Tool:   %s\n", *session.CurrentStatus.Tool)
+			}
+			if session.CurrentStatus.Work != nil {
+				fmt.Printf("  Work:   %s\n", *session.CurrentStatus.Work)
+			}
+			fmt.Println()
+		}
+	}
+
+	// Print comments.
+	if len(t.Comments) > 0 {
+		fmt.Println("Comments:")
+		for _, c := range t.Comments {
+			fmt.Printf("  [%s] %s\n", c.Type, c.Content)
+		}
+	}
 }
