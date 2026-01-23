@@ -23,6 +23,7 @@ const (
 	CommentQuestion    CommentType = "question"
 	CommentRejection   CommentType = "rejection"
 	CommentGeneral     CommentType = "general"
+	CommentTicketDone  CommentType = "ticket_done"
 )
 
 // Comment represents a comment on a ticket.

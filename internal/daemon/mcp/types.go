@@ -68,27 +68,13 @@ type SpawnSessionInput struct {
 
 // AddCommentInput is the input for the addTicketComment tool.
 type AddCommentInput struct {
-	Type    string `json:"type" jsonschema:"Comment type (scope_change/decision/blocker/progress/question/rejection/general)"`
+	Type    string `json:"type" jsonschema:"Comment type (scope_change/decision/blocker/progress/question/rejection/general/ticket_done)"`
 	Content string `json:"content" jsonschema:"The comment content"`
 }
 
-// ConcludeSessionInput is the input for the concludeSession tool.
-type ConcludeSessionInput struct {
-	Summary string `json:"summary,omitempty" jsonschema:"Final summary of work done in this session"`
-}
-
-// SubmitReportInput is the input for the submitReport tool (deprecated).
-type SubmitReportInput struct {
-	Files        []string `json:"files,omitempty" jsonschema:"List of modified files"`
-	ScopeChanges *string  `json:"scope_changes,omitempty" jsonschema:"Description of any scope changes"`
-	Decisions    []string `json:"decisions,omitempty" jsonschema:"List of decisions made"`
-	Summary      string   `json:"summary,omitempty" jsonschema:"Summary of work done"`
-}
-
-// ApproveInput is the input for the approve tool (deprecated).
-type ApproveInput struct {
-	Summary       string `json:"summary,omitempty" jsonschema:"Final summary before approval"`
-	CommitMessage string `json:"commit_message,omitempty" jsonschema:"Commit message for on_approve hooks"`
+// MoveTicketToDoneInput is the input for the moveTicketToDone tool.
+type MoveTicketToDoneInput struct {
+	Summary string `json:"summary,omitempty" jsonschema:"Optional summary of completed work (added as ticket_done comment)"`
 }
 
 // Output types
@@ -215,21 +201,7 @@ type AddCommentOutput struct {
 	Hooks   *HooksExecutionOutput `json:"hooks,omitempty"`
 }
 
-// ConcludeSessionOutput is the output for the concludeSession tool.
-type ConcludeSessionOutput struct {
-	Success bool                  `json:"success"`
-	Message string                `json:"message,omitempty"`
-	Hooks   *HooksExecutionOutput `json:"hooks,omitempty"`
-}
-
-// SubmitReportOutput is the output for the submitReport tool (deprecated).
-type SubmitReportOutput struct {
-	Success bool                  `json:"success"`
-	Message string                `json:"message,omitempty"`
-	Hooks   *HooksExecutionOutput `json:"hooks,omitempty"`
-}
-
-// ApproveOutput is the output for the approve tool.
+// ApproveOutput is the output for the moveTicketToDone tool.
 type ApproveOutput struct {
 	Success  bool                  `json:"success"`
 	TicketID string                `json:"ticket_id"`
