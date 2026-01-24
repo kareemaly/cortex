@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
@@ -25,6 +26,7 @@ type Model struct {
 	killing       bool
 	embedded      bool // if true, send CloseDetailMsg instead of tea.Quit
 	pendingG      bool // tracking 'g' key for 'gg' sequence
+	mdRenderer    *glamour.TermRenderer
 }
 
 // Message types for async operations.
@@ -52,10 +54,15 @@ type CloseDetailMsg struct{}
 
 // New creates a new ticket detail model.
 func New(client *sdk.Client, ticketID string) Model {
+	renderer, _ := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(80),
+	)
 	return Model{
-		client:   client,
-		ticketID: ticketID,
-		loading:  true,
+		client:     client,
+		ticketID:   ticketID,
+		loading:    true,
+		mdRenderer: renderer,
 	}
 }
 
@@ -80,6 +87,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Header (1 line) + blank (1) + help bar (1) = 3 lines overhead.
 		viewportHeight := max(m.height-3, 1)
+
+		// Update renderer width.
+		renderer, _ := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(m.width),
+		)
+		m.mdRenderer = renderer
 
 		if !m.ready {
 			m.viewport = viewport.New(m.width, viewportHeight)
@@ -411,6 +425,18 @@ func (m Model) renderDates() string {
 	return b.String()
 }
 
+// renderMarkdown renders content as markdown using glamour.
+func (m Model) renderMarkdown(content string) string {
+	if m.mdRenderer == nil {
+		return content
+	}
+	rendered, err := m.mdRenderer.Render(content)
+	if err != nil {
+		return content // fallback to raw on error
+	}
+	return strings.TrimSpace(rendered)
+}
+
 // renderSection renders a labeled section with content.
 func (m Model) renderSection(title, content string) string {
 	var b strings.Builder
@@ -418,7 +444,7 @@ func (m Model) renderSection(title, content string) string {
 	b.WriteString("\n")
 	b.WriteString(sectionHeaderStyle.Render("─── " + title + " ───"))
 	b.WriteString("\n")
-	b.WriteString(content)
+	b.WriteString(m.renderMarkdown(content))
 
 	return b.String()
 }
@@ -496,13 +522,9 @@ func (m Model) renderComments() string {
 		b.WriteString(date)
 		b.WriteString("\n")
 
-		// Comment content with indent.
-		lines := strings.Split(comment.Content, "\n")
-		for _, line := range lines {
-			b.WriteString("  ")
-			b.WriteString(line)
-			b.WriteString("\n")
-		}
+		// Comment content rendered as markdown.
+		b.WriteString(m.renderMarkdown(comment.Content))
+		b.WriteString("\n")
 
 		// Add spacing between comments, but not after the last one.
 		if i < len(m.ticket.Comments)-1 {
