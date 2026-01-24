@@ -10,10 +10,11 @@ import (
 
 // Column represents a kanban column with tickets.
 type Column struct {
-	title   string
-	status  string
-	tickets []sdk.TicketSummary
-	cursor  int
+	title        string
+	status       string
+	tickets      []sdk.TicketSummary
+	cursor       int
+	scrollOffset int // first visible ticket index
 }
 
 // NewColumn creates a new column with the given title and status.
@@ -56,6 +57,49 @@ func (c *Column) MoveDown() {
 	}
 }
 
+// JumpToFirst moves cursor to first ticket.
+func (c *Column) JumpToFirst() {
+	c.cursor = 0
+	c.scrollOffset = 0
+}
+
+// JumpToLast moves cursor to last ticket.
+func (c *Column) JumpToLast() {
+	if len(c.tickets) > 0 {
+		c.cursor = len(c.tickets) - 1
+	}
+	// scrollOffset adjusted in EnsureCursorVisible
+}
+
+// ScrollUp scrolls up by n tickets (for ctrl+u).
+func (c *Column) ScrollUp(n int) {
+	c.cursor = max(c.cursor-n, 0)
+	// scrollOffset adjusted in EnsureCursorVisible
+}
+
+// ScrollDown scrolls down by n tickets (for ctrl+d).
+func (c *Column) ScrollDown(n int) {
+	if len(c.tickets) > 0 {
+		c.cursor = min(c.cursor+n, len(c.tickets)-1)
+	}
+	// scrollOffset adjusted in EnsureCursorVisible
+}
+
+// EnsureCursorVisible adjusts scrollOffset to keep cursor in view.
+func (c *Column) EnsureCursorVisible(visibleCount int) {
+	if visibleCount <= 0 {
+		return
+	}
+	// Cursor above visible area
+	if c.cursor < c.scrollOffset {
+		c.scrollOffset = c.cursor
+	}
+	// Cursor below visible area
+	if c.cursor >= c.scrollOffset+visibleCount {
+		c.scrollOffset = c.cursor - visibleCount + 1
+	}
+}
+
 // SetTickets sets the tickets for this column and resets cursor if needed.
 func (c *Column) SetTickets(tickets []sdk.TicketSummary) {
 	c.tickets = tickets
@@ -65,6 +109,10 @@ func (c *Column) SetTickets(tickets []sdk.TicketSummary) {
 		} else {
 			c.cursor = 0
 		}
+	}
+	// Reset scroll offset if it's now invalid
+	if c.scrollOffset >= len(tickets) {
+		c.scrollOffset = max(len(tickets)-1, 0)
 	}
 }
 
@@ -77,13 +125,30 @@ func (c *Column) Len() int {
 func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	var b strings.Builder
 
+	// Header takes ~2 lines (text + border)
+	headerLines := 2
+	// Scroll indicators take 1 line each when shown
+	indicatorLines := 2 // Reserve space for both
+	visibleCount := max(maxHeight-headerLines-indicatorLines, 1)
+
+	// Ensure cursor is visible
+	c.EnsureCursorVisible(visibleCount)
+
 	// Render header with count.
 	headerText := fmt.Sprintf("%s (%d)", c.title, len(c.tickets))
 	header := columnHeaderStyle(c.status).Width(width - 2).Render(headerText)
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Render tickets.
+	// Top scroll indicator
+	if c.scrollOffset > 0 {
+		b.WriteString(mutedStyle.Render("  ▲"))
+		b.WriteString("\n")
+	} else {
+		b.WriteString("\n") // Empty line to maintain layout
+	}
+
+	// Render only visible tickets.
 	if len(c.tickets) == 0 {
 		emptyText := lipgloss.NewStyle().
 			Foreground(mutedColor).
@@ -92,7 +157,9 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 		b.WriteString(emptyText)
 		b.WriteString("\n")
 	} else {
-		for i, t := range c.tickets {
+		endIdx := min(c.scrollOffset+visibleCount, len(c.tickets))
+		for i := c.scrollOffset; i < endIdx; i++ {
+			t := c.tickets[i]
 			// Truncate title if too long.
 			title := t.Title
 			maxLen := max(width-6, 10)
@@ -112,10 +179,16 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 				line = ticketStyle.Width(width - 2).Render(prefix + title)
 			}
 			b.WriteString(line)
-			if i < len(c.tickets)-1 {
+			if i < endIdx-1 {
 				b.WriteString("\n")
 			}
 		}
+	}
+
+	// Bottom scroll indicator
+	b.WriteString("\n")
+	if c.scrollOffset+visibleCount < len(c.tickets) {
+		b.WriteString(mutedStyle.Render("  ▼"))
 	}
 
 	content := b.String()

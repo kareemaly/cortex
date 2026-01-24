@@ -89,6 +89,10 @@ var (
 	loadingStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241")).
 			Italic(true)
+
+	// Muted style for scroll indicators.
+	mutedStyle = lipgloss.NewStyle().
+			Foreground(mutedColor)
 )
 
 // columnHeaderStyle returns the appropriate header style for a status.

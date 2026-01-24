@@ -23,6 +23,10 @@ const (
 	KeyFresh   Key = "f"
 	KeyCancel  Key = "c"
 	KeyEscape  Key = "esc"
+	KeyCtrlU   Key = "ctrl+u"
+	KeyCtrlD   Key = "ctrl+d"
+	KeyG       Key = "g"
+	KeyShiftG  Key = "G"
 )
 
 // isKey checks if a key message matches a key constant.
@@ -37,5 +41,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the kanban board.
 func helpText() string {
-	return "[s]pawn  [r]efresh  [h/l] columns  [j/k] navigate  [q]uit"
+	return "[s]pawn  [r]efresh  [h/l] columns  [j/k/gg/G] navigate  [ctrl+u/d] scroll  [q]uit"
 }
