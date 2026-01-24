@@ -66,8 +66,10 @@ func TestHandleListTickets(t *testing.T) {
 	_, _ = server.Store().Create("Ticket 1", "body 1")
 	_, _ = server.Store().Create("Ticket 2", "body 2")
 
-	// List all tickets
-	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{})
+	// List backlog tickets (status is required)
+	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
+		Status: "backlog",
+	})
 	if err != nil {
 		t.Fatalf("handleListTickets failed: %v", err)
 	}
@@ -113,9 +115,10 @@ func TestHandleListTicketsWithQuery(t *testing.T) {
 	_, _ = server.Store().Create("Fix login bug", "Authentication issue")
 	_, _ = server.Store().Create("Add feature", "New feature")
 
-	// Search for "login"
+	// Search for "login" in backlog (status is required)
 	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
-		Query: "login",
+		Status: "backlog",
+		Query:  "login",
 	})
 	if err != nil {
 		t.Fatalf("handleListTickets failed: %v", err)
@@ -160,9 +163,10 @@ func TestHandleListTicketsEmptyQuery(t *testing.T) {
 	_, _ = server.Store().Create("Ticket 1", "body 1")
 	_, _ = server.Store().Create("Ticket 2", "body 2")
 
-	// Empty query should return all tickets (not error like searchTickets did)
+	// Empty query should return all tickets in the specified status (status is required)
 	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
-		Query: "",
+		Status: "backlog",
+		Query:  "",
 	})
 	if err != nil {
 		t.Fatalf("handleListTickets failed: %v", err)
@@ -170,6 +174,46 @@ func TestHandleListTicketsEmptyQuery(t *testing.T) {
 
 	if output.Total != 2 {
 		t.Errorf("total = %d, want 2", output.Total)
+	}
+}
+
+func TestHandleListTickets_MissingStatus(t *testing.T) {
+	server, cleanup := setupTestServer(t, "")
+	defer cleanup()
+
+	// Call without status - should return validation error
+	_, _, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{})
+
+	if err == nil {
+		t.Error("expected error for missing status")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("error code = %q, want %q", toolErr.Code, ErrorCodeValidation)
+	}
+}
+
+func TestHandleListTickets_InvalidStatus(t *testing.T) {
+	server, cleanup := setupTestServer(t, "")
+	defer cleanup()
+
+	// Call with invalid status - should return validation error
+	_, _, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
+		Status: "invalid",
+	})
+
+	if err == nil {
+		t.Error("expected error for invalid status")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("error code = %q, want %q", toolErr.Code, ErrorCodeValidation)
 	}
 }
 

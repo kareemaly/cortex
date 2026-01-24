@@ -15,7 +15,7 @@ func (s *Server) registerArchitectTools() {
 	// List tickets
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "listTickets",
-		Description: "List tickets with optional status and query filters",
+		Description: "List tickets by status. Status parameter is required and must be one of: backlog, progress, review, done",
 	}, s.handleListTickets)
 
 	// Read ticket
@@ -55,51 +55,40 @@ func (s *Server) registerArchitectTools() {
 	}, s.handleSpawnSession)
 }
 
-// handleListTickets lists tickets with optional status and query filters.
+// handleListTickets lists tickets by status.
 func (s *Server) handleListTickets(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input ListTicketsInput,
 ) (*mcp.CallToolResult, ListTicketsOutput, error) {
+	// Validate status is provided and valid
+	if input.Status == "" {
+		return nil, ListTicketsOutput{}, NewValidationError("status", "is required")
+	}
+	status := ticket.Status(input.Status)
+	if status != ticket.StatusBacklog && status != ticket.StatusProgress && status != ticket.StatusReview && status != ticket.StatusDone {
+		return nil, ListTicketsOutput{}, NewValidationError("status", "must be one of: backlog, progress, review, done")
+	}
+
 	// Initialize as empty slice (not nil) to ensure JSON marshals to [] not null
 	summaries := []TicketSummary{}
 
 	// Prepare query for case-insensitive matching
 	query := strings.ToLower(input.Query)
 
-	if input.Status != "" {
-		// List by specific status
-		status := ticket.Status(input.Status)
-		tickets, err := s.store.List(status)
-		if err != nil {
-			return nil, ListTicketsOutput{}, WrapTicketError(err)
+	// List by status
+	tickets, err := s.store.List(status)
+	if err != nil {
+		return nil, ListTicketsOutput{}, WrapTicketError(err)
+	}
+	for _, t := range tickets {
+		// Apply query filter if specified
+		if query != "" &&
+			!strings.Contains(strings.ToLower(t.Title), query) &&
+			!strings.Contains(strings.ToLower(t.Body), query) {
+			continue
 		}
-		for _, t := range tickets {
-			// Apply query filter if specified
-			if query != "" &&
-				!strings.Contains(strings.ToLower(t.Title), query) &&
-				!strings.Contains(strings.ToLower(t.Body), query) {
-				continue
-			}
-			summaries = append(summaries, ToTicketSummary(t, status))
-		}
-	} else {
-		// List all tickets
-		allTickets, err := s.store.ListAll()
-		if err != nil {
-			return nil, ListTicketsOutput{}, WrapTicketError(err)
-		}
-		for status, tickets := range allTickets {
-			for _, t := range tickets {
-				// Apply query filter if specified
-				if query != "" &&
-					!strings.Contains(strings.ToLower(t.Title), query) &&
-					!strings.Contains(strings.ToLower(t.Body), query) {
-					continue
-				}
-				summaries = append(summaries, ToTicketSummary(t, status))
-			}
-		}
+		summaries = append(summaries, ToTicketSummary(t, status))
 	}
 
 	return nil, ListTicketsOutput{

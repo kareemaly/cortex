@@ -24,7 +24,7 @@ type Session struct {
 
 // ListTicketsInput is the input for the listTickets tool.
 type ListTicketsInput struct {
-	Status string `json:"status,omitempty" jsonschema:"Filter by status (backlog/progress/review/done). Leave empty for all tickets."`
+	Status string `json:"status" jsonschema:"Ticket status to filter by (required). Must be one of: backlog, progress, review, done"`
 	Query  string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
 }
 

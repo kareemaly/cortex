@@ -175,7 +175,7 @@ func parseToolOutput[T any](t *testing.T, result *mcp.CallToolResult) T {
 
 // Integration tests for architect tools
 
-func TestIntegration_ListTickets_Empty(t *testing.T) {
+func TestIntegration_ListTickets_MissingStatus(t *testing.T) {
 	skipIfCI(t)
 
 	env := setupTestEnv(t)
@@ -186,6 +186,54 @@ func TestIntegration_ListTickets_Empty(t *testing.T) {
 
 	ctx := context.Background()
 	result, err := client.callTool(ctx, "listTickets", nil)
+
+	// The MCP SDK validates the schema at the transport level, returning an error
+	// when required fields are missing. This is the expected behavior.
+	if err == nil && (result == nil || !result.IsError) {
+		t.Error("expected error for missing status")
+	}
+	// If we got an error, verify it's about the missing status field
+	if err != nil && !strings.Contains(err.Error(), "status") {
+		t.Errorf("expected error about status, got: %v", err)
+	}
+}
+
+func TestIntegration_ListTickets_InvalidStatus(t *testing.T) {
+	skipIfCI(t)
+
+	env := setupTestEnv(t)
+	defer env.cleanup()
+
+	client := newMCPTestClient(t, env)
+	defer client.Close()
+
+	ctx := context.Background()
+	result, err := client.callTool(ctx, "listTickets", map[string]any{
+		"status": "invalid",
+	})
+	if err != nil {
+		t.Fatalf("callTool failed: %v", err)
+	}
+
+	// Should have an error for invalid status
+	if !result.IsError {
+		t.Error("expected error for invalid status")
+	}
+}
+
+func TestIntegration_ListTickets_Empty(t *testing.T) {
+	skipIfCI(t)
+
+	env := setupTestEnv(t)
+	defer env.cleanup()
+
+	client := newMCPTestClient(t, env)
+	defer client.Close()
+
+	ctx := context.Background()
+	result, err := client.callTool(ctx, "listTickets", map[string]any{
+		"status": "backlog",
+	})
 	if err != nil {
 		t.Fatalf("listTickets failed: %v", err)
 	}
@@ -281,8 +329,10 @@ func TestIntegration_ListTickets_WithTickets(t *testing.T) {
 		t.Fatalf("createTicket failed: %v", err)
 	}
 
-	// List all tickets
-	result, err := client.callTool(ctx, "listTickets", nil)
+	// List backlog tickets (status is required)
+	result, err := client.callTool(ctx, "listTickets", map[string]any{
+		"status": "backlog",
+	})
 	if err != nil {
 		t.Fatalf("listTickets failed: %v", err)
 	}
@@ -652,9 +702,10 @@ func TestIntegration_ListTickets_WithQuery(t *testing.T) {
 		t.Fatalf("createTicket failed: %v", err)
 	}
 
-	// Search for "login" using query filter
+	// Search for "login" in backlog (status is required)
 	result, err := client.callTool(ctx, "listTickets", map[string]any{
-		"query": "login",
+		"status": "backlog",
+		"query":  "login",
 	})
 	if err != nil {
 		t.Fatalf("listTickets failed: %v", err)
