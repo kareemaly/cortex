@@ -24,6 +24,7 @@ type Model struct {
 	showKillModal bool
 	killing       bool
 	embedded      bool // if true, send CloseDetailMsg instead of tea.Quit
+	pendingG      bool // tracking 'g' key for 'gg' sequence
 }
 
 // Message types for async operations.
@@ -180,6 +181,39 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.hasActiveSession() {
 			m.showKillModal = true
 		}
+		return m, nil
+	}
+
+	// Handle 'G' - jump to bottom.
+	if isKey(msg, KeyShiftG) {
+		m.pendingG = false
+		m.viewport.GotoBottom()
+		return m, nil
+	}
+
+	// Handle 'g' key for 'gg' sequence.
+	if isKey(msg, KeyG) {
+		if m.pendingG {
+			// Second 'g' - jump to top.
+			m.pendingG = false
+			m.viewport.GotoTop()
+		} else {
+			// First 'g' - set pending state.
+			m.pendingG = true
+		}
+		return m, nil
+	}
+
+	// Clear pending g on any other key.
+	m.pendingG = false
+
+	// Half-page scroll (ctrl+u/d).
+	if isKey(msg, KeyCtrlU) {
+		m.viewport.HalfPageUp()
+		return m, nil
+	}
+	if isKey(msg, KeyCtrlD) {
+		m.viewport.HalfPageDown()
 		return m, nil
 	}
 

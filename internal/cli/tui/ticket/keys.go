@@ -26,6 +26,10 @@ const (
 	KeyYes         Key = "y"
 	KeyNo          Key = "n"
 	KeyEscape      Key = "esc"
+	KeyCtrlU       Key = "ctrl+u"
+	KeyCtrlD       Key = "ctrl+d"
+	KeyG           Key = "g"
+	KeyShiftG      Key = "G"
 )
 
 // isKey checks if a key message matches a key constant.
@@ -46,9 +50,9 @@ func helpText(scrollPercent int, hasActiveSession bool, embedded bool) string {
 	} else {
 		quit = "[q]uit"
 	}
-	base := "[j/k] scroll  [r]efresh  " + quit
+	base := "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  " + quit
 	if hasActiveSession {
-		base = "[j/k] scroll  [r]efresh  [x] kill session  " + quit
+		base = "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  [x] kill session  " + quit
 	}
 	return base + "  " + percentStr(scrollPercent)
 }
