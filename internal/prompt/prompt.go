@@ -16,8 +16,39 @@ func ArchitectPath(projectRoot string) string {
 }
 
 // TicketAgentPath returns the path to the ticket agent prompt file.
+// Deprecated: Use TicketSystemPath and TicketPath instead.
 func TicketAgentPath(projectRoot string) string {
 	return filepath.Join(PromptsDir(projectRoot), "ticket-agent.md")
+}
+
+// TicketSystemPath returns the path to the ticket system prompt file.
+// This contains MCP tool instructions and workflow guidance.
+func TicketSystemPath(projectRoot string) string {
+	return filepath.Join(PromptsDir(projectRoot), "ticket-system.md")
+}
+
+// TicketPath returns the path to the ticket content template.
+// This template is used for the dynamic ticket content.
+func TicketPath(projectRoot string) string {
+	return filepath.Join(PromptsDir(projectRoot), "ticket.md")
+}
+
+// TicketWorktreePath returns the path to the ticket worktree template.
+// This template includes worktree-specific information.
+func TicketWorktreePath(projectRoot string) string {
+	return filepath.Join(PromptsDir(projectRoot), "ticket-worktree.md")
+}
+
+// ApprovePath returns the path to the approve prompt file.
+// This contains instructions for the approval workflow.
+func ApprovePath(projectRoot string) string {
+	return filepath.Join(PromptsDir(projectRoot), "approve.md")
+}
+
+// ApproveWorktreePath returns the path to the approve worktree prompt file.
+// This contains instructions for approving worktree-based changes.
+func ApproveWorktreePath(projectRoot string) string {
+	return filepath.Join(PromptsDir(projectRoot), "approve-worktree.md")
 }
 
 // ValidatePromptFile checks that a prompt file exists.

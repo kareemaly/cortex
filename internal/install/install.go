@@ -146,13 +146,14 @@ func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
 	ticketsDir := filepath.Join(cortexDir, "tickets")
 	backlogDir := filepath.Join(ticketsDir, "backlog")
 	progressDir := filepath.Join(ticketsDir, "progress")
+	reviewDir := filepath.Join(ticketsDir, "review")
 	doneDir := filepath.Join(ticketsDir, "done")
 	configPath := filepath.Join(cortexDir, "cortex.yaml")
 
 	var items []SetupItem
 
 	// Create directories
-	dirs := []string{cortexDir, ticketsDir, backlogDir, progressDir, doneDir}
+	dirs := []string{cortexDir, ticketsDir, backlogDir, progressDir, reviewDir, doneDir}
 	for _, dir := range dirs {
 		item := ensureDir(dir)
 		items = append(items, item)
@@ -189,8 +190,45 @@ git:
 		return items, item.Error
 	}
 
+	// Legacy ticket-agent.md (for backward compatibility)
 	ticketAgentPath := prompt.TicketAgentPath(absPath)
 	item = ensureConfigFile(ticketAgentPath, defaultTicketAgentPrompt, force)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	// New workflow prompts
+	ticketSystemPath := prompt.TicketSystemPath(absPath)
+	item = ensureConfigFile(ticketSystemPath, DefaultTicketSystemPrompt, force)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	ticketPath := prompt.TicketPath(absPath)
+	item = ensureConfigFile(ticketPath, DefaultTicketPrompt, force)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	ticketWorktreePath := prompt.TicketWorktreePath(absPath)
+	item = ensureConfigFile(ticketWorktreePath, DefaultTicketWorktreePrompt, force)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	approvePath := prompt.ApprovePath(absPath)
+	item = ensureConfigFile(approvePath, DefaultApprovePrompt, force)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	approveWorktreePath := prompt.ApproveWorktreePath(absPath)
+	item = ensureConfigFile(approveWorktreePath, DefaultApproveWorktreePrompt, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error

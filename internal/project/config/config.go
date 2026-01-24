@@ -17,10 +17,9 @@ const (
 
 // Config holds the project configuration.
 type Config struct {
-	Name      string          `yaml:"name"`
-	Agent     AgentType       `yaml:"agent"`
-	Git       GitConfig       `yaml:"git"`
-	Lifecycle LifecycleConfig `yaml:"lifecycle"`
+	Name  string    `yaml:"name"`
+	Agent AgentType `yaml:"agent"`
+	Git   GitConfig `yaml:"git"`
 }
 
 // GitConfig holds git-related configuration.
@@ -31,25 +30,6 @@ type GitConfig struct {
 // RepoConfig holds configuration for a single repository.
 type RepoConfig struct {
 	Path string `yaml:"path"`
-}
-
-// LifecycleConfig holds lifecycle hook configuration.
-type LifecycleConfig struct {
-	// Legacy hooks (kept for backward compatibility)
-	OnPickup  []HookConfig `yaml:"on_pickup,omitempty"`
-	OnSubmit  []HookConfig `yaml:"on_submit,omitempty"`
-	OnApprove []HookConfig `yaml:"on_approve,omitempty"`
-	// New hooks
-	MovedToProgress []HookConfig `yaml:"moved_to_progress,omitempty"`
-	MovedToReview   []HookConfig `yaml:"moved_to_review,omitempty"`
-	MovedToDone     []HookConfig `yaml:"moved_to_done,omitempty"`
-	CommentAdded    []HookConfig `yaml:"comment_added,omitempty"`
-	SessionEnded    []HookConfig `yaml:"session_ended,omitempty"`
-}
-
-// HookConfig holds configuration for a single hook.
-type HookConfig struct {
-	Run string `yaml:"run"`
 }
 
 // DefaultConfig returns a Config with default values.
@@ -148,44 +128,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Validate lifecycle hooks
-	if err := validateHooks("lifecycle.on_pickup", c.Lifecycle.OnPickup); err != nil {
-		return err
-	}
-	if err := validateHooks("lifecycle.on_submit", c.Lifecycle.OnSubmit); err != nil {
-		return err
-	}
-	if err := validateHooks("lifecycle.on_approve", c.Lifecycle.OnApprove); err != nil {
-		return err
-	}
-	if err := validateHooks("lifecycle.moved_to_progress", c.Lifecycle.MovedToProgress); err != nil {
-		return err
-	}
-	if err := validateHooks("lifecycle.moved_to_review", c.Lifecycle.MovedToReview); err != nil {
-		return err
-	}
-	if err := validateHooks("lifecycle.moved_to_done", c.Lifecycle.MovedToDone); err != nil {
-		return err
-	}
-	if err := validateHooks("lifecycle.comment_added", c.Lifecycle.CommentAdded); err != nil {
-		return err
-	}
-	if err := validateHooks("lifecycle.session_ended", c.Lifecycle.SessionEnded); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func validateHooks(field string, hooks []HookConfig) error {
-	for i, hook := range hooks {
-		if hook.Run == "" {
-			return &ValidationError{
-				Field:   field,
-				Message: "hook run command cannot be empty at index " + itoa(i),
-			}
-		}
-	}
 	return nil
 }
 

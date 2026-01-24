@@ -66,6 +66,16 @@ type OrphanedSessionMsg struct {
 	Ticket *sdk.TicketSummary
 }
 
+// SessionApprovedMsg is sent when a session is successfully approved.
+type SessionApprovedMsg struct {
+	Ticket *sdk.TicketSummary
+}
+
+// ApproveErrorMsg is sent when approving a session fails.
+type ApproveErrorMsg struct {
+	Err error
+}
+
 // New creates a new kanban model with the given client.
 func New(client *sdk.Client) Model {
 	return Model{
@@ -147,6 +157,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.orphanedTicket = msg.Ticket
 		m.statusMsg = ""
 		return m, nil
+
+	case SessionApprovedMsg:
+		m.statusMsg = fmt.Sprintf("Approved session for: %s", msg.Ticket.Title)
+		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
+
+	case ApproveErrorMsg:
+		m.statusMsg = fmt.Sprintf("Approve error: %s", msg.Err)
+		return m, m.clearStatusAfterDelay()
 
 	case ClearStatusMsg:
 		m.statusMsg = ""
@@ -248,6 +266,20 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if t != nil {
 			m.statusMsg = fmt.Sprintf("Spawning session for: %s...", t.Title)
 			return m, m.spawnSession(t)
+		}
+		return m, nil
+	}
+
+	// Approve session.
+	if isKey(msg, KeyApprove) {
+		t := m.columns[m.activeColumn].SelectedTicket()
+		if t != nil && t.HasActiveSession {
+			m.statusMsg = fmt.Sprintf("Approving session for: %s...", t.Title)
+			return m, m.approveSession(t)
+		}
+		if t != nil && !t.HasActiveSession {
+			m.statusMsg = "No active session to approve"
+			return m, m.clearStatusAfterDelay()
 		}
 		return m, nil
 	}
@@ -402,6 +434,24 @@ func (m Model) spawnSessionWithMode(ticket *sdk.TicketSummary, mode string) tea.
 			return SessionErrorMsg{Err: err}
 		}
 		return SessionSpawnedMsg{Session: session, Ticket: ticket}
+	}
+}
+
+// approveSession returns a command to approve a session for a ticket.
+func (m Model) approveSession(ticket *sdk.TicketSummary) tea.Cmd {
+	return func() tea.Msg {
+		// First get the ticket to find the session ID
+		fullTicket, err := m.client.GetTicket(ticket.Status, ticket.ID)
+		if err != nil {
+			return ApproveErrorMsg{Err: err}
+		}
+		if fullTicket.Session == nil {
+			return ApproveErrorMsg{Err: fmt.Errorf("no session found")}
+		}
+		if err := m.client.ApproveSession(fullTicket.Session.ID); err != nil {
+			return ApproveErrorMsg{Err: err}
+		}
+		return SessionApprovedMsg{Ticket: ticket}
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/kareemaly/cortex/internal/lifecycle"
 	"github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
@@ -50,7 +49,6 @@ type Server struct {
 	session       *Session
 	config        *Config
 	projectConfig *config.Config
-	lifecycle     *lifecycle.Executor
 	tmuxManager   *tmux.Manager
 }
 
@@ -99,9 +97,6 @@ func NewServer(cfg *Config) (*Server, error) {
 		}
 	}
 
-	// Create lifecycle executor
-	lifecycleExec := lifecycle.NewExecutor()
-
 	// Create MCP server
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "cortex-mcp",
@@ -114,7 +109,6 @@ func NewServer(cfg *Config) (*Server, error) {
 		session:       session,
 		config:        cfg,
 		projectConfig: projectCfg,
-		lifecycle:     lifecycleExec,
 		tmuxManager:   cfg.TmuxManager,
 	}
 

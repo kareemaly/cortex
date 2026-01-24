@@ -309,6 +309,39 @@ func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, 
 	return &comment, nil
 }
 
+// AddReviewRequest adds a review request to the ticket's active session.
+// Returns the total number of review requests after adding.
+func (s *Store) AddReviewRequest(ticketID, repoPath, summary string) (int, error) {
+	ticket, status, err := s.Get(ticketID)
+	if err != nil {
+		return 0, err
+	}
+
+	if ticket.Session == nil {
+		return 0, &NotFoundError{Resource: "session", ID: ticketID}
+	}
+
+	if !ticket.Session.IsActive() {
+		return 0, &ValidationError{Field: "session", Message: "session is not active"}
+	}
+
+	now := time.Now().UTC()
+	review := ReviewRequest{
+		RepoPath:    repoPath,
+		Summary:     summary,
+		RequestedAt: now,
+	}
+
+	ticket.Session.RequestedReviews = append(ticket.Session.RequestedReviews, review)
+	ticket.Dates.Updated = now
+
+	if err := s.save(ticket, status); err != nil {
+		return 0, fmt.Errorf("save ticket: %w", err)
+	}
+
+	return len(ticket.Session.RequestedReviews), nil
+}
+
 // filename generates the filename for a ticket: {slug}-{id}.json
 func (s *Store) filename(ticket *Ticket) string {
 	slug := GenerateSlug(ticket.Title)

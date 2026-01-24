@@ -67,13 +67,14 @@ type Dates struct {
 
 // Session represents a work session on a ticket.
 type Session struct {
-	ID            string        `json:"id"`
-	StartedAt     time.Time     `json:"started_at"`
-	EndedAt       *time.Time    `json:"ended_at,omitempty"`
-	Agent         string        `json:"agent"`
-	TmuxWindow    string        `json:"tmux_window"`
-	CurrentStatus *StatusEntry  `json:"current_status,omitempty"`
-	StatusHistory []StatusEntry `json:"status_history"`
+	ID               string          `json:"id"`
+	StartedAt        time.Time       `json:"started_at"`
+	EndedAt          *time.Time      `json:"ended_at,omitempty"`
+	Agent            string          `json:"agent"`
+	TmuxWindow       string          `json:"tmux_window"`
+	CurrentStatus    *StatusEntry    `json:"current_status,omitempty"`
+	StatusHistory    []StatusEntry   `json:"status_history"`
+	RequestedReviews []ReviewRequest `json:"requested_reviews,omitempty"`
 }
 
 // StatusEntry represents a point-in-time status of an agent.
@@ -82,6 +83,13 @@ type StatusEntry struct {
 	Tool   *string     `json:"tool"`
 	Work   *string     `json:"work"`
 	At     time.Time   `json:"at"`
+}
+
+// ReviewRequest represents a request for human review of changes.
+type ReviewRequest struct {
+	RepoPath    string    `json:"repo_path"`
+	Summary     string    `json:"summary"`
+	RequestedAt time.Time `json:"requested_at"`
 }
 
 // IsActive returns true if the session has not ended.

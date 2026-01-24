@@ -10,7 +10,6 @@ import (
 	"github.com/kareemaly/cortex/internal/daemon/api"
 	"github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/daemon/logging"
-	"github.com/kareemaly/cortex/internal/lifecycle"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/pkg/version"
 	"github.com/spf13/cobra"
@@ -82,14 +81,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Initialize lifecycle executor
-	hookExecutor := lifecycle.NewExecutor()
-
 	// Build dependencies
 	deps := &api.Dependencies{
 		StoreManager: storeManager,
 		TmuxManager:  tmuxManager,
-		HookExecutor: hookExecutor,
 		Logger:       logger,
 	}
 

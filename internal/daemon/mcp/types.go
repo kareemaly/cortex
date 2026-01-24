@@ -72,26 +72,18 @@ type AddCommentInput struct {
 	Content string `json:"content" jsonschema:"The comment content"`
 }
 
-// MoveTicketToDoneInput is the input for the moveTicketToDone tool.
-type MoveTicketToDoneInput struct {
-	Summary string `json:"summary,omitempty" jsonschema:"Optional summary of completed work (added as ticket_done comment)"`
+// RequestReviewInput is the input for the requestReview tool.
+type RequestReviewInput struct {
+	RepoPath string `json:"repo_path" jsonschema:"Path to the repository being reviewed"`
+	Summary  string `json:"summary" jsonschema:"Summary of changes for the reviewer"`
+}
+
+// ConcludeSessionInput is the input for the concludeSession tool.
+type ConcludeSessionInput struct {
+	FullReport string `json:"full_report" jsonschema:"Complete summary of work done, decisions made, and files changed"`
 }
 
 // Output types
-
-// HookResultOutput represents the result of executing a single hook.
-type HookResultOutput struct {
-	Command  string `json:"command"`
-	Stdout   string `json:"stdout"`
-	ExitCode int    `json:"exit_code"`
-}
-
-// HooksExecutionOutput represents the overall result of executing hooks.
-type HooksExecutionOutput struct {
-	Executed bool               `json:"executed"`
-	Success  bool               `json:"success"`
-	Hooks    []HookResultOutput `json:"hooks,omitempty"`
-}
 
 // TicketSummary is a brief ticket representation for list views.
 type TicketSummary struct {
@@ -196,25 +188,22 @@ type SpawnSessionOutput struct {
 
 // AddCommentOutput is the output for the addTicketComment tool.
 type AddCommentOutput struct {
-	Success bool                  `json:"success"`
-	Comment CommentOutput         `json:"comment,omitempty"`
-	Hooks   *HooksExecutionOutput `json:"hooks,omitempty"`
+	Success bool          `json:"success"`
+	Comment CommentOutput `json:"comment,omitempty"`
 }
 
-// ApproveOutput is the output for the moveTicketToDone tool.
-type ApproveOutput struct {
-	Success  bool                  `json:"success"`
-	TicketID string                `json:"ticket_id"`
-	Status   string                `json:"status"`
-	Message  string                `json:"message,omitempty"`
-	Hooks    *HooksExecutionOutput `json:"hooks,omitempty"`
+// RequestReviewOutput is the output for the requestReview tool.
+type RequestReviewOutput struct {
+	Success     bool   `json:"success"`
+	Message     string `json:"message"`
+	ReviewCount int    `json:"review_count"`
 }
 
-// PickupTicketOutput is the output for the pickupTicket tool.
-type PickupTicketOutput struct {
-	Success bool                  `json:"success"`
-	Message string                `json:"message"`
-	Hooks   *HooksExecutionOutput `json:"hooks,omitempty"`
+// ConcludeSessionOutput is the output for the concludeSession tool.
+type ConcludeSessionOutput struct {
+	Success  bool   `json:"success"`
+	TicketID string `json:"ticket_id"`
+	Message  string `json:"message,omitempty"`
 }
 
 // Conversion functions

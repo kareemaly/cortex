@@ -379,13 +379,42 @@ func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
 
 // buildTicketAgentPrompt creates the dynamic ticket prompt.
 func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) {
-	systemPromptPath := prompt.TicketAgentPath(req.ProjectPath)
+	// Load system prompt (MCP tool instructions and workflow)
+	systemPromptPath := prompt.TicketSystemPath(req.ProjectPath)
 	systemPromptContent, err := prompt.LoadPromptFile(systemPromptPath)
+	if err != nil {
+		// Fall back to legacy ticket-agent.md if new file doesn't exist
+		systemPromptPath = prompt.TicketAgentPath(req.ProjectPath)
+		systemPromptContent, err = prompt.LoadPromptFile(systemPromptPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Load ticket template
+	ticketTemplatePath := prompt.TicketPath(req.ProjectPath)
+	ticketTemplate, err := prompt.LoadPromptFile(ticketTemplatePath)
+	if err != nil {
+		// Fall back to simple format if template doesn't exist
+		promptText := fmt.Sprintf("# Ticket: %s\n\n%s", req.Ticket.Title, req.Ticket.Body)
+		return &promptInfo{
+			PromptText:          promptText,
+			SystemPromptContent: systemPromptContent,
+		}, nil
+	}
+
+	// Render template with ticket variables
+	vars := prompt.TicketVars{
+		ProjectPath: req.ProjectPath,
+		TicketID:    req.TicketID,
+		TicketTitle: req.Ticket.Title,
+		TicketBody:  req.Ticket.Body,
+	}
+
+	promptText, err := prompt.RenderTemplate(ticketTemplate, vars)
 	if err != nil {
 		return nil, err
 	}
-
-	promptText := fmt.Sprintf("# Ticket: %s\n\n%s", req.Ticket.Title, req.Ticket.Body)
 
 	return &promptInfo{
 		PromptText:          promptText,

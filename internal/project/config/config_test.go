@@ -92,14 +92,6 @@ git:
   repos:
     - path: .
     - path: ../shared
-lifecycle:
-  on_pickup:
-    - run: make setup
-  on_submit:
-    - run: make test
-    - run: make lint
-  on_approve:
-    - run: make deploy
 `)
 
 	cfg, err := Load(projectRoot)
@@ -121,18 +113,6 @@ lifecycle:
 	}
 	if cfg.Git.Repos[1].Path != "../shared" {
 		t.Errorf("expected second repo path '../shared', got %q", cfg.Git.Repos[1].Path)
-	}
-	if len(cfg.Lifecycle.OnPickup) != 1 {
-		t.Errorf("expected 1 on_pickup hook, got %d", len(cfg.Lifecycle.OnPickup))
-	}
-	if cfg.Lifecycle.OnPickup[0].Run != "make setup" {
-		t.Errorf("expected on_pickup run 'make setup', got %q", cfg.Lifecycle.OnPickup[0].Run)
-	}
-	if len(cfg.Lifecycle.OnSubmit) != 2 {
-		t.Errorf("expected 2 on_submit hooks, got %d", len(cfg.Lifecycle.OnSubmit))
-	}
-	if len(cfg.Lifecycle.OnApprove) != 1 {
-		t.Errorf("expected 1 on_approve hook, got %d", len(cfg.Lifecycle.OnApprove))
 	}
 }
 
@@ -233,59 +213,6 @@ func TestValidate_EmptyRepoPath(t *testing.T) {
 	valErr := err.(*ValidationError)
 	if valErr.Field != "git.repos" {
 		t.Errorf("expected field 'git.repos', got %q", valErr.Field)
-	}
-}
-
-func TestValidate_EmptyHookRun(t *testing.T) {
-	tests := []struct {
-		name  string
-		cfg   *Config
-		field string
-	}{
-		{
-			name: "on_pickup",
-			cfg: &Config{
-				Lifecycle: LifecycleConfig{
-					OnPickup: []HookConfig{{Run: ""}},
-				},
-			},
-			field: "lifecycle.on_pickup",
-		},
-		{
-			name: "on_submit",
-			cfg: &Config{
-				Lifecycle: LifecycleConfig{
-					OnSubmit: []HookConfig{{Run: ""}},
-				},
-			},
-			field: "lifecycle.on_submit",
-		},
-		{
-			name: "on_approve",
-			cfg: &Config{
-				Lifecycle: LifecycleConfig{
-					OnApprove: []HookConfig{{Run: ""}},
-				},
-			},
-			field: "lifecycle.on_approve",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.cfg.Validate()
-			if err == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !IsValidationError(err) {
-				t.Errorf("expected ValidationError, got %T", err)
-			}
-
-			valErr := err.(*ValidationError)
-			if valErr.Field != tt.field {
-				t.Errorf("expected field %q, got %q", tt.field, valErr.Field)
-			}
-		})
 	}
 }
 
