@@ -86,6 +86,8 @@ type TicketSummary struct {
 	Status           string    `json:"status"`
 	Created          time.Time `json:"created"`
 	HasActiveSession bool      `json:"has_active_session"`
+	AgentStatus      *string   `json:"agent_status,omitempty"`
+	AgentTool        *string   `json:"agent_tool,omitempty"`
 }
 
 // ListAllTicketsResponse groups tickets by status.
@@ -210,13 +212,22 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 			!strings.Contains(strings.ToLower(t.Body), query) {
 			continue
 		}
-		summaries = append(summaries, TicketSummary{
+		summary := TicketSummary{
 			ID:               t.ID,
 			Title:            t.Title,
 			Status:           string(status),
 			Created:          t.Dates.Created,
 			HasActiveSession: t.HasActiveSession(),
-		})
+		}
+
+		// Populate agent status from active session
+		if t.HasActiveSession() && t.Session.CurrentStatus != nil {
+			statusStr := string(t.Session.CurrentStatus.Status)
+			summary.AgentStatus = &statusStr
+			summary.AgentTool = t.Session.CurrentStatus.Tool
+		}
+
+		summaries = append(summaries, summary)
 	}
 	if summaries == nil {
 		summaries = []TicketSummary{}

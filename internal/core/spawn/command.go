@@ -12,6 +12,7 @@ import (
 type ClaudeCommandParams struct {
 	Prompt         string
 	MCPConfigPath  string
+	SettingsPath   string   // path to settings.json with hooks config
 	PermissionMode string   // "plan" or "full" or empty (default)
 	AllowedTools   []string // tools that don't require user approval
 	ResumeID       string   // optional claude session ID to resume
@@ -37,6 +38,11 @@ func BuildClaudeCommand(params ClaudeCommandParams) string {
 	// Add MCP config
 	if params.MCPConfigPath != "" {
 		parts = append(parts, "--mcp-config", params.MCPConfigPath)
+	}
+
+	// Add settings config (hooks)
+	if params.SettingsPath != "" {
+		parts = append(parts, "--settings", params.SettingsPath)
 	}
 
 	// Add permission mode

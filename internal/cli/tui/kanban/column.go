@@ -198,7 +198,7 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 				for lineIdx, line := range wrappedTitle {
 					prefix := "  "
 					if lineIdx == 0 && t.HasActiveSession {
-						prefix = activeSessionStyle.Render("● ")
+						prefix = formatAgentStatus(t)
 					}
 					b.WriteString(ticketStyle.Width(width - 2).Render(prefix + line))
 					b.WriteString("\n")
@@ -228,6 +228,36 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 		return activeColumnStyle.Width(width).Height(maxHeight).Render(content)
 	}
 	return columnStyle.Width(width).Height(maxHeight).Render(content)
+}
+
+// formatAgentStatus returns a styled prefix based on agent status.
+func formatAgentStatus(t sdk.TicketSummary) string {
+	if t.AgentStatus == nil {
+		return activeSessionStyle.Render("● ")
+	}
+
+	symbols := map[string]string{
+		"starting":           "▶ ",
+		"in_progress":        "● ",
+		"idle":               "○ ",
+		"waiting_permission": "⏸ ",
+		"error":              "✗ ",
+	}
+
+	symbol := symbols[*t.AgentStatus]
+	if symbol == "" {
+		symbol = "● "
+	}
+
+	if t.AgentTool != nil && *t.AgentTool != "" {
+		tool := *t.AgentTool
+		if len(tool) > 8 {
+			tool = tool[:8]
+		}
+		return activeSessionStyle.Render(symbol + tool + " ")
+	}
+
+	return activeSessionStyle.Render(symbol)
 }
 
 // wrapText wraps text to fit within width, returning all wrapped lines.
