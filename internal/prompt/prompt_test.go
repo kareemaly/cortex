@@ -23,14 +23,6 @@ func TestArchitectPath(t *testing.T) {
 	}
 }
 
-func TestTicketAgentPath(t *testing.T) {
-	got := TicketAgentPath("/project/root")
-	want := "/project/root/.cortex/prompts/ticket-agent.md"
-	if got != want {
-		t.Errorf("TicketAgentPath() = %q, want %q", got, want)
-	}
-}
-
 func TestValidatePromptFile_Exists(t *testing.T) {
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, ".cortex", "prompts")
@@ -71,7 +63,7 @@ func TestNotFoundError_Message(t *testing.T) {
 		t.Error("NotFoundError.Error() returned empty string")
 	}
 	// Check it contains the hint
-	want := "cortex install --project"
+	want := "cortex install"
 	if !contains(got, want) {
 		t.Errorf("NotFoundError.Error() = %q, should contain %q", got, want)
 	}

@@ -15,12 +15,6 @@ func ArchitectPath(projectRoot string) string {
 	return filepath.Join(PromptsDir(projectRoot), "architect.md")
 }
 
-// TicketAgentPath returns the path to the ticket agent prompt file.
-// Deprecated: Use TicketSystemPath and TicketPath instead.
-func TicketAgentPath(projectRoot string) string {
-	return filepath.Join(PromptsDir(projectRoot), "ticket-agent.md")
-}
-
 // TicketSystemPath returns the path to the ticket system prompt file.
 // This contains MCP tool instructions and workflow guidance.
 func TicketSystemPath(projectRoot string) string {

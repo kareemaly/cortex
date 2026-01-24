@@ -151,7 +151,7 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket-agent.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "ticket-system.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -246,7 +246,7 @@ func TestSpawn_CleanupOnFailure(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket-agent.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "ticket-system.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -375,7 +375,7 @@ func TestFresh_ClearsExisting(t *testing.T) {
 	store.tickets["ticket-1"] = testTicket
 	store.sessions["ticket-1"] = testTicket.Session
 
-	createTestPromptFile(t, tmpDir, "ticket-agent.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "ticket-system.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,

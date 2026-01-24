@@ -28,9 +28,9 @@ func setupTestServerWithMockTmux(t *testing.T, ticketID string) (*Server, func()
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create prompts dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-agent.md"), []byte(testTicketAgentPrompt), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-system.md"), []byte(testTicketAgentPrompt), 0644); err != nil {
 		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("create ticket-agent.md: %v", err)
+		t.Fatalf("create ticket-system.md: %v", err)
 	}
 
 	mockRunner := tmux.NewMockRunner()
@@ -983,9 +983,9 @@ func setupTestServerWithOrphanedSession(t *testing.T) (*Server, func()) {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create prompts dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-agent.md"), []byte(testTicketAgentPrompt), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-system.md"), []byte(testTicketAgentPrompt), 0644); err != nil {
 		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("create ticket-agent.md: %v", err)
+		t.Fatalf("create ticket-system.md: %v", err)
 	}
 
 	// Create mock runner that reports window does NOT exist

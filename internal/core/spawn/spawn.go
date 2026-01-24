@@ -416,12 +416,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 	systemPromptPath := prompt.TicketSystemPath(req.ProjectPath)
 	systemPromptContent, err := prompt.LoadPromptFile(systemPromptPath)
 	if err != nil {
-		// Fall back to legacy ticket-agent.md if new file doesn't exist
-		systemPromptPath = prompt.TicketAgentPath(req.ProjectPath)
-		systemPromptContent, err = prompt.LoadPromptFile(systemPromptPath)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	// Choose template based on worktree mode

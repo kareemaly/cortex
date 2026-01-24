@@ -33,32 +33,6 @@ You are the project architect. Manage tickets and orchestrate development.
 3. Use ` + "`mcp__cortex__spawnSession`" + ` to assign work
 `
 
-// defaultTicketAgentPrompt contains static instructions for ticket agents.
-// Dynamic content (ticket details) is injected via the prompt argument.
-const defaultTicketAgentPrompt = `## Cortex MCP Tools
-
-- ` + "`mcp__cortex__readTicket`" + ` - Read your assigned ticket
-- ` + "`mcp__cortex__moveTicketToProgress`" + ` - Start work
-- ` + "`mcp__cortex__moveTicketToReview`" + ` - Submit for review
-- ` + "`mcp__cortex__moveTicketToDone`" + ` - Mark complete
-- ` + "`mcp__cortex__addTicketComment`" + ` - Add comments
-
-## Workflow
-
-1. Call ` + "`mcp__cortex__moveTicketToProgress`" + ` to start
-2. Do the work
-3. Call ` + "`mcp__cortex__moveTicketToReview`" + ` when complete
-
-## Hooks
-
-Status changes may trigger project hooks. Read hook output and react accordingly.
-
-## Comments
-
-Use ` + "`mcp__cortex__addTicketComment`" + ` with type "decision" for key decisions.
-Other types: scope_change, blocker, question, progress.
-`
-
 // Options configures the installation.
 type Options struct {
 	// ProjectPath is the path for project setup. If empty, project setup is skipped.
@@ -190,15 +164,7 @@ git:
 		return items, item.Error
 	}
 
-	// Legacy ticket-agent.md (for backward compatibility)
-	ticketAgentPath := prompt.TicketAgentPath(absPath)
-	item = ensureConfigFile(ticketAgentPath, defaultTicketAgentPrompt, force)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
-	// New workflow prompts
+	// Workflow prompts
 	ticketSystemPath := prompt.TicketSystemPath(absPath)
 	item = ensureConfigFile(ticketSystemPath, DefaultTicketSystemPrompt, force)
 	items = append(items, item)
