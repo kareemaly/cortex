@@ -62,13 +62,14 @@ type CommentResponse struct {
 
 // SessionResponse is a session in a ticket response.
 type SessionResponse struct {
-	ID            string                `json:"id"`
-	StartedAt     time.Time             `json:"started_at"`
-	EndedAt       *time.Time            `json:"ended_at,omitempty"`
-	Agent         string                `json:"agent"`
-	TmuxWindow    string                `json:"tmux_window"`
-	CurrentStatus *StatusEntryResponse  `json:"current_status,omitempty"`
-	StatusHistory []StatusEntryResponse `json:"status_history"`
+	ID               string                    `json:"id"`
+	StartedAt        time.Time                 `json:"started_at"`
+	EndedAt          *time.Time                `json:"ended_at,omitempty"`
+	Agent            string                    `json:"agent"`
+	TmuxWindow       string                    `json:"tmux_window"`
+	CurrentStatus    *StatusEntryResponse      `json:"current_status,omitempty"`
+	StatusHistory    []StatusEntryResponse     `json:"status_history"`
+	RequestedReviews []RequestedReviewResponse `json:"requested_reviews,omitempty"`
 }
 
 // StatusEntryResponse is a status entry in a session response.
@@ -77,6 +78,13 @@ type StatusEntryResponse struct {
 	Tool   *string   `json:"tool,omitempty"`
 	Work   *string   `json:"work,omitempty"`
 	At     time.Time `json:"at"`
+}
+
+// RequestedReviewResponse is a review request in a session response.
+type RequestedReviewResponse struct {
+	RepoPath    string    `json:"repo_path"`
+	Summary     string    `json:"summary"`
+	RequestedAt time.Time `json:"requested_at"`
 }
 
 // TicketSummary is a brief view of a ticket for lists.
@@ -191,14 +199,24 @@ func toSessionResponse(s ticket.Session) SessionResponse {
 		}
 	}
 
+	reviews := make([]RequestedReviewResponse, len(s.RequestedReviews))
+	for i, r := range s.RequestedReviews {
+		reviews[i] = RequestedReviewResponse{
+			RepoPath:    r.RepoPath,
+			Summary:     r.Summary,
+			RequestedAt: r.RequestedAt,
+		}
+	}
+
 	return SessionResponse{
-		ID:            s.ID,
-		StartedAt:     s.StartedAt,
-		EndedAt:       s.EndedAt,
-		Agent:         s.Agent,
-		TmuxWindow:    s.TmuxWindow,
-		CurrentStatus: currentStatus,
-		StatusHistory: history,
+		ID:               s.ID,
+		StartedAt:        s.StartedAt,
+		EndedAt:          s.EndedAt,
+		Agent:            s.Agent,
+		TmuxWindow:       s.TmuxWindow,
+		CurrentStatus:    currentStatus,
+		StatusHistory:    history,
+		RequestedReviews: reviews,
 	}
 }
 

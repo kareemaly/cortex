@@ -173,6 +173,11 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Focus the tmux window (non-fatal if this fails)
+	if err := h.deps.TmuxManager.FocusWindow(tmuxSession, session.TmuxWindow); err != nil {
+		h.deps.Logger.Warn("failed to focus tmux window", "error", err)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":    true,
 		"session_id": sessionID,

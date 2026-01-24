@@ -23,6 +23,7 @@ const (
 	KeyHome        Key = "home"
 	KeyEnd         Key = "end"
 	KeyKillSession Key = "x"
+	KeyApprove     Key = "a"
 	KeyYes         Key = "y"
 	KeyNo          Key = "n"
 	KeyEscape      Key = "esc"
@@ -43,7 +44,7 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 }
 
 // helpText returns the help bar text for the ticket detail view.
-func helpText(scrollPercent int, hasActiveSession bool, embedded bool) string {
+func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, embedded bool) string {
 	var quit string
 	if embedded {
 		quit = "[q/esc] back"
@@ -52,7 +53,11 @@ func helpText(scrollPercent int, hasActiveSession bool, embedded bool) string {
 	}
 	base := "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  " + quit
 	if hasActiveSession {
-		base = "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  [x] kill session  " + quit
+		sessionActions := "[x] kill"
+		if hasReviewRequests {
+			sessionActions += "  [a]pprove"
+		}
+		base = "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  " + sessionActions + "  " + quit
 	}
 	return base + "  " + percentStr(scrollPercent)
 }

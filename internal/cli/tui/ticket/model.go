@@ -3,6 +3,7 @@ package ticket
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,6 +25,7 @@ type Model struct {
 	err           error
 	showKillModal bool
 	killing       bool
+	approving     bool
 	embedded      bool // if true, send CloseDetailMsg instead of tea.Quit
 	pendingG      bool // tracking 'g' key for 'gg' sequence
 	mdRenderer    *glamour.TermRenderer
@@ -46,6 +48,14 @@ type SessionKilledMsg struct{}
 
 // SessionKillErrorMsg is sent when killing a session fails.
 type SessionKillErrorMsg struct {
+	Err error
+}
+
+// SessionApprovedMsg is sent when a session is successfully approved.
+type SessionApprovedMsg struct{}
+
+// ApproveErrorMsg is sent when approving a session fails.
+type ApproveErrorMsg struct {
 	Err error
 }
 
@@ -141,6 +151,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showKillModal = false
 		m.err = msg.Err
 		return m, nil
+
+	case SessionApprovedMsg:
+		m.approving = false
+		// Refresh ticket to show updated state.
+		m.loading = true
+		return m, m.loadTicket()
+
+	case ApproveErrorMsg:
+		m.approving = false
+		m.err = msg.Err
+		return m, nil
 	}
 
 	// Handle viewport scroll messages.
@@ -169,8 +190,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseDetailMsg{} }
 	}
 
-	// If loading or killing, don't process other keys.
-	if m.loading || m.killing {
+	// If loading, killing, or approving, don't process other keys.
+	if m.loading || m.killing || m.approving {
 		return m, nil
 	}
 
@@ -194,6 +215,15 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if isKey(msg, KeyKillSession) {
 		if m.hasActiveSession() {
 			m.showKillModal = true
+		}
+		return m, nil
+	}
+
+	// Approve session.
+	if isKey(msg, KeyApprove) {
+		if m.hasActiveSession() && m.hasReviewRequests() {
+			m.approving = true
+			return m, m.approveSession()
 		}
 		return m, nil
 	}
@@ -281,6 +311,13 @@ func (m Model) hasActiveSession() bool {
 	return m.ticket != nil && m.ticket.Session != nil && m.ticket.Session.EndedAt == nil
 }
 
+// hasReviewRequests returns true if the session has pending review requests.
+func (m Model) hasReviewRequests() bool {
+	return m.ticket != nil &&
+		m.ticket.Session != nil &&
+		len(m.ticket.Session.RequestedReviews) > 0
+}
+
 // killSession returns a command to kill the current session.
 func (m Model) killSession() tea.Cmd {
 	return func() tea.Msg {
@@ -292,6 +329,20 @@ func (m Model) killSession() tea.Cmd {
 			return SessionKillErrorMsg{Err: err}
 		}
 		return SessionKilledMsg{}
+	}
+}
+
+// approveSession returns a command to approve the current session.
+func (m Model) approveSession() tea.Cmd {
+	return func() tea.Msg {
+		if m.ticket == nil || m.ticket.Session == nil {
+			return ApproveErrorMsg{Err: fmt.Errorf("no session to approve")}
+		}
+		err := m.client.ApproveSession(m.ticket.Session.ID)
+		if err != nil {
+			return ApproveErrorMsg{Err: err}
+		}
+		return SessionApprovedMsg{}
 	}
 }
 
@@ -332,6 +383,12 @@ func (m Model) View() string {
 		return b.String()
 	}
 
+	// Handle approving state.
+	if m.approving {
+		b.WriteString(loadingStyle.Render("Approving session..."))
+		return b.String()
+	}
+
 	// Kill confirmation modal.
 	if m.showKillModal {
 		b.WriteString(m.renderKillModal())
@@ -343,7 +400,7 @@ func (m Model) View() string {
 	b.WriteString("\n")
 
 	// Help bar.
-	b.WriteString(helpBarStyle.Render(helpText(int(m.viewport.ScrollPercent()*100), m.hasActiveSession(), m.embedded)))
+	b.WriteString(helpBarStyle.Render(helpText(int(m.viewport.ScrollPercent()*100), m.hasActiveSession(), m.hasReviewRequests(), m.embedded)))
 
 	return b.String()
 }
@@ -401,6 +458,11 @@ func (m Model) renderContent() string {
 	if m.ticket.Session != nil {
 		b.WriteString(m.renderSession())
 		b.WriteString("\n")
+	}
+
+	// Review requests section (after session, before comments).
+	if m.hasReviewRequests() {
+		b.WriteString(m.renderReviewRequests())
 	}
 
 	// Comments section.
@@ -503,6 +565,34 @@ func (m Model) renderSession() string {
 	return b.String()
 }
 
+// renderReviewRequests renders the review requests section.
+func (m Model) renderReviewRequests() string {
+	if m.ticket == nil || m.ticket.Session == nil || len(m.ticket.Session.RequestedReviews) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(sectionHeaderStyle.Render("─── Review Requests ───"))
+	b.WriteString("\n")
+
+	for _, review := range m.ticket.Session.RequestedReviews {
+		// Format: [repo: .]  "Summary text"  (2 min ago)
+		repo := review.RepoPath
+		if repo == "" || repo == "." {
+			repo = "."
+		}
+		b.WriteString(labelStyle.Render("[repo: " + repo + "]"))
+		b.WriteString("  ")
+		b.WriteString(valueStyle.Render("\"" + review.Summary + "\""))
+		b.WriteString("  ")
+		b.WriteString(labelStyle.Render("(" + formatTimeAgo(review.RequestedAt) + ")"))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
 // renderComments renders the comments section.
 func (m Model) renderComments() string {
 	var b strings.Builder
@@ -543,5 +633,32 @@ func (m Model) loadTicket() tea.Cmd {
 			return TicketErrorMsg{Err: err}
 		}
 		return TicketLoadedMsg{Ticket: ticket}
+	}
+}
+
+// formatTimeAgo formats a time as a human-readable relative string.
+func formatTimeAgo(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		mins := int(d.Minutes())
+		if mins == 1 {
+			return "1 min ago"
+		}
+		return fmt.Sprintf("%d min ago", mins)
+	case d < 24*time.Hour:
+		hours := int(d.Hours())
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", hours)
+	default:
+		days := int(d.Hours() / 24)
+		if days == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", days)
 	}
 }

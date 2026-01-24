@@ -102,15 +102,23 @@ type StatusEntryResponse struct {
 	At     time.Time `json:"at"`
 }
 
+// RequestedReviewResponse is a review request in a session response.
+type RequestedReviewResponse struct {
+	RepoPath    string    `json:"repo_path"`
+	Summary     string    `json:"summary"`
+	RequestedAt time.Time `json:"requested_at"`
+}
+
 // SessionResponse is a session in a ticket response.
 type SessionResponse struct {
-	ID            string                `json:"id"`
-	StartedAt     time.Time             `json:"started_at"`
-	EndedAt       *time.Time            `json:"ended_at,omitempty"`
-	Agent         string                `json:"agent"`
-	TmuxWindow    string                `json:"tmux_window"`
-	CurrentStatus *StatusEntryResponse  `json:"current_status,omitempty"`
-	StatusHistory []StatusEntryResponse `json:"status_history"`
+	ID               string                    `json:"id"`
+	StartedAt        time.Time                 `json:"started_at"`
+	EndedAt          *time.Time                `json:"ended_at,omitempty"`
+	Agent            string                    `json:"agent"`
+	TmuxWindow       string                    `json:"tmux_window"`
+	CurrentStatus    *StatusEntryResponse      `json:"current_status,omitempty"`
+	StatusHistory    []StatusEntryResponse     `json:"status_history"`
+	RequestedReviews []RequestedReviewResponse `json:"requested_reviews,omitempty"`
 }
 
 // ArchitectSessionResponse is a session response for architect endpoints.
