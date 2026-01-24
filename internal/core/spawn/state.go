@@ -1,7 +1,6 @@
 package spawn
 
 import (
-	"github.com/kareemaly/cortex/internal/project/architect"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -83,67 +82,5 @@ func (s *StateInfo) CanResume() bool {
 
 // NeedsCleanup returns true if the session should be cleaned up before spawning.
 func (s *StateInfo) NeedsCleanup() bool {
-	return s.State == StateOrphaned || s.State == StateEnded
-}
-
-// ArchitectStateInfo contains information about an architect session's state.
-type ArchitectStateInfo struct {
-	State        SessionState
-	Session      *architect.Session
-	WindowExists bool
-}
-
-// DetectArchitectState determines the current state of an architect session.
-func DetectArchitectState(session *architect.Session, tmuxSession string, tmuxChecker TmuxChecker) (*ArchitectStateInfo, error) {
-	info := &ArchitectStateInfo{
-		State:   StateNormal,
-		Session: session,
-	}
-
-	// No session - normal state
-	if session == nil {
-		return info, nil
-	}
-
-	// Session ended explicitly
-	if session.EndedAt != nil {
-		info.State = StateEnded
-		return info, nil
-	}
-
-	// Session exists - check if window is still running
-	if tmuxChecker != nil && tmuxSession != "" && session.TmuxWindow != "" {
-		exists, err := tmuxChecker.WindowExists(tmuxSession, session.TmuxWindow)
-		if err != nil {
-			return nil, &TmuxError{Operation: "check window", Cause: err}
-		}
-		info.WindowExists = exists
-
-		if exists {
-			info.State = StateActive
-		} else {
-			info.State = StateOrphaned
-		}
-	} else {
-		// Can't check tmux - assume active if session hasn't ended
-		info.State = StateActive
-		info.WindowExists = true
-	}
-
-	return info, nil
-}
-
-// CanSpawn returns true if a new architect session can be spawned based on the state.
-func (s *ArchitectStateInfo) CanSpawn() bool {
-	return s.State == StateNormal || s.State == StateOrphaned || s.State == StateEnded
-}
-
-// CanResume returns true if an existing architect session can be resumed.
-func (s *ArchitectStateInfo) CanResume() bool {
-	return s.State == StateOrphaned && s.Session != nil && s.Session.ID != ""
-}
-
-// NeedsCleanup returns true if the session should be cleaned up before spawning.
-func (s *ArchitectStateInfo) NeedsCleanup() bool {
 	return s.State == StateOrphaned || s.State == StateEnded
 }

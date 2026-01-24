@@ -11,8 +11,6 @@ import (
 
 var (
 	architectDetachFlag bool
-	architectResumeFlag bool
-	architectFreshFlag  bool
 )
 
 var architectCmd = &cobra.Command{
@@ -23,31 +21,22 @@ var architectCmd = &cobra.Command{
 The architect lives in tmux window 0 and has full MCP tools for ticket
 management and spawning ticket sessions.
 
+If an architect window already exists, it will be focused.
+Otherwise, a fresh architect session will be spawned.
+
 Examples:
   cortex architect           # Start or attach to architect
-  cortex architect --detach  # Start architect without attaching
-  cortex architect --resume  # Resume an orphaned architect session
-  cortex architect --fresh   # Clear existing session and start fresh`,
+  cortex architect --detach  # Start architect without attaching`,
 	Run: runArchitect,
 }
 
 func init() {
 	architectCmd.Flags().BoolVar(&architectDetachFlag, "detach", false,
 		"Spawn architect without attaching to session")
-	architectCmd.Flags().BoolVar(&architectResumeFlag, "resume", false,
-		"Resume an orphaned architect session")
-	architectCmd.Flags().BoolVar(&architectFreshFlag, "fresh", false,
-		"Clear existing session and start fresh")
 	rootCmd.AddCommand(architectCmd)
 }
 
 func runArchitect(cmd *cobra.Command, args []string) {
-	// Validate mutually exclusive flags
-	if architectResumeFlag && architectFreshFlag {
-		fmt.Fprintf(os.Stderr, "Error: --resume and --fresh are mutually exclusive\n")
-		os.Exit(1)
-	}
-
 	// Get project path
 	projectPath, err := resolveProjectPath()
 	if err != nil {
@@ -58,16 +47,8 @@ func runArchitect(cmd *cobra.Command, args []string) {
 	// Create SDK client
 	client := sdk.DefaultClient(projectPath)
 
-	// Determine mode from flags
-	mode := ""
-	if architectResumeFlag {
-		mode = "resume"
-	} else if architectFreshFlag {
-		mode = "fresh"
-	}
-
-	// Spawn architect via SDK
-	resp, err := client.SpawnArchitect(mode)
+	// Spawn architect via SDK (no mode parameter - simplified)
+	resp, err := client.SpawnArchitect("")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

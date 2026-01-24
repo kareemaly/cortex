@@ -220,10 +220,14 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 	}, nil
 }
 
-// Resume resumes an orphaned session.
+// Resume resumes an orphaned ticket agent session.
+// Note: This is only used for ticket agents - architect sessions do not support resume.
 func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 	if req.SessionID == "" {
 		return nil, &ConfigError{Field: "SessionID", Message: "cannot be empty for resume"}
+	}
+	if req.TicketID == "" {
+		return nil, &ConfigError{Field: "TicketID", Message: "cannot be empty for resume (only ticket agents support resume)"}
 	}
 
 	// Find cortexd path
@@ -241,12 +245,7 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 		TmuxSession: req.TmuxSession,
 	})
 
-	identifier := req.TicketID
-	if identifier == "" {
-		identifier = "architect"
-	}
-
-	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
+	mcpConfigPath, err := WriteMCPConfig(mcpConfig, req.TicketID, s.deps.MCPConfigDir)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +257,7 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 		ProjectPath: req.ProjectPath,
 	})
 
-	settingsPath, err := WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
+	settingsPath, err := WriteSettingsConfig(settingsConfig, req.TicketID, s.deps.SettingsConfigDir)
 	if err != nil {
 		_ = RemoveMCPConfig(mcpConfigPath)
 		return nil, err
@@ -273,15 +272,9 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 		ResumeID:       req.SessionID,
 	})
 
-	// Determine companion command and env vars based on agent type
-	var companionCmd, cmdWithEnv string
-	if req.TicketID != "" {
-		cmdWithEnv = fmt.Sprintf("CORTEX_TICKET_ID=%s CORTEX_PROJECT=%s %s", req.TicketID, req.ProjectPath, claudeCmd)
-		companionCmd = fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
-	} else {
-		cmdWithEnv = claudeCmd
-		companionCmd = "cortex kanban"
-	}
+	// Set up command with ticket environment variables
+	cmdWithEnv := fmt.Sprintf("CORTEX_TICKET_ID=%s CORTEX_PROJECT=%s %s", req.TicketID, req.ProjectPath, claudeCmd)
+	companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
 
 	// Spawn in tmux
 	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, cmdWithEnv, companionCmd, req.ProjectPath)
