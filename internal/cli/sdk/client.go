@@ -58,6 +58,8 @@ type TicketSummary struct {
 	Status           string    `json:"status"`
 	Created          time.Time `json:"created"`
 	HasActiveSession bool      `json:"has_active_session"`
+	AgentStatus      *string   `json:"agent_status,omitempty"`
+	AgentTool        *string   `json:"agent_tool,omitempty"`
 }
 
 // ListAllTicketsResponse groups tickets by status.

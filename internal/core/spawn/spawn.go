@@ -33,10 +33,11 @@ type TmuxManagerInterface interface {
 
 // Dependencies contains the external dependencies for the Spawner.
 type Dependencies struct {
-	Store        StoreInterface
-	TmuxManager  TmuxManagerInterface
-	CortexdPath  string // optional override for cortexd binary path
-	MCPConfigDir string // optional override for MCP config directory
+	Store             StoreInterface
+	TmuxManager       TmuxManagerInterface
+	CortexdPath       string // optional override for cortexd binary path
+	MCPConfigDir      string // optional override for MCP config directory
+	SettingsConfigDir string // optional override for settings config directory
 }
 
 // Spawner handles spawning agent sessions.
@@ -86,6 +87,7 @@ type SpawnResult struct {
 	TmuxWindow    string
 	WindowIndex   int
 	MCPConfigPath string
+	SettingsPath  string
 	Message       string
 }
 
@@ -146,14 +148,27 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 
 	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, "")
+		s.cleanupOnFailure(req.AgentType, req.TicketID, "", "")
+		return nil, err
+	}
+
+	// Generate and write settings config (hooks)
+	settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
+		CortexdPath: cortexdPath,
+		TicketID:    req.TicketID,
+		ProjectPath: req.ProjectPath,
+	})
+
+	settingsPath, err := WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
+	if err != nil {
+		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, "")
 		return nil, err
 	}
 
 	// Load and build prompt
 	promptText, err := s.buildPrompt(req)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath)
+		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, settingsPath)
 		return &SpawnResult{
 			Success: false,
 			Message: err.Error(),
@@ -169,6 +184,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
 			Prompt:        promptText,
 			MCPConfigPath: mcpConfigPath,
+			SettingsPath:  settingsPath,
 			AllowedTools:  []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
 			SessionID:     sessionID,
 		})
@@ -177,6 +193,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
 			Prompt:         promptText,
 			MCPConfigPath:  mcpConfigPath,
+			SettingsPath:   settingsPath,
 			PermissionMode: "plan",
 			SessionID:      sessionID,
 		})
@@ -185,7 +202,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 	// Spawn in tmux
 	windowIndex, err := s.spawnInTmux(req, windowName, claudeCmd)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath)
+		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, settingsPath)
 		return &SpawnResult{
 			Success: false,
 			Message: "failed to spawn agent in tmux: " + err.Error(),
@@ -198,6 +215,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		TmuxWindow:    windowName,
 		WindowIndex:   windowIndex,
 		MCPConfigPath: mcpConfigPath,
+		SettingsPath:  settingsPath,
 		Message:       "Agent session spawned in tmux window '" + windowName + "'",
 	}, nil
 }
@@ -228,8 +246,21 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 		identifier = "architect"
 	}
 
-	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, "")
+	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
 	if err != nil {
+		return nil, err
+	}
+
+	// Generate and write settings config (hooks)
+	settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
+		CortexdPath: cortexdPath,
+		TicketID:    req.TicketID,
+		ProjectPath: req.ProjectPath,
+	})
+
+	settingsPath, err := WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
+	if err != nil {
+		_ = RemoveMCPConfig(mcpConfigPath)
 		return nil, err
 	}
 
@@ -237,22 +268,26 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 	claudeCmd := BuildClaudeCommand(ClaudeCommandParams{
 		Prompt:         "",
 		MCPConfigPath:  mcpConfigPath,
+		SettingsPath:   settingsPath,
 		PermissionMode: "plan",
 		ResumeID:       req.SessionID,
 	})
 
-	// Determine companion command based on agent type
-	var companionCmd string
+	// Determine companion command and env vars based on agent type
+	var companionCmd, cmdWithEnv string
 	if req.TicketID != "" {
+		cmdWithEnv = fmt.Sprintf("CORTEX_TICKET_ID=%s CORTEX_PROJECT=%s %s", req.TicketID, req.ProjectPath, claudeCmd)
 		companionCmd = fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
 	} else {
+		cmdWithEnv = claudeCmd
 		companionCmd = "cortex kanban"
 	}
 
 	// Spawn in tmux
-	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, claudeCmd, companionCmd, req.ProjectPath)
+	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, cmdWithEnv, companionCmd, req.ProjectPath)
 	if err != nil {
 		_ = RemoveMCPConfig(mcpConfigPath)
+		_ = RemoveSettingsConfig(settingsPath)
 		return &SpawnResult{
 			Success: false,
 			Message: "failed to spawn agent in tmux: " + err.Error(),
@@ -264,6 +299,7 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 		TmuxWindow:    req.WindowName,
 		WindowIndex:   windowIndex,
 		MCPConfigPath: mcpConfigPath,
+		SettingsPath:  settingsPath,
 		Message:       "Session resumed in tmux window '" + req.WindowName + "'",
 	}, nil
 }
@@ -346,8 +382,8 @@ func (s *Spawner) buildPrompt(req SpawnRequest) (string, error) {
 func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd string) (int, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		// Prefix command with CORTEX_TICKET_ID env var so child processes can identify the ticket
-		cmdWithEnv := fmt.Sprintf("CORTEX_TICKET_ID=%s %s", req.TicketID, claudeCmd)
+		// Prefix command with env vars so child processes can identify the ticket and project
+		cmdWithEnv := fmt.Sprintf("CORTEX_TICKET_ID=%s CORTEX_PROJECT=%s %s", req.TicketID, req.ProjectPath, claudeCmd)
 		// Companion command shows ticket details
 		companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
 		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, cmdWithEnv, companionCmd, req.ProjectPath)
@@ -361,11 +397,14 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd string) (i
 }
 
 // cleanupOnFailure cleans up resources when spawn fails.
-func (s *Spawner) cleanupOnFailure(agentType AgentType, ticketID, mcpConfigPath string) {
+func (s *Spawner) cleanupOnFailure(agentType AgentType, ticketID, mcpConfigPath, settingsPath string) {
 	if agentType == AgentTypeTicketAgent && ticketID != "" {
 		_ = s.deps.Store.EndSession(ticketID)
 	}
 	if mcpConfigPath != "" {
 		_ = RemoveMCPConfig(mcpConfigPath)
+	}
+	if settingsPath != "" {
+		_ = RemoveSettingsConfig(settingsPath)
 	}
 }
