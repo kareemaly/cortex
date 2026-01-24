@@ -540,6 +540,14 @@ func TestBuildClaudeCommand(t *testing.T) {
 			},
 			contains: []string{"'It'\\''s a test'"},
 		},
+		{
+			name: "with allowed tools",
+			params: ClaudeCommandParams{
+				Prompt:       "Test prompt",
+				AllowedTools: []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
+			},
+			contains: []string{"--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"},
+		},
 	}
 
 	for _, tc := range tests {
