@@ -32,8 +32,8 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Search all tickets for the session
-	ticketID, session := h.findSession(store, sessionID)
-	if ticketID == "" {
+	t, session := h.findSession(store, sessionID)
+	if t == nil {
 		writeError(w, http.StatusNotFound, "not_found", "session not found")
 		return
 	}
@@ -57,7 +57,7 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// End the session in the store
-	if err := store.EndSession(ticketID); err != nil {
+	if err := store.EndSession(t.ID); err != nil {
 		if ticket.IsNotFound(err) {
 			writeError(w, http.StatusNotFound, "not_found", "session not found")
 			return
@@ -71,28 +71,8 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 }
 
 // findSession searches all tickets for a session by ID.
-// Returns the ticket ID and session, or empty string and nil if not found.
-func (h *SessionHandlers) findSession(store *ticket.Store, sessionID string) (string, *ticket.Session) {
-	all, err := store.ListAll()
-	if err != nil {
-		h.deps.Logger.Error("failed to list tickets", "error", err)
-		return "", nil
-	}
-
-	for _, tickets := range all {
-		for _, t := range tickets {
-			if t.Session != nil && t.Session.ID == sessionID {
-				return t.ID, t.Session
-			}
-		}
-	}
-
-	return "", nil
-}
-
-// findSessionWithTicket searches all tickets for a session by ID.
 // Returns the ticket and session, or nil if not found.
-func (h *SessionHandlers) findSessionWithTicket(store *ticket.Store, sessionID string) (*ticket.Ticket, *ticket.Session) {
+func (h *SessionHandlers) findSession(store *ticket.Store, sessionID string) (*ticket.Ticket, *ticket.Session) {
 	all, err := store.ListAll()
 	if err != nil {
 		h.deps.Logger.Error("failed to list tickets", "error", err)
@@ -122,7 +102,7 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Find the session and ticket
-	t, session := h.findSessionWithTicket(store, sessionID)
+	t, session := h.findSession(store, sessionID)
 	if t == nil {
 		writeError(w, http.StatusNotFound, "not_found", "session not found")
 		return
