@@ -74,6 +74,11 @@ var (
 	activeSessionStyle = lipgloss.NewStyle().
 				Foreground(progressColor)
 
+	// Ticket date style (muted).
+	ticketDateStyle = lipgloss.NewStyle().
+			Padding(0, 1).
+			Foreground(mutedColor)
+
 	// Status bar at the bottom.
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241"))
