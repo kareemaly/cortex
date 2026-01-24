@@ -350,6 +350,7 @@ func (m Model) View() string {
 		cols[i] = m.columns[i].View(columnWidth, i == m.activeColumn, columnHeight)
 	}
 	columnsView := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	columnsView = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, columnsView)
 	b.WriteString(columnsView)
 	b.WriteString("\n")
 
