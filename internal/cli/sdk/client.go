@@ -57,6 +57,7 @@ type TicketSummary struct {
 	Title            string    `json:"title"`
 	Status           string    `json:"status"`
 	Created          time.Time `json:"created"`
+	Updated          time.Time `json:"updated"`
 	HasActiveSession bool      `json:"has_active_session"`
 	AgentStatus      *string   `json:"agent_status,omitempty"`
 	AgentTool        *string   `json:"agent_tool,omitempty"`
