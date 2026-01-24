@@ -1,4 +1,4 @@
-.PHONY: build lint test test-integration clean
+.PHONY: build lint test test-integration clean install
 
 VERSION ?= dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -24,3 +24,20 @@ test-integration:
 
 clean:
 	rm -rf bin
+
+install: clean build
+	@echo "Installing to ~/.local/bin/..."
+	@mkdir -p ~/.local/bin
+	@rm -f ~/.local/bin/cortex ~/.local/bin/cortexd
+	@cp bin/cortex bin/cortexd ~/.local/bin/
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		echo "Code signing (macOS)..."; \
+		codesign --force --sign - ~/.local/bin/cortex ~/.local/bin/cortexd; \
+	fi
+	@echo ""
+	@echo "Validating installation..."
+	@~/.local/bin/cortex version
+	@echo ""
+	@~/.local/bin/cortexd version
+	@echo ""
+	@echo "Installation complete."
