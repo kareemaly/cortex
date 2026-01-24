@@ -24,7 +24,8 @@ type Config struct {
 
 // GitConfig holds git-related configuration.
 type GitConfig struct {
-	Repos []RepoConfig `yaml:"repos"`
+	Repos     []RepoConfig `yaml:"repos"`
+	Worktrees bool         `yaml:"worktrees"`
 }
 
 // RepoConfig holds configuration for a single repository.

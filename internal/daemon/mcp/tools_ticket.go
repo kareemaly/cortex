@@ -2,8 +2,10 @@ package mcp
 
 import (
 	"context"
+	"log"
 
 	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/worktree"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -138,10 +140,15 @@ func (s *Server) handleConcludeSession(
 		return nil, ConcludeSessionOutput{}, WrapTicketError(err)
 	}
 
-	// Find active session ID
+	// Capture worktree info before ending session
+	var worktreePath, featureBranch *string
 	var activeSessionID string
-	if t.Session != nil && t.Session.IsActive() {
-		activeSessionID = t.Session.ID
+	if t.Session != nil {
+		worktreePath = t.Session.WorktreePath
+		featureBranch = t.Session.FeatureBranch
+		if t.Session.IsActive() {
+			activeSessionID = t.Session.ID
+		}
 	}
 
 	// Add ticket_done comment with the full report
@@ -158,6 +165,15 @@ func (s *Server) handleConcludeSession(
 	// Move the ticket to done
 	if err := s.store.Move(s.session.TicketID, ticket.StatusDone); err != nil {
 		return nil, ConcludeSessionOutput{}, WrapTicketError(err)
+	}
+
+	// Cleanup worktree if present
+	if worktreePath != nil && featureBranch != nil && s.config.ProjectPath != "" {
+		wm := worktree.NewManager(s.config.ProjectPath)
+		if err := wm.Remove(*worktreePath, *featureBranch); err != nil {
+			// Log but don't fail - main work is done
+			log.Printf("warning: failed to cleanup worktree: %v", err)
+		}
 	}
 
 	return nil, ConcludeSessionOutput{
