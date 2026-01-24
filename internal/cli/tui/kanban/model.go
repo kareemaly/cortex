@@ -338,7 +338,7 @@ func (m Model) View() string {
 	}
 
 	// Calculate column width.
-	columnWidth := max((m.width-8)/4, 20) // -8 for padding/borders
+	columnWidth := max((m.width-2)/4, 20) // -2 for minimal side margins
 
 	// Calculate available height for columns.
 	// Header (1) + newlines (2) + status bar (1) + help bar (1) + margins (2) = ~7 lines overhead
@@ -350,7 +350,6 @@ func (m Model) View() string {
 		cols[i] = m.columns[i].View(columnWidth, i == m.activeColumn, columnHeight)
 	}
 	columnsView := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
-	columnsView = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, columnsView)
 	b.WriteString(columnsView)
 	b.WriteString("\n")
 
