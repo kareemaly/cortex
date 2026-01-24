@@ -414,7 +414,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	if mode == "resume" {
 		// Resume orphaned session
-		result, err = spawner.Resume(spawn.ResumeRequest{
+		result, err = spawner.Resume(r.Context(), spawn.ResumeRequest{
 			AgentType:   spawn.AgentTypeTicketAgent,
 			TmuxSession: sessionName,
 			ProjectPath: projectPath,
@@ -432,7 +432,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Spawn new
-		result, err = spawner.Spawn(spawn.SpawnRequest{
+		result, err = spawner.Spawn(r.Context(), spawn.SpawnRequest{
 			AgentType:   spawn.AgentTypeTicketAgent,
 			Agent:       string(projectCfg.Agent),
 			TmuxSession: sessionName,

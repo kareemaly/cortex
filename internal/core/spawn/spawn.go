@@ -1,6 +1,7 @@
 package spawn
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -115,7 +116,7 @@ type SpawnResult struct {
 }
 
 // Spawn creates a new agent session.
-func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
+func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, error) {
 	// Validate request
 	if err := s.validateSpawnRequest(req); err != nil {
 		return nil, err
@@ -156,7 +157,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		// Generate session ID for worktree path
 		sessionID := generateSessionID()
 
-		wtPath, branch, err := wm.Create(sessionID, slug)
+		wtPath, branch, err := wm.Create(ctx, sessionID, slug)
 		if err != nil {
 			return nil, fmt.Errorf("create worktree: %w", err)
 		}
@@ -173,7 +174,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		if err != nil {
 			if worktreePath != nil && featureBranch != nil {
 				wm := worktree.NewManager(req.ProjectPath)
-				_ = wm.Remove(*worktreePath, *featureBranch)
+				_ = wm.Remove(ctx, *worktreePath, *featureBranch)
 			}
 			return nil, err
 		}
@@ -196,7 +197,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 
 	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, "", "", worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, "", "", worktreePath, featureBranch, req.ProjectPath)
 		return nil, err
 	}
 
@@ -209,14 +210,14 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 
 	settingsPath, err := WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, "", worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, mcpConfigPath, "", worktreePath, featureBranch, req.ProjectPath)
 		return nil, err
 	}
 
 	// Load and build prompt
 	pInfo, err := s.buildPrompt(req, worktreePath, featureBranch)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, settingsPath, worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, mcpConfigPath, settingsPath, worktreePath, featureBranch, req.ProjectPath)
 		return &SpawnResult{
 			Success: false,
 			Message: err.Error(),
@@ -252,7 +253,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 	// Spawn in tmux
 	windowIndex, err := s.spawnInTmux(req, windowName, claudeCmd, workingDir)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, settingsPath, worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, mcpConfigPath, settingsPath, worktreePath, featureBranch, req.ProjectPath)
 		return &SpawnResult{
 			Success: false,
 			Message: "failed to spawn agent in tmux: " + err.Error(),
@@ -272,7 +273,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 
 // Resume resumes an orphaned ticket agent session.
 // Note: This is only used for ticket agents - architect sessions do not support resume.
-func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
+func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, error) {
 	if req.SessionID == "" {
 		return nil, &ConfigError{Field: "SessionID", Message: "cannot be empty for resume"}
 	}
@@ -354,7 +355,7 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 }
 
 // Fresh clears any existing session and spawns a new one.
-func (s *Spawner) Fresh(req SpawnRequest) (*SpawnResult, error) {
+func (s *Spawner) Fresh(ctx context.Context, req SpawnRequest) (*SpawnResult, error) {
 	// End existing session if present
 	if req.AgentType == AgentTypeTicketAgent && req.Ticket != nil && req.Ticket.Session != nil {
 		if err := s.deps.Store.EndSession(req.TicketID); err != nil {
@@ -362,7 +363,7 @@ func (s *Spawner) Fresh(req SpawnRequest) (*SpawnResult, error) {
 		}
 	}
 
-	return s.Spawn(req)
+	return s.Spawn(ctx, req)
 }
 
 // validateSpawnRequest validates a spawn request.
@@ -575,7 +576,7 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd, workingDi
 }
 
 // cleanupOnFailure cleans up resources when spawn fails.
-func (s *Spawner) cleanupOnFailure(agentType AgentType, ticketID, mcpConfigPath, settingsPath string, worktreePath, featureBranch *string, projectPath string) {
+func (s *Spawner) cleanupOnFailure(ctx context.Context, agentType AgentType, ticketID, mcpConfigPath, settingsPath string, worktreePath, featureBranch *string, projectPath string) {
 	if agentType == AgentTypeTicketAgent && ticketID != "" {
 		if err := s.deps.Store.EndSession(ticketID); err != nil {
 			s.logWarn("cleanup: failed to end session", "ticketID", ticketID, "error", err)
@@ -593,7 +594,7 @@ func (s *Spawner) cleanupOnFailure(agentType AgentType, ticketID, mcpConfigPath,
 	}
 	if worktreePath != nil && featureBranch != nil && projectPath != "" {
 		wm := worktree.NewManager(projectPath)
-		if err := wm.Remove(*worktreePath, *featureBranch); err != nil {
+		if err := wm.Remove(ctx, *worktreePath, *featureBranch); err != nil {
 			s.logWarn("cleanup: failed to remove worktree", "path", *worktreePath, "error", err)
 		}
 	}

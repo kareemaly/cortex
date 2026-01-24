@@ -181,7 +181,7 @@ func (s *Server) handleConcludeSession(
 	// Cleanup worktree if present
 	if worktreePath != nil && featureBranch != nil && s.config.ProjectPath != "" {
 		wm := worktree.NewManager(s.config.ProjectPath)
-		if err := wm.Remove(*worktreePath, *featureBranch); err != nil {
+		if err := wm.Remove(ctx, *worktreePath, *featureBranch); err != nil {
 			// Log but don't fail - main work is done
 			log.Printf("warning: failed to cleanup worktree: %v", err)
 		}
