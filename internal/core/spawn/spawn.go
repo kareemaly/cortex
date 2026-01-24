@@ -2,8 +2,12 @@ package spawn
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/kareemaly/cortex/internal/binpath"
+	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -166,7 +170,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 	}
 
 	// Load and build prompt
-	promptText, err := s.buildPrompt(req)
+	pInfo, err := s.buildPrompt(req)
 	if err != nil {
 		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, settingsPath)
 		return &SpawnResult{
@@ -182,20 +186,22 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		// Architects use allowed tools - listTickets and readTicket are auto-approved
 		// Other tools (createTicket, updateTicket, deleteTicket, moveTicket, spawnSession) require user approval
 		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
-			Prompt:        promptText,
-			MCPConfigPath: mcpConfigPath,
-			SettingsPath:  settingsPath,
-			AllowedTools:  []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
-			SessionID:     sessionID,
+			Prompt:             pInfo.PromptText,
+			AppendSystemPrompt: pInfo.SystemPromptPath,
+			MCPConfigPath:      mcpConfigPath,
+			SettingsPath:       settingsPath,
+			AllowedTools:       []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
+			SessionID:          sessionID,
 		})
 	case AgentTypeTicketAgent:
 		// Ticket agents use plan mode
 		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
-			Prompt:         promptText,
-			MCPConfigPath:  mcpConfigPath,
-			SettingsPath:   settingsPath,
-			PermissionMode: "plan",
-			SessionID:      sessionID,
+			Prompt:             pInfo.PromptText,
+			AppendSystemPrompt: pInfo.SystemPromptPath,
+			MCPConfigPath:      mcpConfigPath,
+			SettingsPath:       settingsPath,
+			PermissionMode:     "plan",
+			SessionID:          sessionID,
 		})
 	}
 
@@ -351,24 +357,81 @@ func (s *Spawner) generateWindowName(req SpawnRequest) string {
 	return "architect"
 }
 
-// buildPrompt builds the prompt for the agent.
-func (s *Spawner) buildPrompt(req SpawnRequest) (string, error) {
+// promptInfo contains both dynamic prompt text and the static system prompt path.
+type promptInfo struct {
+	PromptText       string
+	SystemPromptPath string
+}
+
+// buildPrompt builds the dynamic prompt and returns the system prompt path.
+// Dynamic content (ticket details, ticket lists) is embedded in the prompt.
+// Static instructions are loaded from file via --append-system-prompt.
+func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		return BuildTicketAgentPrompt(req.ProjectPath, TicketPromptVars{
-			TicketID: req.TicketID,
-			Title:    req.Ticket.Title,
-			Body:     req.Ticket.Body,
-			Slug:     GenerateWindowName(req.Ticket.Title),
-		})
+		return s.buildTicketAgentPrompt(req)
 	case AgentTypeArchitect:
-		return BuildArchitectPrompt(req.ProjectPath, ArchitectPromptVars{
-			ProjectName: req.ProjectName,
-			TmuxSession: req.TmuxSession,
-		})
+		return s.buildArchitectPrompt(req)
 	default:
-		return "", &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
+		return nil, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
 	}
+}
+
+// buildTicketAgentPrompt creates the dynamic ticket prompt.
+func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) {
+	systemPromptPath := prompt.TicketAgentPath(req.ProjectPath)
+	if err := prompt.ValidatePromptFile(systemPromptPath); err != nil {
+		return nil, err
+	}
+
+	promptText := fmt.Sprintf("# Ticket: %s\n\n%s", req.Ticket.Title, req.Ticket.Body)
+
+	return &promptInfo{
+		PromptText:       promptText,
+		SystemPromptPath: systemPromptPath,
+	}, nil
+}
+
+// buildArchitectPrompt creates the dynamic architect prompt with ticket list.
+func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
+	systemPromptPath := prompt.ArchitectPath(req.ProjectPath)
+	if err := prompt.ValidatePromptFile(systemPromptPath); err != nil {
+		return nil, err
+	}
+
+	// Query daemon API to get tickets by status
+	client := sdk.DefaultClient(req.ProjectPath)
+	tickets, err := client.ListAllTickets("")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tickets: %w", err)
+	}
+
+	// Build formatted ticket list with project name
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("# Project: %s\n\n", req.ProjectName))
+	sb.WriteString("# Tickets\n\n")
+
+	writeSection := func(name string, items []sdk.TicketSummary) {
+		sb.WriteString(fmt.Sprintf("## %s\n", name))
+		if len(items) == 0 {
+			sb.WriteString("(none)\n")
+		} else {
+			for _, t := range items {
+				sb.WriteString(fmt.Sprintf("- [%s] %s (updated: %s)\n", t.ID, t.Title, t.Updated.Format(time.DateOnly)))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	writeSection("Backlog", tickets.Backlog)
+	writeSection("In Progress", tickets.Progress)
+	writeSection("Review", tickets.Review)
+	writeSection("Done", tickets.Done)
+
+	return &promptInfo{
+		PromptText:       sb.String(),
+		SystemPromptPath: systemPromptPath,
+	}, nil
 }
 
 // spawnInTmux spawns the agent in a tmux window.

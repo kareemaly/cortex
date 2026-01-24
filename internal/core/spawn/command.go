@@ -1,22 +1,19 @@
 package spawn
 
 import (
-	"fmt"
 	"strings"
-
-	"github.com/kareemaly/cortex/internal/prompt"
-	"github.com/kareemaly/cortex/internal/ticket"
 )
 
 // ClaudeCommandParams contains parameters for building a claude command.
 type ClaudeCommandParams struct {
-	Prompt         string
-	MCPConfigPath  string
-	SettingsPath   string   // path to settings.json with hooks config
-	PermissionMode string   // "plan" or "full" or empty (default)
-	AllowedTools   []string // tools that don't require user approval
-	ResumeID       string   // optional claude session ID to resume
-	SessionID      string   // optional session ID for --session-id flag
+	Prompt             string
+	AppendSystemPrompt string // path to system prompt file to load via --append-system-prompt
+	MCPConfigPath      string
+	SettingsPath       string   // path to settings.json with hooks config
+	PermissionMode     string   // "plan" or "full" or empty (default)
+	AllowedTools       []string // tools that don't require user approval
+	ResumeID           string   // optional claude session ID to resume
+	SessionID          string   // optional session ID for --session-id flag
 }
 
 // EscapePromptForShell escapes a prompt for safe shell inclusion.
@@ -33,7 +30,12 @@ func BuildClaudeCommand(params ClaudeCommandParams) string {
 	parts = append(parts, "claude")
 
 	// Add prompt
-	parts = append(parts, fmt.Sprintf("'%s'", escapedPrompt))
+	parts = append(parts, "'"+escapedPrompt+"'")
+
+	// Add append system prompt (static instructions from file)
+	if params.AppendSystemPrompt != "" {
+		parts = append(parts, "--append-system-prompt", params.AppendSystemPrompt)
+	}
 
 	// Add MCP config
 	if params.MCPConfigPath != "" {
@@ -68,39 +70,33 @@ func BuildClaudeCommand(params ClaudeCommandParams) string {
 	return strings.Join(parts, " ")
 }
 
-// TicketPromptVars contains variables for ticket agent prompts.
-type TicketPromptVars struct {
-	TicketID string
-	Title    string
-	Body     string
-	Slug     string
-}
-
-// ArchitectPromptVars contains variables for architect prompts.
-type ArchitectPromptVars struct {
-	ProjectName string
-	TmuxSession string
-}
-
-// BuildTicketAgentPrompt loads and renders the ticket agent prompt.
-func BuildTicketAgentPrompt(projectPath string, vars TicketPromptVars) (string, error) {
-	return prompt.LoadTicketAgent(projectPath, prompt.TicketVars{
-		TicketID: vars.TicketID,
-		Title:    vars.Title,
-		Body:     vars.Body,
-		Slug:     vars.Slug,
-	})
-}
-
-// BuildArchitectPrompt loads and renders the architect prompt.
-func BuildArchitectPrompt(projectPath string, vars ArchitectPromptVars) (string, error) {
-	return prompt.LoadArchitect(projectPath, prompt.ArchitectVars{
-		ProjectName: vars.ProjectName,
-		TmuxSession: vars.TmuxSession,
-	})
-}
-
 // GenerateWindowName creates a tmux window name from a ticket.
 func GenerateWindowName(ticketTitle string) string {
-	return ticket.GenerateSlug(ticketTitle)
+	return generateSlug(ticketTitle)
+}
+
+// generateSlug creates a URL-safe slug from a title.
+// Moved inline to avoid circular dependency with ticket package.
+func generateSlug(title string) string {
+	slug := strings.ToLower(title)
+	slug = strings.ReplaceAll(slug, " ", "-")
+	// Keep only alphanumeric and hyphens
+	var result strings.Builder
+	for _, r := range slug {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			result.WriteRune(r)
+		}
+	}
+	slug = result.String()
+	// Collapse multiple hyphens
+	for strings.Contains(slug, "--") {
+		slug = strings.ReplaceAll(slug, "--", "-")
+	}
+	// Trim leading/trailing hyphens
+	slug = strings.Trim(slug, "-")
+	// Limit length
+	if len(slug) > 50 {
+		slug = slug[:50]
+	}
+	return slug
 }

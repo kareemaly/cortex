@@ -7,6 +7,58 @@ import (
 	"github.com/kareemaly/cortex/internal/prompt"
 )
 
+// defaultArchitectPrompt contains static instructions for the architect agent.
+// Dynamic content (ticket list) is injected via the prompt argument.
+const defaultArchitectPrompt = `## Role
+
+You are the project architect. Manage tickets and orchestrate development.
+
+## Cortex MCP Tools
+
+### Read Operations (auto-approved)
+- ` + "`mcp__cortex__listTickets`" + ` - List tickets by status
+- ` + "`mcp__cortex__readTicket`" + ` - Read full ticket details
+
+### Write Operations (require approval)
+- ` + "`mcp__cortex__createTicket`" + ` - Create a new ticket
+- ` + "`mcp__cortex__updateTicket`" + ` - Update ticket title/body
+- ` + "`mcp__cortex__deleteTicket`" + ` - Delete a ticket
+- ` + "`mcp__cortex__moveTicket`" + ` - Move ticket to different status
+- ` + "`mcp__cortex__spawnSession`" + ` - Spawn agent session for a ticket
+
+## Workflow
+
+1. Review the ticket list above
+2. Use ` + "`mcp__cortex__readTicket`" + ` to examine details
+3. Use ` + "`mcp__cortex__spawnSession`" + ` to assign work
+`
+
+// defaultTicketAgentPrompt contains static instructions for ticket agents.
+// Dynamic content (ticket details) is injected via the prompt argument.
+const defaultTicketAgentPrompt = `## Cortex MCP Tools
+
+- ` + "`mcp__cortex__readTicket`" + ` - Read your assigned ticket
+- ` + "`mcp__cortex__moveTicketToProgress`" + ` - Start work
+- ` + "`mcp__cortex__moveTicketToReview`" + ` - Submit for review
+- ` + "`mcp__cortex__moveTicketToDone`" + ` - Mark complete
+- ` + "`mcp__cortex__addTicketComment`" + ` - Add comments
+
+## Workflow
+
+1. Call ` + "`mcp__cortex__moveTicketToProgress`" + ` to start
+2. Do the work
+3. Call ` + "`mcp__cortex__moveTicketToReview`" + ` when complete
+
+## Hooks
+
+Status changes may trigger project hooks. Read hook output and react accordingly.
+
+## Comments
+
+Use ` + "`mcp__cortex__addTicketComment`" + ` with type "decision" for key decisions.
+Other types: scope_change, blocker, question, progress.
+`
+
 // Options configures the installation.
 type Options struct {
 	// ProjectPath is the path for project setup. If empty, project setup is skipped.
@@ -131,14 +183,14 @@ git:
 	}
 
 	architectPath := prompt.ArchitectPath(absPath)
-	item = ensureConfigFile(architectPath, prompt.DefaultArchitectPrompt, force)
+	item = ensureConfigFile(architectPath, defaultArchitectPrompt, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
 	}
 
 	ticketAgentPath := prompt.TicketAgentPath(absPath)
-	item = ensureConfigFile(ticketAgentPath, prompt.DefaultTicketAgentPrompt, force)
+	item = ensureConfigFile(ticketAgentPath, defaultTicketAgentPrompt, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error

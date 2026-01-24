@@ -31,142 +31,41 @@ func TestTicketAgentPath(t *testing.T) {
 	}
 }
 
-func TestLoadArchitect(t *testing.T) {
+func TestValidatePromptFile_Exists(t *testing.T) {
 	tmpDir := t.TempDir()
 	promptsDir := filepath.Join(tmpDir, ".cortex", "prompts")
 	if err := os.MkdirAll(promptsDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	template := `Hello {{.ProjectName}}, session {{.TmuxSession}}`
-	if err := os.WriteFile(filepath.Join(promptsDir, "architect.md"), []byte(template), 0644); err != nil {
+	promptFile := filepath.Join(promptsDir, "architect.md")
+	if err := os.WriteFile(promptFile, []byte("test content"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := LoadArchitect(tmpDir, ArchitectVars{
-		ProjectName: "myproject",
-		TmuxSession: "mysession",
-	})
+	err := ValidatePromptFile(promptFile)
 	if err != nil {
-		t.Fatalf("LoadArchitect() error = %v", err)
-	}
-
-	want := "Hello myproject, session mysession"
-	if got != want {
-		t.Errorf("LoadArchitect() = %q, want %q", got, want)
+		t.Errorf("ValidatePromptFile() error = %v, want nil", err)
 	}
 }
 
-func TestLoadTicketAgent(t *testing.T) {
+func TestValidatePromptFile_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	promptsDir := filepath.Join(tmpDir, ".cortex", "prompts")
-	if err := os.MkdirAll(promptsDir, 0755); err != nil {
-		t.Fatal(err)
-	}
+	promptFile := filepath.Join(tmpDir, "nonexistent.md")
 
-	template := `Ticket: {{.TicketID}} - {{.Title}}
-Slug: {{.Slug}}
-Body: {{.Body}}`
-	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-agent.md"), []byte(template), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := LoadTicketAgent(tmpDir, TicketVars{
-		TicketID: "2026-01-22-fix-bug",
-		Title:    "Fix the bug",
-		Body:     "This is the description.",
-		Slug:     "fix-the-bug",
-	})
-	if err != nil {
-		t.Fatalf("LoadTicketAgent() error = %v", err)
-	}
-
-	want := `Ticket: 2026-01-22-fix-bug - Fix the bug
-Slug: fix-the-bug
-Body: This is the description.`
-	if got != want {
-		t.Errorf("LoadTicketAgent() = %q, want %q", got, want)
-	}
-}
-
-func TestLoadArchitect_NotFound(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	_, err := LoadArchitect(tmpDir, ArchitectVars{})
+	err := ValidatePromptFile(promptFile)
 	if err == nil {
-		t.Fatal("LoadArchitect() expected error for missing file")
+		t.Fatal("ValidatePromptFile() expected error for missing file")
 	}
 
 	var notFoundErr *NotFoundError
 	if !errors.As(err, &notFoundErr) {
-		t.Errorf("LoadArchitect() error = %T, want *NotFoundError", err)
-	}
-}
-
-func TestLoadTicketAgent_NotFound(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	_, err := LoadTicketAgent(tmpDir, TicketVars{})
-	if err == nil {
-		t.Fatal("LoadTicketAgent() expected error for missing file")
-	}
-
-	var notFoundErr *NotFoundError
-	if !errors.As(err, &notFoundErr) {
-		t.Errorf("LoadTicketAgent() error = %T, want *NotFoundError", err)
-	}
-}
-
-func TestLoadArchitect_ParseError(t *testing.T) {
-	tmpDir := t.TempDir()
-	promptsDir := filepath.Join(tmpDir, ".cortex", "prompts")
-	if err := os.MkdirAll(promptsDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Invalid template syntax
-	badTemplate := `Hello {{.ProjectName`
-	if err := os.WriteFile(filepath.Join(promptsDir, "architect.md"), []byte(badTemplate), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := LoadArchitect(tmpDir, ArchitectVars{ProjectName: "test"})
-	if err == nil {
-		t.Fatal("LoadArchitect() expected error for invalid template")
-	}
-
-	var parseErr *ParseError
-	if !errors.As(err, &parseErr) {
-		t.Errorf("LoadArchitect() error = %T, want *ParseError", err)
-	}
-}
-
-func TestLoadArchitect_RenderError(t *testing.T) {
-	tmpDir := t.TempDir()
-	promptsDir := filepath.Join(tmpDir, ".cortex", "prompts")
-	if err := os.MkdirAll(promptsDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Template that calls a method that doesn't exist
-	badTemplate := `Hello {{.InvalidMethod}}`
-	if err := os.WriteFile(filepath.Join(promptsDir, "architect.md"), []byte(badTemplate), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := LoadArchitect(tmpDir, ArchitectVars{ProjectName: "test"})
-	if err == nil {
-		t.Fatal("LoadArchitect() expected error for invalid field")
-	}
-
-	var renderErr *RenderError
-	if !errors.As(err, &renderErr) {
-		t.Errorf("LoadArchitect() error = %T, want *RenderError", err)
+		t.Errorf("ValidatePromptFile() error = %T, want *NotFoundError", err)
 	}
 }
 
 func TestNotFoundError_Message(t *testing.T) {
-	err := &NotFoundError{Path: "/path/to/template.md"}
+	err := &NotFoundError{Path: "/path/to/prompt.md"}
 	got := err.Error()
 	if got == "" {
 		t.Error("NotFoundError.Error() returned empty string")
@@ -175,22 +74,6 @@ func TestNotFoundError_Message(t *testing.T) {
 	want := "cortex install --project"
 	if !contains(got, want) {
 		t.Errorf("NotFoundError.Error() = %q, should contain %q", got, want)
-	}
-}
-
-func TestParseError_Unwrap(t *testing.T) {
-	inner := errors.New("inner error")
-	err := &ParseError{Path: "/path", Err: inner}
-	if errors.Unwrap(err) != inner {
-		t.Error("ParseError.Unwrap() did not return inner error")
-	}
-}
-
-func TestRenderError_Unwrap(t *testing.T) {
-	inner := errors.New("inner error")
-	err := &RenderError{Path: "/path", Err: inner}
-	if errors.Unwrap(err) != inner {
-		t.Error("RenderError.Unwrap() did not return inner error")
 	}
 }
 

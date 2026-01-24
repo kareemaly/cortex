@@ -1,110 +1,33 @@
 package prompt
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
-	"text/template"
 )
-
-// ArchitectVars contains variables for architect prompt templates.
-type ArchitectVars struct {
-	ProjectName string
-	TmuxSession string
-}
-
-// TicketVars contains variables for ticket agent prompt templates.
-type TicketVars struct {
-	TicketID string
-	Title    string
-	Body     string
-	Slug     string
-}
 
 // PromptsDir returns the path to the prompts directory.
 func PromptsDir(projectRoot string) string {
 	return filepath.Join(projectRoot, ".cortex", "prompts")
 }
 
-// ArchitectPath returns the path to the architect prompt template.
+// ArchitectPath returns the path to the architect prompt file.
 func ArchitectPath(projectRoot string) string {
 	return filepath.Join(PromptsDir(projectRoot), "architect.md")
 }
 
-// TicketAgentPath returns the path to the ticket agent prompt template.
+// TicketAgentPath returns the path to the ticket agent prompt file.
 func TicketAgentPath(projectRoot string) string {
 	return filepath.Join(PromptsDir(projectRoot), "ticket-agent.md")
 }
 
-// LoadArchitect loads and renders the architect prompt template.
-func LoadArchitect(projectRoot string, vars ArchitectVars) (string, error) {
-	path := ArchitectPath(projectRoot)
-	return loadAndRender(path, vars)
-}
-
-// LoadTicketAgent loads and renders the ticket agent prompt template.
-func LoadTicketAgent(projectRoot string, vars TicketVars) (string, error) {
-	path := TicketAgentPath(projectRoot)
-	return loadAndRender(path, vars)
-}
-
-// loadAndRender loads a template file and renders it with the given data.
-func loadAndRender(path string, data any) (string, error) {
-	content, err := os.ReadFile(path)
+// ValidatePromptFile checks that a prompt file exists.
+func ValidatePromptFile(path string) error {
+	_, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", &NotFoundError{Path: path}
+			return &NotFoundError{Path: path}
 		}
-		return "", err
+		return err
 	}
-
-	tmpl, err := template.New(filepath.Base(path)).Parse(string(content))
-	if err != nil {
-		return "", &ParseError{Path: path, Err: err}
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", &RenderError{Path: path, Err: err}
-	}
-
-	return buf.String(), nil
+	return nil
 }
-
-// DefaultArchitectPrompt is the default architect prompt template.
-const DefaultArchitectPrompt = `You are the architect for project: {{.ProjectName}}
-
-Your role is to manage tickets and orchestrate development work. Use the cortex MCP tools to:
-- List tickets with optional status/query filters (listTickets)
-- Read full ticket details (readTicket)
-- Create and update tickets (createTicket, updateTicket, deleteTicket, moveTicket)
-- Spawn agent sessions for tickets (spawnSession)
-
-Start by listing current tickets to understand the project state.`
-
-// DefaultTicketAgentPrompt is the default ticket agent prompt template.
-const DefaultTicketAgentPrompt = `# Ticket: {{.Title}}
-
-{{.Body}}
-
-## Cortex MCP Tools
-
-- moveTicketToProgress - Move ticket to in_progress
-- moveTicketToReview - Move ticket to review
-- addTicketComment - Add a comment to the ticket
-
-## Workflow
-
-1. Call moveTicketToProgress to start
-2. Do the work
-3. Call moveTicketToReview when complete
-
-## Hooks
-
-Status changes may trigger project hooks (git branch, tests, etc). Hook output is returned in the tool response. Read it and react accordingly.
-
-## Comments
-
-Use addTicketComment with type "decision" for key implementation decisions.
-
-Other types available when relevant: scope_change, blocker, question.`

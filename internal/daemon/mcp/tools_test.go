@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 )
+
+// testTicketAgentPrompt is a minimal prompt for testing.
+const testTicketAgentPrompt = "## Test Instructions"
 
 // setupTestServerWithMockTmux creates a test server with a mock tmux manager.
 func setupTestServerWithMockTmux(t *testing.T, ticketID string) (*Server, func()) {
@@ -26,7 +28,7 @@ func setupTestServerWithMockTmux(t *testing.T, ticketID string) (*Server, func()
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create prompts dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-agent.md"), []byte(prompt.DefaultTicketAgentPrompt), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-agent.md"), []byte(testTicketAgentPrompt), 0644); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create ticket-agent.md: %v", err)
 	}
@@ -1087,7 +1089,7 @@ func setupTestServerWithOrphanedSession(t *testing.T) (*Server, func()) {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create prompts dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-agent.md"), []byte(prompt.DefaultTicketAgentPrompt), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-agent.md"), []byte(testTicketAgentPrompt), 0644); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create ticket-agent.md: %v", err)
 	}
