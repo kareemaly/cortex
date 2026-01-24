@@ -9,7 +9,7 @@ import (
 // The new pane starts in the specified working directory.
 func (m *Manager) SplitWindowHorizontal(session string, windowIndex int, workingDir string) error {
 	target := fmt.Sprintf("%s:%d", session, windowIndex)
-	args := []string{"split-window", "-h", "-t", target}
+	args := []string{"split-window", "-h", "-p", "70", "-t", target}
 	if workingDir != "" {
 		args = append(args, "-c", workingDir)
 	}
