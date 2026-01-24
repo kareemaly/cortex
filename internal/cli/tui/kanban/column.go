@@ -8,6 +8,8 @@ import (
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
+const linesPerTicket = 3 // title (max 2 lines) + date line
+
 // Column represents a kanban column with tickets.
 type Column struct {
 	title        string
@@ -129,7 +131,7 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	headerLines := 2
 	// Scroll indicators take 1 line each when shown
 	indicatorLines := 2 // Reserve space for both
-	visibleCount := max(maxHeight-headerLines-indicatorLines, 1)
+	visibleCount := max((maxHeight-headerLines-indicatorLines)/linesPerTicket, 1)
 
 	// Ensure cursor is visible
 	c.EnsureCursorVisible(visibleCount)
@@ -160,25 +162,43 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 		endIdx := min(c.scrollOffset+visibleCount, len(c.tickets))
 		for i := c.scrollOffset; i < endIdx; i++ {
 			t := c.tickets[i]
-			// Truncate title if too long.
-			title := t.Title
-			maxLen := max(width-6, 10)
-			if len(title) > maxLen {
-				title = title[:maxLen-3] + "..."
+
+			// Calculate available width for title text
+			titleWidth := max(width-6, 10)
+
+			// Word wrap title (max 2 lines)
+			wrappedTitle := wrapText(t.Title, titleWidth, 2)
+
+			// Format creation date
+			dateStr := t.Created.Format("Jan 2")
+
+			// Build lines based on selection state
+			if i == c.cursor && isActive {
+				// Selected: show with prefix and highlight
+				for lineIdx, line := range wrappedTitle {
+					prefix := "  "
+					if lineIdx == 0 {
+						prefix = "> "
+					}
+					b.WriteString(selectedTicketStyle.Width(width - 2).Render(prefix + line))
+					b.WriteString("\n")
+				}
+				// Date line with selection style
+				b.WriteString(selectedTicketStyle.Width(width - 2).Render("  " + dateStr))
+			} else {
+				// Normal: show with appropriate prefix
+				for lineIdx, line := range wrappedTitle {
+					prefix := "  "
+					if lineIdx == 0 && t.HasActiveSession {
+						prefix = activeSessionStyle.Render("● ")
+					}
+					b.WriteString(ticketStyle.Width(width - 2).Render(prefix + line))
+					b.WriteString("\n")
+				}
+				// Date line with muted style
+				b.WriteString(ticketDateStyle.Width(width - 2).Render("  " + dateStr))
 			}
 
-			// Build the line.
-			var line string
-			if i == c.cursor && isActive {
-				line = selectedTicketStyle.Width(width - 2).Render("> " + title)
-			} else {
-				prefix := "  "
-				if t.HasActiveSession {
-					prefix = activeSessionStyle.Render("● ")
-				}
-				line = ticketStyle.Width(width - 2).Render(prefix + title)
-			}
-			b.WriteString(line)
 			if i < endIdx-1 {
 				b.WriteString("\n")
 			}
@@ -198,4 +218,45 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 		return activeColumnStyle.Width(width).Height(maxHeight).Render(content)
 	}
 	return columnStyle.Width(width).Height(maxHeight).Render(content)
+}
+
+// wrapText wraps text to fit within width, limiting to maxLines.
+// If text exceeds maxLines after wrapping, truncates with "..."
+func wrapText(text string, width, maxLines int) []string {
+	if width <= 0 {
+		return []string{text}
+	}
+
+	var lines []string
+	remaining := text
+
+	for len(remaining) > 0 && len(lines) < maxLines {
+		if len(remaining) <= width {
+			lines = append(lines, remaining)
+			break
+		}
+
+		// Find last space within width for word boundary
+		cutPoint := width
+		for cutPoint > 0 && remaining[cutPoint] != ' ' {
+			cutPoint--
+		}
+		if cutPoint == 0 {
+			cutPoint = width // No space found, hard break
+		}
+
+		lines = append(lines, remaining[:cutPoint])
+		remaining = strings.TrimLeft(remaining[cutPoint:], " ")
+	}
+
+	// Truncate last line if there's remaining text
+	if len(remaining) > 0 && len(lines) == maxLines {
+		last := lines[maxLines-1]
+		if len(last) > width-3 {
+			last = last[:width-3]
+		}
+		lines[maxLines-1] = last + "..."
+	}
+
+	return lines
 }
