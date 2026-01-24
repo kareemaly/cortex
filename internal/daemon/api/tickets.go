@@ -11,6 +11,7 @@ import (
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/types"
 )
 
 // TicketHandlers provides HTTP handlers for ticket operations.
@@ -117,7 +118,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := toTicketResponse(t, ticket.StatusBacklog)
+	resp := types.ToTicketResponse(t, ticket.StatusBacklog)
 	writeJSON(w, http.StatusCreated, resp)
 }
 
@@ -149,7 +150,7 @@ func (h *TicketHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := toTicketResponse(t, actualStatus)
+	resp := types.ToTicketResponse(t, actualStatus)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -193,7 +194,7 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := toTicketResponse(t, actualStatus)
+	resp := types.ToTicketResponse(t, actualStatus)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -284,7 +285,7 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := toTicketResponse(t, newStatus)
+	resp := types.ToTicketResponse(t, newStatus)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -364,8 +365,8 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 				h.deps.Logger.Warn("failed to focus window", "error", err)
 			}
 			resp := SpawnResponse{
-				Session: toSessionResponse(*stateInfo.Session),
-				Ticket:  toTicketResponse(t, actualStatus),
+				Session: types.ToSessionResponse(*stateInfo.Session),
+				Ticket:  types.ToTicketResponse(t, actualStatus),
 			}
 			writeJSON(w, http.StatusOK, resp)
 			return
@@ -469,8 +470,8 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := SpawnResponse{
-		Session: toSessionResponse(*t.Session),
-		Ticket:  toTicketResponse(t, newStatus),
+		Session: types.ToSessionResponse(*t.Session),
+		Ticket:  types.ToTicketResponse(t, newStatus),
 	}
 	writeJSON(w, http.StatusCreated, resp)
 }
