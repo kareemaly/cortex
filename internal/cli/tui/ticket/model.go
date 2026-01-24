@@ -23,6 +23,7 @@ type Model struct {
 	err           error
 	showKillModal bool
 	killing       bool
+	embedded      bool // if true, send CloseDetailMsg instead of tea.Quit
 }
 
 // Message types for async operations.
@@ -45,6 +46,9 @@ type SessionKillErrorMsg struct {
 	Err error
 }
 
+// CloseDetailMsg is sent when user wants to close the detail view.
+type CloseDetailMsg struct{}
+
 // New creates a new ticket detail model.
 func New(client *sdk.Client, ticketID string) Model {
 	return Model{
@@ -52,6 +56,13 @@ func New(client *sdk.Client, ticketID string) Model {
 		ticketID: ticketID,
 		loading:  true,
 	}
+}
+
+// NewEmbedded creates a model that sends CloseDetailMsg on close.
+func NewEmbedded(client *sdk.Client, ticketID string) Model {
+	m := New(client, ticketID)
+	m.embedded = true
+	return m
 }
 
 // Init initializes the model and starts loading the ticket.
@@ -130,9 +141,17 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleKillModalKey(msg)
 	}
 
-	// Quit.
+	// Quit or close.
 	if isKey(msg, KeyQuit, KeyCtrlC) {
+		if m.embedded {
+			return m, func() tea.Msg { return CloseDetailMsg{} }
+		}
 		return m, tea.Quit
+	}
+
+	// Handle Escape for embedded mode.
+	if m.embedded && isKey(msg, KeyEscape) {
+		return m, func() tea.Msg { return CloseDetailMsg{} }
 	}
 
 	// If loading or killing, don't process other keys.
@@ -276,7 +295,7 @@ func (m Model) View() string {
 	b.WriteString("\n")
 
 	// Help bar.
-	b.WriteString(helpBarStyle.Render(helpText(int(m.viewport.ScrollPercent()*100), m.hasActiveSession())))
+	b.WriteString(helpBarStyle.Render(helpText(int(m.viewport.ScrollPercent()*100), m.hasActiveSession(), m.embedded)))
 
 	return b.String()
 }

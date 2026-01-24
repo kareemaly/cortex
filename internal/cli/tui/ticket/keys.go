@@ -39,10 +39,16 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 }
 
 // helpText returns the help bar text for the ticket detail view.
-func helpText(scrollPercent int, hasActiveSession bool) string {
-	base := "[j/k] scroll  [r]efresh  [q]uit"
+func helpText(scrollPercent int, hasActiveSession bool, embedded bool) string {
+	var quit string
+	if embedded {
+		quit = "[q/esc] back"
+	} else {
+		quit = "[q]uit"
+	}
+	base := "[j/k] scroll  [r]efresh  " + quit
 	if hasActiveSession {
-		base = "[j/k] scroll  [r]efresh  [x] kill session  [q]uit"
+		base = "[j/k] scroll  [r]efresh  [x] kill session  " + quit
 	}
 	return base + "  " + percentStr(scrollPercent)
 }

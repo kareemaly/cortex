@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/tui/ticket"
 )
 
 // Model is the main Bubbletea model for the kanban board.
@@ -28,6 +29,10 @@ type Model struct {
 
 	// Vim navigation state
 	pendingG bool // tracking 'g' key for 'gg' sequence
+
+	// Ticket detail view state
+	showDetail  bool
+	detailModel *ticket.Model
 }
 
 // Message types for async operations.
@@ -82,6 +87,29 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages and updates the model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle close from ticket detail view.
+	if _, ok := msg.(ticket.CloseDetailMsg); ok {
+		m.showDetail = false
+		m.detailModel = nil
+		m.loading = true
+		return m, m.loadTickets()
+	}
+
+	// Delegate to detail model when active.
+	if m.showDetail && m.detailModel != nil {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width = sizeMsg.Width
+			m.height = sizeMsg.Height
+			m.ready = true
+		}
+		var cmd tea.Cmd
+		updatedModel, cmd := m.detailModel.Update(msg)
+		if dm, ok := updatedModel.(ticket.Model); ok {
+			m.detailModel = &dm
+		}
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -216,10 +244,26 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Spawn session.
 	if isKey(msg, KeySpawn) {
-		ticket := m.columns[m.activeColumn].SelectedTicket()
-		if ticket != nil {
-			m.statusMsg = fmt.Sprintf("Spawning session for: %s...", ticket.Title)
-			return m, m.spawnSession(ticket)
+		t := m.columns[m.activeColumn].SelectedTicket()
+		if t != nil {
+			m.statusMsg = fmt.Sprintf("Spawning session for: %s...", t.Title)
+			return m, m.spawnSession(t)
+		}
+		return m, nil
+	}
+
+	// Open ticket detail.
+	if isKey(msg, KeyOpen, KeyEnter) {
+		t := m.columns[m.activeColumn].SelectedTicket()
+		if t != nil {
+			detailModel := ticket.NewEmbedded(m.client, t.ID)
+			m.detailModel = &detailModel
+			m.showDetail = true
+			initCmd := m.detailModel.Init()
+			sizeCmd := func() tea.Msg {
+				return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+			}
+			return m, tea.Batch(initCmd, sizeCmd)
 		}
 		return m, nil
 	}
@@ -259,6 +303,11 @@ func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	if !m.ready {
 		return "Loading..."
+	}
+
+	// Delegate to detail view when active.
+	if m.showDetail && m.detailModel != nil {
+		return m.detailModel.View()
 	}
 
 	var b strings.Builder
