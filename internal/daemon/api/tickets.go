@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -47,6 +48,15 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query),
 	}
 
+	// Sort by Updated descending (most recent first)
+	sortByUpdated := func(a, b TicketSummary) int {
+		return b.Updated.Compare(a.Updated)
+	}
+	slices.SortFunc(resp.Backlog, sortByUpdated)
+	slices.SortFunc(resp.Progress, sortByUpdated)
+	slices.SortFunc(resp.Review, sortByUpdated)
+	slices.SortFunc(resp.Done, sortByUpdated)
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -77,6 +87,11 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	resp := ListTicketsResponse{
 		Tickets: filterSummaryList(tickets, ticket.Status(status), query),
 	}
+
+	// Sort by Updated descending (most recent first)
+	slices.SortFunc(resp.Tickets, func(a, b TicketSummary) int {
+		return b.Updated.Compare(a.Updated)
+	})
 
 	writeJSON(w, http.StatusOK, resp)
 }
