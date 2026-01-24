@@ -5,11 +5,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/worktree"
 )
+
+// generateSessionID generates a unique session ID for worktrees.
+func generateSessionID() string {
+	return uuid.New().String()
+}
 
 // AgentType represents the type of agent being spawned.
 type AgentType string
@@ -24,7 +31,7 @@ const (
 // StoreInterface defines the ticket store operations needed for spawning.
 type StoreInterface interface {
 	Get(id string) (*ticket.Ticket, ticket.Status, error)
-	SetSession(ticketID, agent, tmuxWindow string) (*ticket.Session, error)
+	SetSession(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (*ticket.Session, error)
 	EndSession(ticketID string) error
 }
 
@@ -63,8 +70,9 @@ type SpawnRequest struct {
 	TicketsDir  string
 
 	// For ticket agents
-	TicketID string
-	Ticket   *ticket.Ticket
+	TicketID    string
+	Ticket      *ticket.Ticket
+	UseWorktree bool // if true, spawn in a git worktree
 
 	// For architect agents
 	ProjectName string
@@ -126,11 +134,36 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 	// Generate window name
 	windowName := s.generateWindowName(req)
 
+	// Determine working directory and worktree info
+	workingDir := req.ProjectPath
+	var worktreePath, featureBranch *string
+
+	if req.UseWorktree && req.AgentType == AgentTypeTicketAgent {
+		wm := worktree.NewManager(req.ProjectPath)
+		slug := ticket.GenerateSlug(req.Ticket.Title)
+
+		// Generate session ID for worktree path
+		sessionID := generateSessionID()
+
+		wtPath, branch, err := wm.Create(sessionID, slug)
+		if err != nil {
+			return nil, fmt.Errorf("create worktree: %w", err)
+		}
+
+		worktreePath = &wtPath
+		featureBranch = &branch
+		workingDir = wtPath
+	}
+
 	// Create session in store (ticket agents only)
 	var sessionID string
 	if req.AgentType == AgentTypeTicketAgent {
-		session, err := s.deps.Store.SetSession(req.TicketID, req.Agent, windowName)
+		session, err := s.deps.Store.SetSession(req.TicketID, req.Agent, windowName, worktreePath, featureBranch)
 		if err != nil {
+			if worktreePath != nil && featureBranch != nil {
+				wm := worktree.NewManager(req.ProjectPath)
+				_ = wm.Remove(*worktreePath, *featureBranch)
+			}
 			return nil, err
 		}
 		sessionID = session.ID
@@ -152,7 +185,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 
 	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, "", "")
+		s.cleanupOnFailure(req.AgentType, req.TicketID, "", "", worktreePath, featureBranch, req.ProjectPath)
 		return nil, err
 	}
 
@@ -165,14 +198,14 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 
 	settingsPath, err := WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, "")
+		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, "", worktreePath, featureBranch, req.ProjectPath)
 		return nil, err
 	}
 
 	// Load and build prompt
-	pInfo, err := s.buildPrompt(req)
+	pInfo, err := s.buildPrompt(req, worktreePath, featureBranch)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, settingsPath)
+		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, settingsPath, worktreePath, featureBranch, req.ProjectPath)
 		return &SpawnResult{
 			Success: false,
 			Message: err.Error(),
@@ -206,9 +239,9 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 	}
 
 	// Spawn in tmux
-	windowIndex, err := s.spawnInTmux(req, windowName, claudeCmd)
+	windowIndex, err := s.spawnInTmux(req, windowName, claudeCmd, workingDir)
 	if err != nil {
-		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, settingsPath)
+		s.cleanupOnFailure(req.AgentType, req.TicketID, mcpConfigPath, settingsPath, worktreePath, featureBranch, req.ProjectPath)
 		return &SpawnResult{
 			Success: false,
 			Message: "failed to spawn agent in tmux: " + err.Error(),
@@ -366,10 +399,10 @@ type promptInfo struct {
 // buildPrompt builds the dynamic prompt and returns the system prompt path.
 // Dynamic content (ticket details, ticket lists) is embedded in the prompt.
 // Static instructions are loaded from file via --append-system-prompt.
-func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
+func (s *Spawner) buildPrompt(req SpawnRequest, worktreePath, featureBranch *string) (*promptInfo, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		return s.buildTicketAgentPrompt(req)
+		return s.buildTicketAgentPrompt(req, worktreePath, featureBranch)
 	case AgentTypeArchitect:
 		return s.buildArchitectPrompt(req)
 	default:
@@ -378,7 +411,7 @@ func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
 }
 
 // buildTicketAgentPrompt creates the dynamic ticket prompt.
-func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) {
+func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, featureBranch *string) (*promptInfo, error) {
 	// Load system prompt (MCP tool instructions and workflow)
 	systemPromptPath := prompt.TicketSystemPath(req.ProjectPath)
 	systemPromptContent, err := prompt.LoadPromptFile(systemPromptPath)
@@ -391,8 +424,15 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 		}
 	}
 
+	// Choose template based on worktree mode
+	var ticketTemplatePath string
+	if worktreePath != nil {
+		ticketTemplatePath = prompt.TicketWorktreePath(req.ProjectPath)
+	} else {
+		ticketTemplatePath = prompt.TicketPath(req.ProjectPath)
+	}
+
 	// Load ticket template
-	ticketTemplatePath := prompt.TicketPath(req.ProjectPath)
 	ticketTemplate, err := prompt.LoadPromptFile(ticketTemplatePath)
 	if err != nil {
 		// Fall back to simple format if template doesn't exist
@@ -409,6 +449,12 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 		TicketID:    req.TicketID,
 		TicketTitle: req.Ticket.Title,
 		TicketBody:  req.Ticket.Body,
+	}
+	if worktreePath != nil {
+		vars.WorktreePath = *worktreePath
+	}
+	if featureBranch != nil {
+		vars.WorktreeBranch = *featureBranch
 	}
 
 	promptText, err := prompt.RenderTemplate(ticketTemplate, vars)
@@ -466,17 +512,17 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 }
 
 // spawnInTmux spawns the agent in a tmux window.
-func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd string) (int, error) {
+func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd, workingDir string) (int, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
 		// Prefix command with env vars so child processes can identify the ticket and project
 		cmdWithEnv := fmt.Sprintf("CORTEX_TICKET_ID=%s CORTEX_PROJECT=%s %s", req.TicketID, req.ProjectPath, claudeCmd)
 		// Companion command shows ticket details
 		companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
-		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, cmdWithEnv, companionCmd, req.ProjectPath)
+		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, cmdWithEnv, companionCmd, workingDir)
 	case AgentTypeArchitect:
 		// Companion command shows kanban board
-		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, claudeCmd, "cortex kanban", req.ProjectPath)
+		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, claudeCmd, "cortex kanban", workingDir)
 		return 0, err
 	default:
 		return 0, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
@@ -484,7 +530,7 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd string) (i
 }
 
 // cleanupOnFailure cleans up resources when spawn fails.
-func (s *Spawner) cleanupOnFailure(agentType AgentType, ticketID, mcpConfigPath, settingsPath string) {
+func (s *Spawner) cleanupOnFailure(agentType AgentType, ticketID, mcpConfigPath, settingsPath string, worktreePath, featureBranch *string, projectPath string) {
 	if agentType == AgentTypeTicketAgent && ticketID != "" {
 		_ = s.deps.Store.EndSession(ticketID)
 	}
@@ -493,5 +539,9 @@ func (s *Spawner) cleanupOnFailure(agentType AgentType, ticketID, mcpConfigPath,
 	}
 	if settingsPath != "" {
 		_ = RemoveSettingsConfig(settingsPath)
+	}
+	if worktreePath != nil && featureBranch != nil && projectPath != "" {
+		wm := worktree.NewManager(projectPath)
+		_ = wm.Remove(*worktreePath, *featureBranch)
 	}
 }

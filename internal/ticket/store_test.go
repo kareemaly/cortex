@@ -290,7 +290,7 @@ func TestStoreSetSession(t *testing.T) {
 
 	ticket, _ := store.Create("Test Ticket", "body")
 
-	session, err := store.SetSession(ticket.ID, "claude", "test-window")
+	session, err := store.SetSession(ticket.ID, "claude", "test-window", nil, nil)
 	if err != nil {
 		t.Fatalf("SetSession failed: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestStoreEndSession(t *testing.T) {
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
-	_, _ = store.SetSession(ticket.ID, "claude", "window")
+	_, _ = store.SetSession(ticket.ID, "claude", "window", nil, nil)
 
 	if err := store.EndSession(ticket.ID); err != nil {
 		t.Fatalf("EndSession failed: %v", err)
@@ -336,7 +336,7 @@ func TestStoreUpdateSessionStatus(t *testing.T) {
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
-	_, _ = store.SetSession(ticket.ID, "claude", "window")
+	_, _ = store.SetSession(ticket.ID, "claude", "window", nil, nil)
 
 	tool := "Edit"
 	work := "Writing code"
@@ -359,7 +359,7 @@ func TestStoreAddComment(t *testing.T) {
 	defer cleanup()
 
 	ticket, _ := store.Create("Test Ticket", "body")
-	session, _ := store.SetSession(ticket.ID, "claude", "window")
+	session, _ := store.SetSession(ticket.ID, "claude", "window", nil, nil)
 
 	comment, err := store.AddComment(ticket.ID, session.ID, CommentDecision, "Test decision")
 	if err != nil {

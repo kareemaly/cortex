@@ -276,6 +276,9 @@ func (s *Server) handleSpawnSession(
 		CortexdPath: s.config.CortexdPath,
 	})
 
+	// Determine if worktrees are enabled
+	useWorktree := s.projectConfig != nil && s.projectConfig.Git.Worktrees
+
 	// Execute based on state/mode matrix
 	var result *spawn.SpawnResult
 	switch stateInfo.State {
@@ -290,6 +293,7 @@ func (s *Server) handleSpawnSession(
 				TicketsDir:  s.config.TicketsDir,
 				TicketID:    input.TicketID,
 				Ticket:      t,
+				UseWorktree: useWorktree,
 			})
 		case "resume":
 			return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot resume - no existing session to resume")
@@ -326,6 +330,7 @@ func (s *Server) handleSpawnSession(
 				TicketsDir:  s.config.TicketsDir,
 				TicketID:    input.TicketID,
 				Ticket:      t,
+				UseWorktree: useWorktree,
 			})
 		}
 
@@ -340,6 +345,7 @@ func (s *Server) handleSpawnSession(
 				TicketsDir:  s.config.TicketsDir,
 				TicketID:    input.TicketID,
 				Ticket:      t,
+				UseWorktree: useWorktree,
 			})
 		case "resume":
 			return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot resume - session has ended")
@@ -352,6 +358,7 @@ func (s *Server) handleSpawnSession(
 				TicketsDir:  s.config.TicketsDir,
 				TicketID:    input.TicketID,
 				Ticket:      t,
+				UseWorktree: useWorktree,
 			})
 		}
 	}

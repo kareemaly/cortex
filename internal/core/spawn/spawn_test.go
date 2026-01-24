@@ -40,16 +40,18 @@ func (m *mockStore) Get(id string) (*ticket.Ticket, ticket.Status, error) {
 	return t, ticket.StatusBacklog, nil
 }
 
-func (m *mockStore) SetSession(ticketID, agent, tmuxWindow string) (*ticket.Session, error) {
+func (m *mockStore) SetSession(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (*ticket.Session, error) {
 	if m.setErr != nil {
 		return nil, m.setErr
 	}
 	m.lastSetID = ticketID
 	session := &ticket.Session{
-		ID:         "session-123",
-		StartedAt:  time.Now(),
-		Agent:      agent,
-		TmuxWindow: tmuxWindow,
+		ID:            "session-123",
+		StartedAt:     time.Now(),
+		Agent:         agent,
+		TmuxWindow:    tmuxWindow,
+		WorktreePath:  worktreePath,
+		FeatureBranch: featureBranch,
 	}
 	m.sessions[ticketID] = session
 	if t, ok := m.tickets[ticketID]; ok {

@@ -72,6 +72,8 @@ type Session struct {
 	EndedAt          *time.Time      `json:"ended_at,omitempty"`
 	Agent            string          `json:"agent"`
 	TmuxWindow       string          `json:"tmux_window"`
+	WorktreePath     *string         `json:"worktree_path,omitempty"`
+	FeatureBranch    *string         `json:"feature_branch,omitempty"`
 	CurrentStatus    *StatusEntry    `json:"current_status,omitempty"`
 	StatusHistory    []StatusEntry   `json:"status_history"`
 	RequestedReviews []ReviewRequest `json:"requested_reviews,omitempty"`
