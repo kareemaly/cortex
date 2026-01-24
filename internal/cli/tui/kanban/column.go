@@ -8,7 +8,7 @@ import (
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
-const linesPerTicket = 3 // title (max 2 lines) + date line
+const linesPerTicket = 6 // title (up to 5 lines) + date line
 
 // Column represents a kanban column with tickets.
 type Column struct {
@@ -166,8 +166,8 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 			// Calculate available width for title text
 			titleWidth := max(width-6, 10)
 
-			// Word wrap title (max 2 lines)
-			wrappedTitle := wrapText(t.Title, titleWidth, 2)
+			// Word wrap title
+			wrappedTitle := wrapText(t.Title, titleWidth)
 
 			// Format creation date
 			dateStr := t.Created.Format("Jan 2")
@@ -220,9 +220,8 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	return columnStyle.Width(width).Height(maxHeight).Render(content)
 }
 
-// wrapText wraps text to fit within width, limiting to maxLines.
-// If text exceeds maxLines after wrapping, truncates with "..."
-func wrapText(text string, width, maxLines int) []string {
+// wrapText wraps text to fit within width, returning all wrapped lines.
+func wrapText(text string, width int) []string {
 	if width <= 0 {
 		return []string{text}
 	}
@@ -230,7 +229,7 @@ func wrapText(text string, width, maxLines int) []string {
 	var lines []string
 	remaining := text
 
-	for len(remaining) > 0 && len(lines) < maxLines {
+	for len(remaining) > 0 {
 		if len(remaining) <= width {
 			lines = append(lines, remaining)
 			break
@@ -247,15 +246,6 @@ func wrapText(text string, width, maxLines int) []string {
 
 		lines = append(lines, remaining[:cutPoint])
 		remaining = strings.TrimLeft(remaining[cutPoint:], " ")
-	}
-
-	// Truncate last line if there's remaining text
-	if len(remaining) > 0 && len(lines) == maxLines {
-		last := lines[maxLines-1]
-		if len(last) > width-3 {
-			last = last[:width-3]
-		}
-		lines[maxLines-1] = last + "..."
 	}
 
 	return lines
