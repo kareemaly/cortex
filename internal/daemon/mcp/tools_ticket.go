@@ -118,6 +118,17 @@ func (s *Server) handleRequestReview(
 		return nil, RequestReviewOutput{}, WrapTicketError(err)
 	}
 
+	// Move ticket to review status (idempotent - no-op if already in review or done)
+	_, currentStatus, err := s.store.Get(s.session.TicketID)
+	if err != nil {
+		return nil, RequestReviewOutput{}, WrapTicketError(err)
+	}
+	if currentStatus != ticket.StatusReview && currentStatus != ticket.StatusDone {
+		if err := s.store.Move(s.session.TicketID, ticket.StatusReview); err != nil {
+			return nil, RequestReviewOutput{}, WrapTicketError(err)
+		}
+	}
+
 	return nil, RequestReviewOutput{
 		Success:     true,
 		Message:     "Review request added. Wait for human approval.",

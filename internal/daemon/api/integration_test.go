@@ -42,7 +42,6 @@ func setupTestServer(t *testing.T) *testServer {
 	deps := &Dependencies{
 		StoreManager: storeManager,
 		TmuxManager:  nil, // tmux not used in tests
-		HookExecutor: nil,
 		Logger:       logger,
 	}
 

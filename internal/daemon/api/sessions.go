@@ -147,8 +147,13 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		tmuxSession = projectCfg.Name
 	}
 
-	// Load and render approve prompt
-	approvePath := prompt.ApprovePath(projectPath)
+	// Load and render approve prompt (use worktree version if session has worktree)
+	var approvePath string
+	if session.WorktreePath != nil {
+		approvePath = prompt.ApproveWorktreePath(projectPath)
+	} else {
+		approvePath = prompt.ApprovePath(projectPath)
+	}
 	approveContent, err := prompt.LoadPromptFile(approvePath)
 	if err != nil {
 		// Use a default message if file doesn't exist
