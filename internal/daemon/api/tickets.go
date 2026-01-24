@@ -407,6 +407,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	spawner := spawn.NewSpawner(spawn.Dependencies{
 		Store:       store,
 		TmuxManager: h.deps.TmuxManager,
+		Logger:      h.deps.Logger,
 	})
 
 	var result *spawn.SpawnResult

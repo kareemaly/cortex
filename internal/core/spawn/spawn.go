@@ -2,6 +2,9 @@ package spawn
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -46,9 +49,10 @@ type TmuxManagerInterface interface {
 type Dependencies struct {
 	Store             StoreInterface
 	TmuxManager       TmuxManagerInterface
-	CortexdPath       string // optional override for cortexd binary path
-	MCPConfigDir      string // optional override for MCP config directory
-	SettingsConfigDir string // optional override for settings config directory
+	Logger            *slog.Logger // optional logger for warnings
+	CortexdPath       string       // optional override for cortexd binary path
+	MCPConfigDir      string       // optional override for MCP config directory
+	SettingsConfigDir string       // optional override for settings config directory
 }
 
 // Spawner handles spawning agent sessions.
@@ -59,6 +63,13 @@ type Spawner struct {
 // NewSpawner creates a new Spawner with the given dependencies.
 func NewSpawner(deps Dependencies) *Spawner {
 	return &Spawner{deps: deps}
+}
+
+// logWarn logs a warning message if a logger is configured.
+func (s *Spawner) logWarn(msg string, args ...any) {
+	if s.deps.Logger != nil {
+		s.deps.Logger.Warn(msg, args...)
+	}
 }
 
 // SpawnRequest contains parameters for spawning a new agent session.
@@ -298,7 +309,9 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 
 	settingsPath, err := WriteSettingsConfig(settingsConfig, req.TicketID, s.deps.SettingsConfigDir)
 	if err != nil {
-		_ = RemoveMCPConfig(mcpConfigPath)
+		if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
+			s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
+		}
 		return nil, err
 	}
 
@@ -318,8 +331,12 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 	// Spawn in tmux
 	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, cmdWithEnv, companionCmd, req.ProjectPath)
 	if err != nil {
-		_ = RemoveMCPConfig(mcpConfigPath)
-		_ = RemoveSettingsConfig(settingsPath)
+		if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
+			s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
+		}
+		if rmErr := RemoveSettingsConfig(settingsPath); rmErr != nil {
+			s.logWarn("cleanup: failed to remove settings config", "path", settingsPath, "error", rmErr)
+		}
 		return &SpawnResult{
 			Success: false,
 			Message: "failed to spawn agent in tmux: " + err.Error(),
@@ -340,7 +357,9 @@ func (s *Spawner) Resume(req ResumeRequest) (*SpawnResult, error) {
 func (s *Spawner) Fresh(req SpawnRequest) (*SpawnResult, error) {
 	// End existing session if present
 	if req.AgentType == AgentTypeTicketAgent && req.Ticket != nil && req.Ticket.Session != nil {
-		_ = s.deps.Store.EndSession(req.TicketID)
+		if err := s.deps.Store.EndSession(req.TicketID); err != nil {
+			s.logWarn("fresh: failed to end existing session", "ticketID", req.TicketID, "error", err)
+		}
 	}
 
 	return s.Spawn(req)
@@ -350,6 +369,16 @@ func (s *Spawner) Fresh(req SpawnRequest) (*SpawnResult, error) {
 func (s *Spawner) validateSpawnRequest(req SpawnRequest) error {
 	if req.TmuxSession == "" {
 		return &ConfigError{Field: "TmuxSession", Message: "cannot be empty"}
+	}
+
+	if err := validateTmuxName(req.TmuxSession); err != nil {
+		return &ConfigError{Field: "TmuxSession", Message: err.Error()}
+	}
+
+	if req.ProjectPath != "" {
+		if _, err := os.Stat(req.ProjectPath); os.IsNotExist(err) {
+			return &ConfigError{Field: "ProjectPath", Message: "directory does not exist"}
+		}
 	}
 
 	if req.AgentType == AgentTypeTicketAgent {
@@ -367,6 +396,27 @@ func (s *Spawner) validateSpawnRequest(req SpawnRequest) error {
 		}
 	}
 
+	return nil
+}
+
+// tmuxNameRegex matches valid tmux session/window names:
+// - alphanumeric characters, underscores, and hyphens only
+var tmuxNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// validateTmuxName validates a tmux session or window name.
+func validateTmuxName(name string) error {
+	if len(name) > 128 {
+		return fmt.Errorf("exceeds maximum length of 128 characters")
+	}
+	if strings.HasPrefix(name, "-") {
+		return fmt.Errorf("cannot start with a hyphen")
+	}
+	if strings.ContainsAny(name, ":.") {
+		return fmt.Errorf("cannot contain colons or periods (tmux delimiters)")
+	}
+	if !tmuxNameRegex.MatchString(name) {
+		return fmt.Errorf("must contain only alphanumeric characters, underscores, and hyphens")
+	}
 	return nil
 }
 
@@ -527,16 +577,24 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd, workingDi
 // cleanupOnFailure cleans up resources when spawn fails.
 func (s *Spawner) cleanupOnFailure(agentType AgentType, ticketID, mcpConfigPath, settingsPath string, worktreePath, featureBranch *string, projectPath string) {
 	if agentType == AgentTypeTicketAgent && ticketID != "" {
-		_ = s.deps.Store.EndSession(ticketID)
+		if err := s.deps.Store.EndSession(ticketID); err != nil {
+			s.logWarn("cleanup: failed to end session", "ticketID", ticketID, "error", err)
+		}
 	}
 	if mcpConfigPath != "" {
-		_ = RemoveMCPConfig(mcpConfigPath)
+		if err := RemoveMCPConfig(mcpConfigPath); err != nil {
+			s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", err)
+		}
 	}
 	if settingsPath != "" {
-		_ = RemoveSettingsConfig(settingsPath)
+		if err := RemoveSettingsConfig(settingsPath); err != nil {
+			s.logWarn("cleanup: failed to remove settings config", "path", settingsPath, "error", err)
+		}
 	}
 	if worktreePath != nil && featureBranch != nil && projectPath != "" {
 		wm := worktree.NewManager(projectPath)
-		_ = wm.Remove(*worktreePath, *featureBranch)
+		if err := wm.Remove(*worktreePath, *featureBranch); err != nil {
+			s.logWarn("cleanup: failed to remove worktree", "path", *worktreePath, "error", err)
+		}
 	}
 }

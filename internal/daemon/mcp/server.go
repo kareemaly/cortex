@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/kareemaly/cortex/internal/project/config"
@@ -40,6 +41,10 @@ type Config struct {
 	// If empty, binpath.FindCortexd() is used at runtime.
 	// This is primarily used for testing.
 	CortexdPath string
+
+	// Logger is an optional logger for warnings and errors.
+	// If nil, warnings are silently ignored.
+	Logger *slog.Logger
 }
 
 // Server is the MCP server for ticket management.
