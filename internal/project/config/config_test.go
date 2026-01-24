@@ -89,9 +89,7 @@ func TestLoad_FullConfig(t *testing.T) {
 name: my-project
 agent: opencode
 git:
-  repos:
-    - path: .
-    - path: ../shared
+  worktrees: true
 `)
 
 	cfg, err := Load(projectRoot)
@@ -105,14 +103,8 @@ git:
 	if cfg.Agent != AgentOpenCode {
 		t.Errorf("expected agent 'opencode', got %q", cfg.Agent)
 	}
-	if len(cfg.Git.Repos) != 2 {
-		t.Errorf("expected 2 repos, got %d", len(cfg.Git.Repos))
-	}
-	if cfg.Git.Repos[0].Path != "." {
-		t.Errorf("expected first repo path '.', got %q", cfg.Git.Repos[0].Path)
-	}
-	if cfg.Git.Repos[1].Path != "../shared" {
-		t.Errorf("expected second repo path '../shared', got %q", cfg.Git.Repos[1].Path)
+	if !cfg.Git.Worktrees {
+		t.Errorf("expected worktrees true, got %v", cfg.Git.Worktrees)
 	}
 }
 
@@ -134,9 +126,6 @@ name: minimal
 	if cfg.Agent != AgentClaude {
 		t.Errorf("expected default agent 'claude', got %q", cfg.Agent)
 	}
-	if len(cfg.Git.Repos) != 1 || cfg.Git.Repos[0].Path != "." {
-		t.Errorf("expected default repos [{'.'}], got %v", cfg.Git.Repos)
-	}
 }
 
 func TestLoad_NoConfigFile(t *testing.T) {
@@ -151,9 +140,6 @@ func TestLoad_NoConfigFile(t *testing.T) {
 	// Should return defaults
 	if cfg.Agent != AgentClaude {
 		t.Errorf("expected default agent 'claude', got %q", cfg.Agent)
-	}
-	if len(cfg.Git.Repos) != 1 || cfg.Git.Repos[0].Path != "." {
-		t.Errorf("expected default repos [{'.'}], got %v", cfg.Git.Repos)
 	}
 }
 
@@ -189,30 +175,6 @@ func TestValidate_InvalidAgent(t *testing.T) {
 	valErr := err.(*ValidationError)
 	if valErr.Field != "agent" {
 		t.Errorf("expected field 'agent', got %q", valErr.Field)
-	}
-}
-
-func TestValidate_EmptyRepoPath(t *testing.T) {
-	cfg := &Config{
-		Git: GitConfig{
-			Repos: []RepoConfig{
-				{Path: "."},
-				{Path: ""},
-			},
-		},
-	}
-
-	err := cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !IsValidationError(err) {
-		t.Errorf("expected ValidationError, got %T", err)
-	}
-
-	valErr := err.(*ValidationError)
-	if valErr.Field != "git.repos" {
-		t.Errorf("expected field 'git.repos', got %q", valErr.Field)
 	}
 }
 

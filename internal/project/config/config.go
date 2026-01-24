@@ -24,22 +24,13 @@ type Config struct {
 
 // GitConfig holds git-related configuration.
 type GitConfig struct {
-	Repos     []RepoConfig `yaml:"repos"`
-	Worktrees bool         `yaml:"worktrees"`
-}
-
-// RepoConfig holds configuration for a single repository.
-type RepoConfig struct {
-	Path string `yaml:"path"`
+	Worktrees bool `yaml:"worktrees"`
 }
 
 // DefaultConfig returns a Config with default values.
 func DefaultConfig() *Config {
 	return &Config{
 		Agent: AgentClaude,
-		Git: GitConfig{
-			Repos: []RepoConfig{{Path: "."}},
-		},
 	}
 }
 
@@ -119,28 +110,5 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Validate repo paths
-	for i, repo := range c.Git.Repos {
-		if repo.Path == "" {
-			return &ValidationError{
-				Field:   "git.repos",
-				Message: "repo path cannot be empty at index " + itoa(i),
-			}
-		}
-	}
-
 	return nil
-}
-
-// itoa converts an int to string without importing strconv.
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	var digits []byte
-	for i > 0 {
-		digits = append([]byte{byte('0' + i%10)}, digits...)
-		i /= 10
-	}
-	return string(digits)
 }
