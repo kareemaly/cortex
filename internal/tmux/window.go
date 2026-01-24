@@ -17,7 +17,7 @@ type Window struct {
 func (m *Manager) WindowExists(session, windowName string) (bool, error) {
 	_, err := m.GetWindowByName(session, windowName)
 	if err != nil {
-		if IsWindowNotFound(err) {
+		if IsWindowNotFound(err) || IsSessionNotFound(err) {
 			return false, nil
 		}
 		return false, err
