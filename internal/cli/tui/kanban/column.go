@@ -129,8 +129,16 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 
 	// Header takes ~2 lines (text + border)
 	headerLines := 2
-	// Scroll indicators take 1 line each when shown
-	indicatorLines := 2 // Reserve space for both
+
+	// Calculate how many tickets could fit without scroll indicators
+	maxVisibleWithoutIndicators := (maxHeight - headerLines) / linesPerTicket
+
+	// Only reserve indicator space if scrolling is actually needed
+	needsScrolling := len(c.tickets) > maxVisibleWithoutIndicators
+	indicatorLines := 0
+	if needsScrolling {
+		indicatorLines = 2
+	}
 	visibleCount := max((maxHeight-headerLines-indicatorLines)/linesPerTicket, 1)
 
 	// Ensure cursor is visible
@@ -142,12 +150,12 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Top scroll indicator
-	if c.scrollOffset > 0 {
-		b.WriteString(mutedStyle.Render("  ▲"))
+	// Top scroll indicator (only when scrolling is enabled)
+	if needsScrolling {
+		if c.scrollOffset > 0 {
+			b.WriteString(mutedStyle.Render("  ▲"))
+		}
 		b.WriteString("\n")
-	} else {
-		b.WriteString("\n") // Empty line to maintain layout
 	}
 
 	// Render only visible tickets.
@@ -205,10 +213,12 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 		}
 	}
 
-	// Bottom scroll indicator
-	b.WriteString("\n")
-	if c.scrollOffset+visibleCount < len(c.tickets) {
-		b.WriteString(mutedStyle.Render("  ▼"))
+	// Bottom scroll indicator (only when scrolling is enabled)
+	if needsScrolling {
+		b.WriteString("\n")
+		if c.scrollOffset+visibleCount < len(c.tickets) {
+			b.WriteString(mutedStyle.Render("  ▼"))
+		}
 	}
 
 	content := b.String()
