@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/types"
 )
 
 // SessionType indicates the type of MCP session.
@@ -83,9 +84,20 @@ type ConcludeSessionInput struct {
 	FullReport string `json:"full_report" jsonschema:"Complete summary of work done, decisions made, and files changed"`
 }
 
-// Output types
+// Type aliases for identical types (map to shared types)
+type (
+	DatesOutput  = types.DatesResponse
+	StatusOutput = types.StatusEntryResponse
+)
+
+// CommentOutput represents a comment on a ticket.
+// Alias to shared type for JSON compatibility.
+type CommentOutput = types.CommentResponse
+
+// MCP-specific output types (structurally different from shared types)
 
 // TicketSummary is a brief ticket representation for list views.
+// MCP version is simpler: no Updated, AgentStatus, AgentTool fields.
 type TicketSummary struct {
 	ID               string    `json:"id"`
 	Title            string    `json:"title"`
@@ -94,36 +106,8 @@ type TicketSummary struct {
 	HasActiveSession bool      `json:"has_active_session"`
 }
 
-// TicketOutput is the full ticket representation.
-type TicketOutput struct {
-	ID       string          `json:"id"`
-	Title    string          `json:"title"`
-	Body     string          `json:"body"`
-	Status   string          `json:"status"`
-	Dates    DatesOutput     `json:"dates"`
-	Comments []CommentOutput `json:"comments"`
-	Session  *SessionOutput  `json:"session,omitempty"`
-}
-
-// DatesOutput represents ticket date information.
-type DatesOutput struct {
-	Created  time.Time  `json:"created"`
-	Updated  time.Time  `json:"updated"`
-	Progress *time.Time `json:"progress,omitempty"`
-	Reviewed *time.Time `json:"reviewed,omitempty"`
-	Done     *time.Time `json:"done,omitempty"`
-}
-
-// CommentOutput represents a comment on a ticket.
-type CommentOutput struct {
-	ID        string    `json:"id"`
-	SessionID string    `json:"session_id,omitempty"`
-	Type      string    `json:"type"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 // SessionOutput represents a work session.
+// MCP version has IsActive but no StatusHistory/RequestedReviews.
 type SessionOutput struct {
 	ID            string        `json:"id"`
 	StartedAt     time.Time     `json:"started_at"`
@@ -134,13 +118,19 @@ type SessionOutput struct {
 	IsActive      bool          `json:"is_active"`
 }
 
-// StatusOutput represents agent status.
-type StatusOutput struct {
-	Status string    `json:"status"`
-	Tool   *string   `json:"tool,omitempty"`
-	Work   *string   `json:"work,omitempty"`
-	At     time.Time `json:"at"`
+// TicketOutput is the full ticket representation.
+// Uses MCP-specific SessionOutput.
+type TicketOutput struct {
+	ID       string          `json:"id"`
+	Title    string          `json:"title"`
+	Body     string          `json:"body"`
+	Status   string          `json:"status"`
+	Dates    DatesOutput     `json:"dates"`
+	Comments []CommentOutput `json:"comments"`
+	Session  *SessionOutput  `json:"session,omitempty"`
 }
+
+// Tool output wrappers
 
 // ListTicketsOutput is the output for the listTickets tool.
 type ListTicketsOutput struct {
@@ -218,21 +208,15 @@ func ToTicketOutput(t *ticket.Ticket, status ticket.Status) TicketOutput {
 
 	comments := make([]CommentOutput, len(t.Comments))
 	for i, c := range t.Comments {
-		comments[i] = ToCommentOutput(&c)
+		comments[i] = types.ToCommentResponse(&c)
 	}
 
 	return TicketOutput{
-		ID:     t.ID,
-		Title:  t.Title,
-		Body:   t.Body,
-		Status: string(status),
-		Dates: DatesOutput{
-			Created:  t.Dates.Created,
-			Updated:  t.Dates.Updated,
-			Progress: t.Dates.Progress,
-			Reviewed: t.Dates.Reviewed,
-			Done:     t.Dates.Done,
-		},
+		ID:       t.ID,
+		Title:    t.Title,
+		Body:     t.Body,
+		Status:   string(status),
+		Dates:    types.ToDatesResponse(t.Dates),
 		Comments: comments,
 		Session:  session,
 	}
@@ -253,12 +237,8 @@ func ToTicketSummary(t *ticket.Ticket, status ticket.Status) TicketSummary {
 func ToSessionOutput(s *ticket.Session) SessionOutput {
 	var currentStatus *StatusOutput
 	if s.CurrentStatus != nil {
-		currentStatus = &StatusOutput{
-			Status: string(s.CurrentStatus.Status),
-			Tool:   s.CurrentStatus.Tool,
-			Work:   s.CurrentStatus.Work,
-			At:     s.CurrentStatus.At,
-		}
+		cs := types.ToStatusEntryResponse(*s.CurrentStatus)
+		currentStatus = &cs
 	}
 
 	return SessionOutput{
@@ -269,16 +249,5 @@ func ToSessionOutput(s *ticket.Session) SessionOutput {
 		TmuxWindow:    s.TmuxWindow,
 		CurrentStatus: currentStatus,
 		IsActive:      s.IsActive(),
-	}
-}
-
-// ToCommentOutput converts a comment to output format.
-func ToCommentOutput(c *ticket.Comment) CommentOutput {
-	return CommentOutput{
-		ID:        c.ID,
-		SessionID: c.SessionID,
-		Type:      string(c.Type),
-		Content:   c.Content,
-		CreatedAt: c.CreatedAt,
 	}
 }
