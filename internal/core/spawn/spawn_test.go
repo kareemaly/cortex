@@ -566,13 +566,22 @@ func TestBuildClaudeCommand(t *testing.T) {
 			contains: []string{"--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"},
 		},
 		{
-			name: "with append system prompt",
+			name: "with append system prompt content",
 			params: ClaudeCommandParams{
 				Prompt:             "Dynamic content",
-				AppendSystemPrompt: "/path/to/prompt.md",
+				AppendSystemPrompt: "## Instructions\nDo the task",
 				MCPConfigPath:      "/config.json",
 			},
-			contains: []string{"--append-system-prompt", "/path/to/prompt.md", "'Dynamic content'"},
+			contains: []string{"--append-system-prompt", "'## Instructions\nDo the task'", "'Dynamic content'"},
+		},
+		{
+			name: "with append system prompt content containing quotes",
+			params: ClaudeCommandParams{
+				Prompt:             "Dynamic content",
+				AppendSystemPrompt: "It's a test prompt",
+				MCPConfigPath:      "/config.json",
+			},
+			contains: []string{"--append-system-prompt", "'It'\\''s a test prompt'"},
 		},
 	}
 

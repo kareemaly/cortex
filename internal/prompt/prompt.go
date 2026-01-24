@@ -31,3 +31,15 @@ func ValidatePromptFile(path string) error {
 	}
 	return nil
 }
+
+// LoadPromptFile reads and returns the content of a prompt file.
+func LoadPromptFile(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", &NotFoundError{Path: path}
+		}
+		return "", err
+	}
+	return string(content), nil
+}

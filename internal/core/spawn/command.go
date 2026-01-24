@@ -7,7 +7,7 @@ import (
 // ClaudeCommandParams contains parameters for building a claude command.
 type ClaudeCommandParams struct {
 	Prompt             string
-	AppendSystemPrompt string // path to system prompt file to load via --append-system-prompt
+	AppendSystemPrompt string // system prompt content to pass via --append-system-prompt
 	MCPConfigPath      string
 	SettingsPath       string   // path to settings.json with hooks config
 	PermissionMode     string   // "plan" or "full" or empty (default)
@@ -32,9 +32,10 @@ func BuildClaudeCommand(params ClaudeCommandParams) string {
 	// Add prompt
 	parts = append(parts, "'"+escapedPrompt+"'")
 
-	// Add append system prompt (static instructions from file)
+	// Add append system prompt (static instructions content)
 	if params.AppendSystemPrompt != "" {
-		parts = append(parts, "--append-system-prompt", params.AppendSystemPrompt)
+		escapedSystemPrompt := EscapePromptForShell(params.AppendSystemPrompt)
+		parts = append(parts, "--append-system-prompt", "'"+escapedSystemPrompt+"'")
 	}
 
 	// Add MCP config

@@ -187,7 +187,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		// Other tools (createTicket, updateTicket, deleteTicket, moveTicket, spawnSession) require user approval
 		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
 			Prompt:             pInfo.PromptText,
-			AppendSystemPrompt: pInfo.SystemPromptPath,
+			AppendSystemPrompt: pInfo.SystemPromptContent,
 			MCPConfigPath:      mcpConfigPath,
 			SettingsPath:       settingsPath,
 			AllowedTools:       []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
@@ -197,7 +197,7 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		// Ticket agents use plan mode
 		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
 			Prompt:             pInfo.PromptText,
-			AppendSystemPrompt: pInfo.SystemPromptPath,
+			AppendSystemPrompt: pInfo.SystemPromptContent,
 			MCPConfigPath:      mcpConfigPath,
 			SettingsPath:       settingsPath,
 			PermissionMode:     "plan",
@@ -357,10 +357,10 @@ func (s *Spawner) generateWindowName(req SpawnRequest) string {
 	return "architect"
 }
 
-// promptInfo contains both dynamic prompt text and the static system prompt path.
+// promptInfo contains both dynamic prompt text and the static system prompt content.
 type promptInfo struct {
-	PromptText       string
-	SystemPromptPath string
+	PromptText          string
+	SystemPromptContent string
 }
 
 // buildPrompt builds the dynamic prompt and returns the system prompt path.
@@ -380,22 +380,24 @@ func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
 // buildTicketAgentPrompt creates the dynamic ticket prompt.
 func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) {
 	systemPromptPath := prompt.TicketAgentPath(req.ProjectPath)
-	if err := prompt.ValidatePromptFile(systemPromptPath); err != nil {
+	systemPromptContent, err := prompt.LoadPromptFile(systemPromptPath)
+	if err != nil {
 		return nil, err
 	}
 
 	promptText := fmt.Sprintf("# Ticket: %s\n\n%s", req.Ticket.Title, req.Ticket.Body)
 
 	return &promptInfo{
-		PromptText:       promptText,
-		SystemPromptPath: systemPromptPath,
+		PromptText:          promptText,
+		SystemPromptContent: systemPromptContent,
 	}, nil
 }
 
 // buildArchitectPrompt creates the dynamic architect prompt with ticket list.
 func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	systemPromptPath := prompt.ArchitectPath(req.ProjectPath)
-	if err := prompt.ValidatePromptFile(systemPromptPath); err != nil {
+	systemPromptContent, err := prompt.LoadPromptFile(systemPromptPath)
+	if err != nil {
 		return nil, err
 	}
 
@@ -429,8 +431,8 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	writeSection("Done", tickets.Done)
 
 	return &promptInfo{
-		PromptText:       sb.String(),
-		SystemPromptPath: systemPromptPath,
+		PromptText:          sb.String(),
+		SystemPromptContent: systemPromptContent,
 	}, nil
 }
 
