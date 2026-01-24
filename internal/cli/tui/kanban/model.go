@@ -25,6 +25,9 @@ type Model struct {
 	// Modal state for orphaned session handling
 	showOrphanModal bool
 	orphanedTicket  *sdk.TicketSummary
+
+	// Vim navigation state
+	pendingG bool // tracking 'g' key for 'gg' sequence
 }
 
 // Message types for async operations.
@@ -149,6 +152,41 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			return m, m.loadTickets()
 		}
+		return m, nil
+	}
+
+	// Handle 'G' - jump to last
+	if isKey(msg, KeyShiftG) {
+		m.pendingG = false
+		m.columns[m.activeColumn].JumpToLast()
+		return m, nil
+	}
+
+	// Handle 'g' key for 'gg' sequence
+	if isKey(msg, KeyG) {
+		if m.pendingG {
+			// Second 'g' - jump to first
+			m.pendingG = false
+			m.columns[m.activeColumn].JumpToFirst()
+		} else {
+			// First 'g' - set pending state
+			m.pendingG = true
+		}
+		return m, nil
+	}
+
+	// Clear pending g on any other key
+	m.pendingG = false
+
+	// Scroll up (ctrl+u)
+	if isKey(msg, KeyCtrlU) {
+		m.columns[m.activeColumn].ScrollUp(10)
+		return m, nil
+	}
+
+	// Scroll down (ctrl+d)
+	if isKey(msg, KeyCtrlD) {
+		m.columns[m.activeColumn].ScrollDown(10)
 		return m, nil
 	}
 
