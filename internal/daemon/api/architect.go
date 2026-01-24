@@ -114,7 +114,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		TmuxManager: h.deps.TmuxManager,
 	})
 
-	result, err := spawner.Spawn(spawn.SpawnRequest{
+	result, err := spawner.Spawn(r.Context(), spawn.SpawnRequest{
 		AgentType:   spawn.AgentTypeArchitect,
 		Agent:       "claude",
 		TmuxSession: sessionName,

@@ -285,7 +285,7 @@ func (s *Server) handleSpawnSession(
 	case spawn.StateNormal:
 		switch mode {
 		case "normal":
-			result, err = spawner.Spawn(spawn.SpawnRequest{
+			result, err = spawner.Spawn(ctx, spawn.SpawnRequest{
 				AgentType:   spawn.AgentTypeTicketAgent,
 				Agent:       agent,
 				TmuxSession: s.config.TmuxSession,
@@ -312,7 +312,7 @@ func (s *Server) handleSpawnSession(
 			if stateInfo.Session == nil || stateInfo.Session.ID == "" {
 				return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot resume - no session ID stored")
 			}
-			result, err = spawner.Resume(spawn.ResumeRequest{
+			result, err = spawner.Resume(ctx, spawn.ResumeRequest{
 				AgentType:   spawn.AgentTypeTicketAgent,
 				TmuxSession: s.config.TmuxSession,
 				ProjectPath: s.config.ProjectPath,
@@ -322,7 +322,7 @@ func (s *Server) handleSpawnSession(
 				TicketID:    input.TicketID,
 			})
 		case "fresh":
-			result, err = spawner.Fresh(spawn.SpawnRequest{
+			result, err = spawner.Fresh(ctx, spawn.SpawnRequest{
 				AgentType:   spawn.AgentTypeTicketAgent,
 				Agent:       agent,
 				TmuxSession: s.config.TmuxSession,
@@ -337,7 +337,7 @@ func (s *Server) handleSpawnSession(
 	case spawn.StateEnded:
 		switch mode {
 		case "normal":
-			result, err = spawner.Spawn(spawn.SpawnRequest{
+			result, err = spawner.Spawn(ctx, spawn.SpawnRequest{
 				AgentType:   spawn.AgentTypeTicketAgent,
 				Agent:       agent,
 				TmuxSession: s.config.TmuxSession,
@@ -350,7 +350,7 @@ func (s *Server) handleSpawnSession(
 		case "resume":
 			return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot resume - session has ended")
 		case "fresh":
-			result, err = spawner.Fresh(spawn.SpawnRequest{
+			result, err = spawner.Fresh(ctx, spawn.SpawnRequest{
 				AgentType:   spawn.AgentTypeTicketAgent,
 				Agent:       agent,
 				TmuxSession: s.config.TmuxSession,

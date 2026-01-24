@@ -1,6 +1,7 @@
 package spawn
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -161,7 +162,7 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	})
 
 	// Execute
-	result, err := spawner.Spawn(SpawnRequest{
+	result, err := spawner.Spawn(context.Background(), SpawnRequest{
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "claude",
 		TmuxSession: "test-session",
@@ -211,7 +212,7 @@ func TestSpawn_TicketAgent_AlreadyActive(t *testing.T) {
 	})
 
 	// Execute
-	result, err := spawner.Spawn(SpawnRequest{
+	result, err := spawner.Spawn(context.Background(), SpawnRequest{
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "claude",
 		TmuxSession: "test-session",
@@ -256,7 +257,7 @@ func TestSpawn_CleanupOnFailure(t *testing.T) {
 	})
 
 	// Execute
-	result, err := spawner.Spawn(SpawnRequest{
+	result, err := spawner.Spawn(context.Background(), SpawnRequest{
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "claude",
 		TmuxSession: "test-session",
@@ -296,7 +297,7 @@ func TestResume_Success(t *testing.T) {
 	})
 
 	// Execute
-	result, err := spawner.Resume(ResumeRequest{
+	result, err := spawner.Resume(context.Background(), ResumeRequest{
 		AgentType:   AgentTypeTicketAgent,
 		TmuxSession: "test-session",
 		ProjectPath: tmpDir,
@@ -329,7 +330,7 @@ func TestResume_Success(t *testing.T) {
 func TestResume_NoSessionID(t *testing.T) {
 	spawner := NewSpawner(Dependencies{})
 
-	_, err := spawner.Resume(ResumeRequest{
+	_, err := spawner.Resume(context.Background(), ResumeRequest{
 		TmuxSession: "test-session",
 		WindowName:  "test-window",
 		TicketID:    "ticket-1",
@@ -346,7 +347,7 @@ func TestResume_NoSessionID(t *testing.T) {
 func TestResume_NoTicketID(t *testing.T) {
 	spawner := NewSpawner(Dependencies{})
 
-	_, err := spawner.Resume(ResumeRequest{
+	_, err := spawner.Resume(context.Background(), ResumeRequest{
 		TmuxSession: "test-session",
 		WindowName:  "test-window",
 		SessionID:   "session-abc",
@@ -385,7 +386,7 @@ func TestFresh_ClearsExisting(t *testing.T) {
 	})
 
 	// Execute
-	result, err := spawner.Fresh(SpawnRequest{
+	result, err := spawner.Fresh(context.Background(), SpawnRequest{
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "claude",
 		TmuxSession: "test-session",
