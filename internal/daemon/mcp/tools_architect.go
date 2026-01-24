@@ -274,6 +274,7 @@ func (s *Server) handleSpawnSession(
 		Store:       s.store,
 		TmuxManager: tmuxMgr,
 		CortexdPath: s.config.CortexdPath,
+		Logger:      s.config.Logger,
 	})
 
 	// Determine if worktrees are enabled

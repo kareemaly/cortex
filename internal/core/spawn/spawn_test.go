@@ -672,3 +672,188 @@ func containsSubstr(s, substr string) bool {
 	}
 	return false
 }
+
+func TestValidateTmuxName(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid simple name",
+			input:   "my-session",
+			wantErr: false,
+		},
+		{
+			name:    "valid with underscores",
+			input:   "my_session_123",
+			wantErr: false,
+		},
+		{
+			name:    "valid alphanumeric",
+			input:   "Session123",
+			wantErr: false,
+		},
+		{
+			name:    "starts with hyphen",
+			input:   "-session",
+			wantErr: true,
+			errMsg:  "cannot start with a hyphen",
+		},
+		{
+			name:    "contains colon",
+			input:   "my:session",
+			wantErr: true,
+			errMsg:  "cannot contain colons or periods",
+		},
+		{
+			name:    "contains period",
+			input:   "my.session",
+			wantErr: true,
+			errMsg:  "cannot contain colons or periods",
+		},
+		{
+			name:    "contains space",
+			input:   "my session",
+			wantErr: true,
+			errMsg:  "must contain only alphanumeric",
+		},
+		{
+			name:    "contains special character",
+			input:   "my@session",
+			wantErr: true,
+			errMsg:  "must contain only alphanumeric",
+		},
+		{
+			name:    "too long",
+			input:   string(make([]byte, 129)),
+			wantErr: true,
+			errMsg:  "exceeds maximum length",
+		},
+		{
+			name:    "exactly 128 chars",
+			input:   "a" + string(make([]byte, 127)),
+			wantErr: true,
+			errMsg:  "must contain only alphanumeric", // null bytes
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateTmuxName(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tc.errMsg)
+				} else if !containsSubstr(err.Error(), tc.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tc.errMsg, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateTmuxName_EdgeCases(t *testing.T) {
+	// Valid 128 character name
+	validLongName := ""
+	for range 128 {
+		validLongName += "a"
+	}
+	if err := validateTmuxName(validLongName); err != nil {
+		t.Errorf("128 char name should be valid: %v", err)
+	}
+
+	// Single character
+	if err := validateTmuxName("a"); err != nil {
+		t.Errorf("single char should be valid: %v", err)
+	}
+
+	// Numeric only
+	if err := validateTmuxName("123"); err != nil {
+		t.Errorf("numeric only should be valid: %v", err)
+	}
+}
+
+func TestSpawn_ProjectPathValidation(t *testing.T) {
+	spawner := NewSpawner(Dependencies{})
+
+	// Non-existent path
+	_, err := spawner.Spawn(SpawnRequest{
+		AgentType:   AgentTypeTicketAgent,
+		TmuxSession: "test-session",
+		ProjectPath: "/nonexistent/path/that/does/not/exist",
+		TicketID:    "ticket-1",
+		Ticket:      createTestTicket("ticket-1", "Test", "Body"),
+	})
+
+	if err == nil {
+		t.Fatal("expected error for non-existent project path")
+	}
+	if !IsConfigError(err) {
+		t.Errorf("expected ConfigError, got: %T", err)
+	}
+	configErr := err.(*ConfigError)
+	if configErr.Field != "ProjectPath" {
+		t.Errorf("expected Field 'ProjectPath', got: %s", configErr.Field)
+	}
+}
+
+func TestSpawn_TmuxSessionValidation(t *testing.T) {
+	tmpDir := t.TempDir()
+	spawner := NewSpawner(Dependencies{})
+
+	tests := []struct {
+		name        string
+		tmuxSession string
+		wantErr     bool
+		errField    string
+	}{
+		{
+			name:        "empty session",
+			tmuxSession: "",
+			wantErr:     true,
+			errField:    "TmuxSession",
+		},
+		{
+			name:        "session with colon",
+			tmuxSession: "my:session",
+			wantErr:     true,
+			errField:    "TmuxSession",
+		},
+		{
+			name:        "session starting with hyphen",
+			tmuxSession: "-mysession",
+			wantErr:     true,
+			errField:    "TmuxSession",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := spawner.Spawn(SpawnRequest{
+				AgentType:   AgentTypeTicketAgent,
+				TmuxSession: tc.tmuxSession,
+				ProjectPath: tmpDir,
+				TicketID:    "ticket-1",
+				Ticket:      createTestTicket("ticket-1", "Test", "Body"),
+			})
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if !IsConfigError(err) {
+					t.Errorf("expected ConfigError, got: %T", err)
+				}
+				configErr := err.(*ConfigError)
+				if configErr.Field != tc.errField {
+					t.Errorf("expected Field %q, got: %s", tc.errField, configErr.Field)
+				}
+			} else if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
