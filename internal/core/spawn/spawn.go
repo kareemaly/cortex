@@ -160,13 +160,27 @@ func (s *Spawner) Spawn(req SpawnRequest) (*SpawnResult, error) {
 		}, nil
 	}
 
-	// Build claude command
-	claudeCmd := BuildClaudeCommand(ClaudeCommandParams{
-		Prompt:         promptText,
-		MCPConfigPath:  mcpConfigPath,
-		PermissionMode: "plan",
-		SessionID:      sessionID,
-	})
+	// Build claude command with different options based on agent type
+	var claudeCmd string
+	switch req.AgentType {
+	case AgentTypeArchitect:
+		// Architects use allowed tools - listTickets and readTicket are auto-approved
+		// Other tools (createTicket, updateTicket, deleteTicket, moveTicket, spawnSession) require user approval
+		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
+			Prompt:        promptText,
+			MCPConfigPath: mcpConfigPath,
+			AllowedTools:  []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
+			SessionID:     sessionID,
+		})
+	case AgentTypeTicketAgent:
+		// Ticket agents use plan mode
+		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
+			Prompt:         promptText,
+			MCPConfigPath:  mcpConfigPath,
+			PermissionMode: "plan",
+			SessionID:      sessionID,
+		})
+	}
 
 	// Spawn in tmux
 	windowIndex, err := s.spawnInTmux(req, windowName, claudeCmd)
