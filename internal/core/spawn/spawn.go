@@ -42,8 +42,8 @@ type StoreInterface interface {
 // TmuxManagerInterface defines the tmux operations needed for spawning.
 type TmuxManagerInterface interface {
 	WindowExists(session, windowName string) (bool, error)
-	SpawnAgent(session, windowName, agentCommand, companionCommand, workingDir string) (int, error)
-	SpawnArchitect(session, windowName, agentCommand, companionCommand, workingDir string) error
+	SpawnAgent(session, windowName, agentCommand, companionCommand, workingDir, companionWorkingDir string) (int, error)
+	SpawnArchitect(session, windowName, agentCommand, companionCommand, workingDir, companionWorkingDir string) error
 }
 
 // Dependencies contains the external dependencies for the Spawner.
@@ -364,7 +364,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	launchCmd := "bash " + launcherPath
 	companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
 
-	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, companionCmd, req.ProjectPath)
+	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, companionCmd, req.ProjectPath, req.ProjectPath)
 	if err != nil {
 		for _, path := range allTempFiles {
 			if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
@@ -598,10 +598,10 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDi
 	case AgentTypeTicketAgent:
 		// Companion command shows ticket details
 		companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
-		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir)
+		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, req.ProjectPath)
 	case AgentTypeArchitect:
 		// Companion command shows kanban board
-		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, "cortex kanban", workingDir)
+		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, "cortex kanban", workingDir, req.ProjectPath)
 		return 0, err
 	default:
 		return 0, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
