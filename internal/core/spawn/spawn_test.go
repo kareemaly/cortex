@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -188,6 +189,31 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	if tmuxMgr.spawnCalls != 1 {
 		t.Errorf("expected 1 spawn call, got: %d", tmuxMgr.spawnCalls)
 	}
+
+	// Verify command uses launcher script
+	if !strings.HasPrefix(tmuxMgr.lastCommand, "bash ") {
+		t.Errorf("expected command to start with 'bash ', got: %s", tmuxMgr.lastCommand)
+	}
+	if !containsSubstr(tmuxMgr.lastCommand, "cortex-launcher") {
+		t.Errorf("expected command to contain 'cortex-launcher', got: %s", tmuxMgr.lastCommand)
+	}
+
+	// Verify launcher script was created and contains expected content
+	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
+	data, err := os.ReadFile(launcherPath)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+	if !containsSubstr(script, "\"$(cat") {
+		t.Error("expected launcher to use $(cat) syntax for prompt")
+	}
+	if !containsSubstr(script, "--permission-mode plan") {
+		t.Error("expected launcher to have --permission-mode plan for ticket agent")
+	}
+	if !containsSubstr(script, "export CORTEX_TICKET_ID=") {
+		t.Error("expected launcher to export CORTEX_TICKET_ID")
+	}
 }
 
 func TestSpawn_TicketAgent_AlreadyActive(t *testing.T) {
@@ -321,9 +347,23 @@ func TestResume_Success(t *testing.T) {
 		t.Errorf("expected 1 spawn call, got: %d", tmuxMgr.spawnCalls)
 	}
 
-	// Verify --resume flag in command
-	if tmuxMgr.lastCommand == "" {
-		t.Error("expected command to be set")
+	// Verify command uses launcher script
+	if !strings.HasPrefix(tmuxMgr.lastCommand, "bash ") {
+		t.Errorf("expected command to start with 'bash ', got: %s", tmuxMgr.lastCommand)
+	}
+	if !containsSubstr(tmuxMgr.lastCommand, "cortex-launcher") {
+		t.Errorf("expected command to contain 'cortex-launcher', got: %s", tmuxMgr.lastCommand)
+	}
+
+	// Verify launcher script contains --resume flag
+	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
+	data, err := os.ReadFile(launcherPath)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+	if !containsSubstr(script, "--resume session-abc") {
+		t.Error("expected launcher to contain --resume flag")
 	}
 }
 
@@ -522,100 +562,198 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 	}
 }
 
-func TestBuildClaudeCommand(t *testing.T) {
-	tests := []struct {
-		name     string
-		params   ClaudeCommandParams
-		contains []string
-	}{
-		{
-			name: "basic command",
-			params: ClaudeCommandParams{
-				Prompt:        "Hello world",
-				MCPConfigPath: "/path/to/config.json",
-			},
-			contains: []string{"claude", "'Hello world'", "--mcp-config", "/path/to/config.json"},
-		},
-		{
-			name: "with permission mode",
-			params: ClaudeCommandParams{
-				Prompt:         "Test prompt",
-				MCPConfigPath:  "/config.json",
-				PermissionMode: "plan",
-			},
-			contains: []string{"--permission-mode", "plan"},
-		},
-		{
-			name: "with resume",
-			params: ClaudeCommandParams{
-				Prompt:   "Test",
-				ResumeID: "session-abc",
-			},
-			contains: []string{"--resume", "session-abc"},
-		},
-		{
-			name: "with single quotes in prompt",
-			params: ClaudeCommandParams{
-				Prompt: "It's a test",
-			},
-			contains: []string{"'It'\\''s a test'"},
-		},
-		{
-			name: "with allowed tools",
-			params: ClaudeCommandParams{
-				Prompt:       "Test prompt",
-				AllowedTools: []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
-			},
-			contains: []string{"--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"},
-		},
-		{
-			name: "with append system prompt content",
-			params: ClaudeCommandParams{
-				Prompt:             "Dynamic content",
-				AppendSystemPrompt: "## Instructions\nDo the task",
-				MCPConfigPath:      "/config.json",
-			},
-			contains: []string{"--append-system-prompt", "'## Instructions\nDo the task'", "'Dynamic content'"},
-		},
-		{
-			name: "with append system prompt content containing quotes",
-			params: ClaudeCommandParams{
-				Prompt:             "Dynamic content",
-				AppendSystemPrompt: "It's a test prompt",
-				MCPConfigPath:      "/config.json",
-			},
-			contains: []string{"--append-system-prompt", "'It'\\''s a test prompt'"},
-		},
+func TestWritePromptFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	path, err := WritePromptFile("Hello world prompt", "test-id", "prompt", tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			cmd := BuildClaudeCommand(tc.params)
-			for _, expected := range tc.contains {
-				if !contains(cmd, expected) {
-					t.Errorf("expected command to contain %q, got: %s", expected, cmd)
-				}
-			}
-		})
+	// Verify file exists and has correct content
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read prompt file: %v", err)
+	}
+	if string(data) != "Hello world prompt" {
+		t.Errorf("expected content 'Hello world prompt', got: %s", string(data))
+	}
+
+	// Verify filename pattern
+	if !containsSubstr(path, "cortex-prompt-test-id.txt") {
+		t.Errorf("expected path to contain 'cortex-prompt-test-id.txt', got: %s", path)
+	}
+
+	// Test remove
+	if err := RemovePromptFile(path); err != nil {
+		t.Errorf("unexpected error removing prompt file: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("expected prompt file to be removed")
 	}
 }
 
-func TestEscapePromptForShell(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"hello", "hello"},
-		{"it's", "it'\\''s"},
-		{"don't do it", "don'\\''t do it"},
-		{"'''", "'\\'''\\'''\\''"}, // Each ' becomes '\''
+func TestWriteLauncherScript(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	params := LauncherParams{
+		PromptFilePath:       "/tmp/cortex-prompt-test.txt",
+		SystemPromptFilePath: "/tmp/cortex-sysprompt-test.txt",
+		MCPConfigPath:        "/tmp/cortex-mcp-test.json",
+		SettingsPath:         "/tmp/cortex-settings-test.json",
+		PermissionMode:       "plan",
+		SessionID:            "session-abc",
+		EnvVars: map[string]string{
+			"CORTEX_TICKET_ID": "ticket-1",
+			"CORTEX_PROJECT":   "/path/to/project",
+		},
+		CleanupFiles: []string{
+			"/tmp/cortex-mcp-test.json",
+			"/tmp/cortex-settings-test.json",
+			"/tmp/cortex-prompt-test.txt",
+			"/tmp/cortex-sysprompt-test.txt",
+		},
 	}
 
-	for _, tc := range tests {
-		result := EscapePromptForShell(tc.input)
-		if result != tc.expected {
-			t.Errorf("EscapePromptForShell(%q): expected %q, got: %q", tc.input, tc.expected, result)
-		}
+	path, err := WriteLauncherScript(params, "test-id", tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+
+	// Verify shebang
+	if !containsSubstr(script, "#!/usr/bin/env bash") {
+		t.Error("expected shebang line")
+	}
+
+	// Verify trap with cleanup files (should include launcher itself)
+	if !containsSubstr(script, "trap 'rm -f") {
+		t.Error("expected trap for cleanup")
+	}
+	if !containsSubstr(script, "cortex-launcher-test-id.sh") {
+		t.Error("expected launcher itself in cleanup files")
+	}
+
+	// Verify env vars
+	if !containsSubstr(script, "export CORTEX_TICKET_ID=") {
+		t.Error("expected CORTEX_TICKET_ID export")
+	}
+	if !containsSubstr(script, "export CORTEX_PROJECT=") {
+		t.Error("expected CORTEX_PROJECT export")
+	}
+
+	// Verify $(cat) syntax for prompt and system prompt
+	if !containsSubstr(script, "\"$(cat") {
+		t.Error("expected $(cat) syntax for prompt file")
+	}
+	if !containsSubstr(script, "--append-system-prompt") {
+		t.Error("expected --append-system-prompt flag")
+	}
+
+	// Verify other flags
+	if !containsSubstr(script, "--mcp-config") {
+		t.Error("expected --mcp-config flag")
+	}
+	if !containsSubstr(script, "--settings") {
+		t.Error("expected --settings flag")
+	}
+	if !containsSubstr(script, "--permission-mode plan") {
+		t.Error("expected --permission-mode plan")
+	}
+	if !containsSubstr(script, "--session-id session-abc") {
+		t.Error("expected --session-id flag")
+	}
+
+	// Verify file is executable
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat launcher script: %v", err)
+	}
+	if info.Mode().Perm()&0100 == 0 {
+		t.Error("expected launcher script to be executable")
+	}
+}
+
+func TestWriteLauncherScript_Resume(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	params := LauncherParams{
+		MCPConfigPath:  "/tmp/cortex-mcp-test.json",
+		SettingsPath:   "/tmp/cortex-settings-test.json",
+		PermissionMode: "plan",
+		ResumeID:       "session-to-resume",
+		CleanupFiles:   []string{"/tmp/cortex-mcp-test.json", "/tmp/cortex-settings-test.json"},
+	}
+
+	path, err := WriteLauncherScript(params, "resume-test", tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+
+	// Should have --resume flag
+	if !containsSubstr(script, "--resume session-to-resume") {
+		t.Error("expected --resume flag")
+	}
+
+	// Should NOT have $(cat) since there's no prompt file
+	if containsSubstr(script, "$(cat") {
+		t.Error("did not expect $(cat) syntax for resume (no prompt)")
+	}
+}
+
+func TestWriteLauncherScript_Architect(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	params := LauncherParams{
+		PromptFilePath:       "/tmp/cortex-prompt-arch.txt",
+		SystemPromptFilePath: "/tmp/cortex-sysprompt-arch.txt",
+		MCPConfigPath:        "/tmp/cortex-mcp-arch.json",
+		SettingsPath:         "/tmp/cortex-settings-arch.json",
+		AllowedTools:         []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
+		SessionID:            "arch-session",
+		CleanupFiles: []string{
+			"/tmp/cortex-mcp-arch.json",
+			"/tmp/cortex-settings-arch.json",
+			"/tmp/cortex-prompt-arch.txt",
+			"/tmp/cortex-sysprompt-arch.txt",
+		},
+	}
+
+	path, err := WriteLauncherScript(params, "architect", tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+
+	// Should have --allowedTools
+	if !containsSubstr(script, "--allowedTools mcp__cortex__listTickets,mcp__cortex__readTicket") {
+		t.Error("expected --allowedTools flag with tools")
+	}
+
+	// Should NOT have ticket env vars
+	if containsSubstr(script, "CORTEX_TICKET_ID") {
+		t.Error("architect should not have CORTEX_TICKET_ID")
+	}
+
+	// Should NOT have --permission-mode (architect doesn't use plan mode)
+	if containsSubstr(script, "--permission-mode") {
+		t.Error("architect should not have --permission-mode")
 	}
 }
 
@@ -661,10 +799,6 @@ func TestStateInfo_CanResume(t *testing.T) {
 }
 
 // Helper function
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstr(s, substr))
-}
-
 func containsSubstr(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

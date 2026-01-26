@@ -197,7 +197,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 
 	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, "", "", worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nil, worktreePath, featureBranch, req.ProjectPath)
 		return nil, err
 	}
 
@@ -210,50 +210,71 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 
 	settingsPath, err := WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, mcpConfigPath, "", worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath}, worktreePath, featureBranch, req.ProjectPath)
 		return nil, err
 	}
 
 	// Load and build prompt
 	pInfo, err := s.buildPrompt(req, worktreePath, featureBranch)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, mcpConfigPath, settingsPath, worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath}, worktreePath, featureBranch, req.ProjectPath)
 		return &SpawnResult{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
-	// Build claude command with different options based on agent type
-	var claudeCmd string
-	switch req.AgentType {
-	case AgentTypeArchitect:
-		// Architects use allowed tools - listTickets and readTicket are auto-approved
-		// Other tools (createTicket, updateTicket, deleteTicket, moveTicket, spawnSession) require user approval
-		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
-			Prompt:             pInfo.PromptText,
-			AppendSystemPrompt: pInfo.SystemPromptContent,
-			MCPConfigPath:      mcpConfigPath,
-			SettingsPath:       settingsPath,
-			AllowedTools:       []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
-			SessionID:          sessionID,
-		})
-	case AgentTypeTicketAgent:
-		// Ticket agents use plan mode
-		claudeCmd = BuildClaudeCommand(ClaudeCommandParams{
-			Prompt:             pInfo.PromptText,
-			AppendSystemPrompt: pInfo.SystemPromptContent,
-			MCPConfigPath:      mcpConfigPath,
-			SettingsPath:       settingsPath,
-			PermissionMode:     "plan",
-			SessionID:          sessionID,
-		})
+	// Write prompt to temp file
+	promptFilePath, err := WritePromptFile(pInfo.PromptText, identifier, "prompt", s.deps.MCPConfigDir)
+	if err != nil {
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath}, worktreePath, featureBranch, req.ProjectPath)
+		return nil, err
 	}
 
-	// Spawn in tmux
-	windowIndex, err := s.spawnInTmux(req, windowName, claudeCmd, workingDir)
+	// Write system prompt to temp file
+	var systemPromptFilePath string
+	if pInfo.SystemPromptContent != "" {
+		systemPromptFilePath, err = WritePromptFile(pInfo.SystemPromptContent, identifier, "sysprompt", s.deps.MCPConfigDir)
+		if err != nil {
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath, promptFilePath}, worktreePath, featureBranch, req.ProjectPath)
+			return nil, err
+		}
+	}
+
+	// Build launcher params based on agent type
+	tempFiles := nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath)
+	launcherParams := LauncherParams{
+		PromptFilePath:       promptFilePath,
+		SystemPromptFilePath: systemPromptFilePath,
+		MCPConfigPath:        mcpConfigPath,
+		SettingsPath:         settingsPath,
+		SessionID:            sessionID,
+		CleanupFiles:         tempFiles,
+	}
+
+	switch req.AgentType {
+	case AgentTypeArchitect:
+		launcherParams.AllowedTools = []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"}
+	case AgentTypeTicketAgent:
+		launcherParams.PermissionMode = "plan"
+		launcherParams.EnvVars = map[string]string{
+			"CORTEX_TICKET_ID": req.TicketID,
+			"CORTEX_PROJECT":   req.ProjectPath,
+		}
+	}
+
+	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, mcpConfigPath, settingsPath, worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles, worktreePath, featureBranch, req.ProjectPath)
+		return nil, err
+	}
+	allTempFiles := append(tempFiles, launcherPath)
+
+	// Spawn in tmux
+	launchCmd := "bash " + launcherPath
+	windowIndex, err := s.spawnInTmux(req, windowName, launchCmd, workingDir)
+	if err != nil {
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, allTempFiles, worktreePath, featureBranch, req.ProjectPath)
 		return &SpawnResult{
 			Success: false,
 			Message: "failed to spawn agent in tmux: " + err.Error(),
@@ -261,13 +282,11 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	}
 
 	return &SpawnResult{
-		Success:       true,
-		SessionID:     sessionID,
-		TmuxWindow:    windowName,
-		WindowIndex:   windowIndex,
-		MCPConfigPath: mcpConfigPath,
-		SettingsPath:  settingsPath,
-		Message:       "Agent session spawned in tmux window '" + windowName + "'",
+		Success:     true,
+		SessionID:   sessionID,
+		TmuxWindow:  windowName,
+		WindowIndex: windowIndex,
+		Message:     "Agent session spawned in tmux window '" + windowName + "'",
 	}, nil
 }
 
@@ -316,27 +335,41 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		return nil, err
 	}
 
-	// Build resume command (no prompt needed, just resume ID)
-	claudeCmd := BuildClaudeCommand(ClaudeCommandParams{
-		Prompt:         "",
+	// Build launcher script for resume (no prompt files needed)
+	tempFiles := nonEmptyStrings(mcpConfigPath, settingsPath)
+	launcherParams := LauncherParams{
 		MCPConfigPath:  mcpConfigPath,
 		SettingsPath:   settingsPath,
 		PermissionMode: "plan",
 		ResumeID:       req.SessionID,
-	})
+		EnvVars: map[string]string{
+			"CORTEX_TICKET_ID": req.TicketID,
+			"CORTEX_PROJECT":   req.ProjectPath,
+		},
+		CleanupFiles: tempFiles,
+	}
 
-	// Set up command with ticket environment variables
-	cmdWithEnv := fmt.Sprintf("CORTEX_TICKET_ID=%s CORTEX_PROJECT=%s %s", req.TicketID, req.ProjectPath, claudeCmd)
-	companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
+	launcherPath, err := WriteLauncherScript(launcherParams, req.TicketID, s.deps.MCPConfigDir)
+	if err != nil {
+		for _, path := range tempFiles {
+			if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
+				s.logWarn("cleanup: failed to remove temp file", "path", path, "error", rmErr)
+			}
+		}
+		return nil, err
+	}
+	allTempFiles := append(tempFiles, launcherPath)
 
 	// Spawn in tmux
-	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, cmdWithEnv, companionCmd, req.ProjectPath)
+	launchCmd := "bash " + launcherPath
+	companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
+
+	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, companionCmd, req.ProjectPath)
 	if err != nil {
-		if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
-			s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
-		}
-		if rmErr := RemoveSettingsConfig(settingsPath); rmErr != nil {
-			s.logWarn("cleanup: failed to remove settings config", "path", settingsPath, "error", rmErr)
+		for _, path := range allTempFiles {
+			if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
+				s.logWarn("cleanup: failed to remove temp file", "path", path, "error", rmErr)
+			}
 		}
 		return &SpawnResult{
 			Success: false,
@@ -345,12 +378,10 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	}
 
 	return &SpawnResult{
-		Success:       true,
-		TmuxWindow:    req.WindowName,
-		WindowIndex:   windowIndex,
-		MCPConfigPath: mcpConfigPath,
-		SettingsPath:  settingsPath,
-		Message:       "Session resumed in tmux window '" + req.WindowName + "'",
+		Success:     true,
+		TmuxWindow:  req.WindowName,
+		WindowIndex: windowIndex,
+		Message:     "Session resumed in tmux window '" + req.WindowName + "'",
 	}, nil
 }
 
@@ -558,17 +589,15 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 }
 
 // spawnInTmux spawns the agent in a tmux window.
-func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd, workingDir string) (int, error) {
+func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDir string) (int, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		// Prefix command with env vars so child processes can identify the ticket and project
-		cmdWithEnv := fmt.Sprintf("CORTEX_TICKET_ID=%s CORTEX_PROJECT=%s %s", req.TicketID, req.ProjectPath, claudeCmd)
 		// Companion command shows ticket details
 		companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
-		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, cmdWithEnv, companionCmd, workingDir)
+		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir)
 	case AgentTypeArchitect:
 		// Companion command shows kanban board
-		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, claudeCmd, "cortex kanban", workingDir)
+		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, "cortex kanban", workingDir)
 		return 0, err
 	default:
 		return 0, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
@@ -576,20 +605,18 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, claudeCmd, workingDi
 }
 
 // cleanupOnFailure cleans up resources when spawn fails.
-func (s *Spawner) cleanupOnFailure(ctx context.Context, agentType AgentType, ticketID, mcpConfigPath, settingsPath string, worktreePath, featureBranch *string, projectPath string) {
+func (s *Spawner) cleanupOnFailure(ctx context.Context, agentType AgentType, ticketID string, tempFiles []string, worktreePath, featureBranch *string, projectPath string) {
 	if agentType == AgentTypeTicketAgent && ticketID != "" {
 		if err := s.deps.Store.EndSession(ticketID); err != nil {
 			s.logWarn("cleanup: failed to end session", "ticketID", ticketID, "error", err)
 		}
 	}
-	if mcpConfigPath != "" {
-		if err := RemoveMCPConfig(mcpConfigPath); err != nil {
-			s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", err)
+	for _, path := range tempFiles {
+		if path == "" {
+			continue
 		}
-	}
-	if settingsPath != "" {
-		if err := RemoveSettingsConfig(settingsPath); err != nil {
-			s.logWarn("cleanup: failed to remove settings config", "path", settingsPath, "error", err)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			s.logWarn("cleanup: failed to remove temp file", "path", path, "error", err)
 		}
 	}
 	if worktreePath != nil && featureBranch != nil && projectPath != "" {
@@ -598,4 +625,15 @@ func (s *Spawner) cleanupOnFailure(ctx context.Context, agentType AgentType, tic
 			s.logWarn("cleanup: failed to remove worktree", "path", *worktreePath, "error", err)
 		}
 	}
+}
+
+// nonEmptyStrings filters out empty strings from the given values.
+func nonEmptyStrings(values ...string) []string {
+	result := make([]string, 0, len(values))
+	for _, v := range values {
+		if v != "" {
+			result = append(result, v)
+		}
+	}
+	return result
 }
