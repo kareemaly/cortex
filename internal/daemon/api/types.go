@@ -84,6 +84,12 @@ type ConcludeSessionResponse struct {
 	Message  string `json:"message"`
 }
 
+// FocusResponse is the response for the focus endpoint.
+type FocusResponse struct {
+	Success bool   `json:"success"`
+	Window  string `json:"window"`
+}
+
 // filterSummaryList converts tickets to summaries with optional query filter.
 // Query is matched case-insensitively against title or body.
 func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string) []TicketSummary {

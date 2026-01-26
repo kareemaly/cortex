@@ -549,6 +549,26 @@ func (c *Client) ConcludeSession(ticketID, fullReport string) (*ConcludeSessionR
 	return &result, nil
 }
 
+// FocusTicket focuses the tmux window of a ticket's active session.
+func (c *Client) FocusTicket(ticketID string) error {
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+ticketID+"/focus", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
 // parseError extracts an error message from a non-OK response.
 func (c *Client) parseError(resp *http.Response) error {
 	body, err := io.ReadAll(resp.Body)
