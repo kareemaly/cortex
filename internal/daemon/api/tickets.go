@@ -499,6 +499,50 @@ func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// Focus handles POST /tickets/{id}/focus - focuses the tmux window of a ticket's active session.
+func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	t, _, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	if t.Session == nil || !t.Session.IsActive() || t.Session.TmuxWindow == "" {
+		writeError(w, http.StatusNotFound, "no_active_session", "ticket has no active session with a tmux window")
+		return
+	}
+
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	tmuxSession := "cortex"
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
+	if err := h.deps.TmuxManager.FocusWindow(tmuxSession, t.Session.TmuxWindow); err != nil {
+		writeError(w, http.StatusInternalServerError, "focus_error", err.Error())
+		return
+	}
+
+	resp := FocusResponse{
+		Success: true,
+		Window:  t.Session.TmuxWindow,
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // Conclude handles POST /tickets/{id}/conclude - concludes a session and moves ticket to done.
 func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())

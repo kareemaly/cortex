@@ -66,6 +66,16 @@ type OrphanedSessionMsg struct {
 	Ticket *sdk.TicketSummary
 }
 
+// FocusSuccessMsg is sent when a window is successfully focused.
+type FocusSuccessMsg struct {
+	Window string
+}
+
+// FocusErrorMsg is sent when focusing a window fails.
+type FocusErrorMsg struct {
+	Err error
+}
+
 // SessionApprovedMsg is sent when a session is successfully approved.
 type SessionApprovedMsg struct {
 	Ticket *sdk.TicketSummary
@@ -164,6 +174,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ApproveErrorMsg:
 		m.statusMsg = fmt.Sprintf("Approve error: %s", msg.Err)
+		return m, m.clearStatusAfterDelay()
+
+	case FocusSuccessMsg:
+		m.statusMsg = fmt.Sprintf("Focused: %s", msg.Window)
+		return m, m.clearStatusAfterDelay()
+
+	case FocusErrorMsg:
+		m.statusMsg = fmt.Sprintf("Focus error: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
 	case ClearStatusMsg:
@@ -266,6 +284,20 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if t != nil {
 			m.statusMsg = fmt.Sprintf("Spawning session for: %s...", t.Title)
 			return m, m.spawnSession(t)
+		}
+		return m, nil
+	}
+
+	// Focus tmux window.
+	if isKey(msg, KeyFocus) {
+		t := m.columns[m.activeColumn].SelectedTicket()
+		if t != nil && t.HasActiveSession {
+			m.statusMsg = "Focusing window..."
+			return m, m.focusTicket(t)
+		}
+		if t != nil && !t.HasActiveSession {
+			m.statusMsg = "No active session"
+			return m, m.clearStatusAfterDelay()
 		}
 		return m, nil
 	}
@@ -434,6 +466,16 @@ func (m Model) spawnSessionWithMode(ticket *sdk.TicketSummary, mode string) tea.
 			return SessionErrorMsg{Err: err}
 		}
 		return SessionSpawnedMsg{Session: session, Ticket: ticket}
+	}
+}
+
+// focusTicket returns a command to focus the tmux window for a ticket.
+func (m Model) focusTicket(ticket *sdk.TicketSummary) tea.Cmd {
+	return func() tea.Msg {
+		if err := m.client.FocusTicket(ticket.ID); err != nil {
+			return FocusErrorMsg{Err: err}
+		}
+		return FocusSuccessMsg{Window: ticket.Title}
 	}
 }
 
