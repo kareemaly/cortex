@@ -967,6 +967,86 @@ func TestHandleSpawnSession_DefaultMode(t *testing.T) {
 	}
 }
 
+func TestHandleConcludeSession_KillsTmuxWindow(t *testing.T) {
+	// Create temp dir and store
+	tmpDir, err := os.MkdirTemp("", "mcp-conclude-test")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	store, err := ticket.NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+
+	// Create a ticket and set a session with a tmux window
+	tk, err := store.Create("Test Conclude", "body")
+	if err != nil {
+		t.Fatalf("create ticket: %v", err)
+	}
+	_, err = store.SetSession(tk.ID, "claude", "test-window", nil, nil)
+	if err != nil {
+		t.Fatalf("set session: %v", err)
+	}
+
+	// Create mock runner and customize to return the test window name
+	mockRunner := tmux.NewMockRunner()
+	defaultRunFunc := mockRunner.RunFunc
+	mockRunner.RunFunc = func(args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "list-windows" {
+			return []byte("0:test-window:1"), nil
+		}
+		return defaultRunFunc(args...)
+	}
+	tmuxMgr := tmux.NewManagerWithRunner(mockRunner)
+
+	cfg := &Config{
+		TicketID:    tk.ID,
+		TicketsDir:  tmpDir,
+		TmuxSession: "test-session",
+		TmuxManager: tmuxMgr,
+	}
+
+	server, err := NewServer(cfg)
+	if err != nil {
+		t.Fatalf("create server: %v", err)
+	}
+
+	// Call concludeSession
+	_, output, err := server.handleConcludeSession(context.Background(), nil, ConcludeSessionInput{
+		FullReport: "Work completed successfully",
+	})
+	if err != nil {
+		t.Fatalf("handleConcludeSession failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Errorf("expected success, got: %+v", output)
+	}
+
+	// Verify ticket moved to done
+	_, status, err := store.Get(tk.ID)
+	if err != nil {
+		t.Fatalf("get ticket: %v", err)
+	}
+	if status != ticket.StatusDone {
+		t.Errorf("expected status done, got %v", status)
+	}
+
+	// Verify kill-window was called
+	found := false
+	for _, call := range mockRunner.Calls {
+		if len(call) > 0 && call[0] == "kill-window" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected kill-window call in mock runner, got calls: %v", mockRunner.Calls)
+	}
+}
+
 // setupTestServerWithOrphanedSession creates a test server with a mock tmux manager
 // that reports windows do not exist (simulating orphaned state).
 func setupTestServerWithOrphanedSession(t *testing.T) (*Server, func()) {

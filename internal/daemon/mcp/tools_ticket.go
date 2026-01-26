@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/internal/worktree"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -151,12 +152,14 @@ func (s *Server) handleConcludeSession(
 		return nil, ConcludeSessionOutput{}, WrapTicketError(err)
 	}
 
-	// Capture worktree info before ending session
+	// Capture session info before ending session
 	var worktreePath, featureBranch *string
 	var activeSessionID string
+	var tmuxWindow string
 	if t.Session != nil {
 		worktreePath = t.Session.WorktreePath
 		featureBranch = t.Session.FeatureBranch
+		tmuxWindow = t.Session.TmuxWindow
 		if t.Session.IsActive() {
 			activeSessionID = t.Session.ID
 		}
@@ -184,6 +187,21 @@ func (s *Server) handleConcludeSession(
 		if err := wm.Remove(ctx, *worktreePath, *featureBranch); err != nil {
 			// Log but don't fail - main work is done
 			log.Printf("warning: failed to cleanup worktree: %v", err)
+		}
+	}
+
+	// Kill tmux window if associated
+	if tmuxWindow != "" && s.config.TmuxSession != "" {
+		tmuxMgr := s.tmuxManager
+		if tmuxMgr == nil {
+			tmuxMgr, _ = tmux.NewManager()
+		}
+		if tmuxMgr != nil {
+			if killErr := tmuxMgr.KillWindow(s.config.TmuxSession, tmuxWindow); killErr != nil {
+				if !tmux.IsWindowNotFound(killErr) && !tmux.IsSessionNotFound(killErr) {
+					log.Printf("warning: failed to kill tmux window %q: %v", tmuxWindow, killErr)
+				}
+			}
 		}
 	}
 
