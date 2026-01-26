@@ -408,6 +408,147 @@ func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
 	return nil, fmt.Errorf("ticket not found: %s", ticketID)
 }
 
+// AddCommentResponse is the response from the add comment endpoint.
+type AddCommentResponse struct {
+	Success bool            `json:"success"`
+	Comment CommentResponse `json:"comment"`
+}
+
+// RequestReviewResponse is the response from the request review endpoint.
+type RequestReviewResponse struct {
+	Success     bool   `json:"success"`
+	Message     string `json:"message"`
+	ReviewCount int    `json:"review_count"`
+}
+
+// ConcludeSessionResponse is the response from the conclude session endpoint.
+type ConcludeSessionResponse struct {
+	Success  bool   `json:"success"`
+	TicketID string `json:"ticket_id"`
+	Message  string `json:"message"`
+}
+
+// GetTicketByID returns a ticket by ID regardless of status.
+func (c *Client) GetTicketByID(id string) (*TicketResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tickets/by-id/"+id, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result TicketResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// AddComment adds a comment to a ticket.
+func (c *Client) AddComment(ticketID, commentType, content string) (*AddCommentResponse, error) {
+	reqBody := map[string]string{"type": commentType, "content": content}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+ticketID+"/comments", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result AddCommentResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// RequestReview requests a review for a ticket.
+func (c *Client) RequestReview(ticketID, repoPath, summary string) (*RequestReviewResponse, error) {
+	reqBody := map[string]string{"repo_path": repoPath, "summary": summary}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+ticketID+"/reviews", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result RequestReviewResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ConcludeSession concludes a ticket session.
+func (c *Client) ConcludeSession(ticketID, fullReport string) (*ConcludeSessionResponse, error) {
+	reqBody := map[string]string{"full_report": fullReport}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+ticketID+"/conclude", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ConcludeSessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // parseError extracts an error message from a non-OK response.
 func (c *Client) parseError(resp *http.Response) error {
 	body, err := io.ReadAll(resp.Body)

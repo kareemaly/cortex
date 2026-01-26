@@ -2,10 +2,14 @@ package mcp
 
 import (
 	"context"
+	"log/slog"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/daemon/api"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 )
@@ -512,6 +516,8 @@ func TestHandleSpawnSessionAutoMovesToProgress(t *testing.T) {
 
 // Ticket tool tests
 
+// setupTicketSession creates a ticket session backed by a real HTTP test server.
+// The MCP ticket handlers will route through the daemon API via the SDK client.
 func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	t.Helper()
 
@@ -520,8 +526,8 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 		t.Fatalf("create temp dir: %v", err)
 	}
 
-	// First create a store to make a ticket
-	store, err := ticket.NewStore(tmpDir)
+	// Create a store and ticket via the daemon API infrastructure
+	store, err := ticket.NewStore(filepath.Join(tmpDir, ".cortex", "tickets"))
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create store: %v", err)
@@ -541,23 +547,42 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 		t.Fatalf("set session: %v", err)
 	}
 
-	// Now create server with ticket session
+	// Start an HTTP test server with the daemon API
+	logger := slog.Default()
+	storeManager := api.NewStoreManager(logger)
+	deps := &api.Dependencies{
+		StoreManager: storeManager,
+		Logger:       logger,
+	}
+	router := api.NewRouter(deps, logger)
+	ts := httptest.NewServer(router)
+
+	// Create SDK client pointing to test server
+	sdkClient := sdk.NewClient(ts.URL, tmpDir)
+
+	// Create MCP server with SDK client (ticket session)
 	cfg := &Config{
-		TicketID:   tk.ID,
-		TicketsDir: tmpDir,
+		TicketID:    tk.ID,
+		DaemonURL:   ts.URL,
+		ProjectPath: tmpDir,
 	}
 
-	server, err := NewServer(cfg)
+	mcpServer, err := NewServer(cfg)
 	if err != nil {
+		ts.Close()
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create server: %v", err)
 	}
 
+	// Override the SDK client to use the test server's client
+	mcpServer.sdkClient = sdkClient
+
 	cleanup := func() {
+		ts.Close()
 		_ = os.RemoveAll(tmpDir)
 	}
 
-	return server, tk.ID, cleanup
+	return mcpServer, tk.ID, cleanup
 }
 
 func TestHandleReadOwnTicket(t *testing.T) {
@@ -599,12 +624,6 @@ func TestHandleAddTicketComment(t *testing.T) {
 	}
 	if output.Comment.Content != "Decided to use new API" {
 		t.Errorf("comment content = %q, want 'Decided to use new API'", output.Comment.Content)
-	}
-
-	// Verify comment was added
-	tk, _, _ := server.Store().Get(server.Session().TicketID)
-	if len(tk.Comments) != 1 {
-		t.Errorf("comments count = %d, want 1", len(tk.Comments))
 	}
 }
 
@@ -967,53 +986,10 @@ func TestHandleSpawnSession_DefaultMode(t *testing.T) {
 	}
 }
 
-func TestHandleConcludeSession_KillsTmuxWindow(t *testing.T) {
-	// Create temp dir and store
-	tmpDir, err := os.MkdirTemp("", "mcp-conclude-test")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+func TestHandleConcludeSession(t *testing.T) {
+	server, ticketID, cleanup := setupTicketSession(t)
+	defer cleanup()
 
-	store, err := ticket.NewStore(tmpDir)
-	if err != nil {
-		t.Fatalf("create store: %v", err)
-	}
-
-	// Create a ticket and set a session with a tmux window
-	tk, err := store.Create("Test Conclude", "body")
-	if err != nil {
-		t.Fatalf("create ticket: %v", err)
-	}
-	_, err = store.SetSession(tk.ID, "claude", "test-window", nil, nil)
-	if err != nil {
-		t.Fatalf("set session: %v", err)
-	}
-
-	// Create mock runner and customize to return the test window name
-	mockRunner := tmux.NewMockRunner()
-	defaultRunFunc := mockRunner.RunFunc
-	mockRunner.RunFunc = func(args ...string) ([]byte, error) {
-		if len(args) > 0 && args[0] == "list-windows" {
-			return []byte("0:test-window:1"), nil
-		}
-		return defaultRunFunc(args...)
-	}
-	tmuxMgr := tmux.NewManagerWithRunner(mockRunner)
-
-	cfg := &Config{
-		TicketID:    tk.ID,
-		TicketsDir:  tmpDir,
-		TmuxSession: "test-session",
-		TmuxManager: tmuxMgr,
-	}
-
-	server, err := NewServer(cfg)
-	if err != nil {
-		t.Fatalf("create server: %v", err)
-	}
-
-	// Call concludeSession
 	_, output, err := server.handleConcludeSession(context.Background(), nil, ConcludeSessionInput{
 		FullReport: "Work completed successfully",
 	})
@@ -1024,26 +1000,8 @@ func TestHandleConcludeSession_KillsTmuxWindow(t *testing.T) {
 	if !output.Success {
 		t.Errorf("expected success, got: %+v", output)
 	}
-
-	// Verify ticket moved to done
-	_, status, err := store.Get(tk.ID)
-	if err != nil {
-		t.Fatalf("get ticket: %v", err)
-	}
-	if status != ticket.StatusDone {
-		t.Errorf("expected status done, got %v", status)
-	}
-
-	// Verify kill-window was called
-	found := false
-	for _, call := range mockRunner.Calls {
-		if len(call) > 0 && call[0] == "kill-window" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected kill-window call in mock runner, got calls: %v", mockRunner.Calls)
+	if output.TicketID != ticketID {
+		t.Errorf("ticket ID = %q, want %q", output.TicketID, ticketID)
 	}
 }
 

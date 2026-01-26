@@ -39,12 +39,16 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		r.Route("/tickets", func(r chi.Router) {
 			r.Get("/", ticketHandlers.ListAll)
 			r.Post("/", ticketHandlers.Create)
+			r.Get("/by-id/{id}", ticketHandlers.GetByID)
 			r.Get("/{status}", ticketHandlers.ListByStatus)
 			r.Get("/{status}/{id}", ticketHandlers.Get)
 			r.Put("/{status}/{id}", ticketHandlers.Update)
 			r.Delete("/{status}/{id}", ticketHandlers.Delete)
 			r.Post("/{status}/{id}/move", ticketHandlers.Move)
 			r.Post("/{status}/{id}/spawn", ticketHandlers.Spawn)
+			r.Post("/{id}/comments", ticketHandlers.AddComment)
+			r.Post("/{id}/reviews", ticketHandlers.RequestReview)
+			r.Post("/{id}/conclude", ticketHandlers.Conclude)
 		})
 
 		// Architect routes

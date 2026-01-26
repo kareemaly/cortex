@@ -560,6 +560,10 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 	if server.Env["CORTEX_TICKETS_DIR"] != "/path/to/tickets" {
 		t.Errorf("expected CORTEX_TICKETS_DIR, got: %v", server.Env)
 	}
+
+	if server.Env["CORTEX_DAEMON_URL"] != "http://localhost:4200" {
+		t.Errorf("expected CORTEX_DAEMON_URL=http://localhost:4200, got: %v", server.Env["CORTEX_DAEMON_URL"])
+	}
 }
 
 func TestWritePromptFile(t *testing.T) {

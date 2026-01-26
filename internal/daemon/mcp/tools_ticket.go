@@ -2,11 +2,9 @@ package mcp
 
 import (
 	"context"
-	"log"
 
-	"github.com/kareemaly/cortex/internal/ticket"
-	"github.com/kareemaly/cortex/internal/tmux"
-	"github.com/kareemaly/cortex/internal/worktree"
+	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/types"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -40,68 +38,40 @@ func (s *Server) registerTicketTools() {
 // EmptyInput is used for tools that don't require input.
 type EmptyInput struct{}
 
-// handleReadOwnTicket reads the ticket assigned to this session.
+// handleReadOwnTicket reads the ticket assigned to this session via the daemon API.
 func (s *Server) handleReadOwnTicket(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input EmptyInput,
 ) (*mcp.CallToolResult, ReadTicketOutput, error) {
-	t, status, err := s.store.Get(s.session.TicketID)
+	resp, err := s.sdkClient.GetTicketByID(s.session.TicketID)
 	if err != nil {
-		return nil, ReadTicketOutput{}, WrapTicketError(err)
+		return nil, ReadTicketOutput{}, wrapSDKError(err)
 	}
 
 	return nil, ReadTicketOutput{
-		Ticket: ToTicketOutput(t, status),
+		Ticket: ticketResponseToOutput(resp),
 	}, nil
 }
 
-// handleAddTicketComment adds a comment to the assigned ticket.
+// handleAddTicketComment adds a comment to the assigned ticket via the daemon API.
 func (s *Server) handleAddTicketComment(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input AddCommentInput,
 ) (*mcp.CallToolResult, AddCommentOutput, error) {
-	t, _, err := s.store.Get(s.session.TicketID)
+	resp, err := s.sdkClient.AddComment(s.session.TicketID, input.Type, input.Content)
 	if err != nil {
-		return nil, AddCommentOutput{}, WrapTicketError(err)
-	}
-
-	// Find active session ID
-	var activeSessionID string
-	if t.Session != nil && t.Session.IsActive() {
-		activeSessionID = t.Session.ID
-	}
-
-	// Validate comment type
-	commentType := ticket.CommentType(input.Type)
-	switch commentType {
-	case ticket.CommentScopeChange, ticket.CommentDecision, ticket.CommentBlocker,
-		ticket.CommentProgress, ticket.CommentQuestion, ticket.CommentRejection,
-		ticket.CommentGeneral, ticket.CommentTicketDone:
-		// Valid type
-	default:
-		return nil, AddCommentOutput{}, NewValidationError("type", "invalid comment type")
-	}
-
-	comment, err := s.store.AddComment(s.session.TicketID, activeSessionID, commentType, input.Content)
-	if err != nil {
-		return nil, AddCommentOutput{}, WrapTicketError(err)
+		return nil, AddCommentOutput{}, wrapSDKError(err)
 	}
 
 	return nil, AddCommentOutput{
-		Success: true,
-		Comment: CommentOutput{
-			ID:        comment.ID,
-			SessionID: comment.SessionID,
-			Type:      string(comment.Type),
-			Content:   comment.Content,
-			CreatedAt: comment.CreatedAt,
-		},
+		Success: resp.Success,
+		Comment: resp.Comment,
 	}, nil
 }
 
-// handleRequestReview adds a review request to the session.
+// handleRequestReview requests a review via the daemon API.
 func (s *Server) handleRequestReview(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -114,30 +84,20 @@ func (s *Server) handleRequestReview(
 		return nil, RequestReviewOutput{}, NewValidationError("summary", "cannot be empty")
 	}
 
-	reviewCount, err := s.store.AddReviewRequest(s.session.TicketID, input.RepoPath, input.Summary)
+	resp, err := s.sdkClient.RequestReview(s.session.TicketID, input.RepoPath, input.Summary)
 	if err != nil {
-		return nil, RequestReviewOutput{}, WrapTicketError(err)
-	}
-
-	// Move ticket to review status (idempotent - no-op if already in review or done)
-	_, currentStatus, err := s.store.Get(s.session.TicketID)
-	if err != nil {
-		return nil, RequestReviewOutput{}, WrapTicketError(err)
-	}
-	if currentStatus != ticket.StatusReview && currentStatus != ticket.StatusDone {
-		if err := s.store.Move(s.session.TicketID, ticket.StatusReview); err != nil {
-			return nil, RequestReviewOutput{}, WrapTicketError(err)
-		}
+		return nil, RequestReviewOutput{}, wrapSDKError(err)
 	}
 
 	return nil, RequestReviewOutput{
-		Success:     true,
-		Message:     "Review request added. Wait for human approval.",
-		ReviewCount: reviewCount,
+		Success:     resp.Success,
+		Message:     resp.Message,
+		ReviewCount: resp.ReviewCount,
 	}, nil
 }
 
-// handleConcludeSession ends the session and moves the ticket to done.
+// handleConcludeSession concludes the session via the daemon API.
+// All cleanup (worktree removal, tmux window kill) is handled by the daemon.
 func (s *Server) handleConcludeSession(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -147,67 +107,68 @@ func (s *Server) handleConcludeSession(
 		return nil, ConcludeSessionOutput{}, NewValidationError("full_report", "cannot be empty")
 	}
 
-	t, _, err := s.store.Get(s.session.TicketID)
+	resp, err := s.sdkClient.ConcludeSession(s.session.TicketID, input.FullReport)
 	if err != nil {
-		return nil, ConcludeSessionOutput{}, WrapTicketError(err)
-	}
-
-	// Capture session info before ending session
-	var worktreePath, featureBranch *string
-	var activeSessionID string
-	var tmuxWindow string
-	if t.Session != nil {
-		worktreePath = t.Session.WorktreePath
-		featureBranch = t.Session.FeatureBranch
-		tmuxWindow = t.Session.TmuxWindow
-		if t.Session.IsActive() {
-			activeSessionID = t.Session.ID
-		}
-	}
-
-	// Add ticket_done comment with the full report
-	_, err = s.store.AddComment(s.session.TicketID, activeSessionID, ticket.CommentTicketDone, input.FullReport)
-	if err != nil {
-		return nil, ConcludeSessionOutput{}, WrapTicketError(err)
-	}
-
-	// End the session
-	if err := s.store.EndSession(s.session.TicketID); err != nil {
-		return nil, ConcludeSessionOutput{}, WrapTicketError(err)
-	}
-
-	// Move the ticket to done
-	if err := s.store.Move(s.session.TicketID, ticket.StatusDone); err != nil {
-		return nil, ConcludeSessionOutput{}, WrapTicketError(err)
-	}
-
-	// Cleanup worktree if present
-	if worktreePath != nil && featureBranch != nil && s.config.ProjectPath != "" {
-		wm := worktree.NewManager(s.config.ProjectPath)
-		if err := wm.Remove(ctx, *worktreePath, *featureBranch); err != nil {
-			// Log but don't fail - main work is done
-			log.Printf("warning: failed to cleanup worktree: %v", err)
-		}
-	}
-
-	// Kill tmux window if associated
-	if tmuxWindow != "" && s.config.TmuxSession != "" {
-		tmuxMgr := s.tmuxManager
-		if tmuxMgr == nil {
-			tmuxMgr, _ = tmux.NewManager()
-		}
-		if tmuxMgr != nil {
-			if killErr := tmuxMgr.KillWindow(s.config.TmuxSession, tmuxWindow); killErr != nil {
-				if !tmux.IsWindowNotFound(killErr) && !tmux.IsSessionNotFound(killErr) {
-					log.Printf("warning: failed to kill tmux window %q: %v", tmuxWindow, killErr)
-				}
-			}
-		}
+		return nil, ConcludeSessionOutput{}, wrapSDKError(err)
 	}
 
 	return nil, ConcludeSessionOutput{
-		Success:  true,
-		TicketID: s.session.TicketID,
-		Message:  "Session concluded and ticket moved to done",
+		Success:  resp.Success,
+		TicketID: resp.TicketID,
+		Message:  resp.Message,
 	}, nil
+}
+
+// ticketResponseToOutput converts an SDK TicketResponse to an MCP TicketOutput.
+func ticketResponseToOutput(r *types.TicketResponse) TicketOutput {
+	var session *SessionOutput
+	if r.Session != nil {
+		s := sessionResponseToOutput(r.Session)
+		session = &s
+	}
+
+	return TicketOutput{
+		ID:       r.ID,
+		Title:    r.Title,
+		Body:     r.Body,
+		Status:   r.Status,
+		Dates:    r.Dates,
+		Comments: r.Comments,
+		Session:  session,
+	}
+}
+
+// sessionResponseToOutput converts an SDK SessionResponse to an MCP SessionOutput.
+func sessionResponseToOutput(r *types.SessionResponse) SessionOutput {
+	return SessionOutput{
+		ID:            r.ID,
+		StartedAt:     r.StartedAt,
+		EndedAt:       r.EndedAt,
+		Agent:         r.Agent,
+		TmuxWindow:    r.TmuxWindow,
+		CurrentStatus: r.CurrentStatus,
+		IsActive:      r.EndedAt == nil,
+	}
+}
+
+// wrapSDKError converts an SDK error to an MCP ToolError.
+func wrapSDKError(err error) *ToolError {
+	if err == nil {
+		return nil
+	}
+
+	if apiErr, ok := err.(*sdk.APIError); ok {
+		switch apiErr.Status {
+		case 404:
+			return &ToolError{Code: ErrorCodeNotFound, Message: apiErr.Message}
+		case 400:
+			return &ToolError{Code: ErrorCodeValidation, Message: apiErr.Message}
+		case 409:
+			return &ToolError{Code: ErrorCodeStateConflict, Message: apiErr.Message}
+		default:
+			return &ToolError{Code: ErrorCodeInternal, Message: apiErr.Message}
+		}
+	}
+
+	return NewInternalError(err.Error())
 }

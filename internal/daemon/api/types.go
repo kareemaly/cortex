@@ -47,6 +47,43 @@ type SpawnResponse struct {
 	Ticket  TicketResponse  `json:"ticket"`
 }
 
+// AddCommentRequest is the request body for adding a comment to a ticket.
+type AddCommentRequest struct {
+	Type    string `json:"type"`
+	Content string `json:"content"`
+}
+
+// AddCommentResponse is the response for adding a comment.
+type AddCommentResponse struct {
+	Success bool            `json:"success"`
+	Comment CommentResponse `json:"comment"`
+}
+
+// RequestReviewRequest is the request body for requesting a review.
+type RequestReviewRequest struct {
+	RepoPath string `json:"repo_path"`
+	Summary  string `json:"summary"`
+}
+
+// RequestReviewResponse is the response for requesting a review.
+type RequestReviewResponse struct {
+	Success     bool   `json:"success"`
+	Message     string `json:"message"`
+	ReviewCount int    `json:"review_count"`
+}
+
+// ConcludeSessionRequest is the request body for concluding a session.
+type ConcludeSessionRequest struct {
+	FullReport string `json:"full_report"`
+}
+
+// ConcludeSessionResponse is the response for concluding a session.
+type ConcludeSessionResponse struct {
+	Success  bool   `json:"success"`
+	TicketID string `json:"ticket_id"`
+	Message  string `json:"message"`
+}
+
 // filterSummaryList converts tickets to summaries with optional query filter.
 // Query is matched case-insensitively against title or body.
 func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string) []TicketSummary {

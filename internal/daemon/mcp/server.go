@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"path/filepath"
 
+	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
@@ -42,6 +43,11 @@ type Config struct {
 	// This is primarily used for testing.
 	CortexdPath string
 
+	// DaemonURL is the URL of the cortexd HTTP API.
+	// When set for ticket sessions, the MCP server routes mutations through the daemon
+	// instead of creating its own ticket store.
+	DaemonURL string
+
 	// Logger is an optional logger for warnings and errors.
 	// If nil, warnings are silently ignored.
 	Logger *slog.Logger
@@ -51,6 +57,7 @@ type Config struct {
 type Server struct {
 	mcpServer     *mcp.Server
 	store         *ticket.Store
+	sdkClient     *sdk.Client
 	session       *Session
 	config        *Config
 	projectConfig *config.Config
@@ -61,22 +68,6 @@ type Server struct {
 func NewServer(cfg *Config) (*Server, error) {
 	if cfg == nil {
 		cfg = &Config{}
-	}
-
-	// Set tickets directory - derive from ProjectPath or require explicit setting
-	ticketsDir := cfg.TicketsDir
-	if ticketsDir == "" {
-		if cfg.ProjectPath != "" {
-			ticketsDir = filepath.Join(cfg.ProjectPath, ".cortex", "tickets")
-		} else {
-			return nil, fmt.Errorf("MCP server requires CORTEX_PROJECT_PATH or CORTEX_TICKETS_DIR to be set")
-		}
-	}
-
-	// Create ticket store
-	store, err := ticket.NewStore(ticketsDir)
-	if err != nil {
-		return nil, err
 	}
 
 	// Determine session type
@@ -92,13 +83,38 @@ func NewServer(cfg *Config) (*Server, error) {
 		}
 	}
 
-	// Load project config if ProjectPath is set
+	var store *ticket.Store
+	var sdkClient *sdk.Client
 	var projectCfg *config.Config
-	if cfg.ProjectPath != "" {
+
+	if session.Type == SessionTypeTicket {
+		// Ticket sessions always route through the daemon HTTP API
+		if cfg.DaemonURL == "" {
+			return nil, fmt.Errorf("ticket sessions require CORTEX_DAEMON_URL to be set")
+		}
+		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ProjectPath)
+	} else {
+		// Architect sessions use a local ticket store (they run in-process with the daemon)
+		ticketsDir := cfg.TicketsDir
+		if ticketsDir == "" {
+			if cfg.ProjectPath != "" {
+				ticketsDir = filepath.Join(cfg.ProjectPath, ".cortex", "tickets")
+			} else {
+				return nil, fmt.Errorf("MCP server requires CORTEX_PROJECT_PATH or CORTEX_TICKETS_DIR to be set")
+			}
+		}
+
 		var err error
-		projectCfg, err = config.Load(cfg.ProjectPath)
+		store, err = ticket.NewStore(ticketsDir)
 		if err != nil {
 			return nil, err
+		}
+
+		if cfg.ProjectPath != "" {
+			projectCfg, err = config.Load(cfg.ProjectPath)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -111,6 +127,7 @@ func NewServer(cfg *Config) (*Server, error) {
 	s := &Server{
 		mcpServer:     mcpServer,
 		store:         store,
+		sdkClient:     sdkClient,
 		session:       session,
 		config:        cfg,
 		projectConfig: projectCfg,

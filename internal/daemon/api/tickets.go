@@ -1,15 +1,20 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kareemaly/cortex/internal/core/spawn"
+	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/internal/types"
+	"github.com/kareemaly/cortex/internal/worktree"
 )
 
 // TicketHandlers provides HTTP handlers for ticket operations.
@@ -366,4 +371,220 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		Ticket:  types.ToTicketResponse(result.Ticket, result.TicketStatus),
 	}
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// GetByID handles GET /tickets/by-id/{id} - gets a ticket by ID regardless of status.
+func (h *TicketHandlers) GetByID(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	t, status, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	resp := types.ToTicketResponse(t, status)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// AddComment handles POST /tickets/{id}/comments - adds a comment to a ticket.
+func (h *TicketHandlers) AddComment(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	t, _, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	var req AddCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
+		return
+	}
+
+	// Validate comment type
+	commentType := ticket.CommentType(req.Type)
+	switch commentType {
+	case ticket.CommentScopeChange, ticket.CommentDecision, ticket.CommentBlocker,
+		ticket.CommentProgress, ticket.CommentQuestion, ticket.CommentRejection,
+		ticket.CommentGeneral, ticket.CommentTicketDone:
+		// Valid type
+	default:
+		writeError(w, http.StatusBadRequest, "validation_error", "invalid comment type")
+		return
+	}
+
+	// Find active session ID
+	var activeSessionID string
+	if t.Session != nil && t.Session.IsActive() {
+		activeSessionID = t.Session.ID
+	}
+
+	comment, err := store.AddComment(id, activeSessionID, commentType, req.Content)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	resp := AddCommentResponse{
+		Success: true,
+		Comment: types.ToCommentResponse(comment),
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// RequestReview handles POST /tickets/{id}/reviews - requests a review for a ticket.
+func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+
+	var req RequestReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
+		return
+	}
+
+	if req.RepoPath == "" {
+		writeError(w, http.StatusBadRequest, "validation_error", "repo_path cannot be empty")
+		return
+	}
+	if req.Summary == "" {
+		writeError(w, http.StatusBadRequest, "validation_error", "summary cannot be empty")
+		return
+	}
+
+	reviewCount, err := store.AddReviewRequest(id, req.RepoPath, req.Summary)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	// Move ticket to review status (idempotent - no-op if already in review or done)
+	_, currentStatus, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+	if currentStatus != ticket.StatusReview && currentStatus != ticket.StatusDone {
+		if err := store.Move(id, ticket.StatusReview); err != nil {
+			handleTicketError(w, err, h.deps.Logger)
+			return
+		}
+	}
+
+	resp := RequestReviewResponse{
+		Success:     true,
+		Message:     "Review request added. Wait for human approval.",
+		ReviewCount: reviewCount,
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// Conclude handles POST /tickets/{id}/conclude - concludes a session and moves ticket to done.
+func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	t, _, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	var req ConcludeSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
+		return
+	}
+
+	if req.FullReport == "" {
+		writeError(w, http.StatusBadRequest, "validation_error", "full_report cannot be empty")
+		return
+	}
+
+	// Capture session info before ending
+	var worktreePath, featureBranch *string
+	var activeSessionID string
+	var tmuxWindow string
+	if t.Session != nil {
+		worktreePath = t.Session.WorktreePath
+		featureBranch = t.Session.FeatureBranch
+		tmuxWindow = t.Session.TmuxWindow
+		if t.Session.IsActive() {
+			activeSessionID = t.Session.ID
+		}
+	}
+
+	// Add ticket_done comment with the full report
+	_, err = store.AddComment(id, activeSessionID, ticket.CommentTicketDone, req.FullReport)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	// End the session
+	if err := store.EndSession(id); err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	// Move the ticket to done
+	if err := store.Move(id, ticket.StatusDone); err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	// Cleanup worktree if present (best-effort)
+	if worktreePath != nil && featureBranch != nil && projectPath != "" {
+		wm := worktree.NewManager(projectPath)
+		if err := wm.Remove(context.Background(), *worktreePath, *featureBranch); err != nil {
+			log.Printf("warning: failed to cleanup worktree: %v", err)
+		}
+	}
+
+	// Kill tmux window if associated (best-effort)
+	if tmuxWindow != "" && h.deps.TmuxManager != nil {
+		projectCfg, cfgErr := projectconfig.Load(projectPath)
+		tmuxSession := "cortex"
+		if cfgErr == nil && projectCfg.Name != "" {
+			tmuxSession = projectCfg.Name
+		}
+
+		if killErr := h.deps.TmuxManager.KillWindow(tmuxSession, tmuxWindow); killErr != nil {
+			if !tmux.IsWindowNotFound(killErr) && !tmux.IsSessionNotFound(killErr) {
+				log.Printf("warning: failed to kill tmux window %q: %v", tmuxWindow, killErr)
+			}
+		}
+	}
+
+	resp := ConcludeSessionResponse{
+		Success:  true,
+		TicketID: id,
+		Message:  "Session concluded and ticket moved to done",
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

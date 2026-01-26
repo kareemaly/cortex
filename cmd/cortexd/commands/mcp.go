@@ -48,6 +48,7 @@ func runMCP(cmd *cobra.Command, args []string) error {
 	ticketsDir := os.Getenv("CORTEX_TICKETS_DIR")
 	projectPath := os.Getenv("CORTEX_PROJECT_PATH")
 	tmuxSession := os.Getenv("CORTEX_TMUX_SESSION")
+	daemonURL := os.Getenv("CORTEX_DAEMON_URL")
 
 	// Create MCP server config
 	cfg := &mcp.Config{
@@ -55,6 +56,7 @@ func runMCP(cmd *cobra.Command, args []string) error {
 		TicketsDir:  ticketsDir,
 		ProjectPath: projectPath,
 		TmuxSession: tmuxSession,
+		DaemonURL:   daemonURL,
 	}
 
 	// Create MCP server

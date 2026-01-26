@@ -14,8 +14,14 @@ func setupTestServer(t *testing.T, ticketID string) (*Server, func()) {
 	}
 
 	cfg := &Config{
-		TicketID:   ticketID,
 		TicketsDir: tmpDir,
+	}
+
+	if ticketID != "" {
+		cfg.TicketID = ticketID
+		cfg.DaemonURL = "http://localhost:4200" // ticket sessions require daemon URL
+		cfg.TicketsDir = ""                     // ticket sessions don't use local store
+		cfg.ProjectPath = tmpDir                // needed for SDK client project header
 	}
 
 	server, err := NewServer(cfg)
@@ -64,6 +70,26 @@ func TestNewServerTicket(t *testing.T) {
 	}
 	if server.Session().TicketID != "test-ticket-123" {
 		t.Errorf("ticket ID = %q, want %q", server.Session().TicketID, "test-ticket-123")
+	}
+	if server.sdkClient == nil {
+		t.Error("ticket session should have SDK client")
+	}
+	if server.store != nil {
+		t.Error("ticket session should not have local store")
+	}
+}
+
+func TestNewServerTicketRequiresDaemonURL(t *testing.T) {
+	_, err := NewServer(&Config{
+		TicketID:   "test-ticket-123",
+		TicketsDir: "/tmp/test",
+	})
+	if err == nil {
+		t.Fatal("expected error when DaemonURL is missing for ticket session")
+	}
+	expected := "ticket sessions require CORTEX_DAEMON_URL to be set"
+	if err.Error() != expected {
+		t.Errorf("error = %q, want %q", err.Error(), expected)
 	}
 }
 

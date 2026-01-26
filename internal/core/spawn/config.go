@@ -52,6 +52,9 @@ func GenerateMCPConfig(params MCPConfigParams) *ClaudeMCPConfig {
 		serverConfig.Env["CORTEX_TMUX_SESSION"] = params.TmuxSession
 	}
 
+	// Pass daemon URL so ticket sessions can route mutations through the HTTP API
+	serverConfig.Env["CORTEX_DAEMON_URL"] = "http://localhost:4200"
+
 	return &ClaudeMCPConfig{
 		MCPServers: map[string]MCPServerConfig{
 			"cortex": serverConfig,
