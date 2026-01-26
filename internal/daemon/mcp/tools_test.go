@@ -527,7 +527,7 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	}
 
 	// Create a store and ticket via the daemon API infrastructure
-	store, err := ticket.NewStore(filepath.Join(tmpDir, ".cortex", "tickets"))
+	store, err := ticket.NewStore(filepath.Join(tmpDir, ".cortex", "tickets"), nil, "")
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create store: %v", err)
@@ -549,7 +549,7 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 
 	// Start an HTTP test server with the daemon API
 	logger := slog.Default()
-	storeManager := api.NewStoreManager(logger)
+	storeManager := api.NewStoreManager(logger, nil)
 	deps := &api.Dependencies{
 		StoreManager: storeManager,
 		Logger:       logger,

@@ -29,13 +29,13 @@ func setupTestServer(t *testing.T) *testServer {
 	tmpDir := t.TempDir()
 	ticketsDir := filepath.Join(tmpDir, ".cortex", "tickets")
 
-	store, err := ticket.NewStore(ticketsDir)
+	store, err := ticket.NewStore(ticketsDir, nil, "")
 	if err != nil {
 		t.Fatalf("failed to create ticket store: %v", err)
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	storeManager := NewStoreManager(logger)
+	storeManager := NewStoreManager(logger, nil)
 	// Pre-populate the store manager with our test store
 	storeManager.stores[tmpDir] = store
 

@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -33,6 +34,10 @@ type Model struct {
 	// Ticket detail view state
 	showDetail  bool
 	detailModel *ticket.Model
+
+	// SSE subscription state
+	eventCh      <-chan sdk.Event
+	cancelEvents context.CancelFunc
 }
 
 // Message types for async operations.
@@ -71,6 +76,15 @@ type SessionApprovedMsg struct {
 	Ticket *sdk.TicketSummary
 }
 
+// sseConnectedMsg is sent when the SSE connection is established.
+type sseConnectedMsg struct {
+	ch     <-chan sdk.Event
+	cancel context.CancelFunc
+}
+
+// EventMsg is sent when an SSE event is received.
+type EventMsg struct{}
+
 // ApproveErrorMsg is sent when approving a session fails.
 type ApproveErrorMsg struct {
 	Err error
@@ -92,7 +106,7 @@ func New(client *sdk.Client) Model {
 
 // Init initializes the model and starts loading tickets.
 func (m Model) Init() tea.Cmd {
-	return m.loadTickets()
+	return tea.Batch(m.loadTickets(), m.subscribeEvents())
 }
 
 // Update handles messages and updates the model.
@@ -169,6 +183,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ClearStatusMsg:
 		m.statusMsg = ""
 		return m, nil
+
+	case sseConnectedMsg:
+		m.eventCh = msg.ch
+		m.cancelEvents = msg.cancel
+		return m, m.waitForEvent()
+
+	case EventMsg:
+		cmds := []tea.Cmd{m.loadTickets(), m.waitForEvent()}
+		if m.showDetail && m.detailModel != nil {
+			cmds = append(cmds, func() tea.Msg { return ticket.RefreshMsg{} })
+		}
+		return m, tea.Batch(cmds...)
 	}
 
 	return m, nil
@@ -178,6 +204,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Quit.
 	if isKey(msg, KeyQuit, KeyCtrlC) {
+		if m.cancelEvents != nil {
+			m.cancelEvents()
+		}
 		return m, tea.Quit
 	}
 
@@ -409,6 +438,34 @@ func (m Model) loadTickets() tea.Cmd {
 			return TicketsErrorMsg{Err: err}
 		}
 		return TicketsLoadedMsg{Response: resp}
+	}
+}
+
+// subscribeEvents returns a command that connects to the SSE event stream.
+func (m Model) subscribeEvents() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithCancel(context.Background())
+		ch, err := m.client.SubscribeEvents(ctx)
+		if err != nil {
+			cancel()
+			return nil // graceful degradation
+		}
+		return sseConnectedMsg{ch: ch, cancel: cancel}
+	}
+}
+
+// waitForEvent returns a command that waits for the next SSE event.
+func (m Model) waitForEvent() tea.Cmd {
+	if m.eventCh == nil {
+		return nil
+	}
+	ch := m.eventCh
+	return func() tea.Msg {
+		_, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return EventMsg{}
 	}
 }
 

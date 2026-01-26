@@ -105,7 +105,7 @@ func NewServer(cfg *Config) (*Server, error) {
 		}
 
 		var err error
-		store, err = ticket.NewStore(ticketsDir)
+		store, err = ticket.NewStore(ticketsDir, nil, "")
 		if err != nil {
 			return nil, err
 		}

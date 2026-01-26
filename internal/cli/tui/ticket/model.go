@@ -62,6 +62,9 @@ type ApproveErrorMsg struct {
 // CloseDetailMsg is sent when user wants to close the detail view.
 type CloseDetailMsg struct{}
 
+// RefreshMsg triggers a ticket data reload (used by SSE).
+type RefreshMsg struct{}
+
 // New creates a new ticket detail model.
 func New(client *sdk.Client, ticketID string) Model {
 	renderer, _ := glamour.NewTermRenderer(
@@ -81,6 +84,11 @@ func NewEmbedded(client *sdk.Client, ticketID string) Model {
 	m := New(client, ticketID)
 	m.embedded = true
 	return m
+}
+
+// TicketID returns the ticket ID this model is displaying.
+func (m Model) TicketID() string {
+	return m.ticketID
 }
 
 // Init initializes the model and starts loading the ticket.
@@ -162,6 +170,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.approving = false
 		m.err = msg.Err
 		return m, nil
+
+	case RefreshMsg:
+		m.loading = true
+		return m, m.loadTicket()
 	}
 
 	// Handle viewport scroll messages.

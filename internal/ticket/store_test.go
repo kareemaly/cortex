@@ -15,7 +15,7 @@ func setupTestStore(t *testing.T) (*Store, func()) {
 		t.Fatalf("create temp dir: %v", err)
 	}
 
-	store, err := NewStore(tmpDir)
+	store, err := NewStore(tmpDir, nil, "")
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create store: %v", err)

@@ -3,6 +3,7 @@ package api
 import (
 	"log/slog"
 
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/tmux"
 )
 
@@ -10,5 +11,6 @@ import (
 type Dependencies struct {
 	StoreManager *StoreManager
 	TmuxManager  *tmux.Manager
+	Bus          *events.Bus
 	Logger       *slog.Logger
 }
