@@ -348,7 +348,7 @@ func TestIntegrationSpawnAgent(t *testing.T) {
 	}()
 
 	windowName := "agent-window"
-	index, err := m.SpawnAgent(session, windowName, "echo agent started", "", "")
+	index, err := m.SpawnAgent(session, windowName, "echo agent started", "", "", "")
 	if err != nil {
 		t.Fatalf("SpawnAgent failed: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestIntegrationSpawnAgentWithCompanion(t *testing.T) {
 	}()
 
 	windowName := "agent-with-companion"
-	index, err := m.SpawnAgent(session, windowName, "echo agent", "echo companion", "")
+	index, err := m.SpawnAgent(session, windowName, "echo agent", "echo companion", "", "")
 	if err != nil {
 		t.Fatalf("SpawnAgent with companion failed: %v", err)
 	}
@@ -437,7 +437,7 @@ func TestIntegrationSpawnArchitect(t *testing.T) {
 	}()
 
 	windowName := "architect"
-	if err := m.SpawnArchitect(session, windowName, "echo architect started", "", ""); err != nil {
+	if err := m.SpawnArchitect(session, windowName, "echo architect started", "", "", ""); err != nil {
 		t.Fatalf("SpawnArchitect failed: %v", err)
 	}
 
@@ -475,7 +475,7 @@ func TestIntegrationSpawnArchitectWithCompanion(t *testing.T) {
 	}()
 
 	windowName := "architect"
-	if err := m.SpawnArchitect(session, windowName, "echo architect", "echo kanban", ""); err != nil {
+	if err := m.SpawnArchitect(session, windowName, "echo architect", "echo kanban", "", ""); err != nil {
 		t.Fatalf("SpawnArchitect with companion failed: %v", err)
 	}
 

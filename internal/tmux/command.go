@@ -49,7 +49,8 @@ func (m *Manager) SendKeysToIndex(session string, index int, keys ...string) err
 // Returns the window index.
 // If workingDir is specified, both the session and window start in that directory.
 // If companionCommand is provided, a horizontal split is created with the companion in the right pane.
-func (m *Manager) SpawnAgent(session, windowName, agentCommand, companionCommand, workingDir string) (int, error) {
+// companionWorkingDir sets the working directory for the companion (right) pane.
+func (m *Manager) SpawnAgent(session, windowName, agentCommand, companionCommand, workingDir, companionWorkingDir string) (int, error) {
 	// Ensure session exists
 	if err := m.CreateSession(session, workingDir); err != nil {
 		return 0, err
@@ -69,7 +70,7 @@ func (m *Manager) SpawnAgent(session, windowName, agentCommand, companionCommand
 	// If companion command provided, create split pane layout
 	if companionCommand != "" {
 		// Split window horizontally to create right pane
-		if err := m.SplitWindowHorizontal(session, index, workingDir); err != nil {
+		if err := m.SplitWindowHorizontal(session, index, companionWorkingDir); err != nil {
 			return index, err
 		}
 		// Run companion command in right pane (pane 1)
@@ -90,7 +91,8 @@ func (m *Manager) SpawnAgent(session, windowName, agentCommand, companionCommand
 // If workingDir is specified, the session starts in that directory.
 // For existing sessions, the command is prefixed with a cd to ensure correct directory.
 // If companionCommand is provided, a horizontal split is created with the companion in the right pane.
-func (m *Manager) SpawnArchitect(session, windowName, agentCommand, companionCommand, workingDir string) error {
+// companionWorkingDir sets the working directory for the companion (right) pane.
+func (m *Manager) SpawnArchitect(session, windowName, agentCommand, companionCommand, workingDir, companionWorkingDir string) error {
 	// Check if session exists first
 	exists, err := m.SessionExists(session)
 	if err != nil {
@@ -122,7 +124,7 @@ func (m *Manager) SpawnArchitect(session, windowName, agentCommand, companionCom
 	// If companion command provided, create split pane layout
 	if companionCommand != "" {
 		// Split window horizontally to create right pane
-		if err := m.SplitWindowHorizontal(session, ArchitectWindowIndex, workingDir); err != nil {
+		if err := m.SplitWindowHorizontal(session, ArchitectWindowIndex, companionWorkingDir); err != nil {
 			return err
 		}
 		// Run companion command in right pane (pane 1)
