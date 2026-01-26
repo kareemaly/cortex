@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/kareemaly/cortex/internal/ticket"
@@ -23,13 +24,14 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 // handleTicketError converts ticket store errors to HTTP responses.
-func handleTicketError(w http.ResponseWriter, err error) {
+func handleTicketError(w http.ResponseWriter, err error, logger *slog.Logger) {
 	switch e := err.(type) {
 	case *ticket.NotFoundError:
 		writeError(w, http.StatusNotFound, "not_found", e.Error())
 	case *ticket.ValidationError:
 		writeError(w, http.StatusBadRequest, "validation_error", e.Error())
 	default:
+		logger.Error("internal ticket store error", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
 	}
 }

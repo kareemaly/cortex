@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,13 @@ import (
 // Store manages ticket storage with JSON files organized by status.
 type Store struct {
 	ticketsDir string
+	locks      sync.Map // maps ticket ID → *sync.Mutex
+}
+
+// ticketMu returns the mutex for a given ticket ID, creating one if needed.
+func (s *Store) ticketMu(id string) *sync.Mutex {
+	v, _ := s.locks.LoadOrStore(id, &sync.Mutex{})
+	return v.(*sync.Mutex)
 }
 
 // NewStore creates a new Store and ensures the directory structure exists.
@@ -50,6 +58,10 @@ func (s *Store) Create(title, body string) (*Ticket, error) {
 		Session:  nil,
 	}
 
+	mu := s.ticketMu(ticket.ID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	if err := s.save(ticket, StatusBacklog); err != nil {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
@@ -73,6 +85,10 @@ func (s *Store) Get(id string) (*Ticket, Status, error) {
 
 // Update modifies a ticket's title and/or body.
 func (s *Store) Update(id string, title, body *string) (*Ticket, error) {
+	mu := s.ticketMu(id)
+	mu.Lock()
+	defer mu.Unlock()
+
 	ticket, status, err := s.Get(id)
 	if err != nil {
 		return nil, err
@@ -99,6 +115,10 @@ func (s *Store) Update(id string, title, body *string) (*Ticket, error) {
 
 // Delete removes a ticket.
 func (s *Store) Delete(id string) error {
+	mu := s.ticketMu(id)
+	mu.Lock()
+	defer mu.Unlock()
+
 	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
 		path, err := s.findTicketPath(id, status)
 		if err != nil {
@@ -110,6 +130,7 @@ func (s *Store) Delete(id string) error {
 		if err := os.Remove(path); err != nil {
 			return fmt.Errorf("remove ticket file: %w", err)
 		}
+		s.locks.Delete(id)
 		return nil
 	}
 	return &NotFoundError{Resource: "ticket", ID: id}
@@ -128,7 +149,8 @@ func (s *Store) List(status Status) ([]*Ticket, error) {
 
 	var tickets []*Ticket
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".json") || strings.HasPrefix(name, ".tmp-") {
 			continue
 		}
 		ticket, err := s.loadFile(filepath.Join(dir, entry.Name()))
@@ -158,6 +180,10 @@ func (s *Store) ListAll() (map[Status][]*Ticket, error) {
 
 // Move moves a ticket to a different status.
 func (s *Store) Move(id string, to Status) error {
+	mu := s.ticketMu(id)
+	mu.Lock()
+	defer mu.Unlock()
+
 	ticket, from, err := s.Get(id)
 	if err != nil {
 		return err
@@ -201,6 +227,10 @@ func (s *Store) Move(id string, to Status) error {
 
 // SetSession sets the session for a ticket (replaces any existing session).
 func (s *Store) SetSession(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (*Session, error) {
+	mu := s.ticketMu(ticketID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return nil, err
@@ -236,6 +266,10 @@ func (s *Store) SetSession(ticketID, agent, tmuxWindow string, worktreePath, fea
 
 // EndSession marks the ticket's session as ended.
 func (s *Store) EndSession(ticketID string) error {
+	mu := s.ticketMu(ticketID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return err
@@ -258,6 +292,10 @@ func (s *Store) EndSession(ticketID string) error {
 
 // UpdateSessionStatus updates the current status of the ticket's session.
 func (s *Store) UpdateSessionStatus(ticketID string, agentStatus AgentStatus, tool, work *string) error {
+	mu := s.ticketMu(ticketID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return err
@@ -287,6 +325,10 @@ func (s *Store) UpdateSessionStatus(ticketID string, agentStatus AgentStatus, to
 
 // AddComment adds a comment to a ticket.
 func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, content string) (*Comment, error) {
+	mu := s.ticketMu(ticketID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return nil, err
@@ -314,6 +356,10 @@ func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, 
 // AddReviewRequest adds a review request to the ticket's active session.
 // Returns the total number of review requests after adding.
 func (s *Store) AddReviewRequest(ticketID, repoPath, summary string) (int, error) {
+	mu := s.ticketMu(ticketID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	ticket, status, err := s.Get(ticketID)
 	if err != nil {
 		return 0, err
@@ -355,19 +401,47 @@ func (s *Store) filename(ticket *Ticket) string {
 	return fmt.Sprintf("%s-%s.json", slug, shortID)
 }
 
-// save writes a ticket to the appropriate status directory.
+// save writes a ticket to the appropriate status directory using atomic write.
+// It writes to a temp file first, then renames to the target path to prevent
+// partial writes from corrupting data.
 func (s *Store) save(ticket *Ticket, status Status) error {
 	dir := filepath.Join(s.ticketsDir, string(status))
-	path := filepath.Join(dir, s.filename(ticket))
+	target := filepath.Join(dir, s.filename(ticket))
 
 	data, err := json.MarshalIndent(ticket, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal ticket: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("write file: %w", err)
+	// Write to a temp file in the same directory (same filesystem for atomic rename)
+	tmp, err := os.CreateTemp(dir, ".tmp-*.json")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
 	}
+	tmpPath := tmp.Name()
+
+	// Clean up temp file on error
+	defer func() {
+		if tmpPath != "" {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, target); err != nil {
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+
+	// Rename succeeded — prevent deferred cleanup from removing the target
+	tmpPath = ""
 
 	return nil
 }

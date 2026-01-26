@@ -35,7 +35,7 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 
 	all, err := store.ListAll()
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
@@ -78,7 +78,7 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 
 	tickets, err := store.List(ticket.Status(status))
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
@@ -114,7 +114,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	t, err := store.Create(req.Title, req.Body)
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
@@ -140,7 +140,7 @@ func (h *TicketHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	t, actualStatus, err := store.Get(id)
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
@@ -174,7 +174,7 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	// Check ticket exists and is in the expected status
 	_, actualStatus, err := store.Get(id)
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 	if string(actualStatus) != status {
@@ -190,7 +190,7 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 	t, err := store.Update(id, req.Title, req.Body)
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
@@ -218,7 +218,7 @@ func (h *TicketHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// Check ticket exists and is in the expected status
 	_, actualStatus, err := store.Get(id)
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 	if string(actualStatus) != status {
@@ -227,7 +227,7 @@ func (h *TicketHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := store.Delete(id); err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
@@ -254,7 +254,7 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 	// Check ticket exists and is in the expected status
 	_, actualStatus, err := store.Get(id)
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 	if string(actualStatus) != status {
@@ -274,14 +274,14 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := store.Move(id, ticket.Status(req.To)); err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
 	// Fetch the updated ticket
 	t, newStatus, err := store.Get(id)
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
@@ -326,7 +326,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	// Get ticket and verify status
 	t, actualStatus, err := store.Get(id)
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 	if string(actualStatus) != status {
@@ -465,7 +465,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	// Fetch updated ticket
 	t, newStatus, err := store.Get(id)
 	if err != nil {
-		handleTicketError(w, err)
+		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 

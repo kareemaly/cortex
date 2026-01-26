@@ -1,8 +1,10 @@
 package ticket
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -395,5 +397,92 @@ func TestStoreSessionNotFound(t *testing.T) {
 	err := store.EndSession(ticket.ID)
 	if !IsNotFound(err) {
 		t.Errorf("expected NotFoundError, got %T", err)
+	}
+}
+
+func TestStoreConcurrentUpdates(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	tk, err := store.Create("Concurrent Ticket", "initial body")
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	const goroutines = 10
+	const updatesPerGoroutine = 10
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < updatesPerGoroutine; i++ {
+				title := fmt.Sprintf("Title-%d-%d", g, i)
+				body := fmt.Sprintf("Body-%d-%d", g, i)
+				_, err := store.Update(tk.ID, &title, &body)
+				if err != nil {
+					t.Errorf("Update goroutine %d iter %d failed: %v", g, i, err)
+					return
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// Verify the ticket is still readable and valid
+	retrieved, status, err := store.Get(tk.ID)
+	if err != nil {
+		t.Fatalf("Get after concurrent updates failed: %v", err)
+	}
+	if status != StatusBacklog {
+		t.Errorf("status = %q, want %q", status, StatusBacklog)
+	}
+	if retrieved.Title == "" {
+		t.Error("title should not be empty after concurrent updates")
+	}
+}
+
+func TestStoreConcurrentAddComments(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	tk, err := store.Create("Comment Ticket", "body")
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	session, err := store.SetSession(tk.ID, "claude", "window", nil, nil)
+	if err != nil {
+		t.Fatalf("SetSession failed: %v", err)
+	}
+
+	const goroutines = 10
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func(g int) {
+			defer wg.Done()
+			content := fmt.Sprintf("Comment from goroutine %d", g)
+			_, err := store.AddComment(tk.ID, session.ID, CommentProgress, content)
+			if err != nil {
+				t.Errorf("AddComment goroutine %d failed: %v", g, err)
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// Verify all 10 comments are present (no lost updates)
+	retrieved, _, err := store.Get(tk.ID)
+	if err != nil {
+		t.Fatalf("Get after concurrent comments failed: %v", err)
+	}
+	if len(retrieved.Comments) != goroutines {
+		t.Errorf("comments count = %d, want %d", len(retrieved.Comments), goroutines)
 	}
 }
