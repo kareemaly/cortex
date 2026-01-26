@@ -140,6 +140,27 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		approveContent = "Your changes have been approved. Please call `mcp__cortex__concludeSession` with a full report to complete this ticket."
 	}
 
+	// Render template variables
+	vars := prompt.TicketVars{
+		ProjectPath: projectPath,
+		TicketID:    t.ID,
+		TicketTitle: t.Title,
+		TicketBody:  t.Body,
+	}
+	if session.WorktreePath != nil {
+		vars.WorktreePath = *session.WorktreePath
+	}
+	if session.FeatureBranch != nil {
+		vars.WorktreeBranch = *session.FeatureBranch
+	}
+	rendered, err := prompt.RenderTemplate(approveContent, vars)
+	if err != nil {
+		h.deps.Logger.Warn("failed to render approve template", "error", err)
+		// Fall through with unrendered content
+	} else {
+		approveContent = rendered
+	}
+
 	// Get window info from session
 	window, err := h.deps.TmuxManager.GetWindowByName(tmuxSession, session.TmuxWindow)
 	if err != nil {

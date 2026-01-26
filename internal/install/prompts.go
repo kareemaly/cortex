@@ -78,18 +78,14 @@ const DefaultApproveWorktreePrompt = `## Review Approved
 
 Your changes have been reviewed and approved. Complete the following steps:
 
-1. **Verify all changes are committed**
+1. **Commit all changes**
    - Run ` + "`git status`" + ` to check for uncommitted changes
    - Commit any remaining changes
 
-2. **Push your branch**
-   - Run ` + "`git push -u origin {{.WorktreeBranch}}`" + `
+2. **Merge to main**
+   - Run ` + "`cd {{.ProjectPath}} && git merge {{.WorktreeBranch}}`" + `
 
-3. **Merge to main branch** (from the main worktree)
-   - The changes in {{.WorktreeBranch}} need to be merged to main
-   - This may be done via PR or direct merge depending on project workflow
-
-4. **Call concludeSession**
+3. **Call concludeSession**
    - Call ` + "`mcp__cortex__concludeSession`" + ` with a complete report including:
      - Summary of all changes made
      - Key decisions and their rationale
