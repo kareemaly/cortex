@@ -429,7 +429,7 @@ func TestHandleSpawnSessionEmptyTicketID(t *testing.T) {
 }
 
 func TestHandleSpawnSessionTicketNotFound(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
+	server, cleanup := setupTestServerWithMockTmux(t, "")
 	defer cleanup()
 
 	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -470,12 +470,12 @@ func TestHandleSpawnSessionActiveSession(t *testing.T) {
 	}
 }
 
-func TestHandleSpawnSessionNoAutoMove(t *testing.T) {
+func TestHandleSpawnSessionAutoMovesToProgress(t *testing.T) {
 	server, cleanup := setupTestServerWithMockTmux(t, "")
 	defer cleanup()
 
 	// Create a ticket in backlog
-	created, err := server.Store().Create("Test No Auto Move", "Test body")
+	created, err := server.Store().Create("Test Auto Move", "Test body")
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -500,13 +500,13 @@ func TestHandleSpawnSessionNoAutoMove(t *testing.T) {
 		t.Fatalf("spawn should succeed, got message: %s", output.Message)
 	}
 
-	// Verify ticket stays in backlog (no auto-move)
+	// Verify ticket auto-moved to progress
 	_, statusAfter, err := server.Store().Get(created.ID)
 	if err != nil {
 		t.Fatalf("failed to get ticket after spawn: %v", err)
 	}
-	if statusAfter != ticket.StatusBacklog {
-		t.Errorf("ticket should remain in backlog after spawn, got %v", statusAfter)
+	if statusAfter != ticket.StatusProgress {
+		t.Errorf("ticket should be in progress after spawn, got %v", statusAfter)
 	}
 }
 

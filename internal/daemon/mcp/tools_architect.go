@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/kareemaly/cortex/internal/core/spawn"
@@ -221,25 +222,9 @@ func (s *Server) handleSpawnSession(
 		return nil, SpawnSessionOutput{}, NewValidationError("ticket_id", "cannot be empty")
 	}
 
-	// Default agent to claude
-	agent := input.Agent
-	if agent == "" {
-		agent = "claude"
-	}
-
-	// Default and validate mode
-	mode := input.Mode
-	if mode == "" {
-		mode = "normal"
-	}
-	if mode != "normal" && mode != "resume" && mode != "fresh" {
+	// Validate mode if provided
+	if input.Mode != "" && input.Mode != "normal" && input.Mode != "resume" && input.Mode != "fresh" {
 		return nil, SpawnSessionOutput{}, NewValidationError("mode", "must be 'normal', 'resume', or 'fresh'")
-	}
-
-	// Validate ticket exists
-	t, _, err := s.store.Get(input.TicketID)
-	if err != nil {
-		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}
 
 	// Validate TmuxSession is configured
@@ -253,6 +238,7 @@ func (s *Server) handleSpawnSession(
 	// Use injected tmux manager or create a new one
 	tmuxMgr := s.tmuxManager
 	if tmuxMgr == nil {
+		var err error
 		tmuxMgr, err = tmux.NewManager()
 		if err != nil {
 			return nil, SpawnSessionOutput{
@@ -262,125 +248,47 @@ func (s *Server) handleSpawnSession(
 		}
 	}
 
-	// Detect current state
-	stateInfo, err := spawn.DetectTicketState(t, s.config.TmuxSession, tmuxMgr)
-	if err != nil {
-		return nil, SpawnSessionOutput{}, WrapTicketError(err)
-	}
-	state := string(stateInfo.State)
-
-	// Create spawner with dependencies
-	spawner := spawn.NewSpawner(spawn.Dependencies{
+	// Delegate to shared orchestration
+	result, err := spawn.Orchestrate(ctx, spawn.OrchestrateRequest{
+		TicketID:    input.TicketID,
+		Mode:        input.Mode,
+		Agent:       input.Agent,
+		ProjectPath: s.config.ProjectPath,
+		TicketsDir:  s.config.TicketsDir,
+		TmuxSession: s.config.TmuxSession,
+	}, spawn.OrchestrateDeps{
 		Store:       s.store,
 		TmuxManager: tmuxMgr,
 		CortexdPath: s.config.CortexdPath,
 		Logger:      s.config.Logger,
 	})
-
-	// Determine if worktrees are enabled
-	useWorktree := s.projectConfig != nil && s.projectConfig.Git.Worktrees
-
-	// Execute based on state/mode matrix
-	var result *spawn.SpawnResult
-	switch stateInfo.State {
-	case spawn.StateNormal:
-		switch mode {
-		case "normal":
-			result, err = spawner.Spawn(ctx, spawn.SpawnRequest{
-				AgentType:   spawn.AgentTypeTicketAgent,
-				Agent:       agent,
-				TmuxSession: s.config.TmuxSession,
-				ProjectPath: s.config.ProjectPath,
-				TicketsDir:  s.config.TicketsDir,
-				TicketID:    input.TicketID,
-				Ticket:      t,
-				UseWorktree: useWorktree,
-			})
-		case "resume":
-			return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot resume - no existing session to resume")
-		case "fresh":
-			return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot use fresh mode - no existing session to clear")
-		}
-
-	case spawn.StateActive:
-		return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "session is currently active - wait for it to finish or close the tmux window")
-
-	case spawn.StateOrphaned:
-		switch mode {
-		case "normal":
-			return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "session was orphaned (tmux window closed). Use mode='resume' to continue or mode='fresh' to start over")
-		case "resume":
-			if stateInfo.Session == nil || stateInfo.Session.ID == "" {
-				return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot resume - no session ID stored")
-			}
-			result, err = spawner.Resume(ctx, spawn.ResumeRequest{
-				AgentType:   spawn.AgentTypeTicketAgent,
-				TmuxSession: s.config.TmuxSession,
-				ProjectPath: s.config.ProjectPath,
-				TicketsDir:  s.config.TicketsDir,
-				SessionID:   stateInfo.Session.ID,
-				WindowName:  stateInfo.Session.TmuxWindow,
-				TicketID:    input.TicketID,
-			})
-		case "fresh":
-			result, err = spawner.Fresh(ctx, spawn.SpawnRequest{
-				AgentType:   spawn.AgentTypeTicketAgent,
-				Agent:       agent,
-				TmuxSession: s.config.TmuxSession,
-				ProjectPath: s.config.ProjectPath,
-				TicketsDir:  s.config.TicketsDir,
-				TicketID:    input.TicketID,
-				Ticket:      t,
-				UseWorktree: useWorktree,
-			})
-		}
-
-	case spawn.StateEnded:
-		switch mode {
-		case "normal":
-			result, err = spawner.Spawn(ctx, spawn.SpawnRequest{
-				AgentType:   spawn.AgentTypeTicketAgent,
-				Agent:       agent,
-				TmuxSession: s.config.TmuxSession,
-				ProjectPath: s.config.ProjectPath,
-				TicketsDir:  s.config.TicketsDir,
-				TicketID:    input.TicketID,
-				Ticket:      t,
-				UseWorktree: useWorktree,
-			})
-		case "resume":
-			return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, mode, "cannot resume - session has ended")
-		case "fresh":
-			result, err = spawner.Fresh(ctx, spawn.SpawnRequest{
-				AgentType:   spawn.AgentTypeTicketAgent,
-				Agent:       agent,
-				TmuxSession: s.config.TmuxSession,
-				ProjectPath: s.config.ProjectPath,
-				TicketsDir:  s.config.TicketsDir,
-				TicketID:    input.TicketID,
-				Ticket:      t,
-				UseWorktree: useWorktree,
-			})
-		}
-	}
-
 	if err != nil {
+		var stateErr *spawn.StateError
+		if errors.As(err, &stateErr) {
+			return nil, SpawnSessionOutput{State: string(stateErr.State)}, NewStateConflictError(string(stateErr.State), input.Mode, stateErr.Message)
+		}
 		if spawn.IsConfigError(err) || spawn.IsBinaryNotFoundError(err) {
 			return nil, SpawnSessionOutput{
 				Success: false,
-				State:   state,
 				Message: err.Error(),
 			}, nil
 		}
 		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}
 
+	// Already active: return state conflict
+	if result.Outcome == spawn.OutcomeAlreadyActive {
+		state := string(result.StateInfo.State)
+		return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, input.Mode, "session is currently active - wait for it to finish or close the tmux window")
+	}
+
+	// Spawned or resumed
 	return nil, SpawnSessionOutput{
-		Success:    result.Success,
+		Success:    true,
 		TicketID:   input.TicketID,
-		SessionID:  result.SessionID,
-		TmuxWindow: result.TmuxWindow,
-		State:      state,
-		Message:    result.Message,
+		SessionID:  result.SpawnResult.SessionID,
+		TmuxWindow: result.SpawnResult.TmuxWindow,
+		State:      string(result.StateInfo.State),
+		Message:    result.SpawnResult.Message,
 	}, nil
 }

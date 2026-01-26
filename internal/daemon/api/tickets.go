@@ -3,13 +3,11 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kareemaly/cortex/internal/core/spawn"
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
 )
@@ -297,34 +295,18 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse mode parameter
+	id := chi.URLParam(r, "id")
 	mode := r.URL.Query().Get("mode")
-	if mode == "" {
-		mode = "normal"
-	}
-	if mode != "normal" && mode != "resume" && mode != "fresh" {
-		writeError(w, http.StatusBadRequest, "invalid_mode", "mode must be normal, resume, or fresh")
-		return
-	}
-
 	projectPath := GetProjectPath(r.Context())
+
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
 		return
 	}
 
-	// Load project config for this specific project
-	projectCfg, err := projectconfig.Load(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
-		return
-	}
-
-	id := chi.URLParam(r, "id")
-
-	// Get ticket and verify status
-	t, actualStatus, err := store.Get(id)
+	// Verify ticket exists at expected status (HTTP-specific URL validation)
+	_, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -340,138 +322,48 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get session name
-	sessionName := projectCfg.Name
-	if sessionName == "" {
-		sessionName = "cortex"
-	}
-
-	// Detect session state
-	stateInfo, err := spawn.DetectTicketState(t, sessionName, h.deps.TmuxManager)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "state_error", "failed to detect session state")
-		return
-	}
-
-	// Apply mode/state matrix
-	switch mode {
-	case "normal":
-		switch stateInfo.State {
-		case spawn.StateNormal, spawn.StateEnded:
-			// Spawn new - continue
-		case spawn.StateActive:
-			// Focus window and return existing
-			if err := h.deps.TmuxManager.FocusWindow(sessionName, stateInfo.Session.TmuxWindow); err != nil {
-				h.deps.Logger.Warn("failed to focus window", "error", err)
-			}
-			resp := SpawnResponse{
-				Session: types.ToSessionResponse(*stateInfo.Session),
-				Ticket:  types.ToTicketResponse(t, actualStatus),
-			}
-			writeJSON(w, http.StatusOK, resp)
-			return
-		case spawn.StateOrphaned:
-			writeError(w, http.StatusConflict, "session_orphaned", "ticket has an orphaned session; use mode=resume or mode=fresh")
-			return
-		}
-
-	case "resume":
-		switch stateInfo.State {
-		case spawn.StateOrphaned:
-			// Resume - handled below
-		case spawn.StateNormal:
-			writeError(w, http.StatusBadRequest, "no_session_to_resume", "no session to resume")
-			return
-		case spawn.StateActive:
-			writeError(w, http.StatusConflict, "session_active", "ticket already has an active session")
-			return
-		case spawn.StateEnded:
-			writeError(w, http.StatusBadRequest, "session_ended", "session has ended; cannot resume")
-			return
-		}
-
-	case "fresh":
-		switch stateInfo.State {
-		case spawn.StateOrphaned, spawn.StateEnded:
-			// Clear and spawn new - handled below
-		case spawn.StateNormal:
-			writeError(w, http.StatusBadRequest, "no_session_to_clear", "no session to clear")
-			return
-		case spawn.StateActive:
-			writeError(w, http.StatusConflict, "session_active", "ticket has an active session; cannot clear")
-			return
-		}
-	}
-
-	// Create spawner
-	ticketsDir := filepath.Join(projectPath, ".cortex", "tickets")
-	spawner := spawn.NewSpawner(spawn.Dependencies{
+	// Delegate to shared orchestration
+	result, err := spawn.Orchestrate(r.Context(), spawn.OrchestrateRequest{
+		TicketID:    id,
+		Mode:        mode,
+		ProjectPath: projectPath,
+	}, spawn.OrchestrateDeps{
 		Store:       store,
 		TmuxManager: h.deps.TmuxManager,
 		Logger:      h.deps.Logger,
 	})
-
-	var result *spawn.SpawnResult
-
-	if mode == "resume" {
-		// Resume orphaned session
-		result, err = spawner.Resume(r.Context(), spawn.ResumeRequest{
-			AgentType:   spawn.AgentTypeTicketAgent,
-			TmuxSession: sessionName,
-			ProjectPath: projectPath,
-			TicketsDir:  ticketsDir,
-			SessionID:   stateInfo.Session.ID,
-			WindowName:  stateInfo.Session.TmuxWindow,
-			TicketID:    id,
-		})
-	} else {
-		// Fresh mode: end existing session first
-		if mode == "fresh" && stateInfo.Session != nil {
-			if err := store.EndSession(id); err != nil {
-				h.deps.Logger.Warn("failed to end session", "error", err)
-			}
-		}
-
-		// Spawn new
-		result, err = spawner.Spawn(r.Context(), spawn.SpawnRequest{
-			AgentType:   spawn.AgentTypeTicketAgent,
-			Agent:       string(projectCfg.Agent),
-			TmuxSession: sessionName,
-			ProjectPath: projectPath,
-			TicketsDir:  ticketsDir,
-			TicketID:    id,
-			Ticket:      t,
-		})
-	}
-
 	if err != nil {
-		h.deps.Logger.Error("failed to spawn agent", "error", err)
-		writeError(w, http.StatusInternalServerError, "spawn_error", "failed to spawn agent session")
-		return
-	}
-
-	if !result.Success {
-		writeError(w, http.StatusInternalServerError, "spawn_error", result.Message)
-		return
-	}
-
-	// Move ticket to progress if in backlog
-	if actualStatus == ticket.StatusBacklog {
-		if err := store.Move(id, ticket.StatusProgress); err != nil {
-			h.deps.Logger.Warn("failed to move ticket to progress", "error", err)
+		switch {
+		case spawn.IsStateError(err):
+			writeError(w, http.StatusConflict, "state_conflict", err.Error())
+		case spawn.IsConfigError(err):
+			writeError(w, http.StatusBadRequest, "config_error", err.Error())
+		case spawn.IsBinaryNotFoundError(err):
+			h.deps.Logger.Error("binary not found", "error", err)
+			writeError(w, http.StatusInternalServerError, "spawn_error", err.Error())
+		default:
+			handleTicketError(w, err, h.deps.Logger)
 		}
-	}
-
-	// Fetch updated ticket
-	t, newStatus, err := store.Get(id)
-	if err != nil {
-		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
+	// Already active: focus window and return existing session
+	if result.Outcome == spawn.OutcomeAlreadyActive {
+		if err := h.deps.TmuxManager.FocusWindow(result.TmuxSession, result.StateInfo.Session.TmuxWindow); err != nil {
+			h.deps.Logger.Warn("failed to focus window", "error", err)
+		}
+		resp := SpawnResponse{
+			Session: types.ToSessionResponse(*result.StateInfo.Session),
+			Ticket:  types.ToTicketResponse(result.Ticket, result.TicketStatus),
+		}
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
+	// Spawned or resumed
 	resp := SpawnResponse{
-		Session: types.ToSessionResponse(*t.Session),
-		Ticket:  types.ToTicketResponse(t, newStatus),
+		Session: types.ToSessionResponse(*result.Ticket.Session),
+		Ticket:  types.ToTicketResponse(result.Ticket, result.TicketStatus),
 	}
 	writeJSON(w, http.StatusCreated, resp)
 }
