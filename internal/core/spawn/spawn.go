@@ -88,6 +88,9 @@ type SpawnRequest struct {
 
 	// For architect agents
 	ProjectName string
+
+	// Extra CLI args appended to the agent command
+	AgentArgs []string
 }
 
 // ResumeRequest contains parameters for resuming an orphaned session.
@@ -249,6 +252,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		MCPConfigPath:        mcpConfigPath,
 		SettingsPath:         settingsPath,
 		SessionID:            sessionID,
+		AgentArgs:            req.AgentArgs,
 		CleanupFiles:         tempFiles,
 	}
 

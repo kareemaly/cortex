@@ -17,9 +17,10 @@ const (
 
 // Config holds the project configuration.
 type Config struct {
-	Name  string    `yaml:"name"`
-	Agent AgentType `yaml:"agent"`
-	Git   GitConfig `yaml:"git"`
+	Name      string    `yaml:"name"`
+	Agent     AgentType `yaml:"agent"`
+	AgentArgs []string  `yaml:"agent_args"`
+	Git       GitConfig `yaml:"git"`
 }
 
 // GitConfig holds git-related configuration.

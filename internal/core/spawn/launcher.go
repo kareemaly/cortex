@@ -17,6 +17,7 @@ type LauncherParams struct {
 	AllowedTools         []string          // tools that don't require approval
 	ResumeID             string            // claude session ID to resume
 	SessionID            string            // session ID for --session-id flag
+	AgentArgs            []string          // extra CLI args appended to the agent command
 	EnvVars              map[string]string // env vars to export (e.g., CORTEX_TICKET_ID)
 	CleanupFiles         []string          // temp paths to rm on exit (launcher path is added automatically)
 }
@@ -122,6 +123,11 @@ func buildLauncherScript(params LauncherParams, cleanupFiles []string) string {
 	// Add session ID flag
 	if params.SessionID != "" {
 		parts = append(parts, "--session-id", params.SessionID)
+	}
+
+	// Add extra agent args
+	for _, arg := range params.AgentArgs {
+		parts = append(parts, shellQuote(arg))
 	}
 
 	sb.WriteString(strings.Join(parts, " "))

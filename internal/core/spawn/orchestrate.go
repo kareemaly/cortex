@@ -142,6 +142,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 			TicketID:    req.TicketID,
 			Ticket:      t,
 			UseWorktree: useWorktree,
+			AgentArgs:   projectCfg.AgentArgs,
 		}
 	}
 
