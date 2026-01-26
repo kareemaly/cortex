@@ -580,7 +580,11 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	writeSection("Backlog", tickets.Backlog)
 	writeSection("In Progress", tickets.Progress)
 	writeSection("Review", tickets.Review)
-	writeSection("Done", tickets.Done)
+	doneTickets := tickets.Done
+	if len(doneTickets) > 10 {
+		doneTickets = doneTickets[:10]
+	}
+	writeSection("Done", doneTickets)
 
 	return &promptInfo{
 		PromptText:          sb.String(),
