@@ -34,6 +34,10 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 	r.Group(func(r chi.Router) {
 		r.Use(ProjectRequired())
 
+		// SSE event stream
+		eventHandlers := NewEventHandlers(deps)
+		r.Get("/events", eventHandlers.Stream)
+
 		// Ticket routes
 		ticketHandlers := NewTicketHandlers(deps)
 		r.Route("/tickets", func(r chi.Router) {

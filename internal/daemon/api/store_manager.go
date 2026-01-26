@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -15,13 +16,15 @@ type StoreManager struct {
 	mu     sync.RWMutex
 	stores map[string]*ticket.Store
 	logger *slog.Logger
+	bus    *events.Bus
 }
 
 // NewStoreManager creates a new StoreManager.
-func NewStoreManager(logger *slog.Logger) *StoreManager {
+func NewStoreManager(logger *slog.Logger, bus *events.Bus) *StoreManager {
 	return &StoreManager{
 		stores: make(map[string]*ticket.Store),
 		logger: logger,
+		bus:    bus,
 	}
 }
 
@@ -55,7 +58,7 @@ func (m *StoreManager) GetStore(projectPath string) (*ticket.Store, error) {
 
 	// Create store at {projectPath}/.cortex/tickets/
 	ticketsDir := filepath.Join(projectPath, ".cortex", "tickets")
-	store, err := ticket.NewStore(ticketsDir)
+	store, err := ticket.NewStore(ticketsDir, m.bus, projectPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ticket store: %w", err)
 	}

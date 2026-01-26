@@ -10,6 +10,7 @@ import (
 	"github.com/kareemaly/cortex/internal/daemon/api"
 	"github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/daemon/logging"
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/pkg/version"
 	"github.com/spf13/cobra"
@@ -67,8 +68,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	// Create StoreManager (stores are created per-project on demand)
-	storeManager := api.NewStoreManager(logger)
+	// Create event bus and store manager
+	bus := events.NewBus()
+	storeManager := api.NewStoreManager(logger, bus)
 
 	// Initialize tmux manager (nil if not installed)
 	var tmuxManager *tmux.Manager
@@ -85,6 +87,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	deps := &api.Dependencies{
 		StoreManager: storeManager,
 		TmuxManager:  tmuxManager,
+		Bus:          bus,
 		Logger:       logger,
 	}
 

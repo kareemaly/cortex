@@ -10,12 +10,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kareemaly/cortex/internal/events"
 )
 
 // Store manages ticket storage with JSON files organized by status.
 type Store struct {
-	ticketsDir string
-	locks      sync.Map // maps ticket ID → *sync.Mutex
+	ticketsDir  string
+	locks       sync.Map // maps ticket ID → *sync.Mutex
+	bus         *events.Bus
+	projectPath string
 }
 
 // ticketMu returns the mutex for a given ticket ID, creating one if needed.
@@ -24,9 +27,22 @@ func (s *Store) ticketMu(id string) *sync.Mutex {
 	return v.(*sync.Mutex)
 }
 
+func (s *Store) emit(eventType events.EventType, ticketID string, payload any) {
+	if s.bus == nil {
+		return
+	}
+	s.bus.Emit(events.Event{
+		Type:        eventType,
+		ProjectPath: s.projectPath,
+		TicketID:    ticketID,
+		Payload:     payload,
+	})
+}
+
 // NewStore creates a new Store and ensures the directory structure exists.
-func NewStore(ticketsDir string) (*Store, error) {
-	s := &Store{ticketsDir: ticketsDir}
+// bus and projectPath are optional; pass nil/"" to disable event emission.
+func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, error) {
+	s := &Store{ticketsDir: ticketsDir, bus: bus, projectPath: projectPath}
 
 	// Create status directories
 	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
@@ -66,6 +82,7 @@ func (s *Store) Create(title, body string) (*Ticket, error) {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
+	s.emit(events.TicketCreated, ticket.ID, nil)
 	return ticket, nil
 }
 
@@ -110,6 +127,7 @@ func (s *Store) Update(id string, title, body *string) (*Ticket, error) {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
+	s.emit(events.TicketUpdated, ticket.ID, nil)
 	return ticket, nil
 }
 
@@ -131,6 +149,7 @@ func (s *Store) Delete(id string) error {
 			return fmt.Errorf("remove ticket file: %w", err)
 		}
 		s.locks.Delete(id)
+		s.emit(events.TicketDeleted, id, nil)
 		return nil
 	}
 	return &NotFoundError{Resource: "ticket", ID: id}
@@ -222,6 +241,7 @@ func (s *Store) Move(id string, to Status) error {
 		return fmt.Errorf("save ticket: %w", err)
 	}
 
+	s.emit(events.TicketMoved, ticket.ID, nil)
 	return nil
 }
 
@@ -261,6 +281,7 @@ func (s *Store) SetSession(ticketID, agent, tmuxWindow string, worktreePath, fea
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
+	s.emit(events.SessionStarted, ticketID, nil)
 	return session, nil
 }
 
@@ -287,6 +308,7 @@ func (s *Store) EndSession(ticketID string) error {
 		return fmt.Errorf("save ticket: %w", err)
 	}
 
+	s.emit(events.SessionEnded, ticketID, nil)
 	return nil
 }
 
@@ -320,6 +342,7 @@ func (s *Store) UpdateSessionStatus(ticketID string, agentStatus AgentStatus, to
 		return fmt.Errorf("save ticket: %w", err)
 	}
 
+	s.emit(events.SessionStatus, ticketID, nil)
 	return nil
 }
 
@@ -350,6 +373,7 @@ func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, 
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
+	s.emit(events.CommentAdded, ticketID, nil)
 	return &comment, nil
 }
 
@@ -387,6 +411,7 @@ func (s *Store) AddReviewRequest(ticketID, repoPath, summary string) (int, error
 		return 0, fmt.Errorf("save ticket: %w", err)
 	}
 
+	s.emit(events.ReviewRequested, ticketID, nil)
 	return len(ticket.Session.RequestedReviews), nil
 }
 
