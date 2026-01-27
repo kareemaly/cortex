@@ -20,6 +20,21 @@ func (m *Manager) SplitWindowHorizontal(session string, windowIndex int, working
 	return nil
 }
 
+// SplitWindowHorizontalWithPercent splits a window horizontally (side-by-side) creating a new pane on the right.
+// The new pane occupies the given percent of the window width.
+func (m *Manager) SplitWindowHorizontalWithPercent(session string, windowIndex, percent int, workingDir string) error {
+	target := fmt.Sprintf("%s:%d", session, windowIndex)
+	args := []string{"split-window", "-h", "-p", fmt.Sprintf("%d", percent), "-t", target}
+	if workingDir != "" {
+		args = append(args, "-c", workingDir)
+	}
+	output, err := m.run(args...)
+	if err != nil {
+		return &CommandError{Command: "split-window", Output: strings.TrimSpace(string(output))}
+	}
+	return nil
+}
+
 // ResetWindowPanes kills all panes in a window except pane 0, restoring it to a single-pane layout.
 // This is a no-op if the window already has only one pane.
 func (m *Manager) ResetWindowPanes(session string, windowIndex int) error {
