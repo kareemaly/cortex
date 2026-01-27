@@ -52,14 +52,14 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query),
 	}
 
-	// Sort by Updated descending (most recent first)
-	sortByUpdated := func(a, b TicketSummary) int {
-		return b.Updated.Compare(a.Updated)
+	// Sort by Created descending (most recent first)
+	sortByCreated := func(a, b TicketSummary) int {
+		return b.Created.Compare(a.Created)
 	}
-	slices.SortFunc(resp.Backlog, sortByUpdated)
-	slices.SortFunc(resp.Progress, sortByUpdated)
-	slices.SortFunc(resp.Review, sortByUpdated)
-	slices.SortFunc(resp.Done, sortByUpdated)
+	slices.SortFunc(resp.Backlog, sortByCreated)
+	slices.SortFunc(resp.Progress, sortByCreated)
+	slices.SortFunc(resp.Review, sortByCreated)
+	slices.SortFunc(resp.Done, sortByCreated)
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -92,9 +92,9 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 		Tickets: filterSummaryList(tickets, ticket.Status(status), query),
 	}
 
-	// Sort by Updated descending (most recent first)
+	// Sort by Created descending (most recent first)
 	slices.SortFunc(resp.Tickets, func(a, b TicketSummary) int {
-		return b.Updated.Compare(a.Updated)
+		return b.Created.Compare(a.Created)
 	})
 
 	writeJSON(w, http.StatusOK, resp)
