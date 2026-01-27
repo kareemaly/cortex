@@ -396,6 +396,15 @@ func (s *Spawner) Fresh(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		if err := s.deps.Store.EndSession(req.TicketID); err != nil {
 			s.logWarn("fresh: failed to end existing session", "ticketID", req.TicketID, "error", err)
 		}
+
+		// Clean up existing worktree and branch so Spawn() can create fresh ones
+		session := req.Ticket.Session
+		if session.WorktreePath != nil && session.FeatureBranch != nil {
+			wm := worktree.NewManager(req.ProjectPath)
+			if err := wm.Remove(ctx, *session.WorktreePath, *session.FeatureBranch); err != nil {
+				s.logWarn("fresh: failed to clean up old worktree/branch", "error", err)
+			}
+		}
 	}
 
 	return s.Spawn(ctx, req)
