@@ -25,13 +25,11 @@ type row struct {
 	kind         rowKind
 	projectIndex int    // index into projects slice
 	ticketID     string // non-empty for ticket session rows
-	isArchitect  bool   // true for architect session rows
 }
 
 // projectData holds per-project state.
 type projectData struct {
 	project   sdk.ProjectResponse
-	expanded  bool
 	tickets   *sdk.ListAllTicketsResponse
 	architect *sdk.ArchitectStateResponse
 	loading   bool
@@ -146,11 +144,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = nil
 		m.projects = make([]projectData, len(msg.Projects))
+		var cmds []tea.Cmd
 		for i, p := range msg.Projects {
-			m.projects[i] = projectData{project: p}
+			m.projects[i] = projectData{project: p, loading: true}
+			if p.Exists {
+				cmds = append(cmds, m.loadProjectDetail(p.Path))
+				cmds = append(cmds, m.subscribeProjectEvents(p.Path))
+			}
 		}
 		m.rebuildRows()
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case ProjectsErrorMsg:
 		m.loading = false
@@ -182,7 +185,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload this project's data and wait for next event.
 		idx := m.findProject(msg.ProjectPath)
 		cmds := []tea.Cmd{m.waitForProjectEvent(msg.ProjectPath)}
-		if idx >= 0 && m.projects[idx].expanded {
+		if idx >= 0 {
 			cmds = append(cmds, m.loadProjectDetail(msg.ProjectPath))
 		}
 		return m, tea.Batch(cmds...)
@@ -196,7 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusIsError = false
 			// Reload project detail.
 			idx := m.findProject(msg.ProjectPath)
-			if idx >= 0 && m.projects[idx].expanded {
+			if idx >= 0 {
 				return m, tea.Batch(m.loadProjectDetail(msg.ProjectPath), m.clearStatusAfterDelay())
 			}
 		}
@@ -303,19 +306,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Expand / collapse.
-	if isKey(msg, KeyEnter, KeyL) {
-		return m.handleExpandCollapse()
-	}
-
-	// Collapse (h collapses current or parent project).
-	if isKey(msg, KeyH) {
-		return m.handleCollapse()
-	}
-
-	// Focus session.
-	if isKey(msg, KeyFocus) {
-		return m.handleFocus()
+	// Focus current row.
+	if isKey(msg, KeyEnter, KeyL, KeyFocus) {
+		return m.handleFocusCurrentRow()
 	}
 
 	// Spawn architect.
@@ -332,9 +325,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			delete(m.sseContexts, path)
 			delete(m.sseChannels, path)
 		}
-		// Reset expansion state.
+		// Reset project state.
 		for i := range m.projects {
-			m.projects[i].expanded = false
 			m.projects[i].tickets = nil
 			m.projects[i].architect = nil
 			m.projects[i].loading = false
@@ -346,108 +338,32 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleExpandCollapse toggles expand/collapse on project rows.
-func (m Model) handleExpandCollapse() (tea.Model, tea.Cmd) {
+// handleFocusCurrentRow focuses the architect (project row) or ticket session (session row).
+func (m Model) handleFocusCurrentRow() (tea.Model, tea.Cmd) {
 	if m.cursor < 0 || m.cursor >= len(m.rows) {
 		return m, nil
 	}
 	r := m.rows[m.cursor]
+	pd := m.projects[r.projectIndex]
 
 	if r.kind == rowProject {
-		pd := &m.projects[r.projectIndex]
-
-		// Don't expand stale projects.
 		if !pd.project.Exists {
-			return m, nil
+			m.statusMsg = "Project is stale"
+			m.statusIsError = false
+			return m, m.clearStatusAfterDelay()
 		}
-
-		if pd.expanded {
-			// Collapse.
-			pd.expanded = false
-			pd.tickets = nil
-			pd.architect = nil
-			// Cancel SSE for this project.
-			if cancel, ok := m.sseContexts[pd.project.Path]; ok {
-				cancel()
-				delete(m.sseContexts, pd.project.Path)
-				delete(m.sseChannels, pd.project.Path)
-			}
-			m.rebuildRows()
-		} else {
-			// Expand.
-			pd.expanded = true
-			pd.loading = true
-			m.rebuildRows()
-			return m, tea.Batch(
-				m.loadProjectDetail(pd.project.Path),
-				m.subscribeProjectEvents(pd.project.Path),
-			)
+		if pd.architect != nil && pd.architect.State == "active" {
+			// Focus the active architect.
+			m.statusMsg = "Focusing architect..."
+			m.statusIsError = false
+			return m, m.spawnArchitect(pd.project.Path)
 		}
-	}
-
-	return m, nil
-}
-
-// handleCollapse collapses the current or parent project.
-func (m Model) handleCollapse() (tea.Model, tea.Cmd) {
-	if m.cursor < 0 || m.cursor >= len(m.rows) {
-		return m, nil
-	}
-	r := m.rows[m.cursor]
-
-	projectIdx := r.projectIndex
-	pd := &m.projects[projectIdx]
-
-	if !pd.expanded {
-		return m, nil
-	}
-
-	// Collapse.
-	pd.expanded = false
-	pd.tickets = nil
-	pd.architect = nil
-	// Cancel SSE.
-	if cancel, ok := m.sseContexts[pd.project.Path]; ok {
-		cancel()
-		delete(m.sseContexts, pd.project.Path)
-		delete(m.sseChannels, pd.project.Path)
-	}
-
-	// Move cursor to the project row.
-	for i, row := range m.rows {
-		if row.kind == rowProject && row.projectIndex == projectIdx {
-			m.cursor = i
-			break
-		}
-	}
-
-	m.rebuildRows()
-	return m, nil
-}
-
-// handleFocus focuses the selected session's tmux window.
-func (m Model) handleFocus() (tea.Model, tea.Cmd) {
-	if m.cursor < 0 || m.cursor >= len(m.rows) {
-		return m, nil
-	}
-	r := m.rows[m.cursor]
-
-	if r.kind != rowSession {
-		m.statusMsg = "Select a session to focus"
+		m.statusMsg = "No active architect. Press [s] to spawn."
 		m.statusIsError = false
 		return m, m.clearStatusAfterDelay()
 	}
 
-	pd := m.projects[r.projectIndex]
-
-	if r.isArchitect {
-		// Focus architect by spawning (it focuses if active).
-		m.statusMsg = "Focusing architect..."
-		m.statusIsError = false
-		return m, m.spawnArchitect(pd.project.Path)
-	}
-
-	// Focus ticket session.
+	// Session row — focus ticket.
 	m.statusMsg = "Focusing session..."
 	m.statusIsError = false
 	return m, m.focusTicket(pd.project.Path, r.ticketID)
@@ -579,10 +495,11 @@ func (m Model) View() string {
 func (m Model) renderProjectRow(projectIdx int, selected bool) string {
 	pd := m.projects[projectIdx]
 
-	// Expand indicator.
-	indicator := "▶"
-	if pd.expanded {
-		indicator = "▼"
+	// Architect active indicator.
+	architectActive := pd.architect != nil && pd.architect.State == "active"
+	indicator := "○"
+	if architectActive {
+		indicator = "●"
 	}
 
 	// Title.
@@ -598,7 +515,7 @@ func (m Model) renderProjectRow(projectIdx int, selected bool) string {
 		counts = fmt.Sprintf("(%d backlog · %d prog · %d review)", c.Backlog, c.Progress, c.Review)
 	}
 
-	// Loading indicator for expanded projects.
+	// Loading indicator.
 	if pd.loading {
 		counts = "(loading...)"
 	}
@@ -612,41 +529,26 @@ func (m Model) renderProjectRow(projectIdx int, selected bool) string {
 	if !pd.project.Exists {
 		line := fmt.Sprintf("%s %s (stale)", indicator, title)
 		if selected {
-			return selectedStyle.Width(m.width - 1).Render(line)
+			return selectedStyle.Render(line)
 		}
 		return staleStyle.Render(line)
 	}
 
 	if selected {
 		plainLine := fmt.Sprintf("%s %s %s", indicator, title, counts)
-		return selectedStyle.Width(m.width - 1).Render(plainLine)
+		return selectedStyle.Render(plainLine)
 	}
-	return projectStyle.Render(fmt.Sprintf("%s %s", indicator, title)) + " " + countsStyle.Render(counts)
+
+	if architectActive {
+		return activeIconStyle.Render(indicator) + " " + projectStyle.Render(title) + " " + countsStyle.Render(counts)
+	}
+	return mutedStyleRender.Render(indicator) + " " + dimmedProjectStyle.Render(title) + " " + countsStyle.Render(counts)
 }
 
 // renderSessionRow renders a single session row.
 func (m Model) renderSessionRow(r row, selected bool) string {
 	pd := m.projects[r.projectIndex]
 	indent := "    "
-
-	if r.isArchitect {
-		icon := activeIconStyle.Render("●")
-		name := "architect"
-		badge := runningBadgeStyle.Render("running")
-
-		// Duration from architect session StartedAt.
-		dur := ""
-		if pd.architect != nil && pd.architect.Session != nil {
-			dur = formatDuration(time.Since(pd.architect.Session.StartedAt))
-		}
-
-		if selected {
-			plain := fmt.Sprintf("%s%s %-24s %-10s %s", indent, "●", name, "running", dur)
-			return selectedStyle.Width(m.width - 1).Render(plain)
-		}
-
-		return fmt.Sprintf("%s%s %-24s %-10s %s", indent, icon, sessionStyle.Render(name), badge, durationStyle.Render(dur))
-	}
 
 	// Ticket session row.
 	ticket := m.findTicket(pd, r.ticketID)
@@ -671,7 +573,7 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 
 	if selected {
 		plain := fmt.Sprintf("%s%s %-24s %-10s %s", indent, icon, name, badge, dur)
-		return selectedStyle.Width(m.width - 1).Render(plain)
+		return selectedStyle.Render(plain)
 	}
 
 	return fmt.Sprintf("%s%s %-24s %-10s %s", indent, styledIcon, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
@@ -684,15 +586,6 @@ func (m *Model) rebuildRows() {
 	var rows []row
 	for i, pd := range m.projects {
 		rows = append(rows, row{kind: rowProject, projectIndex: i})
-
-		if !pd.expanded {
-			continue
-		}
-
-		// Add architect row if active.
-		if pd.architect != nil && pd.architect.State == "active" {
-			rows = append(rows, row{kind: rowSession, projectIndex: i, isArchitect: true})
-		}
 
 		// Add ticket session rows for progress/review tickets with active sessions.
 		if pd.tickets != nil {

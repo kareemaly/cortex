@@ -12,7 +12,6 @@ const (
 	KeyDown    Key = "down"
 	KeyK       Key = "k"
 	KeyJ       Key = "j"
-	KeyH       Key = "h"
 	KeyL       Key = "l"
 	KeyEnter   Key = "enter"
 	KeyFocus   Key = "f"
@@ -37,5 +36,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the dashboard.
 func helpText() string {
-	return "[f]ocus  [s]pawn architect  [r]efresh  [j/k/gg/G] navigate  [enter/l] expand  [h] collapse  [q]uit"
+	return "[enter/f] focus  [s]pawn architect  [r]efresh  [j/k/gg/G] navigate  [q]uit"
 }

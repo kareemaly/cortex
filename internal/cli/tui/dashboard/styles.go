@@ -9,7 +9,6 @@ var (
 	activeColor   = lipgloss.Color("212") // pink/magenta for active selection
 	errorColor    = lipgloss.Color("196") // red for errors
 	mutedColor    = lipgloss.Color("240") // muted gray
-	greenColor    = lipgloss.Color("82")  // green for running
 )
 
 // Styles for the dashboard.
@@ -47,9 +46,6 @@ var (
 	reviewBadgeStyle = lipgloss.NewStyle().
 				Foreground(reviewColor)
 
-	runningBadgeStyle = lipgloss.NewStyle().
-				Foreground(greenColor)
-
 	// Duration style (muted).
 	durationStyle = lipgloss.NewStyle().
 			Foreground(mutedColor)
@@ -82,4 +78,9 @@ var (
 	// Active session icon style.
 	activeIconStyle = lipgloss.NewStyle().
 			Foreground(activeColor)
+
+	// Dimmed project style for projects without active architect.
+	dimmedProjectStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(mutedColor)
 )
