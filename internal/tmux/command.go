@@ -110,6 +110,11 @@ func (m *Manager) SpawnArchitect(session, windowName, agentCommand, companionCom
 		return err
 	}
 
+	// Reset window to single pane (clean up stale companion from previous spawn)
+	if err := m.ResetWindowPanes(session, ArchitectWindowIndex); err != nil {
+		return err
+	}
+
 	// If session existed, prepend cd to ensure correct directory
 	cmdToRun := agentCommand
 	if exists && workingDir != "" {
