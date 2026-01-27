@@ -30,6 +30,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 	// Global endpoints (no project required)
 	r.Get("/health", HealthHandler())
 	r.Get("/projects", ProjectsHandler(deps.StoreManager))
+	r.Post("/daemon/focus", DaemonFocusHandler(deps.TmuxManager))
 
 	// Project-scoped routes
 	r.Group(func(r chi.Router) {
