@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/kareemaly/cortex/internal/daemon/api"
-	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -68,30 +67,19 @@ func (s *Server) handleListTickets(
 	if input.Status == "" {
 		return nil, ListTicketsOutput{}, NewValidationError("status", "is required")
 	}
-	status := ticket.Status(input.Status)
-	if status != ticket.StatusBacklog && status != ticket.StatusProgress && status != ticket.StatusReview && status != ticket.StatusDone {
+	if input.Status != "backlog" && input.Status != "progress" && input.Status != "review" && input.Status != "done" {
 		return nil, ListTicketsOutput{}, NewValidationError("status", "must be one of: backlog, progress, review, done")
 	}
 
-	// Initialize as empty slice (not nil) to ensure JSON marshals to [] not null
-	summaries := []TicketSummary{}
-
-	// Prepare query for case-insensitive matching
-	query := strings.ToLower(input.Query)
-
-	// List by status
-	tickets, err := s.store.List(status)
+	resp, err := s.sdkClient.ListTicketsByStatus(input.Status, input.Query)
 	if err != nil {
-		return nil, ListTicketsOutput{}, WrapTicketError(err)
+		return nil, ListTicketsOutput{}, wrapSDKError(err)
 	}
-	for _, t := range tickets {
-		// Apply query filter if specified
-		if query != "" &&
-			!strings.Contains(strings.ToLower(t.Title), query) &&
-			!strings.Contains(strings.ToLower(t.Body), query) {
-			continue
-		}
-		summaries = append(summaries, ToTicketSummary(t, status))
+
+	// Map shared types to MCP-specific summaries
+	summaries := make([]TicketSummary, len(resp.Tickets))
+	for i, t := range resp.Tickets {
+		summaries[i] = ticketSummaryResponseToMCP(&t)
 	}
 
 	return nil, ListTicketsOutput{
@@ -110,13 +98,13 @@ func (s *Server) handleReadTicket(
 		return nil, ReadTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	t, status, err := s.store.Get(input.ID)
+	resp, err := s.sdkClient.GetTicketByID(input.ID)
 	if err != nil {
-		return nil, ReadTicketOutput{}, WrapTicketError(err)
+		return nil, ReadTicketOutput{}, wrapSDKError(err)
 	}
 
 	return nil, ReadTicketOutput{
-		Ticket: ToTicketOutput(t, status),
+		Ticket: ticketResponseToOutput(resp),
 	}, nil
 }
 
@@ -191,8 +179,7 @@ func (s *Server) handleMoveTicket(
 	}
 
 	// Validate status
-	status := ticket.Status(input.Status)
-	if status != ticket.StatusBacklog && status != ticket.StatusProgress && status != ticket.StatusReview && status != ticket.StatusDone {
+	if input.Status != "backlog" && input.Status != "progress" && input.Status != "review" && input.Status != "done" {
 		return nil, MoveTicketOutput{}, NewValidationError("status", "must be backlog, progress, review, or done")
 	}
 
@@ -224,14 +211,14 @@ func (s *Server) handleSpawnSession(
 		return nil, SpawnSessionOutput{}, NewValidationError("mode", "must be 'normal', 'resume', or 'fresh'")
 	}
 
-	// Find ticket status via local store (needed to build the URL)
-	_, status, err := s.store.Get(input.TicketID)
+	// Look up ticket status via daemon API (needed to build the spawn URL)
+	ticketResp, err := s.sdkClient.GetTicketByID(input.TicketID)
 	if err != nil {
-		return nil, SpawnSessionOutput{}, WrapTicketError(err)
+		return nil, SpawnSessionOutput{}, wrapSDKError(err)
 	}
 
 	// Build HTTP request to daemon
-	url := fmt.Sprintf("%s/tickets/%s/%s/spawn", s.config.DaemonURL, string(status), input.TicketID)
+	url := fmt.Sprintf("%s/tickets/%s/%s/spawn", s.config.DaemonURL, ticketResp.Status, input.TicketID)
 	if input.Mode != "" {
 		url += "?mode=" + input.Mode
 	}

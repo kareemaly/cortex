@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/project/config"
-	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/pkg/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -20,13 +18,9 @@ type Config struct {
 	// If empty, the session is an architect session with full access.
 	TicketID string
 
-	// TicketsDir is the directory where tickets are stored.
-	// If empty, derived from ProjectPath/.cortex/tickets.
-	TicketsDir string
-
 	// ProjectPath is the project root for hook execution.
 	// If set, project config is loaded from this path.
-	// Required if TicketsDir is not set.
+	// Required for architect sessions.
 	ProjectPath string
 
 	// TmuxSession is the tmux session name for spawning agents.
@@ -56,7 +50,6 @@ type Config struct {
 // Server is the MCP server for ticket management.
 type Server struct {
 	mcpServer     *mcp.Server
-	store         *ticket.Store
 	sdkClient     *sdk.Client
 	session       *Session
 	config        *Config
@@ -83,7 +76,6 @@ func NewServer(cfg *Config) (*Server, error) {
 		}
 	}
 
-	var store *ticket.Store
 	var sdkClient *sdk.Client
 	var projectCfg *config.Config
 
@@ -94,34 +86,21 @@ func NewServer(cfg *Config) (*Server, error) {
 		}
 		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ProjectPath)
 	} else {
-		// Architect sessions use a local ticket store (they run in-process with the daemon)
-		ticketsDir := cfg.TicketsDir
-		if ticketsDir == "" {
-			if cfg.ProjectPath != "" {
-				ticketsDir = filepath.Join(cfg.ProjectPath, ".cortex", "tickets")
-			} else {
-				return nil, fmt.Errorf("MCP server requires CORTEX_PROJECT_PATH or CORTEX_TICKETS_DIR to be set")
-			}
+		// Architect sessions route all operations through the daemon HTTP API
+		if cfg.ProjectPath == "" {
+			return nil, fmt.Errorf("MCP server requires CORTEX_PROJECT_PATH to be set")
 		}
 
 		var err error
-		store, err = ticket.NewStore(ticketsDir, nil, "")
+		projectCfg, err = config.Load(cfg.ProjectPath)
 		if err != nil {
 			return nil, err
-		}
-
-		if cfg.ProjectPath != "" {
-			projectCfg, err = config.Load(cfg.ProjectPath)
-			if err != nil {
-				return nil, err
-			}
 		}
 
 		if cfg.DaemonURL == "" {
 			cfg.DaemonURL = "http://localhost:4200"
 		}
 
-		// SDK client for routing mutations through the daemon HTTP API (emits SSE events)
 		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ProjectPath)
 	}
 
@@ -133,7 +112,6 @@ func NewServer(cfg *Config) (*Server, error) {
 
 	s := &Server{
 		mcpServer:     mcpServer,
-		store:         store,
 		sdkClient:     sdkClient,
 		session:       session,
 		config:        cfg,
@@ -154,11 +132,6 @@ func NewServer(cfg *Config) (*Server, error) {
 // Run starts the MCP server using stdio transport.
 func (s *Server) Run(ctx context.Context) error {
 	return s.mcpServer.Run(ctx, &mcp.StdioTransport{})
-}
-
-// Store returns the ticket store for testing purposes.
-func (s *Server) Store() *ticket.Store {
-	return s.store
 }
 
 // Session returns the current session for testing purposes.
