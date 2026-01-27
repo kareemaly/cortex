@@ -83,4 +83,8 @@ var (
 	dimmedProjectStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(mutedColor)
+
+	// Warn badge style for log badge.
+	warnBadgeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214"))
 )

@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
 )
 
 // rowKind identifies what a tree row represents.
@@ -57,6 +58,11 @@ type Model struct {
 
 	// Vim navigation state.
 	pendingG bool
+
+	// Log viewer state.
+	logBuf        *tuilog.Buffer
+	logViewer     tuilog.Viewer
+	showLogViewer bool
 }
 
 // --- Message types ---
@@ -114,12 +120,14 @@ type ClearStatusMsg struct{}
 type TickMsg struct{}
 
 // New creates a new dashboard model.
-func New(client *sdk.Client) Model {
+func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 	return Model{
 		globalClient: client,
 		loading:      true,
 		sseContexts:  make(map[string]context.CancelFunc),
 		sseChannels:  make(map[string]<-chan sdk.Event),
+		logBuf:       logBuf,
+		logViewer:    tuilog.NewViewer(logBuf),
 	}
 }
 
@@ -130,6 +138,25 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle log viewer dismiss.
+	if _, ok := msg.(tuilog.DismissLogViewerMsg); ok {
+		m.showLogViewer = false
+		return m, nil
+	}
+
+	// Delegate to log viewer when active.
+	if m.showLogViewer {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width = sizeMsg.Width
+			m.height = sizeMsg.Height
+			m.ready = true
+			m.logViewer.SetSize(m.width, m.height)
+		}
+		var cmd tea.Cmd
+		m.logViewer, cmd = m.logViewer.Update(msg)
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -153,11 +180,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.rebuildRows()
+		m.logBuf.Debugf("api", "projects loaded: %d", len(msg.Projects))
 		return m, tea.Batch(cmds...)
 
 	case ProjectsErrorMsg:
 		m.loading = false
 		m.err = msg.Err
+		m.logBuf.Errorf("api", "failed to load projects: %s", msg.Err)
 		return m, nil
 
 	case ProjectDetailLoadedMsg:
@@ -168,10 +197,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.projects[idx].loading = false
 		if msg.Err != nil {
 			m.projects[idx].err = msg.Err
+			m.logBuf.Errorf("api", "failed to load project detail: %s: %s", filepath.Base(msg.ProjectPath), msg.Err)
 		} else {
 			m.projects[idx].tickets = msg.Tickets
 			m.projects[idx].architect = msg.Architect
 			m.projects[idx].err = nil
+			m.logBuf.Debugf("api", "project detail loaded: %s", filepath.Base(msg.ProjectPath))
 		}
 		m.rebuildRows()
 		return m, nil
@@ -179,9 +210,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SSEConnectedMsg:
 		m.sseContexts[msg.ProjectPath] = msg.Cancel
 		m.sseChannels[msg.ProjectPath] = msg.Ch
+		m.logBuf.Infof("sse", "connected: %s", filepath.Base(msg.ProjectPath))
 		return m, m.waitForProjectEvent(msg.ProjectPath)
 
 	case SSEEventMsg:
+		m.logBuf.Debugf("sse", "event: %s", filepath.Base(msg.ProjectPath))
 		// Reload this project's data and wait for next event.
 		idx := m.findProject(msg.ProjectPath)
 		cmds := []tea.Cmd{m.waitForProjectEvent(msg.ProjectPath)}
@@ -194,9 +227,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.statusMsg = fmt.Sprintf("Spawn error: %s", msg.Err)
 			m.statusIsError = true
+			m.logBuf.Errorf("spawn", "architect spawn failed: %s: %s", filepath.Base(msg.ProjectPath), msg.Err)
 		} else {
 			m.statusMsg = "Architect spawned"
 			m.statusIsError = false
+			m.logBuf.Infof("spawn", "architect spawned: %s", filepath.Base(msg.ProjectPath))
 			// Reload project detail.
 			idx := m.findProject(msg.ProjectPath)
 			if idx >= 0 {
@@ -208,11 +243,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case FocusSuccessMsg:
 		m.statusMsg = fmt.Sprintf("Focused: %s", msg.Name)
 		m.statusIsError = false
+		m.logBuf.Infof("focus", "focused: %s", msg.Name)
 		return m, m.clearStatusAfterDelay()
 
 	case FocusErrorMsg:
 		m.statusMsg = fmt.Sprintf("Focus error: %s", msg.Err)
 		m.statusIsError = true
+		m.logBuf.Errorf("focus", "focus failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
 	case ClearStatusMsg:
@@ -235,6 +272,16 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cancel()
 		}
 		return m, tea.Quit
+	}
+
+	// Toggle log viewer.
+	if isKey(msg, KeyExclaim) {
+		m.showLogViewer = !m.showLogViewer
+		if m.showLogViewer {
+			m.logViewer.SetSize(m.width, m.height)
+			m.logViewer.Reset()
+		}
+		return m, nil
 	}
 
 	// Don't process other keys while loading.
@@ -396,6 +443,11 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
+	// Log viewer overlay.
+	if m.showLogViewer {
+		return m.logViewer.View()
+	}
+
 	var b strings.Builder
 
 	// Header.
@@ -486,9 +538,31 @@ func (m Model) View() string {
 	}
 
 	// Help bar.
-	b.WriteString(helpBarStyle.Render(helpText()))
+	help := helpBarStyle.Render(helpText())
+	badge := m.logBadge()
+	if badge != "" {
+		help = help + "  " + badge
+	}
+	b.WriteString(help)
 
 	return b.String()
+}
+
+// logBadge renders an error/warning count badge for the status bar.
+func (m Model) logBadge() string {
+	ec := m.logBuf.ErrorCount()
+	wc := m.logBuf.WarnCount()
+	if ec == 0 && wc == 0 {
+		return ""
+	}
+	var parts []string
+	if ec > 0 {
+		parts = append(parts, errorStatusStyle.Render(fmt.Sprintf("E:%d", ec)))
+	}
+	if wc > 0 {
+		parts = append(parts, warnBadgeStyle.Render(fmt.Sprintf("W:%d", wc)))
+	}
+	return strings.Join(parts, " ")
 }
 
 // renderProjectRow renders a single project row.

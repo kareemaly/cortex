@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/cli/tui/dashboard"
+	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
 	"github.com/spf13/cobra"
 )
 
@@ -23,8 +24,9 @@ Examples:
   cortex dashboard   # Open the dashboard`,
 	Run: func(cmd *cobra.Command, args []string) {
 		client := sdk.DefaultClient("")
+		logBuf := tuilog.NewBuffer(tuilog.DefaultCapacity)
 		p := tea.NewProgram(
-			dashboard.New(client),
+			dashboard.New(client, logBuf),
 			tea.WithAltScreen(),
 		)
 		if _, err := p.Run(); err != nil {
