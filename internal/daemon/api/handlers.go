@@ -26,6 +26,10 @@ func DaemonFocusHandler(tmuxMgr *tmux.Manager) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "focus_error", err.Error())
 			return
 		}
+		if err := tmuxMgr.SwitchClient("CortexDaemon"); err != nil {
+			writeError(w, http.StatusInternalServerError, "focus_error", err.Error())
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(FocusResponse{Success: true, Window: "dashboard"})
