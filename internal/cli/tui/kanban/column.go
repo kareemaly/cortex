@@ -191,20 +191,30 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 					b.WriteString(selectedTicketStyle.Width(width - 2).Render(prefix + line))
 					b.WriteString("\n")
 				}
-				// Date line with selection style
-				b.WriteString(selectedTicketStyle.Width(width - 2).Render("  " + dateStr))
+				// Metadata line: agent status + date
+				meta := "  "
+				if t.HasActiveSession {
+					meta += agentStatusLabel(t) + " · "
+				}
+				meta += dateStr
+				b.WriteString(selectedTicketStyle.Width(width - 2).Render(meta))
 			} else {
-				// Normal: show with appropriate prefix
+				// Normal: icon-only prefix for active sessions
 				for lineIdx, line := range wrappedTitle {
 					prefix := "  "
 					if lineIdx == 0 && t.HasActiveSession {
-						prefix = formatAgentStatus(t)
+						prefix = activeSessionStyle.Render(agentStatusIcon(t)) + " "
 					}
 					b.WriteString(ticketStyle.Width(width - 2).Render(prefix + line))
 					b.WriteString("\n")
 				}
-				// Date line with muted style
-				b.WriteString(ticketDateStyle.Width(width - 2).Render("  " + dateStr))
+				// Metadata line: agent status + date
+				meta := "  "
+				if t.HasActiveSession {
+					meta += activeSessionStyle.Render(agentStatusLabel(t)) + " · "
+				}
+				meta += dateStr
+				b.WriteString(ticketDateStyle.Width(width - 2).Render(meta))
 			}
 
 			if i < endIdx-1 {
@@ -230,34 +240,38 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	return columnStyle.Width(width).Height(maxHeight).Render(content)
 }
 
-// formatAgentStatus returns a styled prefix based on agent status.
-func formatAgentStatus(t sdk.TicketSummary) string {
+// agentStatusIcon returns the icon character for the agent's current status.
+func agentStatusIcon(t sdk.TicketSummary) string {
 	if t.AgentStatus == nil {
-		return activeSessionStyle.Render("● ")
+		return "●"
 	}
 
 	symbols := map[string]string{
-		"starting":           "▶ ",
-		"in_progress":        "● ",
-		"idle":               "○ ",
-		"waiting_permission": "⏸ ",
-		"error":              "✗ ",
+		"starting":           "▶",
+		"in_progress":        "●",
+		"idle":               "○",
+		"waiting_permission": "⏸",
+		"error":              "✗",
 	}
 
 	symbol := symbols[*t.AgentStatus]
 	if symbol == "" {
-		symbol = "● "
+		symbol = "●"
 	}
+	return symbol
+}
 
+// agentStatusLabel returns the icon + truncated tool name (unstyled) for the metadata line.
+func agentStatusLabel(t sdk.TicketSummary) string {
+	icon := agentStatusIcon(t)
 	if t.AgentTool != nil && *t.AgentTool != "" {
 		tool := *t.AgentTool
 		if len(tool) > 8 {
 			tool = tool[:8]
 		}
-		return activeSessionStyle.Render(symbol + tool + " ")
+		return icon + " " + tool
 	}
-
-	return activeSessionStyle.Render(symbol)
+	return icon
 }
 
 // wrapText wraps text to fit within width, returning all wrapped lines.
