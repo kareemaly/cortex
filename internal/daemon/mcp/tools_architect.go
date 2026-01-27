@@ -2,12 +2,14 @@ package mcp
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"strings"
 
-	"github.com/kareemaly/cortex/internal/core/spawn"
+	"github.com/kareemaly/cortex/internal/daemon/api"
 	"github.com/kareemaly/cortex/internal/ticket"
-	"github.com/kareemaly/cortex/internal/tmux"
+	"github.com/kareemaly/cortex/internal/types"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -213,6 +215,7 @@ func (s *Server) handleMoveTicket(
 }
 
 // handleSpawnSession spawns a new agent session for a ticket.
+// Delegates to the daemon HTTP API instead of calling spawn.Orchestrate() directly.
 func (s *Server) handleSpawnSession(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -227,68 +230,106 @@ func (s *Server) handleSpawnSession(
 		return nil, SpawnSessionOutput{}, NewValidationError("mode", "must be 'normal', 'resume', or 'fresh'")
 	}
 
-	// Validate TmuxSession is configured
-	if s.config.TmuxSession == "" {
-		return nil, SpawnSessionOutput{
-			Success: false,
-			Message: "cannot spawn session: CORTEX_TMUX_SESSION not configured",
-		}, nil
-	}
-
-	// Use injected tmux manager or create a new one
-	tmuxMgr := s.tmuxManager
-	if tmuxMgr == nil {
-		var err error
-		tmuxMgr, err = tmux.NewManager()
-		if err != nil {
-			return nil, SpawnSessionOutput{
-				Success: false,
-				Message: "tmux is not available: " + err.Error(),
-			}, nil
-		}
-	}
-
-	// Delegate to shared orchestration
-	result, err := spawn.Orchestrate(ctx, spawn.OrchestrateRequest{
-		TicketID:    input.TicketID,
-		Mode:        input.Mode,
-		Agent:       input.Agent,
-		ProjectPath: s.config.ProjectPath,
-		TicketsDir:  s.config.TicketsDir,
-		TmuxSession: s.config.TmuxSession,
-	}, spawn.OrchestrateDeps{
-		Store:       s.store,
-		TmuxManager: tmuxMgr,
-		CortexdPath: s.config.CortexdPath,
-		Logger:      s.config.Logger,
-	})
+	// Find ticket status via local store (needed to build the URL)
+	_, status, err := s.store.Get(input.TicketID)
 	if err != nil {
-		var stateErr *spawn.StateError
-		if errors.As(err, &stateErr) {
-			return nil, SpawnSessionOutput{State: string(stateErr.State)}, NewStateConflictError(string(stateErr.State), input.Mode, stateErr.Message)
-		}
-		if spawn.IsConfigError(err) || spawn.IsBinaryNotFoundError(err) {
-			return nil, SpawnSessionOutput{
-				Success: false,
-				Message: err.Error(),
-			}, nil
-		}
 		return nil, SpawnSessionOutput{}, WrapTicketError(err)
 	}
 
-	// Already active: return state conflict
-	if result.Outcome == spawn.OutcomeAlreadyActive {
-		state := string(result.StateInfo.State)
-		return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, input.Mode, "session is currently active - wait for it to finish or close the tmux window")
+	// Build HTTP request to daemon
+	url := fmt.Sprintf("%s/tickets/%s/%s/spawn", s.config.DaemonURL, string(status), input.TicketID)
+	if input.Mode != "" {
+		url += "?mode=" + input.Mode
 	}
 
-	// Spawned or resumed
-	return nil, SpawnSessionOutput{
-		Success:    true,
-		TicketID:   input.TicketID,
-		SessionID:  result.SpawnResult.SessionID,
-		TmuxWindow: result.SpawnResult.TmuxWindow,
-		State:      string(result.StateInfo.State),
-		Message:    result.SpawnResult.Message,
-	}, nil
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return nil, SpawnSessionOutput{}, NewInternalError("failed to create request: " + err.Error())
+	}
+	httpReq.Header.Set("X-Cortex-Project", s.config.ProjectPath)
+
+	// Execute request
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, SpawnSessionOutput{}, NewInternalError("failed to contact daemon: " + err.Error())
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Map response
+	switch resp.StatusCode {
+	case http.StatusCreated: // 201 - spawned/resumed
+		var spawnResp api.SpawnResponse
+		if err := json.NewDecoder(resp.Body).Decode(&spawnResp); err != nil {
+			return nil, SpawnSessionOutput{}, NewInternalError("failed to decode response: " + err.Error())
+		}
+		return nil, SpawnSessionOutput{
+			Success:    true,
+			TicketID:   input.TicketID,
+			SessionID:  spawnResp.Session.ID,
+			TmuxWindow: spawnResp.Session.TmuxWindow,
+		}, nil
+
+	case http.StatusOK: // 200 - already active
+		return nil, SpawnSessionOutput{State: "active"}, NewStateConflictError("active", input.Mode, "session is currently active - wait for it to finish or close the tmux window")
+
+	case http.StatusConflict: // 409 - state/orphaned error
+		var errResp types.ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return nil, SpawnSessionOutput{}, NewInternalError("failed to decode error response: " + err.Error())
+		}
+		state := parseStateFromError(errResp.Code, errResp.Error)
+		return nil, SpawnSessionOutput{State: state}, NewStateConflictError(state, input.Mode, errResp.Error)
+
+	case http.StatusNotFound: // 404 - ticket not found
+		return nil, SpawnSessionOutput{}, NewNotFoundError("ticket", input.TicketID)
+
+	case http.StatusBadRequest: // 400 - config error
+		var errResp types.ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return nil, SpawnSessionOutput{}, NewInternalError("failed to decode error response: " + err.Error())
+		}
+		return nil, SpawnSessionOutput{
+			Success: false,
+			Message: errResp.Error,
+		}, nil
+
+	case http.StatusServiceUnavailable: // 503 - tmux unavailable
+		var errResp types.ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return nil, SpawnSessionOutput{}, NewInternalError("failed to decode error response: " + err.Error())
+		}
+		return nil, SpawnSessionOutput{
+			Success: false,
+			Message: errResp.Error,
+		}, nil
+
+	default: // 500, etc.
+		var errResp types.ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return nil, SpawnSessionOutput{
+				Success: false,
+				Message: fmt.Sprintf("daemon returned status %d", resp.StatusCode),
+			}, nil
+		}
+		return nil, SpawnSessionOutput{
+			Success: false,
+			Message: errResp.Error,
+		}, nil
+	}
+}
+
+// parseStateFromError extracts the session state from an HTTP error response.
+func parseStateFromError(code, message string) string {
+	if code == "session_orphaned" {
+		return "orphaned"
+	}
+	// For state_conflict, extract state from error message.
+	// Format: "spawn: ticket <id> in state <state>: <message>"
+	if idx := strings.Index(message, "in state "); idx != -1 {
+		rest := message[idx+len("in state "):]
+		if end := strings.Index(rest, ":"); end != -1 {
+			return rest[:end]
+		}
+	}
+	return "unknown"
 }

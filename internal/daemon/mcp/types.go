@@ -61,7 +61,6 @@ type MoveTicketInput struct {
 // SpawnSessionInput is the input for the spawnSession tool.
 type SpawnSessionInput struct {
 	TicketID string `json:"ticket_id" jsonschema:"The ticket ID to spawn a session for"`
-	Agent    string `json:"agent,omitempty" jsonschema:"Agent name (default: claude)"`
 	Mode     string `json:"mode,omitempty" jsonschema:"Spawn mode: 'normal' (default), 'resume', or 'fresh'"`
 }
 

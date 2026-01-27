@@ -17,11 +17,13 @@ import (
 // testTicketAgentPrompt is a minimal prompt for testing.
 const testTicketAgentPrompt = "## Test Instructions"
 
-// setupTestServerWithMockTmux creates a test server with a mock tmux manager.
-func setupTestServerWithMockTmux(t *testing.T, ticketID string) (*Server, func()) {
+// setupArchitectWithDaemon creates an MCP server backed by an HTTP test server
+// running the daemon API. windowExists controls whether the mock tmux reports
+// windows as existing (false simulates orphaned sessions).
+func setupArchitectWithDaemon(t *testing.T, windowExists bool) (*Server, func()) {
 	t.Helper()
 
-	tmpDir, err := os.MkdirTemp("", "mcp-server-test")
+	tmpDir, err := os.MkdirTemp("", "mcp-spawn-test")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
@@ -37,25 +39,46 @@ func setupTestServerWithMockTmux(t *testing.T, ticketID string) (*Server, func()
 		t.Fatalf("create ticket-system.md: %v", err)
 	}
 
+	// Create project config with name (used as tmux session name)
+	configPath := filepath.Join(tmpDir, ".cortex", "cortex.yaml")
+	if err := os.WriteFile(configPath, []byte("name: test-session\n"), 0644); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create cortex.yaml: %v", err)
+	}
+
+	// Create mock tmux runner for the daemon
 	mockRunner := tmux.NewMockRunner()
+	if !windowExists {
+		mockRunner.SetWindowExists(false)
+	}
 	tmuxMgr := tmux.NewManagerWithRunner(mockRunner)
 
+	// Create HTTP test server with daemon API
+	logger := slog.Default()
+	storeManager := api.NewStoreManager(logger, nil)
+	deps := &api.Dependencies{
+		StoreManager: storeManager,
+		TmuxManager:  tmuxMgr,
+		Logger:       logger,
+	}
+	router := api.NewRouter(deps, logger)
+	ts := httptest.NewServer(router)
+
+	// Create MCP server with DaemonURL pointing to test server
 	cfg := &Config{
-		TicketID:    ticketID,
-		TicketsDir:  tmpDir,
 		ProjectPath: tmpDir,
-		TmuxSession: "test-session",
-		TmuxManager: tmuxMgr,
-		CortexdPath: "/mock/cortexd",
+		DaemonURL:   ts.URL,
 	}
 
 	server, err := NewServer(cfg)
 	if err != nil {
+		ts.Close()
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create server: %v", err)
 	}
 
 	cleanup := func() {
+		ts.Close()
 		_ = os.RemoveAll(tmpDir)
 	}
 
@@ -383,7 +406,7 @@ func TestHandleMoveTicketInvalidStatus(t *testing.T) {
 }
 
 func TestHandleSpawnSession(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	// Create a ticket first
@@ -433,7 +456,7 @@ func TestHandleSpawnSessionEmptyTicketID(t *testing.T) {
 }
 
 func TestHandleSpawnSessionTicketNotFound(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -445,7 +468,7 @@ func TestHandleSpawnSessionTicketNotFound(t *testing.T) {
 }
 
 func TestHandleSpawnSessionActiveSession(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	// Create a ticket with an active session
@@ -461,21 +484,25 @@ func TestHandleSpawnSessionActiveSession(t *testing.T) {
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 	})
-	if err != nil {
-		t.Fatalf("handleSpawnSession failed: %v", err)
-	}
 
-	// Should fail because ticket already has active session
-	if output.Success {
-		t.Error("expected failure for ticket with active session")
+	// Should return STATE_CONFLICT error for active session
+	if err == nil {
+		t.Fatal("expected STATE_CONFLICT error for ticket with active session")
 	}
-	if output.Message == "" {
-		t.Error("expected error message")
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeStateConflict {
+		t.Errorf("expected STATE_CONFLICT, got: %s", toolErr.Code)
+	}
+	if output.State != "active" {
+		t.Errorf("expected state 'active', got: %s", output.State)
 	}
 }
 
 func TestHandleSpawnSessionAutoMovesToProgress(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	// Create a ticket in backlog
@@ -684,7 +711,7 @@ func TestWrapTicketError(t *testing.T) {
 // SpawnSession state/mode matrix tests
 
 func TestHandleSpawnSession_StateNormal_ModeNormal(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -700,13 +727,10 @@ func TestHandleSpawnSession_StateNormal_ModeNormal(t *testing.T) {
 	if !output.Success {
 		t.Errorf("expected success, got message: %s", output.Message)
 	}
-	if output.State != "normal" {
-		t.Errorf("expected state 'normal', got: %s", output.State)
-	}
 }
 
 func TestHandleSpawnSession_StateNormal_ModeResume(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -732,7 +756,7 @@ func TestHandleSpawnSession_StateNormal_ModeResume(t *testing.T) {
 }
 
 func TestHandleSpawnSession_StateNormal_ModeFresh(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -762,10 +786,10 @@ func TestHandleSpawnSession_StateActive_AllModes(t *testing.T) {
 
 	for _, mode := range modes {
 		t.Run("mode="+mode, func(t *testing.T) {
-			server, cleanup := setupTestServerWithMockTmux(t, "")
+			server, cleanup := setupArchitectWithDaemon(t, true)
 			defer cleanup()
 
-			// Create ticket with active session (window exists because mock defaults to true for existing sessions)
+			// Create ticket with active session (window exists because mock defaults to true)
 			created, _ := server.Store().Create("Test Ticket", "body")
 			_, _ = server.Store().SetSession(created.ID, "claude", "window", nil, nil)
 
@@ -792,7 +816,7 @@ func TestHandleSpawnSession_StateActive_AllModes(t *testing.T) {
 }
 
 func TestHandleSpawnSession_StateOrphaned_ModeNormal(t *testing.T) {
-	server, cleanup := setupTestServerWithOrphanedSession(t)
+	server, cleanup := setupArchitectWithDaemon(t, false)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -819,7 +843,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeNormal(t *testing.T) {
 }
 
 func TestHandleSpawnSession_StateOrphaned_ModeResume(t *testing.T) {
-	server, cleanup := setupTestServerWithOrphanedSession(t)
+	server, cleanup := setupArchitectWithDaemon(t, false)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -836,13 +860,10 @@ func TestHandleSpawnSession_StateOrphaned_ModeResume(t *testing.T) {
 	if !output.Success {
 		t.Errorf("expected success, got message: %s", output.Message)
 	}
-	if output.State != "orphaned" {
-		t.Errorf("expected state 'orphaned', got: %s", output.State)
-	}
 }
 
 func TestHandleSpawnSession_StateOrphaned_ModeFresh(t *testing.T) {
-	server, cleanup := setupTestServerWithOrphanedSession(t)
+	server, cleanup := setupArchitectWithDaemon(t, false)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -859,13 +880,10 @@ func TestHandleSpawnSession_StateOrphaned_ModeFresh(t *testing.T) {
 	if !output.Success {
 		t.Errorf("expected success, got message: %s", output.Message)
 	}
-	if output.State != "orphaned" {
-		t.Errorf("expected state 'orphaned', got: %s", output.State)
-	}
 }
 
 func TestHandleSpawnSession_StateEnded_ModeNormal(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -883,13 +901,10 @@ func TestHandleSpawnSession_StateEnded_ModeNormal(t *testing.T) {
 	if !output.Success {
 		t.Errorf("expected success, got message: %s", output.Message)
 	}
-	if output.State != "ended" {
-		t.Errorf("expected state 'ended', got: %s", output.State)
-	}
 }
 
 func TestHandleSpawnSession_StateEnded_ModeResume(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -917,7 +932,7 @@ func TestHandleSpawnSession_StateEnded_ModeResume(t *testing.T) {
 }
 
 func TestHandleSpawnSession_StateEnded_ModeFresh(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -935,13 +950,10 @@ func TestHandleSpawnSession_StateEnded_ModeFresh(t *testing.T) {
 	if !output.Success {
 		t.Errorf("expected success, got message: %s", output.Message)
 	}
-	if output.State != "ended" {
-		t.Errorf("expected state 'ended', got: %s", output.State)
-	}
 }
 
 func TestHandleSpawnSession_InvalidMode(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupTestServer(t, "")
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -964,7 +976,7 @@ func TestHandleSpawnSession_InvalidMode(t *testing.T) {
 }
 
 func TestHandleSpawnSession_DefaultMode(t *testing.T) {
-	server, cleanup := setupTestServerWithMockTmux(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test Ticket", "body")
@@ -980,9 +992,6 @@ func TestHandleSpawnSession_DefaultMode(t *testing.T) {
 
 	if !output.Success {
 		t.Errorf("expected success, got message: %s", output.Message)
-	}
-	if output.State != "normal" {
-		t.Errorf("expected state 'normal', got: %s", output.State)
 	}
 }
 
@@ -1003,52 +1012,4 @@ func TestHandleConcludeSession(t *testing.T) {
 	if output.TicketID != ticketID {
 		t.Errorf("ticket ID = %q, want %q", output.TicketID, ticketID)
 	}
-}
-
-// setupTestServerWithOrphanedSession creates a test server with a mock tmux manager
-// that reports windows do not exist (simulating orphaned state).
-func setupTestServerWithOrphanedSession(t *testing.T) (*Server, func()) {
-	t.Helper()
-
-	tmpDir, err := os.MkdirTemp("", "mcp-server-test")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-
-	// Create the prompts directory and default templates for the project
-	promptsDir := filepath.Join(tmpDir, ".cortex", "prompts")
-	if err := os.MkdirAll(promptsDir, 0755); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("create prompts dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(promptsDir, "ticket-system.md"), []byte(testTicketAgentPrompt), 0644); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("create ticket-system.md: %v", err)
-	}
-
-	// Create mock runner that reports window does NOT exist
-	mockRunner := tmux.NewMockRunner()
-	mockRunner.SetWindowExists(false)
-	tmuxMgr := tmux.NewManagerWithRunner(mockRunner)
-
-	cfg := &Config{
-		TicketID:    "",
-		TicketsDir:  tmpDir,
-		ProjectPath: tmpDir,
-		TmuxSession: "test-session",
-		TmuxManager: tmuxMgr,
-		CortexdPath: "/mock/cortexd",
-	}
-
-	server, err := NewServer(cfg)
-	if err != nil {
-		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("create server: %v", err)
-	}
-
-	cleanup := func() {
-		_ = os.RemoveAll(tmpDir)
-	}
-
-	return server, cleanup
 }
