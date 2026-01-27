@@ -8,8 +8,6 @@ import (
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
-const linesPerTicket = 6 // title (up to 5 lines) + date line
-
 // Column represents a kanban column with tickets.
 type Column struct {
 	title        string
@@ -130,19 +128,26 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	// Header takes ~2 lines (text + border)
 	headerLines := 2
 
-	// Calculate how many tickets could fit without scroll indicators
-	maxVisibleWithoutIndicators := (maxHeight - headerLines) / linesPerTicket
+	// Calculate available lines and title width for dynamic height
+	titleWidth := max(width-4, 10)
 
-	// Only reserve indicator space if scrolling is actually needed
-	needsScrolling := len(c.tickets) > maxVisibleWithoutIndicators
+	availableLines := maxHeight - headerLines
+	needsScrolling := totalTicketHeight(c.tickets, titleWidth) > availableLines
+
+	// If scrolling needed, reserve 1 line per visible indicator
 	indicatorLines := 0
 	if needsScrolling {
-		indicatorLines = 2
+		indicatorLines = 2 // worst-case: top + bottom
 	}
-	visibleCount := max((maxHeight-headerLines-indicatorLines)/linesPerTicket, 1)
 
-	// Ensure cursor is visible
+	visibleCount := countVisibleTickets(c.tickets, c.scrollOffset, availableLines-indicatorLines, titleWidth)
+
+	// Two-pass: ensure cursor visible, then recompute if scrollOffset changed
+	prevOffset := c.scrollOffset
 	c.EnsureCursorVisible(visibleCount)
+	if c.scrollOffset != prevOffset {
+		visibleCount = countVisibleTickets(c.tickets, c.scrollOffset, availableLines-indicatorLines, titleWidth)
+	}
 
 	// Render header with count.
 	headerText := fmt.Sprintf("%s (%d)", c.title, len(c.tickets))
@@ -150,11 +155,9 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Top scroll indicator (only when scrolling is enabled)
-	if needsScrolling {
-		if c.scrollOffset > 0 {
-			b.WriteString(mutedStyle.Render("  ▲"))
-		}
+	// Top scroll indicator (only when arrow is shown)
+	if needsScrolling && c.scrollOffset > 0 {
+		b.WriteString(mutedStyle.Render("▲"))
 		b.WriteString("\n")
 	}
 
@@ -171,9 +174,6 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 		for i := c.scrollOffset; i < endIdx; i++ {
 			t := c.tickets[i]
 
-			// Calculate available width for title text
-			titleWidth := max(width-6, 10)
-
 			// Word wrap title
 			wrappedTitle := wrapText(t.Title, titleWidth)
 
@@ -182,28 +182,26 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 
 			// Build lines based on selection state
 			if i == c.cursor && isActive {
-				// Selected: show with prefix and highlight
+				// Selected: show with highlight
 				for _, line := range wrappedTitle {
-					prefix := "  "
-					b.WriteString(selectedTicketStyle.Width(width - 2).Render(prefix + line))
+					b.WriteString(selectedTicketStyle.Width(width - 2).Render(line))
 					b.WriteString("\n")
 				}
 				// Metadata line: agent status + date
-				meta := "  "
+				meta := ""
 				if t.HasActiveSession {
 					meta += agentStatusLabel(t) + " · "
 				}
 				meta += dateStr
 				b.WriteString(selectedTicketStyle.Width(width - 2).Render(meta))
 			} else {
-				// Normal: icon-only prefix for active sessions
+				// Normal ticket
 				for _, line := range wrappedTitle {
-					prefix := "  "
-					b.WriteString(ticketStyle.Width(width - 2).Render(prefix + line))
+					b.WriteString(ticketStyle.Width(width - 2).Render(line))
 					b.WriteString("\n")
 				}
 				// Metadata line: agent status + date
-				meta := "  "
+				meta := ""
 				if t.HasActiveSession {
 					meta += activeSessionStyle.Render(agentStatusLabel(t)) + " · "
 				}
@@ -212,17 +210,15 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 			}
 
 			if i < endIdx-1 {
-				b.WriteString("\n")
+				b.WriteString("\n\n")
 			}
 		}
 	}
 
-	// Bottom scroll indicator (only when scrolling is enabled)
-	if needsScrolling {
+	// Bottom scroll indicator (only when arrow is shown)
+	if needsScrolling && c.scrollOffset+visibleCount < len(c.tickets) {
 		b.WriteString("\n")
-		if c.scrollOffset+visibleCount < len(c.tickets) {
-			b.WriteString(mutedStyle.Render("  ▼"))
-		}
+		b.WriteString(mutedStyle.Render("▼"))
 	}
 
 	content := b.String()
@@ -297,4 +293,38 @@ func wrapText(text string, width int) []string {
 	}
 
 	return lines
+}
+
+// ticketHeight returns the number of lines a single ticket occupies (title lines + metadata line).
+func ticketHeight(t sdk.TicketSummary, titleWidth int) int {
+	return len(wrapText(t.Title, titleWidth)) + 1
+}
+
+// totalTicketHeight returns the total lines needed to render all tickets with gaps.
+func totalTicketHeight(tickets []sdk.TicketSummary, titleWidth int) int {
+	total := 0
+	for i, t := range tickets {
+		total += ticketHeight(t, titleWidth)
+		if i > 0 {
+			total++ // gap line between tickets
+		}
+	}
+	return total
+}
+
+// countVisibleTickets returns how many tickets fit starting from startIdx within availableLines.
+func countVisibleTickets(tickets []sdk.TicketSummary, startIdx, availableLines, titleWidth int) int {
+	used, count := 0, 0
+	for i := startIdx; i < len(tickets); i++ {
+		h := ticketHeight(tickets[i], titleWidth)
+		if count > 0 {
+			h++ // gap line
+		}
+		if used+h > availableLines {
+			break
+		}
+		used += h
+		count++
+	}
+	return max(count, 1)
 }
