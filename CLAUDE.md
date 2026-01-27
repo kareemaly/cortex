@@ -1,104 +1,110 @@
 # Cortex - AI Development Workflow
 
-## Build & Install
+Orchestration layer for AI coding agents. File-based ticket management with MCP tools, tmux session management, and a daemon-centric architecture.
+
+## Build & Test
 
 ```bash
-make build                    # Build bin/cortex and bin/cortexd
-make lint                     # Run golangci-lint
-make test                     # Unit tests
-make test-integration         # Integration tests
-```
-
-**Install globally:**
-```bash
-cp bin/cortex bin/cortexd ~/.local/bin/
-codesign --force --sign - ~/.local/bin/cortex ~/.local/bin/cortexd  # macOS only
+make install              # Build, install to ~/.local/bin/, codesign (macOS)
+make build                # Build bin/cortex and bin/cortexd only
+make lint                 # golangci-lint
+make test                 # Unit tests
+make test-integration     # Integration tests (requires running daemon)
 ```
 
 ## Architecture
 
-Single `cortexd` daemon serves ALL projects simultaneously via two interfaces:
-
-1. **HTTP API** (port 4200) - Used by `cortex` CLI and kanban TUI
-2. **MCP over stdio** - Used by AI agents (claude/opencode)
-
-Project context is passed via `X-Cortex-Project` header (HTTP) or environment variables (MCP).
+Single `cortexd` daemon serves all projects. **All clients communicate exclusively over HTTP** — no client accesses the ticket store directly. This enables running the daemon on a remote VM with local client TUIs.
 
 ```
-┌─────────────────┐     ┌─────────────────┐
-│  cortex CLI     │────▶│                 │
-│  (kanban, list) │ HTTP│    cortexd      │
-└─────────────────┘     │                 │
-                        │  StoreManager   │
-┌─────────────────┐     │  (per-project)  │
-│  AI Architect   │────▶│                 │
-│  (claude)       │ MCP │                 │
-└─────────────────┘     └─────────────────┘
-       │
-       │ spawns
-       ▼
 ┌─────────────────┐
-│  Ticket Agent   │────▶ MCP (restricted to assigned ticket)
-│  (claude)       │
-└─────────────────┘
+│  cortex CLI/TUI │──┐
+└─────────────────┘  │
+┌─────────────────┐  │  HTTP :4200   ┌──────────────────────┐
+│  MCP Architect  │──┼──────────────▶│      cortexd         │
+└─────────────────┘  │               │  ├─ HTTP API         │
+┌─────────────────┐  │               │  ├─ StoreManager     │
+│  MCP Ticket     │──┘               │  ├─ Tmux management  │
+└─────────────────┘                  │  └─ SSE event bus    │
+                                     └──────────────────────┘
 ```
+
+Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
 
 ## Key Paths
 
 | Component | Path |
 |-----------|------|
-| CLI commands | `~/projects/cortex1/cmd/cortex/commands/` |
-| Daemon commands | `~/projects/cortex1/cmd/cortexd/commands/` |
-| HTTP API handlers | `~/projects/cortex1/internal/daemon/api/` |
-| MCP tools | `~/projects/cortex1/internal/daemon/mcp/` |
-| Ticket store | `~/projects/cortex1/internal/ticket/` |
-| SDK client | `~/projects/cortex1/internal/cli/sdk/client.go` |
-| Project config | `~/projects/cortex1/internal/project/config/` |
-| Tmux manager | `~/projects/cortex1/internal/tmux/tmux.go` |
+| CLI commands | `cmd/cortex/commands/` |
+| Daemon commands | `cmd/cortexd/commands/` |
+| HTTP API handlers | `internal/daemon/api/` |
+| MCP tools | `internal/daemon/mcp/` |
+| Ticket store | `internal/ticket/` |
+| SDK client | `internal/cli/sdk/client.go` |
+| Spawn orchestration | `internal/core/spawn/` |
+| Project config | `internal/project/config/` |
+| Daemon config | `internal/daemon/config/` |
+| Tmux manager | `internal/tmux/` |
+| Worktree manager | `internal/worktree/` |
+| TUI components | `internal/cli/tui/` |
+| Install/init logic | `internal/install/` |
 
-## Project Structure
+## Configuration
 
-Each project has `.cortex/` containing:
-- `cortex.yaml` - Agent type, git repos, lifecycle hooks
-- `tickets/{backlog,progress,done}/` - Ticket markdown files
+**Project** (`.cortex/cortex.yaml`): Agent type, agent args, git worktrees, lifecycle hooks. See `internal/project/config/config.go` for schema.
 
-Global config at `~/.cortex/settings.yaml` (daemon port, log level).
+**Global** (`~/.cortex/settings.yaml`): Daemon port, log level, project registry. See `internal/daemon/config/config.go` for schema.
+
+**Project registry**: Global config tracks all projects (`projects` list). Auto-registered on `cortex init`. Used by `GET /projects` endpoint and `cortex projects` CLI.
+
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `cortex init` | Initialize `.cortex/` in current directory, register in global config |
+| `cortex architect` | Start/attach architect session |
+| `cortex kanban` | Kanban TUI for current project |
+| `cortex show [id]` | Ticket detail TUI |
+| `cortex ticket list` | List tickets |
+| `cortex ticket spawn <id>` | Spawn ticket agent session |
+| `cortex projects` | List all registered projects with ticket counts |
+| `cortex register [path]` | Register project in global config |
+| `cortex unregister [path]` | Remove project from global config |
+
+## API Endpoints
+
+Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/sdk/client.go`.
+
+**Global** (no project header): `GET /health`, `GET /projects`
+
+**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn, session kill/approve, SSE events.
 
 ## MCP Tools
 
-**Architect session** (full access, 7 tools):
-- `listTickets` - List tickets with optional status/query filters
-- `readTicket` - Read full ticket details
-- `createTicket`, `updateTicket`, `deleteTicket`, `moveTicket`
-- `spawnSession` - Spawn agent session for a ticket
+Defined in `internal/daemon/mcp/`. Two session types:
 
-**Ticket session** (restricted to assigned ticket):
-- `readTicket` - Read assigned ticket
-- `pickupTicket` - Move to in_progress, runs `on_pickup` hooks
-- `submitReport` - Update report (files, decisions, summary)
-- `approve` - End session, move to done, runs `on_approve` hooks
+**Architect** (`tools_architect.go`): `listTickets`, `readTicket`, `createTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `spawnSession`
+
+**Ticket** (`tools_ticket.go`): `readTicket`, `addTicketComment`, `requestReview`, `concludeSession`
 
 ## Agent Workflow
 
-1. Architect reads backlog tickets via `listTickets`
-2. Architect calls `spawnSession` for a ticket
-3. Daemon spawns tmux window with ticket-scoped MCP
-4. Ticket agent calls `pickupTicket` to start work
-5. Agent uses `submitReport` to log progress
-6. Agent calls `approve` when done (triggers hooks, moves to done)
+1. Architect reads backlog → calls `spawnSession` for a ticket
+2. Daemon creates tmux window with ticket-scoped MCP (30% agent pane, 70% companion pane)
+3. Ticket agent works, uses `addTicketComment` to log progress
+4. Agent calls `requestReview` when done → ticket moves to review
+5. Architect reviews and approves → triggers lifecycle hooks, moves to done
+
+Spawn orchestration handles state detection (normal/active/orphaned/ended) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 
 ## Lifecycle Hooks
 
-Defined in `.cortex/cortex.yaml`:
-```yaml
-lifecycle:
-  on_pickup: ["git checkout -b ticket/{{.Slug}}"]
-  on_approve: ["git add -A", "git commit -m '{{.CommitMessage}}'"]
-```
+Defined in `.cortex/cortex.yaml` under `lifecycle`. Hooks run on pickup, review, and approve. Template variables: `{{.Slug}}`, `{{.CommitMessage}}`, etc. See `internal/lifecycle/` for execution logic.
 
 ## Testing
 
-- Unit tests: `make test`
-- Integration tests: `make test-integration` (requires `integration` build tag)
-- API tests: `~/projects/cortex1/internal/daemon/api/integration_test.go`
-- MCP tests: `~/projects/cortex1/internal/daemon/mcp/server_test.go`
+- Unit: `make test`
+- Integration: `make test-integration`
+- API tests: `internal/daemon/api/integration_test.go`
+- MCP tests: `internal/daemon/mcp/server_test.go`
+- Config tests: `internal/daemon/config/config_test.go`
