@@ -49,7 +49,7 @@ cortex session <id>         # Open session view TUI (read-only)
 cortex spawn <ticket-id>    # Spawn ticket session
 cortex list [--status=...]  # List tickets
 cortex version              # Version info
-cortex install              # Initial setup
+cortex init                 # Initialize project
 ```
 
 ## Session Types

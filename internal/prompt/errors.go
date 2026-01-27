@@ -8,5 +8,5 @@ type NotFoundError struct {
 }
 
 func (e *NotFoundError) Error() string {
-	return fmt.Sprintf("prompt file not found: %s\nRun 'cortex install' to create default prompts", e.Path)
+	return fmt.Sprintf("prompt file not found: %s\nRun 'cortex init' to create default prompts", e.Path)
 }

@@ -63,7 +63,7 @@ func TestNotFoundError_Message(t *testing.T) {
 		t.Error("NotFoundError.Error() returned empty string")
 	}
 	// Check it contains the hint
-	want := "cortex install"
+	want := "cortex init"
 	if !contains(got, want) {
 		t.Errorf("NotFoundError.Error() = %q, should contain %q", got, want)
 	}
