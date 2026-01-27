@@ -183,11 +183,8 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 			// Build lines based on selection state
 			if i == c.cursor && isActive {
 				// Selected: show with prefix and highlight
-				for lineIdx, line := range wrappedTitle {
+				for _, line := range wrappedTitle {
 					prefix := "  "
-					if lineIdx == 0 {
-						prefix = "> "
-					}
 					b.WriteString(selectedTicketStyle.Width(width - 2).Render(prefix + line))
 					b.WriteString("\n")
 				}
@@ -200,11 +197,8 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 				b.WriteString(selectedTicketStyle.Width(width - 2).Render(meta))
 			} else {
 				// Normal: icon-only prefix for active sessions
-				for lineIdx, line := range wrappedTitle {
+				for _, line := range wrappedTitle {
 					prefix := "  "
-					if lineIdx == 0 && t.HasActiveSession {
-						prefix = activeSessionStyle.Render(agentStatusIcon(t)) + " "
-					}
 					b.WriteString(ticketStyle.Width(width - 2).Render(prefix + line))
 					b.WriteString("\n")
 				}
