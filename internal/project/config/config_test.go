@@ -213,3 +213,137 @@ func TestLoadFromPath_NotFound(t *testing.T) {
 		t.Errorf("expected ProjectNotFoundError, got %T", err)
 	}
 }
+
+func TestAgentArgs_NewNestedFormat(t *testing.T) {
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: test
+agent_args:
+  architect:
+    - "--budget=150000"
+    - "--verbose"
+  ticket:
+    - "--budget=50000"
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(cfg.AgentArgs.Architect) != 2 {
+		t.Fatalf("expected 2 architect args, got %d", len(cfg.AgentArgs.Architect))
+	}
+	if cfg.AgentArgs.Architect[0] != "--budget=150000" {
+		t.Errorf("expected --budget=150000, got %q", cfg.AgentArgs.Architect[0])
+	}
+	if cfg.AgentArgs.Architect[1] != "--verbose" {
+		t.Errorf("expected --verbose, got %q", cfg.AgentArgs.Architect[1])
+	}
+
+	if len(cfg.AgentArgs.Ticket) != 1 {
+		t.Fatalf("expected 1 ticket arg, got %d", len(cfg.AgentArgs.Ticket))
+	}
+	if cfg.AgentArgs.Ticket[0] != "--budget=50000" {
+		t.Errorf("expected --budget=50000, got %q", cfg.AgentArgs.Ticket[0])
+	}
+}
+
+func TestAgentArgs_OldFlatFormat(t *testing.T) {
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: test
+agent_args:
+  - "--budget=100000"
+  - "--verbose"
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Old flat format should populate both Architect and Ticket
+	if len(cfg.AgentArgs.Architect) != 2 {
+		t.Fatalf("expected 2 architect args, got %d", len(cfg.AgentArgs.Architect))
+	}
+	if cfg.AgentArgs.Architect[0] != "--budget=100000" {
+		t.Errorf("expected --budget=100000, got %q", cfg.AgentArgs.Architect[0])
+	}
+
+	if len(cfg.AgentArgs.Ticket) != 2 {
+		t.Fatalf("expected 2 ticket args, got %d", len(cfg.AgentArgs.Ticket))
+	}
+	if cfg.AgentArgs.Ticket[0] != "--budget=100000" {
+		t.Errorf("expected --budget=100000, got %q", cfg.AgentArgs.Ticket[0])
+	}
+}
+
+func TestAgentArgs_Absent(t *testing.T) {
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: test
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(cfg.AgentArgs.Architect) != 0 {
+		t.Errorf("expected empty architect args, got %v", cfg.AgentArgs.Architect)
+	}
+	if len(cfg.AgentArgs.Ticket) != 0 {
+		t.Errorf("expected empty ticket args, got %v", cfg.AgentArgs.Ticket)
+	}
+}
+
+func TestAgentArgs_PartialArchitectOnly(t *testing.T) {
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: test
+agent_args:
+  architect:
+    - "--budget=150000"
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(cfg.AgentArgs.Architect) != 1 {
+		t.Fatalf("expected 1 architect arg, got %d", len(cfg.AgentArgs.Architect))
+	}
+	if cfg.AgentArgs.Architect[0] != "--budget=150000" {
+		t.Errorf("expected --budget=150000, got %q", cfg.AgentArgs.Architect[0])
+	}
+	if len(cfg.AgentArgs.Ticket) != 0 {
+		t.Errorf("expected empty ticket args, got %v", cfg.AgentArgs.Ticket)
+	}
+}
+
+func TestAgentArgs_PartialTicketOnly(t *testing.T) {
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: test
+agent_args:
+  ticket:
+    - "--budget=50000"
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(cfg.AgentArgs.Architect) != 0 {
+		t.Errorf("expected empty architect args, got %v", cfg.AgentArgs.Architect)
+	}
+	if len(cfg.AgentArgs.Ticket) != 1 {
+		t.Fatalf("expected 1 ticket arg, got %d", len(cfg.AgentArgs.Ticket))
+	}
+	if cfg.AgentArgs.Ticket[0] != "--budget=50000" {
+		t.Errorf("expected --budget=50000, got %q", cfg.AgentArgs.Ticket[0])
+	}
+}
