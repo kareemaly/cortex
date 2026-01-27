@@ -120,23 +120,23 @@ func (s *Server) handleReadTicket(
 	}, nil
 }
 
-// handleCreateTicket creates a new ticket.
+// handleCreateTicket creates a new ticket via the daemon HTTP API.
 func (s *Server) handleCreateTicket(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input CreateTicketInput,
 ) (*mcp.CallToolResult, CreateTicketOutput, error) {
-	t, err := s.store.Create(input.Title, input.Body)
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body)
 	if err != nil {
-		return nil, CreateTicketOutput{}, WrapTicketError(err)
+		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
 
 	return nil, CreateTicketOutput{
-		Ticket: ToTicketOutput(t, ticket.StatusBacklog),
+		Ticket: ticketResponseToOutput(resp),
 	}, nil
 }
 
-// handleUpdateTicket updates a ticket's title and/or body.
+// handleUpdateTicket updates a ticket's title and/or body via the daemon HTTP API.
 func (s *Server) handleUpdateTicket(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -146,23 +146,17 @@ func (s *Server) handleUpdateTicket(
 		return nil, UpdateTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	t, err := s.store.Update(input.ID, input.Title, input.Body)
+	resp, err := s.sdkClient.UpdateTicket(input.ID, input.Title, input.Body)
 	if err != nil {
-		return nil, UpdateTicketOutput{}, WrapTicketError(err)
-	}
-
-	// Get status
-	_, status, err := s.store.Get(input.ID)
-	if err != nil {
-		return nil, UpdateTicketOutput{}, WrapTicketError(err)
+		return nil, UpdateTicketOutput{}, wrapSDKError(err)
 	}
 
 	return nil, UpdateTicketOutput{
-		Ticket: ToTicketOutput(t, status),
+		Ticket: ticketResponseToOutput(resp),
 	}, nil
 }
 
-// handleDeleteTicket deletes a ticket.
+// handleDeleteTicket deletes a ticket via the daemon HTTP API.
 func (s *Server) handleDeleteTicket(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -172,9 +166,9 @@ func (s *Server) handleDeleteTicket(
 		return nil, DeleteTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	err := s.store.Delete(input.ID)
+	err := s.sdkClient.DeleteTicket(input.ID)
 	if err != nil {
-		return nil, DeleteTicketOutput{}, WrapTicketError(err)
+		return nil, DeleteTicketOutput{}, wrapSDKError(err)
 	}
 
 	return nil, DeleteTicketOutput{
@@ -183,7 +177,7 @@ func (s *Server) handleDeleteTicket(
 	}, nil
 }
 
-// handleMoveTicket moves a ticket to a different status.
+// handleMoveTicket moves a ticket to a different status via the daemon HTTP API.
 func (s *Server) handleMoveTicket(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -198,13 +192,13 @@ func (s *Server) handleMoveTicket(
 
 	// Validate status
 	status := ticket.Status(input.Status)
-	if status != ticket.StatusBacklog && status != ticket.StatusProgress && status != ticket.StatusDone {
-		return nil, MoveTicketOutput{}, NewValidationError("status", "must be backlog, progress, or done")
+	if status != ticket.StatusBacklog && status != ticket.StatusProgress && status != ticket.StatusReview && status != ticket.StatusDone {
+		return nil, MoveTicketOutput{}, NewValidationError("status", "must be backlog, progress, review, or done")
 	}
 
-	err := s.store.Move(input.ID, status)
+	_, err := s.sdkClient.MoveTicket(input.ID, input.Status)
 	if err != nil {
-		return nil, MoveTicketOutput{}, WrapTicketError(err)
+		return nil, MoveTicketOutput{}, wrapSDKError(err)
 	}
 
 	return nil, MoveTicketOutput{

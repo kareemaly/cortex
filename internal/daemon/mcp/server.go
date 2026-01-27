@@ -120,6 +120,9 @@ func NewServer(cfg *Config) (*Server, error) {
 		if cfg.DaemonURL == "" {
 			cfg.DaemonURL = "http://localhost:4200"
 		}
+
+		// SDK client for routing mutations through the daemon HTTP API (emits SSE events)
+		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ProjectPath)
 	}
 
 	// Create MCP server

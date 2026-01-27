@@ -288,7 +288,7 @@ func TestHandleReadTicketNotFound(t *testing.T) {
 }
 
 func TestHandleCreateTicket(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	_, output, err := server.handleCreateTicket(context.Background(), nil, CreateTicketInput{
@@ -311,7 +311,7 @@ func TestHandleCreateTicket(t *testing.T) {
 }
 
 func TestHandleCreateTicketEmptyTitle(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	_, _, err := server.handleCreateTicket(context.Background(), nil, CreateTicketInput{
@@ -324,7 +324,7 @@ func TestHandleCreateTicketEmptyTitle(t *testing.T) {
 }
 
 func TestHandleUpdateTicket(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Original", "body")
@@ -344,7 +344,7 @@ func TestHandleUpdateTicket(t *testing.T) {
 }
 
 func TestHandleDeleteTicket(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("To Delete", "")
@@ -368,7 +368,7 @@ func TestHandleDeleteTicket(t *testing.T) {
 }
 
 func TestHandleMoveTicket(t *testing.T) {
-	server, cleanup := setupTestServer(t, "")
+	server, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
 	created, _ := server.Store().Create("Test", "")
