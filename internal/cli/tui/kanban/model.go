@@ -82,11 +82,6 @@ type FocusErrorMsg struct {
 	Err error
 }
 
-// SessionApprovedMsg is sent when a session is successfully approved.
-type SessionApprovedMsg struct {
-	Ticket *sdk.TicketSummary
-}
-
 // sseConnectedMsg is sent when the SSE connection is established.
 type sseConnectedMsg struct {
 	ch     <-chan sdk.Event
@@ -95,11 +90,6 @@ type sseConnectedMsg struct {
 
 // EventMsg is sent when an SSE event is received.
 type EventMsg struct{}
-
-// ApproveErrorMsg is sent when approving a session fails.
-type ApproveErrorMsg struct {
-	Err error
-}
 
 // New creates a new kanban model with the given client.
 func New(client *sdk.Client) Model {
@@ -185,16 +175,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 		return m, nil
 
-	case SessionApprovedMsg:
-		m.statusMsg = fmt.Sprintf("Approved session for: %s", msg.Ticket.Title)
-		m.statusIsError = false
-		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
-
-	case ApproveErrorMsg:
-		m.statusMsg = fmt.Sprintf("Approve error: %s", msg.Err)
-		m.statusIsError = true
-		return m, m.clearStatusAfterDelay()
-
 	case FocusSuccessMsg:
 		m.statusMsg = fmt.Sprintf("Focused: %s", msg.Window)
 		m.statusIsError = false
@@ -276,6 +256,14 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Handle 'gd' - focus daemon dashboard
+	if m.pendingG && isKey(msg, KeyD) {
+		m.pendingG = false
+		m.statusMsg = "Focusing daemon dashboard..."
+		m.statusIsError = false
+		return m, m.focusDaemonDashboard()
+	}
+
 	// Clear pending g on any other key
 	m.pendingG = false
 
@@ -336,22 +324,6 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if t != nil && !t.HasActiveSession {
 			m.statusMsg = "No active session"
-			m.statusIsError = false
-			return m, m.clearStatusAfterDelay()
-		}
-		return m, nil
-	}
-
-	// Approve session.
-	if isKey(msg, KeyApprove) {
-		t := m.columns[m.activeColumn].SelectedTicket()
-		if t != nil && t.HasActiveSession {
-			m.statusMsg = fmt.Sprintf("Approving session for: %s...", t.Title)
-			m.statusIsError = false
-			return m, m.approveSession(t)
-		}
-		if t != nil && !t.HasActiveSession {
-			m.statusMsg = "No active session to approve"
 			m.statusIsError = false
 			return m, m.clearStatusAfterDelay()
 		}
@@ -556,21 +528,13 @@ func (m Model) focusTicket(ticket *sdk.TicketSummary) tea.Cmd {
 	}
 }
 
-// approveSession returns a command to approve a session for a ticket.
-func (m Model) approveSession(ticket *sdk.TicketSummary) tea.Cmd {
+// focusDaemonDashboard returns a command to focus the CortexDaemon dashboard window.
+func (m Model) focusDaemonDashboard() tea.Cmd {
 	return func() tea.Msg {
-		// First get the ticket to find the session ID
-		fullTicket, err := m.client.GetTicket(ticket.Status, ticket.ID)
-		if err != nil {
-			return ApproveErrorMsg{Err: err}
+		if err := m.client.FocusDaemonDashboard(); err != nil {
+			return FocusErrorMsg{Err: err}
 		}
-		if fullTicket.Session == nil {
-			return ApproveErrorMsg{Err: fmt.Errorf("no session found")}
-		}
-		if err := m.client.ApproveSession(fullTicket.Session.ID); err != nil {
-			return ApproveErrorMsg{Err: err}
-		}
-		return SessionApprovedMsg{Ticket: ticket}
+		return FocusSuccessMsg{Window: "daemon dashboard"}
 	}
 }
 

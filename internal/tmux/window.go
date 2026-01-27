@@ -110,6 +110,24 @@ func (m *Manager) KillWindowByIndex(session string, index int) error {
 	return nil
 }
 
+// FocusWindowByIndex selects a window by index.
+func (m *Manager) FocusWindowByIndex(session string, index int) error {
+	exists, err := m.SessionExists(session)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return &SessionNotFoundError{Session: session}
+	}
+
+	target := fmt.Sprintf("%s:%d", session, index)
+	output, err := m.run("select-window", "-t", target)
+	if err != nil {
+		return &CommandError{Command: "select-window", Output: strings.TrimSpace(string(output))}
+	}
+	return nil
+}
+
 // FocusWindow selects a window by name.
 func (m *Manager) FocusWindow(session, windowName string) error {
 	window, err := m.GetWindowByName(session, windowName)

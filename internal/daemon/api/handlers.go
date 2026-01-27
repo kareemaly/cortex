@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/pkg/version"
 )
 
@@ -11,6 +12,24 @@ import (
 type HealthResponse struct {
 	Status  string `json:"status"`
 	Version string `json:"version"`
+}
+
+// DaemonFocusHandler returns a handler that focuses the CortexDaemon dashboard window.
+func DaemonFocusHandler(tmuxMgr *tmux.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if tmuxMgr == nil {
+			writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+			return
+		}
+
+		if err := tmuxMgr.FocusWindowByIndex("CortexDaemon", 0); err != nil {
+			writeError(w, http.StatusInternalServerError, "focus_error", err.Error())
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(FocusResponse{Success: true, Window: "dashboard"})
+	}
 }
 
 // HealthHandler returns the health check handler.
