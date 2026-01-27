@@ -37,8 +37,17 @@ func (m *Manager) CreateWindow(session, windowName, workingDir string) (int, err
 		return 0, &SessionNotFoundError{Session: session}
 	}
 
-	// Create window and capture its index
-	args := []string{"new-window", "-t", session, "-n", windowName, "-P", "-F", "#{window_index}"}
+	// Create window and capture its index.
+	// -a: insert at the next index after the target, not at the target index itself.
+	// Without -a, tmux resolves -t to the current window and tries to create AT that index,
+	// which fails with "index N in use" if the window already exists.
+	//
+	// Use "session:" (with trailing colon) to force tmux to resolve the target as a session name.
+	// Without the colon, tmux treats -t as a target-window and may prefix-match a window name
+	// in the current session (e.g., "cortex" matches "cortexd"), creating the window in the
+	// wrong session when the daemon runs inside a different tmux session.
+	sessionTarget := fmt.Sprintf("%s:", session)
+	args := []string{"new-window", "-a", "-t", sessionTarget, "-n", windowName, "-P", "-F", "#{window_index}"}
 	if workingDir != "" {
 		args = append(args, "-c", workingDir)
 	}
