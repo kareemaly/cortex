@@ -95,6 +95,9 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		if err := h.deps.TmuxManager.FocusWindow(sessionName, "architect"); err != nil {
 			h.deps.Logger.Warn("failed to focus architect window", "error", err)
 		}
+		if err := h.deps.TmuxManager.SwitchClient(sessionName); err != nil {
+			h.deps.Logger.Warn("failed to switch tmux client", "session", sessionName, "error", err)
+		}
 		resp := ArchitectSpawnResponse{
 			State: "active",
 			Session: ArchitectSessionResponse{

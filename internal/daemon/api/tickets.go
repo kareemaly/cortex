@@ -362,6 +362,9 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		if err := h.deps.TmuxManager.FocusWindow(result.TmuxSession, result.StateInfo.Session.TmuxWindow); err != nil {
 			h.deps.Logger.Warn("failed to focus window", "error", err)
 		}
+		if err := h.deps.TmuxManager.SwitchClient(result.TmuxSession); err != nil {
+			h.deps.Logger.Warn("failed to switch tmux client", "session", result.TmuxSession, "error", err)
+		}
 		resp := SpawnResponse{
 			Session: types.ToSessionResponse(*result.StateInfo.Session),
 			Ticket:  types.ToTicketResponse(result.Ticket, result.TicketStatus),
@@ -539,6 +542,10 @@ func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 	if err := h.deps.TmuxManager.FocusWindow(tmuxSession, t.Session.TmuxWindow); err != nil {
 		writeError(w, http.StatusInternalServerError, "focus_error", err.Error())
 		return
+	}
+
+	if err := h.deps.TmuxManager.SwitchClient(tmuxSession); err != nil {
+		h.deps.Logger.Warn("failed to switch tmux client", "session", tmuxSession, "error", err)
 	}
 
 	resp := FocusResponse{

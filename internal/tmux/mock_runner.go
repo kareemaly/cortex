@@ -39,7 +39,7 @@ func (m *MockRunner) SetWindowExists(exists bool) {
 				return []byte{}, nil // No windows
 			case "has-session":
 				return []byte{}, nil // Session exists
-			case "new-session", "new-window", "rename-window", "send-keys", "select-window", "kill-window":
+			case "new-session", "new-window", "rename-window", "send-keys", "select-window", "kill-window", "switch-client":
 				if args[0] == "new-window" {
 					return []byte("1"), nil
 				}
@@ -66,7 +66,7 @@ func NewMockRunner() *MockRunner {
 				return []byte{}, nil // No windows
 			case "has-session":
 				return []byte{}, nil // Session exists
-			case "new-session", "new-window", "rename-window", "send-keys", "select-window", "kill-window":
+			case "new-session", "new-window", "rename-window", "send-keys", "select-window", "kill-window", "switch-client":
 				// Return window index for new-window
 				if args[0] == "new-window" {
 					return []byte("1"), nil

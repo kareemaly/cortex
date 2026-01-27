@@ -89,3 +89,13 @@ func (m *Manager) AttachSession(name string) error {
 	}
 	return m.runner.RunInteractive("attach-session", "-t", name)
 }
+
+// SwitchClient switches the most recently active tmux client to the given session.
+// This is a non-interactive command safe for daemon use.
+func (m *Manager) SwitchClient(session string) error {
+	output, err := m.run("switch-client", "-t", session)
+	if err != nil {
+		return &CommandError{Command: "switch-client", Output: strings.TrimSpace(string(output))}
+	}
+	return nil
+}

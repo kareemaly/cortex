@@ -107,6 +107,46 @@ func TestIsWindowNotFound(t *testing.T) {
 	})
 }
 
+func TestSwitchClient(t *testing.T) {
+	t.Run("calls switch-client with session target", func(t *testing.T) {
+		runner := NewMockRunner()
+		mgr := NewManagerWithRunner(runner)
+
+		err := mgr.SwitchClient("myproject")
+		if err != nil {
+			t.Fatalf("SwitchClient() returned error: %v", err)
+		}
+
+		// Find the switch-client call
+		found := false
+		for _, call := range runner.Calls {
+			if len(call) >= 3 && call[0] == "switch-client" && call[1] == "-t" && call[2] == "myproject" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected switch-client -t myproject call, got calls: %v", runner.Calls)
+		}
+	})
+
+	t.Run("returns error on failure", func(t *testing.T) {
+		runner := &MockRunner{}
+		runner.RunFunc = func(args ...string) ([]byte, error) {
+			if len(args) > 0 && args[0] == "switch-client" {
+				return []byte("no clients"), &CommandError{Command: "switch-client", Output: "no clients"}
+			}
+			return []byte{}, nil
+		}
+		mgr := NewManagerWithRunner(runner)
+
+		err := mgr.SwitchClient("myproject")
+		if err == nil {
+			t.Fatal("expected error from SwitchClient(), got nil")
+		}
+	})
+}
+
 func TestAvailable(t *testing.T) {
 	// This test just verifies the function doesn't panic.
 	// The actual result depends on whether tmux is installed.

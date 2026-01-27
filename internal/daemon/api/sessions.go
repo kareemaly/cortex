@@ -184,6 +184,10 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		h.deps.Logger.Warn("failed to focus tmux window", "error", err)
 	}
 
+	if err := h.deps.TmuxManager.SwitchClient(tmuxSession); err != nil {
+		h.deps.Logger.Warn("failed to switch tmux client", "session", tmuxSession, "error", err)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":    true,
 		"session_id": sessionID,
