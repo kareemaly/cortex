@@ -98,6 +98,10 @@ var (
 	// Muted style for scroll indicators.
 	mutedStyle = lipgloss.NewStyle().
 			Foreground(mutedColor)
+
+	// Warn badge style for log badge.
+	warnBadgeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214"))
 )
 
 // columnHeaderStyle returns the appropriate header style for a status.

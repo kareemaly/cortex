@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/cli/tui/ticket"
+	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
 )
 
 // Model is the main Bubbletea model for the kanban board.
@@ -39,6 +40,11 @@ type Model struct {
 	// SSE subscription state
 	eventCh      <-chan sdk.Event
 	cancelEvents context.CancelFunc
+
+	// Log viewer state
+	logBuf        *tuilog.Buffer
+	logViewer     tuilog.Viewer
+	showLogViewer bool
 }
 
 // Message types for async operations.
@@ -91,8 +97,8 @@ type sseConnectedMsg struct {
 // EventMsg is sent when an SSE event is received.
 type EventMsg struct{}
 
-// New creates a new kanban model with the given client.
-func New(client *sdk.Client) Model {
+// New creates a new kanban model with the given client and log buffer.
+func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 	return Model{
 		columns: [4]Column{
 			NewColumn("Backlog", "backlog"),
@@ -100,8 +106,10 @@ func New(client *sdk.Client) Model {
 			NewColumn("Review", "review"),
 			NewColumn("Done", "done"),
 		},
-		client:  client,
-		loading: true,
+		client:    client,
+		loading:   true,
+		logBuf:    logBuf,
+		logViewer: tuilog.NewViewer(logBuf),
 	}
 }
 
@@ -112,6 +120,25 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages and updates the model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle log viewer dismiss.
+	if _, ok := msg.(tuilog.DismissLogViewerMsg); ok {
+		m.showLogViewer = false
+		return m, nil
+	}
+
+	// Delegate to log viewer when active.
+	if m.showLogViewer {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width = sizeMsg.Width
+			m.height = sizeMsg.Height
+			m.ready = true
+			m.logViewer.SetSize(m.width, m.height)
+		}
+		var cmd tea.Cmd
+		m.logViewer, cmd = m.logViewer.Update(msg)
+		return m, cmd
+	}
+
 	// Handle close from ticket detail view.
 	if _, ok := msg.(ticket.CloseDetailMsg); ok {
 		m.showDetail = false
@@ -152,37 +179,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.columns[1].SetTickets(msg.Response.Progress)
 		m.columns[2].SetTickets(msg.Response.Review)
 		m.columns[3].SetTickets(msg.Response.Done)
+		m.logBuf.Debug("api", "tickets loaded")
 		return m, nil
 
 	case TicketsErrorMsg:
 		m.loading = false
 		m.err = msg.Err
+		m.logBuf.Errorf("api", "failed to load tickets: %s", msg.Err)
 		return m, nil
 
 	case SessionSpawnedMsg:
 		m.statusMsg = fmt.Sprintf("Session spawned for: %s", msg.Ticket.Title)
 		m.statusIsError = false
+		m.logBuf.Infof("spawn", "session spawned for: %s", msg.Ticket.Title)
 		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
 
 	case SessionErrorMsg:
 		m.statusMsg = fmt.Sprintf("Error: %s", msg.Err)
 		m.statusIsError = true
+		m.logBuf.Errorf("spawn", "spawn failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
 	case OrphanedSessionMsg:
 		m.showOrphanModal = true
 		m.orphanedTicket = msg.Ticket
 		m.statusMsg = ""
+		m.logBuf.Warnf("spawn", "orphaned session for: %s", msg.Ticket.Title)
 		return m, nil
 
 	case FocusSuccessMsg:
 		m.statusMsg = fmt.Sprintf("Focused: %s", msg.Window)
 		m.statusIsError = false
+		m.logBuf.Infof("focus", "focused: %s", msg.Window)
 		return m, m.clearStatusAfterDelay()
 
 	case FocusErrorMsg:
 		m.statusMsg = fmt.Sprintf("Focus error: %s", msg.Err)
 		m.statusIsError = true
+		m.logBuf.Errorf("focus", "focus failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
 	case ClearStatusMsg:
@@ -193,9 +227,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sseConnectedMsg:
 		m.eventCh = msg.ch
 		m.cancelEvents = msg.cancel
+		m.logBuf.Info("sse", "connected to event stream")
 		return m, m.waitForEvent()
 
 	case EventMsg:
+		m.logBuf.Debug("sse", "event received")
 		cmds := []tea.Cmd{m.loadTickets(), m.waitForEvent()}
 		if m.showDetail && m.detailModel != nil {
 			cmds = append(cmds, func() tea.Msg { return ticket.RefreshMsg{} })
@@ -214,6 +250,16 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cancelEvents()
 		}
 		return m, tea.Quit
+	}
+
+	// Toggle log viewer.
+	if isKey(msg, KeyExclaim) {
+		m.showLogViewer = !m.showLogViewer
+		if m.showLogViewer {
+			m.logViewer.SetSize(m.width, m.height)
+			m.logViewer.Reset()
+		}
+		return m, nil
 	}
 
 	// Modal state takes priority.
@@ -391,6 +437,11 @@ func (m Model) View() string {
 		return m.detailModel.View()
 	}
 
+	// Log viewer overlay.
+	if m.showLogViewer {
+		return m.logViewer.View()
+	}
+
 	var b strings.Builder
 
 	// Header.
@@ -448,7 +499,12 @@ func (m Model) View() string {
 		} else {
 			b.WriteString("\n")
 		}
-		b.WriteString(helpBarStyle.Render(helpText()))
+		help := helpBarStyle.Render(helpText())
+		badge := m.logBadge()
+		if badge != "" {
+			help = help + "  " + badge
+		}
+		b.WriteString(help)
 	}
 
 	return b.String()
@@ -543,6 +599,23 @@ func (m Model) clearStatusAfterDelay() tea.Cmd {
 	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
 		return ClearStatusMsg{}
 	})
+}
+
+// logBadge renders an error/warning count badge for the status bar.
+func (m Model) logBadge() string {
+	ec := m.logBuf.ErrorCount()
+	wc := m.logBuf.WarnCount()
+	if ec == 0 && wc == 0 {
+		return ""
+	}
+	var parts []string
+	if ec > 0 {
+		parts = append(parts, errorStatusStyle.Render(fmt.Sprintf("E:%d", ec)))
+	}
+	if wc > 0 {
+		parts = append(parts, warnBadgeStyle.Render(fmt.Sprintf("W:%d", wc)))
+	}
+	return strings.Join(parts, " ")
 }
 
 // renderOrphanModal renders the orphaned session modal prompt.
