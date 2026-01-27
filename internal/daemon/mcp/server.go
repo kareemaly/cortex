@@ -116,6 +116,10 @@ func NewServer(cfg *Config) (*Server, error) {
 				return nil, err
 			}
 		}
+
+		if cfg.DaemonURL == "" {
+			cfg.DaemonURL = "http://localhost:4200"
+		}
 	}
 
 	// Create MCP server
