@@ -26,6 +26,7 @@ var (
 	mutedColor   = lipgloss.Color("240") // muted gray
 	errorColor   = lipgloss.Color("196") // red
 	warningColor = lipgloss.Color("214") // yellow/orange
+	focusColor   = lipgloss.Color("62")  // purple (matches header)
 )
 
 // Styles for the ticket detail view.
@@ -77,6 +78,51 @@ var (
 	warningStyle = lipgloss.NewStyle().
 			Foreground(warningColor).
 			Bold(true)
+)
+
+// Split layout styles.
+var (
+	// Left panel with focus border.
+	leftPanelFocusedStyle = lipgloss.NewStyle().
+				BorderLeft(true).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(focusColor)
+
+	// Left panel without focus.
+	leftPanelStyle = lipgloss.NewStyle().
+			PaddingLeft(1)
+
+	// Sidebar with focus border.
+	sidebarFocusedStyle = lipgloss.NewStyle().
+				BorderLeft(true).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(focusColor).
+				PaddingLeft(1)
+
+	// Sidebar without focus.
+	sidebarStyle = lipgloss.NewStyle().
+			PaddingLeft(2)
+
+	// Sidebar section headers (DETAILS, SESSION, etc.).
+	sidebarHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("255"))
+
+	// Sidebar field labels.
+	sidebarLabelStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("245"))
+
+	// Sidebar field values.
+	sidebarValueStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("255"))
+
+	// Sidebar dot separator.
+	sidebarDotStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240"))
+
+	// Divider between panels.
+	dividerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("237"))
 )
 
 // statusStyle returns the appropriate style for a ticket status.

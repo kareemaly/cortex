@@ -2,6 +2,7 @@ package ticket
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,12 +13,14 @@ import (
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
+const minSplitWidth = 100
+
 // Model is the main Bubbletea model for the ticket detail view.
 type Model struct {
 	client          *sdk.Client
 	ticketID        string
 	ticket          *sdk.TicketResponse
-	viewport        viewport.Model
+	leftViewport    viewport.Model
 	width           int
 	height          int
 	ready           bool
@@ -31,6 +34,8 @@ type Model struct {
 	embedded        bool // if true, send CloseDetailMsg instead of tea.Quit
 	pendingG        bool // tracking 'g' key for 'gg' sequence
 	mdRenderer      *glamour.TermRenderer
+	focusedPanel    int  // 0=left, 1=right
+	splitLayout     bool // true when width >= minSplitWidth
 }
 
 // Message types for async operations.
@@ -115,29 +120,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.splitLayout = m.width >= minSplitWidth
 
 		// Header (1 line) + blank (1) + help bar (1) = 3 lines overhead.
 		viewportHeight := max(m.height-3, 1)
 
-		// Update renderer width.
+		// Viewport width depends on split mode.
+		vpWidth := m.width
+		if m.splitLayout {
+			vpWidth = m.leftPanelWidth()
+		}
+
+		// Update renderer width to match the left panel.
 		renderer, _ := glamour.NewTermRenderer(
 			glamour.WithAutoStyle(),
-			glamour.WithWordWrap(m.width),
+			glamour.WithWordWrap(vpWidth),
 		)
 		m.mdRenderer = renderer
 
 		if !m.ready {
-			m.viewport = viewport.New(m.width, viewportHeight)
-			m.viewport.YPosition = 2 // Below header.
+			m.leftViewport = viewport.New(vpWidth, viewportHeight)
+			m.leftViewport.YPosition = 2 // Below header.
 			m.ready = true
 			if m.ticket != nil {
-				m.viewport.SetContent(m.renderContent())
+				m.leftViewport.SetContent(m.renderLeftContent())
 			}
 		} else {
-			m.viewport.Width = m.width
-			m.viewport.Height = viewportHeight
+			m.leftViewport.Width = vpWidth
+			m.leftViewport.Height = viewportHeight
 			if m.ticket != nil {
-				m.viewport.SetContent(m.renderContent())
+				m.leftViewport.SetContent(m.renderLeftContent())
 			}
 		}
 		return m, nil
@@ -150,8 +162,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.ticket = msg.Ticket
 		if m.ready {
-			m.viewport.SetContent(m.renderContent())
-			m.viewport.GotoTop()
+			m.leftViewport.SetContent(m.renderLeftContent())
+			m.leftViewport.GotoTop()
 		}
 		return m, nil
 
@@ -206,7 +218,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Handle viewport scroll messages.
 	var cmd tea.Cmd
-	m.viewport, cmd = m.viewport.Update(msg)
+	m.leftViewport, cmd = m.leftViewport.Update(msg)
 	return m, cmd
 }
 
@@ -254,6 +266,18 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadTicket()
 	}
 
+	// Panel focus switching (split layout only).
+	if m.splitLayout {
+		if isKey(msg, KeyH) {
+			m.focusedPanel = 0
+			return m, nil
+		}
+		if isKey(msg, KeyL) {
+			m.focusedPanel = 1
+			return m, nil
+		}
+	}
+
 	// Kill session.
 	if isKey(msg, KeyKillSession) {
 		if m.hasActiveSession() {
@@ -289,7 +313,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle 'G' - jump to bottom.
 	if isKey(msg, KeyShiftG) {
 		m.pendingG = false
-		m.viewport.GotoBottom()
+		m.leftViewport.GotoBottom()
 		return m, nil
 	}
 
@@ -298,7 +322,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.pendingG {
 			// Second 'g' - jump to top.
 			m.pendingG = false
-			m.viewport.GotoTop()
+			m.leftViewport.GotoTop()
 		} else {
 			// First 'g' - set pending state.
 			m.pendingG = true
@@ -311,43 +335,43 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Half-page scroll (ctrl+u/d).
 	if isKey(msg, KeyCtrlU) {
-		m.viewport.HalfPageUp()
+		m.leftViewport.HalfPageUp()
 		return m, nil
 	}
 	if isKey(msg, KeyCtrlD) {
-		m.viewport.HalfPageDown()
+		m.leftViewport.HalfPageDown()
 		return m, nil
 	}
 
 	// Scroll navigation.
 	if isKey(msg, KeyUp, KeyK) {
-		m.viewport.ScrollUp(1)
+		m.leftViewport.ScrollUp(1)
 		return m, nil
 	}
 	if isKey(msg, KeyDown, KeyJ) {
-		m.viewport.ScrollDown(1)
+		m.leftViewport.ScrollDown(1)
 		return m, nil
 	}
 	if isKey(msg, KeyPgUp) {
-		m.viewport.PageUp()
+		m.leftViewport.PageUp()
 		return m, nil
 	}
 	if isKey(msg, KeyPgDown) {
-		m.viewport.PageDown()
+		m.leftViewport.PageDown()
 		return m, nil
 	}
 	if isKey(msg, KeyHome) {
-		m.viewport.GotoTop()
+		m.leftViewport.GotoTop()
 		return m, nil
 	}
 	if isKey(msg, KeyEnd) {
-		m.viewport.GotoBottom()
+		m.leftViewport.GotoBottom()
 		return m, nil
 	}
 
 	// Pass to viewport for mouse scroll, etc.
 	var cmd tea.Cmd
-	m.viewport, cmd = m.viewport.Update(msg)
+	m.leftViewport, cmd = m.leftViewport.Update(msg)
 	return m, cmd
 }
 
@@ -550,11 +574,19 @@ func (m Model) View() string {
 	}
 
 	// Scrollable content.
-	b.WriteString(m.viewport.View())
+	if m.splitLayout {
+		b.WriteString(m.renderSplitLayout())
+	} else {
+		b.WriteString(m.leftViewport.View())
+	}
 	b.WriteString("\n")
 
 	// Help bar.
-	b.WriteString(helpBarStyle.Render(helpText(int(m.viewport.ScrollPercent()*100), m.hasActiveSession(), m.hasReviewRequests(), m.canSpawn(), m.embedded)))
+	b.WriteString(helpBarStyle.Render(helpText(
+		int(m.leftViewport.ScrollPercent()*100),
+		m.hasActiveSession(), m.hasReviewRequests(), m.canSpawn(),
+		m.embedded, m.splitLayout,
+	)))
 
 	return b.String()
 }
@@ -622,6 +654,257 @@ func (m Model) renderContent() string {
 	// Comments section.
 	if len(m.ticket.Comments) > 0 {
 		b.WriteString(m.renderComments())
+	}
+
+	return b.String()
+}
+
+// leftPanelWidth returns the width of the left panel in split mode.
+func (m Model) leftPanelWidth() int {
+	return m.width * 70 / 100
+}
+
+// rightPanelWidth returns the width of the right panel in split mode.
+func (m Model) rightPanelWidth() int {
+	return m.width - m.leftPanelWidth() - 1 // 1 for divider
+}
+
+// renderLeftContent returns content for the left viewport.
+// In split mode: just the markdown body. Otherwise: full stacked layout.
+func (m Model) renderLeftContent() string {
+	if !m.splitLayout {
+		return m.renderContent()
+	}
+	if m.ticket == nil || m.ticket.Body == "" {
+		return ""
+	}
+	return m.renderMarkdown(m.ticket.Body)
+}
+
+// renderSplitLayout renders the side-by-side split layout.
+func (m Model) renderSplitLayout() string {
+	contentHeight := m.leftViewport.Height
+
+	// Left panel with optional focus style.
+	leftContent := m.leftViewport.View()
+	var left string
+	if m.focusedPanel == 0 {
+		left = leftPanelFocusedStyle.
+			Width(m.leftPanelWidth()).
+			Height(contentHeight).
+			Render(leftContent)
+	} else {
+		left = leftPanelStyle.
+			Width(m.leftPanelWidth()).
+			Height(contentHeight).
+			Render(leftContent)
+	}
+
+	// Divider column.
+	divider := m.renderPanelDivider(contentHeight)
+
+	// Right sidebar.
+	right := m.renderSidebar(m.rightPanelWidth(), contentHeight)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
+}
+
+// renderPanelDivider renders a vertical divider column.
+func (m Model) renderPanelDivider(height int) string {
+	var b strings.Builder
+	for i := 0; i < height; i++ {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(dividerStyle.Render("│"))
+	}
+	return b.String()
+}
+
+// renderSidebar renders the right-side metadata panel.
+func (m Model) renderSidebar(width, height int) string {
+	if m.ticket == nil {
+		return ""
+	}
+
+	var b strings.Builder
+
+	// DETAILS section.
+	b.WriteString(m.renderSidebarDetails(width))
+
+	// SESSION section.
+	if m.ticket.Session != nil {
+		b.WriteString("\n\n")
+		b.WriteString(m.renderSidebarSession(width))
+	}
+
+	// REVIEWS section.
+	if m.hasReviewRequests() {
+		b.WriteString("\n\n")
+		b.WriteString(m.renderSidebarReviews(width))
+	}
+
+	// COMMENTS section.
+	if len(m.ticket.Comments) > 0 {
+		b.WriteString("\n\n")
+		b.WriteString(m.renderSidebarComments(width))
+	}
+
+	content := b.String()
+
+	// Apply sidebar style with focus.
+	if m.focusedPanel == 1 {
+		return sidebarFocusedStyle.
+			Width(width).
+			Height(height).
+			Render(content)
+	}
+	return sidebarStyle.
+		Width(width).
+		Height(height).
+		Render(content)
+}
+
+// renderSidebarDetails renders the DETAILS section of the sidebar.
+func (m Model) renderSidebarDetails(width int) string {
+	var b strings.Builder
+	b.WriteString(sidebarHeaderStyle.Render("DETAILS"))
+	b.WriteString("\n")
+
+	b.WriteString(sidebarLabelStyle.Render("Created  "))
+	b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Created.Format("Jan 02, 15:04")))
+
+	b.WriteString("\n")
+	b.WriteString(sidebarLabelStyle.Render("Updated  "))
+	b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Updated.Format("Jan 02, 15:04")))
+
+	if m.ticket.Dates.Progress != nil {
+		b.WriteString("\n")
+		b.WriteString(sidebarLabelStyle.Render("Progress "))
+		b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Progress.Format("Jan 02, 15:04")))
+	}
+
+	if m.ticket.Dates.Reviewed != nil {
+		b.WriteString("\n")
+		b.WriteString(sidebarLabelStyle.Render("Reviewed "))
+		b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Reviewed.Format("Jan 02, 15:04")))
+	}
+
+	if m.ticket.Dates.Done != nil {
+		b.WriteString("\n")
+		b.WriteString(sidebarLabelStyle.Render("Done     "))
+		b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Done.Format("Jan 02, 15:04")))
+	}
+
+	return b.String()
+}
+
+// renderSidebarSession renders the SESSION section of the sidebar.
+func (m Model) renderSidebarSession(_ int) string {
+	session := m.ticket.Session
+	var b strings.Builder
+
+	b.WriteString(sidebarHeaderStyle.Render("SESSION"))
+	b.WriteString("\n")
+
+	b.WriteString(sidebarLabelStyle.Render("Agent    "))
+	b.WriteString(sidebarValueStyle.Render(session.Agent))
+
+	b.WriteString("\n")
+	b.WriteString(sidebarLabelStyle.Render("Status   "))
+	if session.EndedAt == nil {
+		b.WriteString(statusStyle("progress").Render("ACTIVE"))
+	} else {
+		b.WriteString(statusStyle("done").Render("ENDED"))
+	}
+
+	if session.CurrentStatus != nil && session.CurrentStatus.Tool != nil {
+		b.WriteString("\n")
+		b.WriteString(sidebarLabelStyle.Render("Tool     "))
+		b.WriteString(sidebarValueStyle.Render(*session.CurrentStatus.Tool))
+	}
+
+	b.WriteString("\n")
+	b.WriteString(sidebarLabelStyle.Render("Window   "))
+	b.WriteString(sidebarValueStyle.Render(session.TmuxWindow))
+
+	b.WriteString("\n")
+	b.WriteString(sidebarLabelStyle.Render("Started  "))
+	b.WriteString(sidebarValueStyle.Render(session.StartedAt.Format("Jan 02, 15:04")))
+
+	if session.EndedAt != nil {
+		b.WriteString("\n")
+		b.WriteString(sidebarLabelStyle.Render("Ended    "))
+		b.WriteString(sidebarValueStyle.Render(session.EndedAt.Format("Jan 02, 15:04")))
+	}
+
+	return b.String()
+}
+
+// renderSidebarReviews renders the REVIEWS section of the sidebar.
+func (m Model) renderSidebarReviews(width int) string {
+	reviews := m.ticket.Session.RequestedReviews
+	var b strings.Builder
+
+	b.WriteString(sidebarHeaderStyle.Render(fmt.Sprintf("REVIEWS (%d)", len(reviews))))
+	b.WriteString("\n")
+
+	// Available width for content (account for sidebar padding/border ~3 chars).
+	maxLineWidth := max(width-3, 10)
+
+	for i, review := range reviews {
+		repo := filepath.Base(review.RepoPath)
+		if repo == "." || repo == "" || repo == "/" {
+			repo = ""
+		}
+
+		var line string
+		if repo != "" {
+			line = repo + " " + sidebarDotStyle.Render("·") + " " + review.Summary
+		} else {
+			line = review.Summary
+		}
+
+		// Truncate to fit.
+		if lipgloss.Width(line) > maxLineWidth {
+			line = line[:max(maxLineWidth-1, 0)] + "…"
+		}
+
+		b.WriteString(sidebarValueStyle.Render(line))
+		if i < len(reviews)-1 {
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+// renderSidebarComments renders the COMMENTS section of the sidebar.
+func (m Model) renderSidebarComments(width int) string {
+	comments := m.ticket.Comments
+	var b strings.Builder
+
+	b.WriteString(sidebarHeaderStyle.Render(fmt.Sprintf("COMMENTS (%d)", len(comments))))
+	b.WriteString("\n")
+
+	maxLineWidth := max(width-3, 10)
+
+	for i, comment := range comments {
+		// Replace newlines with spaces for one-liner display.
+		content := strings.ReplaceAll(comment.Content, "\n", " ")
+
+		typeStr := commentTypeStyle(comment.Type).Render(comment.Type)
+		line := typeStr + " " + sidebarDotStyle.Render("·") + " " + content
+
+		// Truncate to fit.
+		if lipgloss.Width(line) > maxLineWidth {
+			line = line[:max(maxLineWidth-1, 0)] + "…"
+		}
+
+		b.WriteString(line)
+		if i < len(comments)-1 {
+			b.WriteString("\n")
+		}
 	}
 
 	return b.String()
