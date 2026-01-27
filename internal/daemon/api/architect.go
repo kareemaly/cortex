@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"path/filepath"
 
@@ -149,4 +150,37 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// Focus handles POST /architect/focus - focuses the architect tmux window.
+func (h *ArchitectHandlers) Focus(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+
+	projectCfg, err := projectconfig.Load(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
+		return
+	}
+
+	sessionName := projectCfg.Name
+	if sessionName == "" {
+		sessionName = "cortex"
+	}
+
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	if err := h.deps.TmuxManager.FocusWindowByIndex(sessionName, 0); err != nil {
+		writeError(w, http.StatusInternalServerError, "focus_error", err.Error())
+		return
+	}
+
+	if err := h.deps.TmuxManager.SwitchClient(sessionName); err != nil {
+		h.deps.Logger.Warn("failed to switch tmux client", "session", sessionName, "error", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(FocusResponse{Success: true, Window: "architect"})
 }
