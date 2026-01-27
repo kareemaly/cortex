@@ -431,6 +431,114 @@ type ConcludeSessionResponse struct {
 	Message  string `json:"message"`
 }
 
+// UpdateTicket updates a ticket's title and/or body by ID (status-agnostic).
+func (c *Client) UpdateTicket(id string, title, body *string) (*TicketResponse, error) {
+	// Discover current status
+	current, err := c.GetTicketByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	reqBody := map[string]*string{}
+	if title != nil {
+		reqBody["title"] = title
+	}
+	if body != nil {
+		reqBody["body"] = body
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPut, c.baseURL+"/tickets/"+current.Status+"/"+id, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result TicketResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteTicket deletes a ticket by ID (status-agnostic).
+func (c *Client) DeleteTicket(id string) error {
+	// Discover current status
+	current, err := c.GetTicketByID(id)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/tickets/"+current.Status+"/"+id, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusNoContent {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
+// MoveTicket moves a ticket to a different status by ID (status-agnostic).
+func (c *Client) MoveTicket(id, toStatus string) (*TicketResponse, error) {
+	// Discover current status
+	current, err := c.GetTicketByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	reqBody := map[string]string{"to": toStatus}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+current.Status+"/"+id+"/move", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result TicketResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // GetTicketByID returns a ticket by ID regardless of status.
 func (c *Client) GetTicketByID(id string) (*TicketResponse, error) {
 	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tickets/by-id/"+id, nil)
