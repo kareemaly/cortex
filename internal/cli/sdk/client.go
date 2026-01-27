@@ -611,8 +611,8 @@ func (c *Client) GetTicketByID(id string) (*TicketResponse, error) {
 }
 
 // AddComment adds a comment to a ticket.
-func (c *Client) AddComment(ticketID, commentType, content string) (*AddCommentResponse, error) {
-	reqBody := map[string]string{"type": commentType, "content": content}
+func (c *Client) AddComment(ticketID, commentType, title, content string) (*AddCommentResponse, error) {
+	reqBody := map[string]string{"type": commentType, "title": title, "content": content}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)
@@ -643,8 +643,8 @@ func (c *Client) AddComment(ticketID, commentType, content string) (*AddCommentR
 }
 
 // RequestReview requests a review for a ticket.
-func (c *Client) RequestReview(ticketID, repoPath, summary string) (*RequestReviewResponse, error) {
-	reqBody := map[string]string{"repo_path": repoPath, "summary": summary}
+func (c *Client) RequestReview(ticketID, repoPath, title, content string) (*RequestReviewResponse, error) {
+	reqBody := map[string]string{"repo_path": repoPath, "title": title, "content": content}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)

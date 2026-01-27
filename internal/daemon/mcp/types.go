@@ -68,13 +68,15 @@ type SpawnSessionInput struct {
 // AddCommentInput is the input for the addTicketComment tool.
 type AddCommentInput struct {
 	Type    string `json:"type" jsonschema:"Comment type (scope_change/decision/blocker/progress/question/rejection/general/ticket_done)"`
+	Title   string `json:"title" jsonschema:"Short one-liner title for the comment (required)"`
 	Content string `json:"content" jsonschema:"The comment content"`
 }
 
 // RequestReviewInput is the input for the requestReview tool.
 type RequestReviewInput struct {
 	RepoPath string `json:"repo_path" jsonschema:"Path to the repository being reviewed"`
-	Summary  string `json:"summary" jsonschema:"Summary of changes for the reviewer"`
+	Title    string `json:"title" jsonschema:"Short one-liner title for the review request (required)"`
+	Content  string `json:"content" jsonschema:"Full description of changes for the reviewer"`
 }
 
 // ConcludeSessionInput is the input for the concludeSession tool.

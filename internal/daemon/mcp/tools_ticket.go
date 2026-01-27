@@ -60,7 +60,11 @@ func (s *Server) handleAddTicketComment(
 	req *mcp.CallToolRequest,
 	input AddCommentInput,
 ) (*mcp.CallToolResult, AddCommentOutput, error) {
-	resp, err := s.sdkClient.AddComment(s.session.TicketID, input.Type, input.Content)
+	if input.Title == "" {
+		return nil, AddCommentOutput{}, NewValidationError("title", "cannot be empty")
+	}
+
+	resp, err := s.sdkClient.AddComment(s.session.TicketID, input.Type, input.Title, input.Content)
 	if err != nil {
 		return nil, AddCommentOutput{}, wrapSDKError(err)
 	}
@@ -80,11 +84,14 @@ func (s *Server) handleRequestReview(
 	if input.RepoPath == "" {
 		return nil, RequestReviewOutput{}, NewValidationError("repo_path", "cannot be empty")
 	}
-	if input.Summary == "" {
-		return nil, RequestReviewOutput{}, NewValidationError("summary", "cannot be empty")
+	if input.Title == "" {
+		return nil, RequestReviewOutput{}, NewValidationError("title", "cannot be empty")
+	}
+	if input.Content == "" {
+		return nil, RequestReviewOutput{}, NewValidationError("content", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.RequestReview(s.session.TicketID, input.RepoPath, input.Summary)
+	resp, err := s.sdkClient.RequestReview(s.session.TicketID, input.RepoPath, input.Title, input.Content)
 	if err != nil {
 		return nil, RequestReviewOutput{}, wrapSDKError(err)
 	}

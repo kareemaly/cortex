@@ -363,7 +363,7 @@ func TestStoreAddComment(t *testing.T) {
 	ticket, _ := store.Create("Test Ticket", "body")
 	session, _ := store.SetSession(ticket.ID, "claude", "window", nil, nil)
 
-	comment, err := store.AddComment(ticket.ID, session.ID, CommentDecision, "Test decision")
+	comment, err := store.AddComment(ticket.ID, session.ID, CommentDecision, "Test title", "Test decision")
 	if err != nil {
 		t.Fatalf("AddComment failed: %v", err)
 	}
@@ -373,6 +373,9 @@ func TestStoreAddComment(t *testing.T) {
 	}
 	if comment.Type != CommentDecision {
 		t.Errorf("type = %q, want %q", comment.Type, CommentDecision)
+	}
+	if comment.Title != "Test title" {
+		t.Errorf("title = %q, want %q", comment.Title, "Test title")
 	}
 	if comment.Content != "Test decision" {
 		t.Errorf("content = %q, want %q", comment.Content, "Test decision")
@@ -467,8 +470,9 @@ func TestStoreConcurrentAddComments(t *testing.T) {
 	for g := 0; g < goroutines; g++ {
 		go func(g int) {
 			defer wg.Done()
+			title := fmt.Sprintf("Title %d", g)
 			content := fmt.Sprintf("Comment from goroutine %d", g)
-			_, err := store.AddComment(tk.ID, session.ID, CommentProgress, content)
+			_, err := store.AddComment(tk.ID, session.ID, CommentProgress, title, content)
 			if err != nil {
 				t.Errorf("AddComment goroutine %d failed: %v", g, err)
 			}
@@ -484,5 +488,85 @@ func TestStoreConcurrentAddComments(t *testing.T) {
 	}
 	if len(retrieved.Comments) != goroutines {
 		t.Errorf("comments count = %d, want %d", len(retrieved.Comments), goroutines)
+	}
+}
+
+func TestStoreAddCommentValidation(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	tk, _ := store.Create("Test Ticket", "body")
+	session, _ := store.SetSession(tk.ID, "claude", "window", nil, nil)
+
+	// Empty title should fail
+	_, err := store.AddComment(tk.ID, session.ID, CommentDecision, "", "content")
+	if err == nil {
+		t.Error("expected error for empty title")
+	}
+	if _, ok := err.(*ValidationError); !ok {
+		t.Errorf("expected ValidationError, got %T", err)
+	}
+
+	// Empty content should fail
+	_, err = store.AddComment(tk.ID, session.ID, CommentDecision, "title", "")
+	if err == nil {
+		t.Error("expected error for empty content")
+	}
+	if _, ok := err.(*ValidationError); !ok {
+		t.Errorf("expected ValidationError, got %T", err)
+	}
+}
+
+func TestStoreAddReviewRequest(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	tk, _ := store.Create("Test Ticket", "body")
+	_, _ = store.SetSession(tk.ID, "claude", "window", nil, nil)
+
+	count, err := store.AddReviewRequest(tk.ID, ".", "Review title", "Review content")
+	if err != nil {
+		t.Fatalf("AddReviewRequest failed: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("review count = %d, want 1", count)
+	}
+
+	retrieved, _, _ := store.Get(tk.ID)
+	if len(retrieved.Session.RequestedReviews) != 1 {
+		t.Fatalf("reviews count = %d, want 1", len(retrieved.Session.RequestedReviews))
+	}
+	review := retrieved.Session.RequestedReviews[0]
+	if review.Title != "Review title" {
+		t.Errorf("title = %q, want %q", review.Title, "Review title")
+	}
+	if review.Content != "Review content" {
+		t.Errorf("content = %q, want %q", review.Content, "Review content")
+	}
+}
+
+func TestStoreAddReviewRequestValidation(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	tk, _ := store.Create("Test Ticket", "body")
+	_, _ = store.SetSession(tk.ID, "claude", "window", nil, nil)
+
+	// Empty title should fail
+	_, err := store.AddReviewRequest(tk.ID, ".", "", "content")
+	if err == nil {
+		t.Error("expected error for empty title")
+	}
+	if _, ok := err.(*ValidationError); !ok {
+		t.Errorf("expected ValidationError, got %T", err)
+	}
+
+	// Empty content should fail
+	_, err = store.AddReviewRequest(tk.ID, ".", "title", "")
+	if err == nil {
+		t.Error("expected error for empty content")
+	}
+	if _, ok := err.(*ValidationError); !ok {
+		t.Errorf("expected ValidationError, got %T", err)
 	}
 }

@@ -31,6 +31,7 @@ type Comment struct {
 	ID        string      `json:"id"`
 	SessionID string      `json:"session_id,omitempty"`
 	Type      CommentType `json:"type"`
+	Title     string      `json:"title"`
 	Content   string      `json:"content"`
 	CreatedAt time.Time   `json:"created_at"`
 }
@@ -90,7 +91,8 @@ type StatusEntry struct {
 // ReviewRequest represents a request for human review of changes.
 type ReviewRequest struct {
 	RepoPath    string    `json:"repo_path"`
-	Summary     string    `json:"summary"`
+	Title       string    `json:"title"`
+	Content     string    `json:"content"`
 	RequestedAt time.Time `json:"requested_at"`
 }
 
