@@ -731,14 +731,14 @@ func (m Model) renderReviewRequests() string {
 	b.WriteString("\n")
 
 	for _, review := range m.ticket.Session.RequestedReviews {
-		// Format: [repo: .]  "Summary text"  (2 min ago)
+		// Format: [repo: .]  "Title text"  (2 min ago)
 		repo := review.RepoPath
 		if repo == "" || repo == "." {
 			repo = "."
 		}
 		b.WriteString(labelStyle.Render("[repo: " + repo + "]"))
 		b.WriteString("  ")
-		b.WriteString(valueStyle.Render("\"" + review.Summary + "\""))
+		b.WriteString(valueStyle.Render("\"" + review.Title + "\""))
 		b.WriteString("  ")
 		b.WriteString(labelStyle.Render("(" + formatTimeAgo(review.RequestedAt) + ")"))
 		b.WriteString("\n")
@@ -756,13 +756,17 @@ func (m Model) renderComments() string {
 	b.WriteString("\n")
 
 	for i, comment := range m.ticket.Comments {
-		// Comment type badge and date.
+		// Comment type badge, title, and date.
 		typeStyle := commentTypeStyle(comment.Type)
 		badge := typeStyle.Render("[" + comment.Type + "]")
 		date := labelStyle.Render(comment.CreatedAt.Format("Jan 02 15:04"))
 
 		b.WriteString(badge)
 		b.WriteString(strings.Repeat(" ", max(15-len(comment.Type), 1)))
+		if comment.Title != "" {
+			b.WriteString(valueStyle.Render(comment.Title))
+			b.WriteString("  ")
+		}
 		b.WriteString(date)
 		b.WriteString("\n")
 

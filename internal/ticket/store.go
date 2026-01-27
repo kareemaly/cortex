@@ -347,7 +347,14 @@ func (s *Store) UpdateSessionStatus(ticketID string, agentStatus AgentStatus, to
 }
 
 // AddComment adds a comment to a ticket.
-func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, content string) (*Comment, error) {
+func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, title, content string) (*Comment, error) {
+	if title == "" {
+		return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
+	}
+	if content == "" {
+		return nil, &ValidationError{Field: "content", Message: "cannot be empty"}
+	}
+
 	mu := s.ticketMu(ticketID)
 	mu.Lock()
 	defer mu.Unlock()
@@ -362,6 +369,7 @@ func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, 
 		ID:        uuid.New().String(),
 		SessionID: sessionID,
 		Type:      commentType,
+		Title:     title,
 		Content:   content,
 		CreatedAt: now,
 	}
@@ -379,7 +387,14 @@ func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, 
 
 // AddReviewRequest adds a review request to the ticket's active session.
 // Returns the total number of review requests after adding.
-func (s *Store) AddReviewRequest(ticketID, repoPath, summary string) (int, error) {
+func (s *Store) AddReviewRequest(ticketID, repoPath, title, content string) (int, error) {
+	if title == "" {
+		return 0, &ValidationError{Field: "title", Message: "cannot be empty"}
+	}
+	if content == "" {
+		return 0, &ValidationError{Field: "content", Message: "cannot be empty"}
+	}
+
 	mu := s.ticketMu(ticketID)
 	mu.Lock()
 	defer mu.Unlock()
@@ -400,7 +415,8 @@ func (s *Store) AddReviewRequest(ticketID, repoPath, summary string) (int, error
 	now := time.Now().UTC()
 	review := ReviewRequest{
 		RepoPath:    repoPath,
-		Summary:     summary,
+		Title:       title,
+		Content:     content,
 		RequestedAt: now,
 	}
 

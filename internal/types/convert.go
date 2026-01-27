@@ -19,6 +19,7 @@ func ToCommentResponse(c *ticket.Comment) CommentResponse {
 		ID:        c.ID,
 		SessionID: c.SessionID,
 		Type:      string(c.Type),
+		Title:     c.Title,
 		Content:   c.Content,
 		CreatedAt: c.CreatedAt,
 	}
@@ -38,7 +39,8 @@ func ToStatusEntryResponse(s ticket.StatusEntry) StatusEntryResponse {
 func ToRequestedReviewResponse(r ticket.ReviewRequest) RequestedReviewResponse {
 	return RequestedReviewResponse{
 		RepoPath:    r.RepoPath,
-		Summary:     r.Summary,
+		Title:       r.Title,
+		Content:     r.Content,
 		RequestedAt: r.RequestedAt,
 	}
 }

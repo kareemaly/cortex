@@ -643,6 +643,7 @@ func TestHandleAddTicketComment(t *testing.T) {
 
 	_, output, err := server.handleAddTicketComment(context.Background(), nil, AddCommentInput{
 		Type:    "decision",
+		Title:   "API decision",
 		Content: "Decided to use new API",
 	})
 	if err != nil {
@@ -669,6 +670,7 @@ func TestHandleAddTicketCommentInvalidType(t *testing.T) {
 
 	_, _, err := server.handleAddTicketComment(context.Background(), nil, AddCommentInput{
 		Type:    "invalid_type",
+		Title:   "Test title",
 		Content: "Test content",
 	})
 	if err == nil {
@@ -979,5 +981,86 @@ func TestHandleConcludeSession(t *testing.T) {
 	}
 	if output.TicketID != ticketID {
 		t.Errorf("ticket ID = %q, want %q", output.TicketID, ticketID)
+	}
+}
+
+func TestHandleAddTicketCommentMissingTitle(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, _, err := server.handleAddTicketComment(context.Background(), nil, AddCommentInput{
+		Type:    "decision",
+		Title:   "",
+		Content: "Some content",
+	})
+	if err == nil {
+		t.Error("expected error for missing title")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("error code = %q, want %q", toolErr.Code, ErrorCodeValidation)
+	}
+}
+
+func TestHandleRequestReview(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, output, err := server.handleRequestReview(context.Background(), nil, RequestReviewInput{
+		RepoPath: ".",
+		Title:    "Review changes",
+		Content:  "Please review the implementation",
+	})
+	if err != nil {
+		t.Fatalf("handleRequestReview failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Error("request review should succeed")
+	}
+	if output.ReviewCount != 1 {
+		t.Errorf("review count = %d, want 1", output.ReviewCount)
+	}
+}
+
+func TestHandleRequestReviewValidation(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	// Missing title
+	_, _, err := server.handleRequestReview(context.Background(), nil, RequestReviewInput{
+		RepoPath: ".",
+		Title:    "",
+		Content:  "Some content",
+	})
+	if err == nil {
+		t.Error("expected error for missing title")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("error code = %q, want %q", toolErr.Code, ErrorCodeValidation)
+	}
+
+	// Missing content
+	_, _, err = server.handleRequestReview(context.Background(), nil, RequestReviewInput{
+		RepoPath: ".",
+		Title:    "Some title",
+		Content:  "",
+	})
+	if err == nil {
+		t.Error("expected error for missing content")
+	}
+	toolErr, ok = err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("error code = %q, want %q", toolErr.Code, ErrorCodeValidation)
 	}
 }

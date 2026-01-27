@@ -23,6 +23,7 @@ type CommentResponse struct {
 	ID        string    `json:"id"`
 	SessionID string    `json:"session_id,omitempty"`
 	Type      string    `json:"type"`
+	Title     string    `json:"title"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -38,7 +39,8 @@ type StatusEntryResponse struct {
 // RequestedReviewResponse is a review request in a session response.
 type RequestedReviewResponse struct {
 	RepoPath    string    `json:"repo_path"`
-	Summary     string    `json:"summary"`
+	Title       string    `json:"title"`
+	Content     string    `json:"content"`
 	RequestedAt time.Time `json:"requested_at"`
 }
 

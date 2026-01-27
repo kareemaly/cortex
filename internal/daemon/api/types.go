@@ -50,6 +50,7 @@ type SpawnResponse struct {
 // AddCommentRequest is the request body for adding a comment to a ticket.
 type AddCommentRequest struct {
 	Type    string `json:"type"`
+	Title   string `json:"title"`
 	Content string `json:"content"`
 }
 
@@ -62,7 +63,8 @@ type AddCommentResponse struct {
 // RequestReviewRequest is the request body for requesting a review.
 type RequestReviewRequest struct {
 	RepoPath string `json:"repo_path"`
-	Summary  string `json:"summary"`
+	Title    string `json:"title"`
+	Content  string `json:"content"`
 }
 
 // RequestReviewResponse is the response for requesting a review.
