@@ -340,7 +340,12 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case spawn.IsStateError(err):
-			writeError(w, http.StatusConflict, "state_conflict", err.Error())
+			stateErr := err.(*spawn.StateError)
+			if stateErr.State == spawn.StateOrphaned {
+				writeError(w, http.StatusConflict, "session_orphaned", err.Error())
+			} else {
+				writeError(w, http.StatusConflict, "state_conflict", err.Error())
+			}
 		case spawn.IsConfigError(err):
 			writeError(w, http.StatusBadRequest, "config_error", err.Error())
 		case spawn.IsBinaryNotFoundError(err):

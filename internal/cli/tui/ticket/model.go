@@ -14,21 +14,23 @@ import (
 
 // Model is the main Bubbletea model for the ticket detail view.
 type Model struct {
-	client        *sdk.Client
-	ticketID      string
-	ticket        *sdk.TicketResponse
-	viewport      viewport.Model
-	width         int
-	height        int
-	ready         bool
-	loading       bool
-	err           error
-	showKillModal bool
-	killing       bool
-	approving     bool
-	embedded      bool // if true, send CloseDetailMsg instead of tea.Quit
-	pendingG      bool // tracking 'g' key for 'gg' sequence
-	mdRenderer    *glamour.TermRenderer
+	client          *sdk.Client
+	ticketID        string
+	ticket          *sdk.TicketResponse
+	viewport        viewport.Model
+	width           int
+	height          int
+	ready           bool
+	loading         bool
+	err             error
+	showKillModal   bool
+	killing         bool
+	approving       bool
+	spawning        bool
+	showOrphanModal bool
+	embedded        bool // if true, send CloseDetailMsg instead of tea.Quit
+	pendingG        bool // tracking 'g' key for 'gg' sequence
+	mdRenderer      *glamour.TermRenderer
 }
 
 // Message types for async operations.
@@ -58,6 +60,17 @@ type SessionApprovedMsg struct{}
 type ApproveErrorMsg struct {
 	Err error
 }
+
+// SessionSpawnedMsg is sent when a session is successfully spawned.
+type SessionSpawnedMsg struct{}
+
+// SpawnErrorMsg is sent when spawning a session fails.
+type SpawnErrorMsg struct {
+	Err error
+}
+
+// OrphanedSessionMsg is sent when spawn encounters an orphaned session.
+type OrphanedSessionMsg struct{}
 
 // CloseDetailMsg is sent when user wants to close the detail view.
 type CloseDetailMsg struct{}
@@ -171,6 +184,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.Err
 		return m, nil
 
+	case SessionSpawnedMsg:
+		m.spawning = false
+		m.loading = true
+		return m, m.loadTicket()
+
+	case SpawnErrorMsg:
+		m.spawning = false
+		m.err = msg.Err
+		return m, nil
+
+	case OrphanedSessionMsg:
+		m.spawning = false
+		m.showOrphanModal = true
+		return m, nil
+
 	case RefreshMsg:
 		m.loading = true
 		return m, m.loadTicket()
@@ -184,9 +212,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg handles keyboard input.
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Modal takes priority when visible.
+	// Modals take priority when visible.
 	if m.showKillModal {
 		return m.handleKillModalKey(msg)
+	}
+	if m.showOrphanModal {
+		return m.handleOrphanModalKey(msg)
 	}
 
 	// Quit or close.
@@ -202,8 +233,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseDetailMsg{} }
 	}
 
-	// If loading, killing, or approving, don't process other keys.
-	if m.loading || m.killing || m.approving {
+	// If loading, killing, approving, or spawning, don't process other keys.
+	if m.loading || m.killing || m.approving || m.spawning {
 		return m, nil
 	}
 
@@ -236,6 +267,15 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.hasActiveSession() && m.hasReviewRequests() {
 			m.approving = true
 			return m, m.approveSession()
+		}
+		return m, nil
+	}
+
+	// Spawn session.
+	if isKey(msg, KeySpawn) {
+		if m.canSpawn() {
+			m.spawning = true
+			return m, m.spawnSession()
 		}
 		return m, nil
 	}
@@ -358,6 +398,82 @@ func (m Model) approveSession() tea.Cmd {
 	}
 }
 
+// canSpawn returns true when the ticket can have a session spawned.
+func (m Model) canSpawn() bool {
+	if m.ticket == nil {
+		return false
+	}
+	// Can spawn if in backlog or progress with no active session.
+	status := m.ticket.Status
+	if status != "backlog" && status != "progress" {
+		return false
+	}
+	return !m.hasActiveSession()
+}
+
+// spawnSession returns a command to spawn a session for the current ticket.
+func (m Model) spawnSession() tea.Cmd {
+	return func() tea.Msg {
+		if m.ticket == nil {
+			return SpawnErrorMsg{Err: fmt.Errorf("no ticket to spawn")}
+		}
+		_, err := m.client.SpawnSession(m.ticket.Status, m.ticket.ID, "normal")
+		if err != nil {
+			if apiErr, ok := err.(*sdk.APIError); ok && apiErr.IsOrphanedSession() {
+				return OrphanedSessionMsg{}
+			}
+			return SpawnErrorMsg{Err: err}
+		}
+		return SessionSpawnedMsg{}
+	}
+}
+
+// spawnSessionWithMode returns a command to spawn a session with a specific mode.
+func (m Model) spawnSessionWithMode(mode string) tea.Cmd {
+	return func() tea.Msg {
+		if m.ticket == nil {
+			return SpawnErrorMsg{Err: fmt.Errorf("no ticket to spawn")}
+		}
+		_, err := m.client.SpawnSession(m.ticket.Status, m.ticket.ID, mode)
+		if err != nil {
+			return SpawnErrorMsg{Err: err}
+		}
+		return SessionSpawnedMsg{}
+	}
+}
+
+// handleOrphanModalKey handles keyboard input when the orphan modal is shown.
+func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if isKey(msg, KeyRefresh) { // 'r' for resume
+		m.showOrphanModal = false
+		m.spawning = true
+		return m, m.spawnSessionWithMode("resume")
+	}
+	if isKey(msg, KeyFresh) { // 'f' for fresh
+		m.showOrphanModal = false
+		m.spawning = true
+		return m, m.spawnSessionWithMode("fresh")
+	}
+	if isKey(msg, KeyCancel, KeyEscape) {
+		m.showOrphanModal = false
+		return m, nil
+	}
+	return m, nil
+}
+
+// renderOrphanModal renders the orphaned session modal.
+func (m Model) renderOrphanModal() string {
+	var b strings.Builder
+
+	b.WriteString("\n")
+	b.WriteString(warningStyle.Render("Orphaned session detected"))
+	b.WriteString("\n\n")
+	b.WriteString("The tmux window for this session was closed.\n\n")
+	b.WriteString("[r]esume  [f]resh  [c]ancel")
+
+	return b.String()
+}
+
 // View renders the ticket detail view.
 func (m Model) View() string {
 	if !m.ready {
@@ -401,9 +517,21 @@ func (m Model) View() string {
 		return b.String()
 	}
 
+	// Handle spawning state.
+	if m.spawning {
+		b.WriteString(loadingStyle.Render("Spawning session..."))
+		return b.String()
+	}
+
 	// Kill confirmation modal.
 	if m.showKillModal {
 		b.WriteString(m.renderKillModal())
+		return b.String()
+	}
+
+	// Orphan session modal.
+	if m.showOrphanModal {
+		b.WriteString(m.renderOrphanModal())
 		return b.String()
 	}
 
@@ -412,7 +540,7 @@ func (m Model) View() string {
 	b.WriteString("\n")
 
 	// Help bar.
-	b.WriteString(helpBarStyle.Render(helpText(int(m.viewport.ScrollPercent()*100), m.hasActiveSession(), m.hasReviewRequests(), m.embedded)))
+	b.WriteString(helpBarStyle.Render(helpText(int(m.viewport.ScrollPercent()*100), m.hasActiveSession(), m.hasReviewRequests(), m.canSpawn(), m.embedded)))
 
 	return b.String()
 }
