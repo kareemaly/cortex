@@ -121,6 +121,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		ProjectPath: projectPath,
 		TicketsDir:  ticketsDir,
 		ProjectName: sessionName,
+		AgentArgs:   projectCfg.AgentArgs.Architect,
 	})
 
 	if err != nil {

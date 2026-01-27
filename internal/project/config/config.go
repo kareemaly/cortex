@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -15,12 +16,42 @@ const (
 	AgentOpenCode AgentType = "opencode"
 )
 
+// AgentArgsConfig holds separate CLI arguments for architect and ticket sessions.
+type AgentArgsConfig struct {
+	Architect []string `yaml:"architect"`
+	Ticket    []string `yaml:"ticket"`
+}
+
+// UnmarshalYAML implements custom YAML unmarshaling for AgentArgsConfig.
+// It supports two formats:
+//   - New format (mapping): agent_args: {architect: [...], ticket: [...]}
+//   - Old format (sequence): agent_args: ["--flag"] — copies to both Architect and Ticket
+func (a *AgentArgsConfig) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.MappingNode:
+		// New structured format: decode as normal struct
+		type plain AgentArgsConfig
+		return value.Decode((*plain)(a))
+	case yaml.SequenceNode:
+		// Old flat format: decode as []string and copy to both fields
+		var args []string
+		if err := value.Decode(&args); err != nil {
+			return err
+		}
+		a.Architect = args
+		a.Ticket = args
+		return nil
+	default:
+		return fmt.Errorf("agent_args must be a mapping or sequence, got %v", value.Kind)
+	}
+}
+
 // Config holds the project configuration.
 type Config struct {
-	Name      string    `yaml:"name"`
-	Agent     AgentType `yaml:"agent"`
-	AgentArgs []string  `yaml:"agent_args"`
-	Git       GitConfig `yaml:"git"`
+	Name      string          `yaml:"name"`
+	Agent     AgentType       `yaml:"agent"`
+	AgentArgs AgentArgsConfig `yaml:"agent_args"`
+	Git       GitConfig       `yaml:"git"`
 }
 
 // GitConfig holds git-related configuration.
