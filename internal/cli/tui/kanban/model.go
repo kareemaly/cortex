@@ -14,15 +14,16 @@ import (
 
 // Model is the main Bubbletea model for the kanban board.
 type Model struct {
-	columns      [4]Column
-	client       *sdk.Client
-	activeColumn int
-	width        int
-	height       int
-	ready        bool
-	err          error
-	statusMsg    string
-	loading      bool
+	columns       [4]Column
+	client        *sdk.Client
+	activeColumn  int
+	width         int
+	height        int
+	ready         bool
+	err           error
+	statusMsg     string
+	statusIsError bool
+	loading       bool
 
 	// Modal state for orphaned session handling
 	showOrphanModal bool
@@ -170,10 +171,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SessionSpawnedMsg:
 		m.statusMsg = fmt.Sprintf("Session spawned for: %s", msg.Ticket.Title)
+		m.statusIsError = false
 		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
 
 	case SessionErrorMsg:
 		m.statusMsg = fmt.Sprintf("Error: %s", msg.Err)
+		m.statusIsError = true
 		return m, m.clearStatusAfterDelay()
 
 	case OrphanedSessionMsg:
@@ -184,22 +187,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SessionApprovedMsg:
 		m.statusMsg = fmt.Sprintf("Approved session for: %s", msg.Ticket.Title)
+		m.statusIsError = false
 		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
 
 	case ApproveErrorMsg:
 		m.statusMsg = fmt.Sprintf("Approve error: %s", msg.Err)
+		m.statusIsError = true
 		return m, m.clearStatusAfterDelay()
 
 	case FocusSuccessMsg:
 		m.statusMsg = fmt.Sprintf("Focused: %s", msg.Window)
+		m.statusIsError = false
 		return m, m.clearStatusAfterDelay()
 
 	case FocusErrorMsg:
 		m.statusMsg = fmt.Sprintf("Focus error: %s", msg.Err)
+		m.statusIsError = true
 		return m, m.clearStatusAfterDelay()
 
 	case ClearStatusMsg:
 		m.statusMsg = ""
+		m.statusIsError = false
 		return m, nil
 
 	case sseConnectedMsg:
@@ -312,6 +320,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t := m.columns[m.activeColumn].SelectedTicket()
 		if t != nil {
 			m.statusMsg = fmt.Sprintf("Spawning session for: %s...", t.Title)
+			m.statusIsError = false
 			return m, m.spawnSession(t)
 		}
 		return m, nil
@@ -322,10 +331,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t := m.columns[m.activeColumn].SelectedTicket()
 		if t != nil && t.HasActiveSession {
 			m.statusMsg = "Focusing window..."
+			m.statusIsError = false
 			return m, m.focusTicket(t)
 		}
 		if t != nil && !t.HasActiveSession {
 			m.statusMsg = "No active session"
+			m.statusIsError = false
 			return m, m.clearStatusAfterDelay()
 		}
 		return m, nil
@@ -336,10 +347,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t := m.columns[m.activeColumn].SelectedTicket()
 		if t != nil && t.HasActiveSession {
 			m.statusMsg = fmt.Sprintf("Approving session for: %s...", t.Title)
+			m.statusIsError = false
 			return m, m.approveSession(t)
 		}
 		if t != nil && !t.HasActiveSession {
 			m.statusMsg = "No active session to approve"
+			m.statusIsError = false
 			return m, m.clearStatusAfterDelay()
 		}
 		return m, nil
@@ -376,17 +389,20 @@ func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case isKey(msg, KeyRefresh): // 'r' for resume
 		m.showOrphanModal = false
 		m.statusMsg = fmt.Sprintf("Resuming session for: %s...", m.orphanedTicket.Title)
+		m.statusIsError = false
 		return m, m.spawnSessionWithMode(m.orphanedTicket, "resume")
 
 	case isKey(msg, KeyFresh): // 'f' for fresh
 		m.showOrphanModal = false
 		m.statusMsg = fmt.Sprintf("Starting fresh session for: %s...", m.orphanedTicket.Title)
+		m.statusIsError = false
 		return m, m.spawnSessionWithMode(m.orphanedTicket, "fresh")
 
 	case isKey(msg, KeyCancel, KeyEscape): // 'c' or Esc for cancel
 		m.showOrphanModal = false
 		m.orphanedTicket = nil
 		m.statusMsg = "Spawn cancelled"
+		m.statusIsError = false
 		return m, m.clearStatusAfterDelay()
 	}
 	return m, nil
@@ -451,7 +467,11 @@ func (m Model) View() string {
 		b.WriteString(m.renderOrphanModal())
 	} else {
 		if m.statusMsg != "" {
-			b.WriteString(statusBarStyle.Render(m.statusMsg))
+			style := statusBarStyle
+			if m.statusIsError {
+				style = errorStatusStyle
+			}
+			b.WriteString(style.Render(m.statusMsg))
 			b.WriteString("\n")
 		} else {
 			b.WriteString("\n")
