@@ -262,8 +262,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Approve session.
-	if isKey(msg, KeyApprove) {
+	// Approve session (guarded: don't trigger on 'a' when 'g' is pending for 'ga').
+	if !m.pendingG && isKey(msg, KeyApprove) {
 		if m.hasActiveSession() && m.hasReviewRequests() {
 			m.approving = true
 			return m, m.approveSession()
@@ -278,6 +278,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.spawnSession()
 		}
 		return m, nil
+	}
+
+	// Handle 'ga' - focus architect window.
+	if m.pendingG && isKey(msg, KeyApprove) {
+		m.pendingG = false
+		return m, m.focusArchitect()
 	}
 
 	// Handle 'G' - jump to bottom.
@@ -439,6 +445,14 @@ func (m Model) spawnSessionWithMode(mode string) tea.Cmd {
 			return SpawnErrorMsg{Err: err}
 		}
 		return SessionSpawnedMsg{}
+	}
+}
+
+// focusArchitect returns a command to focus the architect tmux window.
+func (m Model) focusArchitect() tea.Cmd {
+	return func() tea.Msg {
+		_ = m.client.FocusArchitect()
+		return nil
 	}
 }
 

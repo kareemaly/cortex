@@ -54,15 +54,15 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, 
 	} else {
 		quit = "[q]uit"
 	}
-	base := "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  " + quit
+	base := "[j/k/gg/G/ga] scroll  [ctrl+u/d] page  [r]efresh  " + quit
 	if hasActiveSession {
 		sessionActions := "[x] kill"
 		if hasReviewRequests {
 			sessionActions += "  [a]pprove"
 		}
-		base = "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  " + sessionActions + "  " + quit
+		base = "[j/k/gg/G/ga] scroll  [ctrl+u/d] page  [r]efresh  " + sessionActions + "  " + quit
 	} else if canSpawn {
-		base = "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  [s]pawn  " + quit
+		base = "[j/k/gg/G/ga] scroll  [ctrl+u/d] page  [r]efresh  [s]pawn  " + quit
 	}
 	return base + "  " + percentStr(scrollPercent)
 }
