@@ -1,10 +1,6 @@
 package mcp
 
-import (
-	"fmt"
-
-	"github.com/kareemaly/cortex/internal/ticket"
-)
+import "fmt"
 
 // ErrorCode represents MCP tool error codes.
 type ErrorCode string
@@ -65,23 +61,6 @@ func NewStateConflictError(state, mode, message string) *ToolError {
 	return &ToolError{
 		Code:    ErrorCodeStateConflict,
 		Message: fmt.Sprintf("state=%s mode=%s: %s", state, mode, message),
-	}
-}
-
-// WrapTicketError converts ticket store errors to MCP tool errors.
-func WrapTicketError(err error) *ToolError {
-	if err == nil {
-		return nil
-	}
-
-	// Check for specific ticket error types
-	switch e := err.(type) {
-	case *ticket.NotFoundError:
-		return NewNotFoundError(e.Resource, e.ID)
-	case *ticket.ValidationError:
-		return NewValidationError(e.Field, e.Message)
-	default:
-		return NewInternalError(err.Error())
 	}
 }
 

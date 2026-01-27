@@ -3,7 +3,6 @@ package mcp
 import (
 	"time"
 
-	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
 )
 
@@ -197,56 +196,14 @@ type ConcludeSessionOutput struct {
 
 // Conversion functions
 
-// ToTicketOutput converts a ticket and status to output format.
-func ToTicketOutput(t *ticket.Ticket, status ticket.Status) TicketOutput {
-	var session *SessionOutput
-	if t.Session != nil {
-		s := ToSessionOutput(t.Session)
-		session = &s
-	}
-
-	comments := make([]CommentOutput, len(t.Comments))
-	for i, c := range t.Comments {
-		comments[i] = types.ToCommentResponse(&c)
-	}
-
-	return TicketOutput{
-		ID:       t.ID,
-		Title:    t.Title,
-		Body:     t.Body,
-		Status:   string(status),
-		Dates:    types.ToDatesResponse(t.Dates),
-		Comments: comments,
-		Session:  session,
-	}
-}
-
-// ToTicketSummary converts a ticket and status to summary format.
-func ToTicketSummary(t *ticket.Ticket, status ticket.Status) TicketSummary {
+// ticketSummaryResponseToMCP maps a shared TicketSummary (from the HTTP API)
+// to the MCP-specific TicketSummary (simpler: no Updated, AgentStatus, AgentTool).
+func ticketSummaryResponseToMCP(s *types.TicketSummary) TicketSummary {
 	return TicketSummary{
-		ID:               t.ID,
-		Title:            t.Title,
-		Status:           string(status),
-		Created:          t.Dates.Created,
-		HasActiveSession: t.HasActiveSession(),
-	}
-}
-
-// ToSessionOutput converts a session to output format.
-func ToSessionOutput(s *ticket.Session) SessionOutput {
-	var currentStatus *StatusOutput
-	if s.CurrentStatus != nil {
-		cs := types.ToStatusEntryResponse(*s.CurrentStatus)
-		currentStatus = &cs
-	}
-
-	return SessionOutput{
-		ID:            s.ID,
-		StartedAt:     s.StartedAt,
-		EndedAt:       s.EndedAt,
-		Agent:         s.Agent,
-		TmuxWindow:    s.TmuxWindow,
-		CurrentStatus: currentStatus,
-		IsActive:      s.IsActive(),
+		ID:               s.ID,
+		Title:            s.Title,
+		Status:           s.Status,
+		Created:          s.Created,
+		HasActiveSession: s.HasActiveSession,
 	}
 }
