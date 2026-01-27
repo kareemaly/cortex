@@ -31,6 +31,9 @@ const (
 	KeyCtrlD       Key = "ctrl+d"
 	KeyG           Key = "g"
 	KeyShiftG      Key = "G"
+	KeySpawn       Key = "s"
+	KeyFresh       Key = "f"
+	KeyCancel      Key = "c"
 )
 
 // isKey checks if a key message matches a key constant.
@@ -44,7 +47,7 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 }
 
 // helpText returns the help bar text for the ticket detail view.
-func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, embedded bool) string {
+func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, embedded bool) string {
 	var quit string
 	if embedded {
 		quit = "[q/esc] back"
@@ -58,6 +61,8 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, embedded b
 			sessionActions += "  [a]pprove"
 		}
 		base = "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  " + sessionActions + "  " + quit
+	} else if canSpawn {
+		base = "[j/k/gg/G] scroll  [ctrl+u/d] page  [r]efresh  [s]pawn  " + quit
 	}
 	return base + "  " + percentStr(scrollPercent)
 }
