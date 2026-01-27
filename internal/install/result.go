@@ -42,8 +42,10 @@ type DependencyResult struct {
 
 // Result holds the complete installation result.
 type Result struct {
-	GlobalItems  []SetupItem
-	ProjectItems []SetupItem
-	Dependencies []DependencyResult
-	ProjectName  string
+	GlobalItems       []SetupItem
+	ProjectItems      []SetupItem
+	Dependencies      []DependencyResult
+	ProjectName       string
+	Registered        bool
+	RegistrationError error
 }

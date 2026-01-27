@@ -27,8 +27,9 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 	r.Use(middleware.Recoverer)
 	r.Use(RequestLogger(logger))
 
-	// Health endpoint (no project required)
+	// Global endpoints (no project required)
 	r.Get("/health", HealthHandler())
+	r.Get("/projects", ProjectsHandler(deps.StoreManager))
 
 	// Project-scoped routes
 	r.Group(func(r chi.Router) {

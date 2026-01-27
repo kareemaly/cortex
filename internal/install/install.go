@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/prompt"
 )
 
@@ -67,12 +68,39 @@ func Run(opts Options) (*Result, error) {
 			return nil, err
 		}
 		result.ProjectItems = projectItems
+
+		// Auto-register project in global config (non-fatal)
+		registered, regErr := registerProject(opts.ProjectPath, name)
+		result.Registered = registered
+		result.RegistrationError = regErr
 	}
 
 	// Check dependencies
 	result.Dependencies = CheckDependencies()
 
 	return result, nil
+}
+
+// registerProject adds the project to the global settings.yaml registry.
+func registerProject(projectPath, name string) (bool, error) {
+	absPath, err := filepath.Abs(projectPath)
+	if err != nil {
+		return false, err
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return false, err
+	}
+
+	if !cfg.RegisterProject(absPath, name) {
+		return false, nil // already registered
+	}
+
+	if err := cfg.Save(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // setupGlobal creates the global ~/.cortex/ directory and config.

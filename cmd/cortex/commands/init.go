@@ -57,6 +57,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if len(result.ProjectItems) > 0 {
 		fmt.Printf("\nProject setup (%s):\n", result.ProjectName)
 		printItems(result.ProjectItems)
+
+		// Print registration status
+		fmt.Println("\nGlobal registry:")
+		if result.RegistrationError != nil {
+			fmt.Printf("  %s Failed to register project: %v\n", crossMark(), result.RegistrationError)
+		} else if result.Registered {
+			fmt.Printf("  %s Registered in ~/.cortex/settings.yaml\n", checkMark())
+		} else {
+			fmt.Printf("  %s Already registered in ~/.cortex/settings.yaml\n", bullet())
+		}
 	}
 
 	// Print dependencies

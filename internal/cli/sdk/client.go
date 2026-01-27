@@ -411,6 +411,52 @@ func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
 	return nil, fmt.Errorf("ticket not found: %s", ticketID)
 }
 
+// ProjectTicketCounts holds ticket counts by status.
+type ProjectTicketCounts struct {
+	Backlog  int `json:"backlog"`
+	Progress int `json:"progress"`
+	Review   int `json:"review"`
+	Done     int `json:"done"`
+}
+
+// ProjectResponse represents a single project in the API response.
+type ProjectResponse struct {
+	Path   string               `json:"path"`
+	Title  string               `json:"title"`
+	Exists bool                 `json:"exists"`
+	Counts *ProjectTicketCounts `json:"counts,omitempty"`
+}
+
+// ListProjectsResponse is the response from GET /projects.
+type ListProjectsResponse struct {
+	Projects []ProjectResponse `json:"projects"`
+}
+
+// ListProjects returns all registered projects from the daemon.
+func (c *Client) ListProjects() (*ListProjectsResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/projects", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req) // No project header needed
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ListProjectsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // AddCommentResponse is the response from the add comment endpoint.
 type AddCommentResponse struct {
 	Success bool            `json:"success"`
