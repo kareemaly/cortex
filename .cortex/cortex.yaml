@@ -1,0 +1,11 @@
+name: cortex
+agent: claude
+qgent_args:
+  architect:
+    - "--allow-dangerously-skip-permissions"
+  ticket:
+    - "--allow-dangerously-skip-permissions"
+git:
+  worktrees: true
+  repos:
+    - path: "."

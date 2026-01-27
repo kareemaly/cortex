@@ -1,0 +1,291 @@
+{
+  "id": "bd84ba87-f063-4629-930e-31a0a92b96fe",
+  "title": "Set Architect Agent Pane to 30% Width",
+  "body": "## Problem\n\nThe architect agent pane width should be 30%, matching the ticket agent pane layout exactly.\n\n## Context\n\nBoth `SpawnAgent` and `SpawnArchitect` in `internal/tmux/command.go` call `SplitWindowHorizontal` which uses `split-window -h -p 70`. This gives 70% to the new right pane and 30% to the left agent pane. The code paths appear identical, but the architect pane may not be rendering at the expected 30% width in practice.\n\nLayout should be:\n```\n┌──────────┬────────────────────────┐\n│ Agent    │  Companion (kanban)    │\n│ 30%      │  70%                   │\n└──────────┴────────────────────────┘\n```\n\n## Scope\n\n- Investigate why the architect pane width differs from the ticket agent pane\n- Ensure the architect agent pane is exactly 30% width, matching the ticket agent layout\n- Relevant files:\n  - `internal/tmux/pane.go` — `SplitWindowHorizontal` (split logic)\n  - `internal/tmux/command.go` — `SpawnArchitect` and `SpawnAgent`\n  - `internal/core/spawn/spawn.go` — `spawnInTmux`\n\n## Acceptance Criteria\n\n- [ ] Architect agent pane renders at 30% width\n- [ ] Layout matches ticket agent pane exactly",
+  "dates": {
+    "created": "2026-01-27T10:21:52.356345Z",
+    "updated": "2026-01-27T10:28:56.139573Z",
+    "progress": "2026-01-27T10:22:24.027043Z",
+    "reviewed": "2026-01-27T10:27:14.162775Z",
+    "done": "2026-01-27T10:28:56.139573Z"
+  },
+  "comments": [
+    {
+      "id": "d618aab7-9e85-4dbe-aa5d-807889b55e81",
+      "session_id": "352b4d1e-6d59-49fc-be0b-e4c995e2a502",
+      "type": "ticket_done",
+      "content": "## Summary\n\nFixed the architect agent pane width issue where re-spawning the architect on a pre-existing tmux session caused incorrect pane sizing. The architect pane now consistently renders at 30% width, matching the ticket agent layout.\n\n## Root Cause\n\nWhen `SpawnArchitect` ran on a pre-existing session, window 0 could already have stale panes from a previous architect spawn (agent pane + companion pane). The function never cleaned up these panes before splitting:\n\n1. Session already exists → window 0 has 2 panes (old agent + old companion)\n2. `CreateArchitectWindow` just renames window 0 — no pane cleanup\n3. `SplitWindowHorizontal` splits the active pane again → 3 panes with wrong sizing\n\nBy contrast, `SpawnAgent` always creates a fresh window via `CreateWindow`, so it always starts clean.\n\n## Changes\n\n### `internal/tmux/pane.go`\n- Added `ResetWindowPanes(session, windowIndex)` method that runs `tmux kill-pane -a -t \u003csession\u003e:\u003cwindow\u003e.0` to kill all panes except pane 0, restoring a single-pane layout. Errors are intentionally discarded (no-op when already a single pane).\n\n### `internal/tmux/command.go`\n- Added a `ResetWindowPanes` call in `SpawnArchitect` after `CreateArchitectWindow` and before executing the agent command. This ensures stale panes from a previous spawn are cleaned up before the 70/30 split.\n\n## Key Decisions\n\n- **Ignore errors from `kill-pane -a`**: When window 0 already has only one pane, tmux returns an error. This is expected and harmless, so the error is explicitly discarded with `_, _ = m.run(...)` to satisfy the linter.\n- **Minimal change scope**: Only added the pane reset step rather than restructuring `SpawnArchitect` to create fresh windows, preserving the existing architect-uses-window-0 design.\n\n## Verification\n\n- `make build` — passes\n- `make lint` — 0 issues\n- `make test` — all unit tests pass\n- `make test-integration` — MCP integration tests have pre-existing connection failures unrelated to this change; API integration tests pass",
+      "created_at": "2026-01-27T10:28:56.138568Z"
+    }
+  ],
+  "session": {
+    "id": "352b4d1e-6d59-49fc-be0b-e4c995e2a502",
+    "started_at": "2026-01-27T10:22:23.988385Z",
+    "ended_at": "2026-01-27T10:28:56.139148Z",
+    "agent": "claude",
+    "tmux_window": "set-architect-agent-pane-to-30-width",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/3ef72208-7a13-48c9-a9c9-56be34e7222b",
+    "feature_branch": "ticket/set-architect-agent",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-27T10:28:42.305294Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:22:23.988385Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:22:37.068768Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:39.484605Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:39.485409Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:39.48591Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:22:43.908743Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:22:44.050647Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:22:44.178772Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:46.201745Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:46.202245Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:22:50.9832Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:52.656328Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:55.360603Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T10:23:10.297509Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:23:17.777882Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:23:17.778341Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:23:17.778727Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:23:23.652637Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:23:23.65313Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:23:23.653454Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:25:08.255066Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:25:12.780183Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T10:25:36.653953Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:25:42.004585Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:25:51.299851Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:25:51.352701Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:25:51.355359Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:25:56.787447Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:26:05.757638Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:26:05.816575Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:26:09.698361Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:26:16.781945Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:26:27.134317Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:26:32.499056Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:26:36.767655Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:26:54.341917Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:27:04.183887Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T10:27:14.185382Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:27:20.254234Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:28:38.598017Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:28:42.305294Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/3ef72208-7a13-48c9-a9c9-56be34e7222b",
+        "summary": "Added `ResetWindowPanes` method to `internal/tmux/pane.go` and called it in `SpawnArchitect` (`internal/tmux/command.go`) to fix the architect agent pane width issue.\n\n**Root cause:** When `SpawnArchitect` runs on a pre-existing session, window 0 may already have stale panes from a previous spawn. The split then creates a third pane with incorrect sizing.\n\n**Fix:** `ResetWindowPanes` kills all panes except pane 0 using `tmux kill-pane -a`, restoring a single-pane layout before the agent command runs and the companion split is created. This ensures the 70/30 horizontal split works correctly, matching the ticket agent layout.\n\n**Files changed:**\n- `internal/tmux/pane.go` — Added `ResetWindowPanes` method\n- `internal/tmux/command.go` — Call `ResetWindowPanes` after `CreateArchitectWindow` in `SpawnArchitect`\n\n**Verification:** Build passes, lint clean (0 issues), all unit tests pass.",
+        "requested_at": "2026-01-27T10:27:14.162088Z"
+      }
+    ]
+  }
+}

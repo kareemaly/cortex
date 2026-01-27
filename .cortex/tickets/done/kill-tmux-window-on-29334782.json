@@ -1,0 +1,295 @@
+{
+  "id": "29334782-0191-4311-85da-ab06fb787198",
+  "title": "Kill Tmux Window on concludeSession",
+  "body": "## Problem\n\nWhen a ticket agent calls `concludeSession`, the tmux window associated with that session remains open. The agent session is ended and the ticket moves to done, but the tmux window lingers.\n\n## Solution\n\nAfter `concludeSession` ends the session and moves the ticket to done, it should also kill the tmux window that was spawned for the session.\n\n## Acceptance Criteria\n\n- `concludeSession` kills the tmux window associated with the session after completing all other cleanup (worktree, status move, etc.)\n- Failure to kill the tmux window should log a warning but not fail the tool call\n- If no tmux window is associated, skip gracefully",
+  "dates": {
+    "created": "2026-01-26T15:46:44.878878Z",
+    "updated": "2026-01-26T15:58:50.323365Z",
+    "progress": "2026-01-26T15:46:51.739129Z",
+    "reviewed": "2026-01-26T15:57:41.557403Z",
+    "done": "2026-01-26T15:58:50.323365Z"
+  },
+  "comments": [
+    {
+      "id": "1de1b8f1-4664-4cb4-a4af-f452ae21402d",
+      "session_id": "298f252f-bb39-4ebc-8739-cff0b6d97688",
+      "type": "ticket_done",
+      "content": "## Summary\n\nAdded tmux window cleanup to `handleConcludeSession` so the agent's tmux window is automatically killed after the session ends and the ticket moves to done.\n\n## Changes Made\n\n### Files Modified\n\n1. **`internal/daemon/mcp/tools_ticket.go`**\n   - Added `tmux` package import\n   - Captured `tmuxWindow` from `t.Session.TmuxWindow` before `EndSession()` clears the session data\n   - Added tmux window kill block after the existing worktree cleanup logic\n   - Uses injected `s.tmuxManager` if available, otherwise falls back to `tmux.NewManager()`\n   - Silently skips if tmux is not available, window name is empty, or `TmuxSession` is not configured\n   - Suppresses `WindowNotFoundError` and `SessionNotFoundError` (expected race conditions where the window/session was already closed)\n   - Logs warning only for unexpected errors\n\n2. **`internal/tmux/mock_runner.go`**\n   - Added `\"kill-window\"` to the switch cases in both `SetWindowExists` and `NewMockRunner` functions, alongside existing tmux commands that return empty success output\n\n3. **`internal/daemon/mcp/tools_test.go`**\n   - Added `TestHandleConcludeSession_KillsTmuxWindow` test that:\n     - Creates a ticket with an active session and tmux window name\n     - Customizes the mock runner to return the correct window name in list-windows output\n     - Calls `handleConcludeSession` with a full report\n     - Verifies the mock runner received a `kill-window` call\n     - Verifies the ticket moved to done status\n\n## Key Decisions\n\n- **Pattern consistency**: Used the same tmux manager resolution pattern as `tools_architect.go` (use injected manager if available, otherwise create new one)\n- **Error suppression**: Silently ignore `WindowNotFound` and `SessionNotFound` errors since the window may have already been closed by the user or another process — matches the pattern in `sessions.go:51-55`\n- **Capture before EndSession**: Session info (including `TmuxWindow`) is captured before `EndSession()` is called, since that method clears the session data\n- **Non-blocking**: Window kill failures don't fail the overall conclude operation — the main work (ending session, moving ticket to done) is already complete\n\n## Verification\n\n- `make test` — All unit tests pass including the new test\n- `make lint` — 0 issues",
+      "created_at": "2026-01-26T15:58:50.322135Z"
+    }
+  ],
+  "session": {
+    "id": "298f252f-bb39-4ebc-8739-cff0b6d97688",
+    "started_at": "2026-01-26T15:46:51.683964Z",
+    "ended_at": "2026-01-26T15:58:50.322809Z",
+    "agent": "claude",
+    "tmux_window": "kill-tmux-window-on-concludesession",
+    "current_status": {
+      "status": "waiting_permission",
+      "tool": null,
+      "work": null,
+      "at": "2026-01-26T15:58:19.654986Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:46:51.683964Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-26T15:47:04.722603Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:47:07.90874Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T15:47:08.035646Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T15:47:08.217068Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:47:10.574998Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:47:14.385236Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:47:14.960001Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:47:15.084666Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:47:18.219885Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:47:22.097539Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:47:22.231533Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:47:24.692546Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:47:27.97422Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:47:28.363289Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:47:31.107079Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:47:34.612759Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:47:37.084873Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-26T15:47:56.783077Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:48:02.131582Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:48:07.410285Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:48:20.966395Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:48:21.115113Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:48:24.282557Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:48:32.594741Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:48:36.969155Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:48:41.341121Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:48:45.568761Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:48:49.87206Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:48:54.371841Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:48:58.199388Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:49:02.383396Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:49:05.151318Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-26T15:49:33.339777Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:49:38.289241Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T15:50:19.907691Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:50:24.33765Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-26T15:57:41.610465Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:57:45.093489Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T15:58:00.018358Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T15:58:06.84044Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:58:19.654986Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/projects/cortex1",
+        "summary": "Added tmux window cleanup to `handleConcludeSession` in `tools_ticket.go`. After the session ends and worktree cleanup runs, the agent's tmux window is now killed automatically. Uses the same pattern as architect tools (injected `tmuxManager` or fallback to `tmux.NewManager()`). Silently skips if the window/session no longer exists, logs warnings only for unexpected errors. Also added `kill-window` to mock runner handlers and a test verifying the kill-window call happens on concludeSession.",
+        "requested_at": "2026-01-26T15:57:41.55695Z"
+      }
+    ]
+  }
+}

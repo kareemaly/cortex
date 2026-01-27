@@ -1,0 +1,12 @@
+{
+  "id": "8a31b6f7-ae2e-4e85-99a0-95f70ac6b96a",
+  "title": "Session Lookup Cleanup",
+  "body": "## Context\n\nEarly development, no users. Breaking changes are fine. Do not accumulate tech debt.\n\n## Problem\n\nTwo nearly identical functions in `internal/daemon/api/sessions.go:75-111`:\n\n- `findSession()` - returns ticket ID and session\n- `findSessionWithTicket()` - returns ticket and session\n\nBoth iterate through all tickets searching for matching session ID. Only difference is return value.\n\n## Requirements\n\n- Consolidate into single session lookup function\n- Update callers to use unified function\n\n## Implementation\n\n### Commits\n- `5343561` refactor: consolidate findSession and findSessionWithTicket into single function\n\n### Key Files Changed\n- `internal/daemon/api/sessions.go` - Consolidated two functions, updated callers\n\n### Changes Made\n- Changed `findSession` signature from `(string, *ticket.Session)` to `(*ticket.Ticket, *ticket.Session)`\n- Deleted redundant `findSessionWithTicket` function\n- Updated `Kill` handler to use `t.ID` instead of `ticketID`\n- Updated `Approve` handler to use `findSession` instead of `findSessionWithTicket`\n\n### Result\n- Reduced code by 20 lines (from 111 to 91)\n- Single source of truth for session lookup logic",
+  "dates": {
+    "created": "2026-01-24T15:50:24Z",
+    "updated": "2026-01-24T15:50:24Z",
+    "done": "2026-01-24T15:50:24Z"
+  },
+  "comments": [],
+  "session": null
+}

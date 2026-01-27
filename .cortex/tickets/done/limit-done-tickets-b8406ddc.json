@@ -1,0 +1,318 @@
+{
+  "id": "b8406ddc-208a-4eee-bc01-720d04ae9c61",
+  "title": "Limit Done Tickets in Architect Prompt to Latest 10",
+  "body": "## Problem\n\nThe architect prompt currently includes ALL done tickets when rendering the ticket list context. As the project accumulates completed tickets, this wastes context window space with irrelevant historical tickets.\n\n## Solution\n\nWhen building the architect prompt, limit the \"Done\" section to only the 10 most recently updated tickets. Backlog, in-progress, and review tickets should continue to show all entries.\n\n## Acceptance Criteria\n\n- Done section in architect prompt shows at most 10 tickets, sorted by most recently updated\n- Other status sections (backlog, progress, review) remain unchanged\n- If there are fewer than 10 done tickets, show all of them",
+  "dates": {
+    "created": "2026-01-26T15:41:02.235348Z",
+    "updated": "2026-01-26T15:45:53.971603Z",
+    "reviewed": "2026-01-26T15:45:04.719324Z",
+    "done": "2026-01-26T15:45:53.971603Z"
+  },
+  "comments": [
+    {
+      "id": "a5d23602-fea4-41fb-906f-73bcced95c82",
+      "session_id": "118fa26c-6dc0-4ba4-946c-52e749968042",
+      "type": "ticket_done",
+      "content": "## Summary\n\nLimited the \"Done\" section in the architect prompt to display at most 10 tickets, preventing unbounded context window growth as completed tickets accumulate over time.\n\n## Changes Made\n\n**File modified:** `internal/core/spawn/spawn.go`\n\nIn the `buildArchitectPrompt()` function (line ~583), added a guard that truncates `tickets.Done` to the first 10 entries before passing it to `writeSection(\"Done\", ...)`. The Done tickets are already sorted by `Updated` descending in the API handler (`internal/daemon/api/tickets.go:52-59`), so truncating to the first 10 yields the 10 most recently updated done tickets.\n\nThe Backlog, In Progress, and Review sections remain unchanged and continue to show all entries.\n\n## Key Decisions\n\n- **Truncate rather than filter:** Simple slice truncation (`doneTickets[:10]`) rather than introducing query parameters or pagination, since the upstream sort order already provides the desired ordering.\n- **No changes to other sections:** Only Done tickets accumulate unboundedly; backlog/progress/review are naturally bounded by active work.\n\n## Verification\n\n- `make build` — compiles successfully\n- `make test` — all unit tests pass\n- `make lint` — 0 issues\n\n## Commit\n\n`7966051` — fix: limit done tickets in architect prompt to latest 10",
+      "created_at": "2026-01-26T15:45:53.970316Z"
+    }
+  ],
+  "session": {
+    "id": "118fa26c-6dc0-4ba4-946c-52e749968042",
+    "started_at": "2026-01-26T15:41:40.074433Z",
+    "ended_at": "2026-01-26T15:45:53.970962Z",
+    "agent": "claude",
+    "tmux_window": "limit-done-tickets-in-architect-prompt-to-latest-1",
+    "current_status": {
+      "status": "waiting_permission",
+      "tool": null,
+      "work": null,
+      "at": "2026-01-26T15:45:51.957148Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:41:40.074433Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:41:55.147578Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-26T15:41:58.223047Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T15:42:02.810216Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T15:42:02.941178Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T15:42:03.092156Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T15:42:03.28225Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:07.44858Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:07.449111Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:07.449289Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:11.300134Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:14.724859Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:42:15.140699Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:17.797598Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:21.474117Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:24.080436Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:42:27.425912Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:29.663266Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T15:42:32.584622Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:34.661245Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:37.193733Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:39.921626Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T15:42:43.405082Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:42:46.44614Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-26T15:43:06.024436Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:43:10.294134Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-26T15:43:22.03373Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:43:25.363118Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-26T15:43:39.79363Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T15:43:39.85556Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T15:43:44.596076Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:43:51.128159Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T15:44:30.79426Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:44:32.19921Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T15:44:36.995975Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:44:38.304137Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T15:44:43.508087Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:44:51.472853Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T15:44:55.469825Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:45:02.021804Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-26T15:45:04.758658Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:45:09.587637Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T15:45:33.399124Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:45:37.902869Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T15:45:43.360361Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T15:45:51.957148Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/projects/cortex1",
+        "summary": "Limited the \"Done\" section in the architect prompt to at most 10 tickets. \n\n**Change:** In `internal/core/spawn/spawn.go` (`buildArchitectPrompt`), the `tickets.Done` slice is now truncated to the first 10 entries before being passed to `writeSection`. The Done tickets are already sorted by `Updated` descending in the API handler, so this gives the 10 most recently updated done tickets.\n\n**Verification:** `make build`, `make test`, and `make lint` all pass cleanly.",
+        "requested_at": "2026-01-26T15:45:04.718222Z"
+      }
+    ]
+  }
+}

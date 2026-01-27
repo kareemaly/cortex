@@ -1,0 +1,451 @@
+{
+  "id": "7cb59295-9601-4a96-8e50-4c3339570a8a",
+  "title": "Fix Worktree Approve Prompt and Template Rendering",
+  "body": "## Problem\n\nTwo issues with the worktree approve flow:\n\n1. **Template variables not rendered**: The `Approve` handler in `internal/daemon/api/sessions.go` loads the prompt file but never calls `prompt.RenderTemplate()`, so `{{.WorktreeBranch}}` is sent as literal text to the agent.\n\n2. **Wrong instructions**: The approve-worktree prompt tells the agent to push the branch remotely. It should merge the worktree branch into main locally instead.\n\n## Fixes Required\n\n### 1. Fix Template Rendering in Approve Handler\n\nIn `internal/daemon/api/sessions.go`, after loading the approve prompt content, call `prompt.RenderTemplate(approveContent, vars)` before sending to tmux. The ticket and session data needed for `TicketVars` is already available in the handler.\n\n### 2. Update `.cortex/prompts/approve-worktree.md`\n\nReplace with:\n\n```markdown\n## Review Approved\n\nYour changes have been reviewed and approved. Complete the following steps:\n\n1. **Commit all changes**\n   - Run `git status` to check for uncommitted changes\n   - Commit any remaining changes\n\n2. **Merge to main**\n   - Run `cd {{.ProjectPath}} \u0026\u0026 git merge {{.WorktreeBranch}}`\n\n3. **Call concludeSession**\n   - Call `mcp__cortex__concludeSession` with a complete report including:\n     - Summary of all changes made\n     - Key decisions and their rationale\n     - List of files modified\n     - Any follow-up tasks or notes\n\nThis will mark the ticket as done and end your session.\n```\n\n### 3. Update Default Prompt in Install Command\n\nThe install command embeds default prompts. Update the embedded approve-worktree template to match the new content above. Search for the default approve-worktree content in the install/setup code.\n\n## Key Files\n\n| File | Change |\n|------|--------|\n| `internal/daemon/api/sessions.go` | Call `prompt.RenderTemplate()` before sending approve content |\n| `.cortex/prompts/approve-worktree.md` | Update prompt text (merge locally, not push) |\n| Install command (embedded defaults) | Update default approve-worktree template to match |\n\n## Acceptance Criteria\n\n- [ ] Approve handler renders template variables before sending to agent\n- [ ] `{{.WorktreeBranch}}` and `{{.ProjectPath}}` are substituted correctly\n- [ ] Worktree approve prompt instructs agent to merge locally, not push\n- [ ] Default embedded prompt in install command matches updated template",
+  "dates": {
+    "created": "2026-01-26T17:42:37.715526Z",
+    "updated": "2026-01-26T17:53:53.628367Z",
+    "progress": "2026-01-26T17:44:04.0797Z",
+    "reviewed": "2026-01-26T17:52:28.850953Z",
+    "done": "2026-01-26T17:53:53.628367Z"
+  },
+  "comments": [
+    {
+      "id": "596ac796-8881-4acb-9fc6-03cc9ea4b60b",
+      "session_id": "f972a9d7-e9db-4536-94dd-ba5479cc64ca",
+      "type": "ticket_done",
+      "content": "## Summary\n\nFixed the worktree approve prompt to render template variables before sending to the agent via tmux, and updated the prompt content to use local merge instead of push-and-PR workflow.\n\n## Changes Made\n\n### 1. internal/daemon/api/sessions.go\nAdded template rendering in the Approve handler. After loading the approve prompt file, the handler now builds a prompt.TicketVars struct (with project path, ticket ID/title/body, and optional worktree path/branch from the session) and calls prompt.RenderTemplate() to resolve Go template variables before sending the prompt to tmux. On render failure, logs a warning and falls through with unrendered content.\n\n### 2. .cortex/prompts/approve-worktree.md\nReplaced the prompt content: removed the push branch step, replaced with a local merge step using cd {{.ProjectPath}} \u0026\u0026 git merge {{.WorktreeBranch}}. Simplified from 4 steps to 3.\n\n### 3. internal/install/prompts.go\nUpdated the DefaultApproveWorktreePrompt constant to match the new prompt content.\n\n## Key Decisions\n- Template rendering pattern mirrors existing pattern from internal/core/spawn/spawn.go for consistency\n- On template render failure, logs warning but falls through with unrendered content\n- Local merge over push matches the project workflow\n\n## Files Modified\n- internal/daemon/api/sessions.go (+21 lines)\n- internal/install/prompts.go (+4/-8 lines)\n- .cortex/prompts/approve-worktree.md (new file, 19 lines)\n\n## Verification\n- make build - compiles successfully\n- make test - all tests pass\n- make lint - 0 issues",
+      "created_at": "2026-01-26T17:53:53.627175Z"
+    }
+  ],
+  "session": {
+    "id": "f972a9d7-e9db-4536-94dd-ba5479cc64ca",
+    "started_at": "2026-01-26T17:44:04.037439Z",
+    "ended_at": "2026-01-26T17:53:53.627779Z",
+    "agent": "claude",
+    "tmux_window": "fix-worktree-approve-prompt-and-template-rendering",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-26T17:53:45.71129Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:44:04.037439Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:44:21.771294Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:44:21.908076Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:44:22.041588Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:44:22.173995Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:44:24.884017Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:44:24.884353Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:44:25.289966Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:44:25.426035Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:44:28.657107Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:44:28.657544Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:44:28.657879Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:44:31.843172Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:44:31.973506Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:44:35.078631Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:44:35.079031Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:44:39.249766Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:44:42.935003Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:47:20.702038Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:47:23.373543Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:47:25.917214Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:47:28.64123Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:47:30.545195Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:47:34.362493Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-26T17:47:51.978395Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:47:59.165416Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:47:59.165871Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:47:59.166885Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:47:59.1674Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:48:06.155363Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:48:06.289271Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-26T17:48:27.859593Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:48:33.178249Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:50:03.350287Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:50:07.201041Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:50:07.201756Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:50:07.202252Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:50:17.925221Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:50:18.023587Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:50:20.658252Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:50:20.658823Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-26T17:50:25.520228Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:50:31.212852Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:50:38.575651Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:50:42.287862Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-26T17:50:52.951464Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:50:53.026896Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:50:57.111695Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:51:04.116041Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:51:05.438762Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:51:06.8139Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:51:12.726448Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:51:20.356729Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:52:00.68068Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:52:04.695836Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:52:09.724694Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:52:17.491619Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:52:28.882694Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:52:32.635835Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:52:59.744785Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:53:04.068051Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:53:04.091835Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:53:04.09253Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:53:15.133634Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:53:18.144924Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:53:24.410482Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:53:27.812076Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:53:45.71129Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/projects/cortex1",
+        "summary": "## Changes Made\n\n### Fix Worktree Approve Prompt and Template Rendering\n\n1. **internal/daemon/api/sessions.go** - Added template rendering in the Approve handler. After loading the approve prompt file, the handler now builds a prompt.TicketVars struct (project path, ticket ID/title/body, optional worktree path/branch) and calls prompt.RenderTemplate() to resolve template variables before sending to tmux. Falls through with unrendered content on error.\n\n2. **.cortex/prompts/approve-worktree.md** - Removed push branch step, replaced with local merge step: cd {{.ProjectPath}} \u0026\u0026 git merge {{.WorktreeBranch}}. Simplified commit step header.\n\n3. **internal/install/prompts.go** - Updated DefaultApproveWorktreePrompt constant to match new prompt content.\n\nAll checks pass: make build, make test (all green), make lint (0 issues).",
+        "requested_at": "2026-01-26T17:52:28.850132Z"
+      }
+    ]
+  }
+}

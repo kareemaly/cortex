@@ -1,0 +1,12 @@
+{
+  "id": "af77cbe9-41e9-4d8a-8497-3f84fa0aafa4",
+  "title": "Fix Shell Escaping for Spawn Session Prompt",
+  "body": "The prompt passed to `claude` command is not properly escaped, causing shell interpretation of special characters.\n\n## Bug\n\n**File:** `internal/daemon/mcp/tools_architect.go:429`\n\n**Current:**\n```go\nclaudeCmd := fmt.Sprintf(\"claude %q --mcp-config %s --permission-mode plan\", prompt, mcpConfigPath)\n```\n\n**Problem:** `%q` wraps the string in double quotes, but double quotes don't prevent:\n- Backtick command substitution: `` `docs/` `` runs as a shell command\n- Variable expansion: `$HOME` would expand\n- History expansion: `!` could cause issues\n\n**Observed error:**\n```\nzsh: no such file or directory: docs/\nzsh: command not found: nYes\n```\n\n## Fix\n\nUse single quotes and escape any single quotes in the prompt:\n\n```go\n// Escape single quotes for shell: ' \u2192 '\\''\nescapedPrompt := strings.ReplaceAll(prompt, \"'\", \"'\\\\''\")\nclaudeCmd := fmt.Sprintf(\"claude '%s' --mcp-config %s --permission-mode plan\", escapedPrompt, mcpConfigPath)\n```\n\nSingle quotes prevent all shell interpretation except for the quote character itself.\n\n## Verification\n\n```bash\n# Create a ticket with backticks and special chars in body\n# Spawn a session for it\n# Verify the agent receives the full prompt without shell errors\n\nmake test\n```\n\n## Notes\n\n- The `'\\''` pattern works by: ending single quote, adding escaped single quote, starting new single quote\n- This is the standard POSIX way to include single quotes in single-quoted strings\n\n## Implementation\n\n### Commits pushed\n- `7024ac1` fix: use single quotes for spawn session prompt to prevent shell expansion\n\n### Key files changed\n- `internal/daemon/mcp/tools_architect.go` - Changed prompt escaping from `%q` (double quotes) to single quotes with POSIX escaping\n\n### Important decisions\n- Used `strings.ReplaceAll(prompt, \"'\", \"'\\\\''\")` for POSIX-compliant single quote escaping\n- Added inline comments explaining the escaping approach\n\n### Scope changes\n- None - implementation matched original ticket specification",
+  "dates": {
+    "created": "2026-01-21T15:10:34Z",
+    "updated": "2026-01-21T15:10:34Z",
+    "done": "2026-01-21T15:10:34Z"
+  },
+  "comments": [],
+  "session": null
+}

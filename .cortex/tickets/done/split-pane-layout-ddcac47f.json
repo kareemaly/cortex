@@ -1,0 +1,12 @@
+{
+  "id": "ddcac47f-b9d6-4e07-835a-a94f364db697",
+  "title": "Split Pane Layout on Spawn",
+  "body": "## Problem\n\nWhen spawning architect or ticket session, only one pane is created for the agent.\n\n## Expected Behavior\n\nWhen spawning, create a split layout:\n- 50% left pane: agent (claude)\n- 50% right pane:\n  - For architect: `cortex kanban`\n  - For ticket: `cortex show` (will use CORTEX_TICKET_ID env var)\n\n## Verification\n\n```bash\nmake lint\nmake test\nmake build\nmake test-integration\n```\n\n## Implementation\n\n### Commits Pushed\n\n- `43b55c8` feat: add split pane layout when spawning agent sessions\n\n### Key Files Changed\n\n| File | Change |\n|------|--------|\n| `internal/tmux/pane.go` | **NEW** - Added `SplitWindowHorizontal`, `RunCommandInPane`, `SelectPane` methods |\n| `internal/tmux/command.go` | Updated `SpawnAgent` and `SpawnArchitect` to accept `companionCommand` parameter |\n| `internal/core/spawn/spawn.go` | Updated `TmuxManagerInterface` and callers to pass companion commands |\n| `internal/core/spawn/spawn_test.go` | Updated mock with new interface signatures |\n| `internal/tmux/integration_test.go` | Added tests for pane methods and split pane spawning |\n\n### Important Decisions\n\n- Companion command for ticket sessions uses `CORTEX_TICKET_ID` env var prefix so `cortex show` can auto-detect the ticket\n- Focus returns to left pane (agent) after creating split layout\n- Split uses horizontal layout (`-h` flag) for side-by-side panes\n\n### Scope Changes\n\nNone - implemented as planned.",
+  "dates": {
+    "created": "2026-01-23T08:46:11Z",
+    "updated": "2026-01-23T08:46:11Z",
+    "done": "2026-01-23T08:46:11Z"
+  },
+  "comments": [],
+  "session": null
+}

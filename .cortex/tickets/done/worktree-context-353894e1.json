@@ -1,0 +1,12 @@
+{
+  "id": "353894e1-2956-4430-8a2d-49ff9083d67d",
+  "title": "Worktree Context Support",
+  "body": "## Context\n\nEarly development, no users. Breaking changes are fine. Do not accumulate tech debt.\n\n## Problem\n\nWorktree operations in `internal/worktree/worktree.go` execute Git commands but don't support context cancellation. If an operation takes a long time, the caller cannot cancel it.\n\nAffected methods:\n- `Manager.Create()`\n- `Manager.Remove()`\n\n## Requirements\n\n- Add `ctx context.Context` parameter to `Create()` and `Remove()` methods\n- Pass context to underlying Git command execution\n- Update all callers to pass context\n\n## Implementation\n\n### Commits\n\n- `bd90287` feat: add context support to worktree Create and Remove methods\n- `0bdd10d` Merge branch 'ticket/2026-01-24-worktree-context-support'\n\n### Key Files Changed\n\n| File | Changes |\n|------|---------|\n| `internal/worktree/worktree.go` | Added `ctx` to `Create()` and `Remove()`, use `exec.CommandContext()` |\n| `internal/core/spawn/spawn.go` | Added `ctx` to `Spawn()`, `Resume()`, `Fresh()`, `cleanupOnFailure()` |\n| `internal/core/spawn/spawn_test.go` | Pass `context.Background()` to spawner methods |\n| `internal/daemon/api/tickets.go` | Pass `r.Context()` to spawner methods |\n| `internal/daemon/api/architect.go` | Pass `r.Context()` to `Spawn()` |\n| `internal/daemon/mcp/tools_architect.go` | Pass `ctx` to spawner methods |\n| `internal/daemon/mcp/tools_ticket.go` | Pass `ctx` to `wm.Remove()` |\n\n### Important Decisions\n\n- Propagate context through the entire spawner call chain to enable cancellation at all levels\n- HTTP handlers use `r.Context()` which is cancelled when the client disconnects\n- MCP handlers already receive ctx from the MCP framework\n\n### Scope Changes\n\nNone - implemented as specified in the original ticket.",
+  "dates": {
+    "created": "2026-01-24T15:58:12Z",
+    "updated": "2026-01-24T15:58:12Z",
+    "done": "2026-01-24T15:58:12Z"
+  },
+  "comments": [],
+  "session": null
+}

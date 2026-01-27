@@ -1,0 +1,489 @@
+{
+  "id": "38f6e893-f75a-460b-b4eb-95bf20731b2b",
+  "title": "Display TUI Errors in Red",
+  "body": "## Problem\n\nErrors in the TUI are displayed as plain text, making them easy to miss or confuse with normal output.\n\n## Solution\n\nStyle all error messages in the TUI with red text using lipgloss or the existing styling system.\n\n## Acceptance Criteria\n\n- [ ] All error messages in the TUI render in red\n- [ ] Applies to inline errors, status bar errors, and any error flash messages",
+  "dates": {
+    "created": "2026-01-26T17:32:19.844936Z",
+    "updated": "2026-01-27T09:25:37.304213Z",
+    "progress": "2026-01-27T09:18:00.838576Z",
+    "reviewed": "2026-01-27T09:24:51.117834Z",
+    "done": "2026-01-27T09:25:37.304213Z"
+  },
+  "comments": [
+    {
+      "id": "5d14b511-4a1a-47b5-9466-2667d2af1e2b",
+      "session_id": "18862419-5b6b-41d4-887a-e39d4db33782",
+      "type": "ticket_done",
+      "content": "## Summary\n\nImplemented red styling for error messages in the kanban board's status bar. Previously, all transient status messages (both success and error) rendered with `statusBarStyle` (gray, color 241), making errors easy to miss. Now error messages render with `errorStatusStyle` (red, color 196).\n\n## Changes Made\n\n### File: `internal/cli/tui/kanban/model.go`\n\n1. **Added `statusIsError bool` field** to the `Model` struct to track whether the current status message is an error.\n\n2. **Set `statusIsError = true`** in error message handlers:\n   - `SessionErrorMsg` — session spawn failures\n   - `ApproveErrorMsg` — session approve failures\n   - `FocusErrorMsg` — tmux window focus failures\n\n3. **Set `statusIsError = false`** in all non-error status message handlers:\n   - `SessionSpawnedMsg`, `SessionApprovedMsg`, `FocusSuccessMsg` (success responses)\n   - \"Spawning session...\", \"Focusing window...\", \"Approving session...\" (in-progress messages)\n   - \"No active session\", \"No active session to approve\" (informational messages)\n   - \"Resuming session...\", \"Starting fresh session...\", \"Spawn cancelled\" (orphan modal messages)\n\n4. **Cleared `statusIsError`** in the `ClearStatusMsg` handler.\n\n5. **Updated `View()`** to conditionally select `errorStatusStyle` or `statusBarStyle` based on the `statusIsError` flag when rendering the status bar.\n\n## Key Decisions\n\n- **Boolean flag approach**: Used a simple `statusIsError` bool rather than a more complex enum or separate error message field. This is the minimal change needed and avoids over-engineering.\n- **Explicit false assignments**: Set `statusIsError = false` at every non-error status message site rather than relying on it being cleared only on `ClearStatusMsg`. This ensures correctness if a success message immediately follows an error before the clear timer fires.\n- **No changes to other views**: Full-screen blocking errors (ticket loading failures) already use `errorStatusStyle`. The ticket detail view has no transient status bar messages. Only the kanban board's status bar needed this fix.\n\n## Verification\n\n- `make build` — compiles successfully\n- `make lint` — 0 issues\n- `make test` — all tests pass\n\n## Follow-up Notes\n\nNone. The change is self-contained and backward-compatible.",
+      "created_at": "2026-01-27T09:25:37.302887Z"
+    }
+  ],
+  "session": {
+    "id": "18862419-5b6b-41d4-887a-e39d4db33782",
+    "started_at": "2026-01-27T09:18:00.804424Z",
+    "ended_at": "2026-01-27T09:25:37.303655Z",
+    "agent": "claude",
+    "tmux_window": "display-tui-errors-in-red",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/e250c29d-1d13-40cf-8d81-5c3bc8395860",
+    "feature_branch": "ticket/display-tui-errors",
+    "current_status": {
+      "status": "waiting_permission",
+      "tool": null,
+      "work": null,
+      "at": "2026-01-27T09:25:36.065645Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:18:00.804424Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:18:21.396295Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T09:18:40.055913Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:18:45.078594Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T09:18:47.979258Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T09:18:48.107115Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T09:18:50.668113Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T09:18:50.826187Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:18:53.376876Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:18:53.377732Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:18:53.378153Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:18:53.378909Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:18:57.319592Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:18:57.320041Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:18:57.32035Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:19:03.161554Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T09:19:03.491105Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:19:09.462092Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:19:09.462736Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T09:19:35.178337Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:19:43.327217Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:19:43.327708Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:19:43.328148Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:19:43.328565Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T09:20:12.238189Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:20:17.415164Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T09:20:35.292478Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:20:35.358283Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T09:20:43.503602Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:20:46.585927Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:20:53.141471Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:20:58.824333Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:21:03.616931Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:11.097723Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:15.931378Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:21.213736Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:25.282254Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:29.370243Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:33.789963Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:37.632386Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:21:44.75574Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:50.553298Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:54.21732Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:21:58.543789Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:22:02.618895Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:22:06.311052Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:22:13.211812Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:22:17.330569Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:22:21.40873Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:22:26.601337Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:22:33.098321Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:22:37.919668Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:22:45.670046Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:22:50.397242Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:22:51.737302Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:23:00.511902Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:23:13.629851Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:23:21.199595Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:23:30.504706Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:24:03.964341Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:24:09.035678Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:24:15.255337Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:24:20.543168Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:24:20.572323Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:24:20.573007Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:24:27.663058Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:24:36.738085Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:24:43.35618Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T09:24:51.187738Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:24:57.28473Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:10.972164Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:25:16.749431Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:20.601358Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:25:36.065645Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/e250c29d-1d13-40cf-8d81-5c3bc8395860",
+        "summary": "Added a `statusIsError` boolean field to the kanban `Model` struct. When error messages are set (from `SessionErrorMsg`, `ApproveErrorMsg`, `FocusErrorMsg`), the flag is set to `true`. For all non-error status messages and on clear, it's set to `false`. The `View()` method now checks this flag and renders error status messages with `errorStatusStyle` (red, color 196) instead of the default `statusBarStyle` (gray, color 241). Build, lint, and all tests pass.",
+        "requested_at": "2026-01-27T09:24:51.116262Z"
+      }
+    ]
+  }
+}

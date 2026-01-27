@@ -1,0 +1,531 @@
+{
+  "id": "3807cd8d-d16a-45b8-b29b-691dfa37f225",
+  "title": "Add \"f\" Shortcut to Focus Ticket's Tmux Window in TUI",
+  "body": "## Context\n\nThis project is in early development. Breaking changes are fine. Do not accumulate tech debt — write clean, direct code without backwards-compatibility shims or unnecessary abstractions.\n\n## Problem\n\nWhen a ticket has an active agent session running in a tmux window, there's no quick way to jump to that window from the kanban TUI. Users have to manually find and switch to the tmux window.\n\n## Solution\n\nAdd an \"f\" keyboard shortcut in the kanban TUI that, when pressed on a ticket with an active session, calls the daemon API to focus (select) the ticket's tmux window.\n\n## Scope\n\n### 1. Daemon API Endpoint\n\nAdd `POST /tickets/{id}/focus` endpoint:\n\n- Look up the ticket's active session to get `tmux_window` name\n- Call tmux to select that window\n- Return 404 if no active session or window not found\n- Return 200 on success\n\n### 2. SDK Client Method\n\nAdd `FocusTicket(ticketID string) error` to the SDK client.\n\n### 3. TUI Keybinding\n\nIn the kanban TUI:\n\n- Add \"f\" keybinding when a ticket is selected\n- Call SDK `FocusTicket()` with the selected ticket ID\n- Show a status message on success (\"Focused on window: ...\") or error (\"No active session\")\n- Add \"f focus\" to the help/footer bar\n\n### 4. Tmux Focus Logic\n\nIn `internal/tmux/`:\n\n- Add a `FocusWindow(sessionName, windowName string) error` function\n- Uses `tmux select-window -t {session}:{window}` to switch\n\n## Key Files\n\n| File | Change |\n|------|--------|\n| `internal/tmux/window.go` | Add `FocusWindow()` function |\n| `internal/daemon/api/tickets.go` | Add focus endpoint handler |\n| `internal/daemon/api/routes.go` | Register `POST /tickets/{id}/focus` |\n| `internal/cli/sdk/client.go` | Add `FocusTicket()` method |\n| TUI keybinding file | Add \"f\" handler, call SDK, show status |\n\n## Acceptance Criteria\n\n- [ ] `POST /tickets/{id}/focus` endpoint exists and switches tmux window\n- [ ] SDK client has `FocusTicket()` method\n- [ ] Pressing \"f\" on a ticket in the TUI focuses its tmux window\n- [ ] Appropriate error shown if ticket has no active session\n- [ ] Help bar shows \"f focus\" hint",
+  "dates": {
+    "created": "2026-01-26T17:14:22.799893Z",
+    "updated": "2026-01-26T17:56:47.410018Z",
+    "progress": "2026-01-26T17:26:57.209134Z",
+    "reviewed": "2026-01-26T17:35:15.475875Z",
+    "done": "2026-01-26T17:56:47.410018Z"
+  },
+  "comments": [
+    {
+      "id": "5cbdae6b-6ab5-41bc-aca6-168ff1246d36",
+      "session_id": "bd2c69b2-c76e-4a36-bd93-7b2e5601db29",
+      "type": "ticket_done",
+      "content": "## Summary\n\nAdded an \"f\" keyboard shortcut in the kanban TUI that focuses (selects) the tmux window of a ticket's active agent session. This enables quick navigation from the kanban board to a running agent's tmux window.\n\n## Changes Made\n\n### 1. API Endpoint — `internal/daemon/api/tickets.go`\nAdded `Focus` handler for `POST /tickets/{id}/focus`:\n- Looks up the ticket by ID via `store.Get(id)`\n- Validates the ticket has an active session with a tmux window; returns 404 with `no_active_session` if not\n- Checks tmux manager availability; returns 503 if unavailable\n- Loads project config to resolve the tmux session name (same pattern as `Conclude` handler)\n- Calls `h.deps.TmuxManager.FocusWindow(tmuxSession, t.Session.TmuxWindow)`\n- Returns 200 with `FocusResponse{Success: true, Window: windowName}`\n\n### 2. Route Registration — `internal/daemon/api/server.go`\nRegistered `r.Post(\"/{id}/focus\", ticketHandlers.Focus)` in the tickets route group alongside other ID-only routes.\n\n### 3. API Response Type — `internal/daemon/api/types.go`\nAdded `FocusResponse` struct with `Success bool` and `Window string` fields.\n\n### 4. SDK Client Method — `internal/cli/sdk/client.go`\nAdded `FocusTicket(ticketID string) error` — a fire-and-forget POST following the same pattern as `ApproveSession`.\n\n### 5. TUI Keybinding — `internal/cli/tui/kanban/keys.go`\n- Added `KeyFocus Key = \"f\"` constant (same physical key as `KeyFresh` but used in different context — main kanban vs orphan modal)\n- Updated help bar to include `[f]ocus`\n\n### 6. TUI Handler — `internal/cli/tui/kanban/model.go`\n- Added `FocusSuccessMsg` and `FocusErrorMsg` message types\n- Added \"f\" key handler: shows \"Focusing window...\" then calls async `focusTicket`, or shows \"No active session\" if ticket has no active session\n- Added `focusTicket()` async command method\n- Added `FocusSuccessMsg`/`FocusErrorMsg` cases in `Update` switch for status feedback\n\n## Key Decisions\n\n- **Reused existing `FocusWindow`**: The tmux layer already had `FocusWindow(session, windowName)` at `internal/tmux/window.go:104-117`, so no tmux-level changes were needed.\n- **`KeyFocus` vs `KeyFresh` coexistence**: Both map to \"f\" but are used in mutually exclusive contexts (main kanban handler vs orphan modal handler), so they coexist without conflict.\n- **Fire-and-forget SDK pattern**: `FocusTicket` returns only an error (no response body parsing), matching the `ApproveSession` pattern since callers don't need the response data.\n\n## Files Modified\n\n| File | Lines Changed |\n|------|--------------|\n| `internal/daemon/api/types.go` | +6 |\n| `internal/daemon/api/tickets.go` | +44 |\n| `internal/daemon/api/server.go` | +1 |\n| `internal/cli/sdk/client.go` | +20 |\n| `internal/cli/tui/kanban/keys.go` | +2, -1 |\n| `internal/cli/tui/kanban/model.go` | +42 |\n\n## Verification\n\n- `make build` — compiles successfully\n- `make lint` — 0 issues\n- `make test` — all tests pass",
+      "created_at": "2026-01-26T17:56:47.408508Z"
+    }
+  ],
+  "session": {
+    "id": "bd2c69b2-c76e-4a36-bd93-7b2e5601db29",
+    "started_at": "2026-01-26T17:26:57.175803Z",
+    "ended_at": "2026-01-26T17:56:47.409405Z",
+    "agent": "claude",
+    "tmux_window": "add-f-shortcut-to-focus-tickets-tmux-window-in-tui",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/5a52032d-7c75-40a6-955c-50d97a19bb05",
+    "feature_branch": "ticket/add-f-shortcut-to",
+    "current_status": {
+      "status": "waiting_permission",
+      "tool": null,
+      "work": null,
+      "at": "2026-01-26T17:56:45.595211Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:26:57.175803Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:27:14.414965Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-26T17:27:15.789193Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:27:19.730213Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:27:22.080659Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:27:24.872607Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:27:26.835239Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:27:29.073788Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:27:31.133187Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T17:27:33.268476Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:36.509831Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:36.510289Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:36.510604Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:40.734917Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:40.735389Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:40.735735Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:27:44.218737Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:47.810263Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:47.810706Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:47.811214Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:52.161097Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:52.161508Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:52.16186Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:27:56.586848Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:27:56.923155Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:28:00.723945Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:28:00.724358Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:28:00.769181Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-26T17:28:38.518143Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:28:51.462548Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:28:51.463185Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:28:51.463598Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:28:51.464006Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:28:57.922408Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:28:57.922888Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:29:23.058377Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:29:23.587972Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:29:23.724346Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:29:31.48131Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T17:29:31.61689Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-26T17:30:07.759524Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:30:13.101942Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:30:38.253155Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-26T17:32:07.938539Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:32:13.952669Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:32:21.268574Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:32:21.26923Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:32:21.269731Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:32:21.270762Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:32:21.27121Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:32:21.27204Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T17:32:21.272513Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:32:30.702357Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:32:48.167117Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:32:48.238227Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:32:48.306689Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:32:48.383027Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:32:48.473507Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:33:17.488694Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:33:17.599344Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:33:17.70791Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:33:17.813015Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T17:33:17.926042Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:33:28.465387Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:33:37.754761Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:34:17.274176Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:34:22.795705Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:34:29.174668Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:34:30.179903Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:34:35.447866Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T17:34:43.741413Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:34:48.741908Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:34:55.734188Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:34:58.020321Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:35:07.676089Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-26T17:35:15.529888Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:35:21.732701Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:54:50.872794Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:54:54.770642Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T17:56:25.847986Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T17:56:45.595211Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/5a52032d-7c75-40a6-955c-50d97a19bb05",
+        "summary": "Added \"f\" keyboard shortcut to focus a ticket's tmux window from the kanban TUI.\n\nChanges across 6 files:\n- **api/types.go**: Added `FocusResponse` struct\n- **api/tickets.go**: Added `Focus` handler — looks up ticket, validates active session with tmux window, loads project config for session name, calls `FocusWindow`\n- **api/server.go**: Registered `POST /{id}/focus` route\n- **sdk/client.go**: Added `FocusTicket(ticketID)` method following the fire-and-forget pattern\n- **kanban/keys.go**: Added `KeyFocus` constant (\"f\") and updated help text with `[f]ocus`\n- **kanban/model.go**: Added `FocusSuccessMsg`/`FocusErrorMsg` types, key handler (shows \"No active session\" if no session), async command, and message handling in Update\n\nBuild, lint (0 issues), and all tests pass.",
+        "requested_at": "2026-01-26T17:35:15.474949Z"
+      }
+    ]
+  }
+}

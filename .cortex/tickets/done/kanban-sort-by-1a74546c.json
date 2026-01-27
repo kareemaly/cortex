@@ -1,0 +1,12 @@
+{
+  "id": "1a74546c-edb7-49d3-b49e-e9f3a4558f88",
+  "title": "Kanban Sort by Updated Date",
+  "body": "## Context\n\nEarly development, no users. Breaking changes are fine. Do not accumulate tech debt.\n\n## Problem\n\nTickets in kanban columns have no consistent ordering.\n\n## Requirements\n\n- Sort tickets in each column by updated date (most recent first)\n\n## Implementation\n\n### Commits\n- `f779f2f` feat: sort kanban tickets by updated date (most recent first)\n- `dc01d2c` Merge branch 'ticket/2026-01-24-kanban-sort-by-updated'\n\n### Key Files Changed\n- `internal/daemon/api/types.go` - Added `Updated` field to `TicketSummary` struct and populated it in `filterSummaryList()`\n- `internal/cli/sdk/client.go` - Added `Updated` field to SDK's `TicketSummary` struct\n- `internal/daemon/api/tickets.go` - Added sorting logic using `slices.SortFunc()` in both `ListAll()` and `ListByStatus()` handlers\n\n### Approach\nServer-side sorting in the API handlers ensures all clients (kanban TUI, CLI, MCP) receive consistently ordered results without needing client-side sorting logic.",
+  "dates": {
+    "created": "2026-01-24T09:53:24Z",
+    "updated": "2026-01-24T09:53:24Z",
+    "done": "2026-01-24T09:53:24Z"
+  },
+  "comments": [],
+  "session": null
+}

@@ -1,0 +1,745 @@
+{
+  "id": "bc66ecd8-de51-46c9-a2db-cd9c89ab0ed2",
+  "title": "Align HTTP API Spawn with MCP Spawn",
+  "body": "## Context\n\nProject is pre-release with no users. Breaking changes are fine. No tech debt tolerance — do it right.\n\n## Problem\n\nThe HTTP API spawn handler (`internal/daemon/api/tickets.go:293-477`) and the MCP spawn tool (`internal/daemon/mcp/tools_architect.go:215-386`) duplicate spawn orchestration logic and have diverged:\n\n| Aspect | HTTP API (TUI) | MCP |\n|--------|----------------|-----|\n| **UseWorktree** | Never set (always `false`) | Set from `projectConfig.Git.Worktrees` |\n| **CortexdPath** | Not passed to Spawner Dependencies | Passed from `s.config.CortexdPath` |\n| **Fresh mode** | Manual `EndSession()` then `Spawn()` | Uses `spawner.Fresh()` method |\n| **State matrix** | Partial validation (lines 357-404) | Complete validation (lines 285-365) |\n\n## Solution\n\nExtract a single spawn orchestration function that both the HTTP API and MCP call into. No duplication — one function handles:\n\n1. State detection (existing session? ended? active? orphaned?)\n2. Mode validation (normal/resume/fresh against current state)\n3. Spawner construction with full dependencies (Store, TmuxManager, CortexdPath, Logger)\n4. SpawnRequest building (including UseWorktree from project config)\n5. Post-spawn actions (move to progress if backlog)\n\nBoth the HTTP handler and MCP tool become thin wrappers that parse their inputs and call this shared function.\n\n## Acceptance Criteria\n\n- [ ] Single spawn orchestration function in `internal/core/spawn/` (or similar)\n- [ ] HTTP API handler is a thin wrapper calling shared function\n- [ ] MCP tool is a thin wrapper calling shared function\n- [ ] All spawn parameters (UseWorktree, CortexdPath, etc.) handled uniformly\n- [ ] State/mode validation logic exists in exactly one place\n- [ ] Post-spawn ticket move logic exists in exactly one place",
+  "dates": {
+    "created": "2026-01-26T16:04:42.218578Z",
+    "updated": "2026-01-26T16:29:22.58172Z",
+    "reviewed": "2026-01-26T16:28:37.084219Z",
+    "done": "2026-01-26T16:29:22.58172Z"
+  },
+  "comments": [
+    {
+      "id": "c4711143-8779-47f3-9444-d52dd90d5439",
+      "session_id": "0da80588-b951-4d58-bbf2-517296c2db93",
+      "type": "progress",
+      "content": "Implementation complete. Created `internal/core/spawn/orchestrate.go` with shared `Orchestrate` function. Both HTTP API handler and MCP tool are now thin wrappers. All unit tests pass (3 updated to match new unified behavior). Build and lint clean. Pre-existing integration test failures unaffected.",
+      "created_at": "2026-01-26T16:27:58.053685Z"
+    },
+    {
+      "id": "567b4f0d-d11f-478a-8cfa-6b29a32a91fa",
+      "session_id": "0da80588-b951-4d58-bbf2-517296c2db93",
+      "type": "ticket_done",
+      "content": "## Summary\n\nExtracted a shared `Orchestrate` function that serves as the single source of truth for spawning ticket agent sessions. Both the HTTP API handler and MCP tool now delegate to this function, eliminating duplicated and divergent spawn orchestration logic.\n\n## Files Changed\n\n### New\n- `internal/core/spawn/orchestrate.go` — Shared orchestration function with types (`OrchestrateStore`, `OrchestrateRequest`, `OrchestrateDeps`, `OrchestrateResult`, `Outcome`)\n\n### Modified\n- `internal/daemon/api/tickets.go` — Spawn handler reduced from ~185 lines to ~50 lines; removed `projectconfig` and `filepath` imports\n- `internal/daemon/mcp/tools_architect.go` — handleSpawnSession reduced from ~170 lines to ~50 lines; added `errors` import for `errors.As`; added mode pre-validation\n- `internal/daemon/mcp/tools_test.go` — Updated 3 tests to match unified behavior\n\n## Key Decisions\n\n1. **Orchestrate returns `OutcomeAlreadyActive` instead of error for normal+active** — Lets callers handle differently (HTTP focuses window + 200; MCP returns StateConflictError)\n\n2. **Soft spawn failures converted to errors** — When spawner returns `Success=false` (prompt load failure, tmux error), Orchestrate converts to `fmt.Errorf` so callers only handle the error path\n\n3. **Mode pre-validation in MCP handler** — Added before Orchestrate call to preserve the existing MCP contract of returning `VALIDATION_ERROR` for invalid modes (Orchestrate returns `ConfigError` which maps differently)\n\n4. **Test updates for unified behavior** — `TestHandleSpawnSessionNoAutoMove` renamed to `TestHandleSpawnSessionAutoMovesToProgress` because MCP now auto-moves backlog→progress (matching HTTP behavior, as intended by the ticket)\n\n## Divergences Resolved\n\n| Aspect | Before (HTTP) | Before (MCP) | After (shared) |\n|--------|--------------|--------------|----------------|\n| UseWorktree | Always false | From project config | From project config |\n| CortexdPath | Not passed | From config | Passed through deps |\n| Fresh mode | Manual EndSession + Spawn | spawner.Fresh() | spawner.Fresh() |\n| State matrix | Partial | Complete | Complete |\n| Post-spawn move | In handler | Not done | In Orchestrate |\n| Agent resolution | From project config | Input or \"claude\" | Input \u003e config \u003e \"claude\" |\n\n## Verification\n\n- `make build` ✅\n- `make lint` ✅ (0 issues)\n- `make test` ✅ (all unit tests pass)\n- Integration test failures are pre-existing (verified on clean main)\n\n## Commit\n\n`0f1f3d8` — refactor: extract shared Orchestrate function for spawn logic",
+      "created_at": "2026-01-26T16:29:22.580722Z"
+    }
+  ],
+  "session": {
+    "id": "0da80588-b951-4d58-bbf2-517296c2db93",
+    "started_at": "2026-01-26T16:08:23.83115Z",
+    "ended_at": "2026-01-26T16:29:22.581241Z",
+    "agent": "claude",
+    "tmux_window": "align-http-api-spawn-with-mcp-spawn",
+    "current_status": {
+      "status": "waiting_permission",
+      "tool": null,
+      "work": null,
+      "at": "2026-01-26T16:29:21.058011Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T16:08:23.83115Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-26T16:08:30.703036Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:49.06281Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:49.371982Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:08:49.560578Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:08:49.700379Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:08:49.837426Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:08:50.343698Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:08:52.402669Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:52.757871Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:52.758344Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:52.758821Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:52.759291Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:53.804687Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:53.806265Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:53.808625Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:54.592973Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:08:56.682387Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:08:57.166849Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:08:57.305715Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:08:57.444039Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:08:57.583743Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:08:58.99513Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:08.810052Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:08.810504Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:08.810813Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:12:19.403932Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:12:19.532174Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:12:19.664878Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:12:19.80025Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:22.525442Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:22.52612Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:22.526521Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:22.528067Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:12:25.200542Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:27.223471Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:27.223912Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:12:30.329537Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:12:30.49235Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:32.684287Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:12:33.03294Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:35.029484Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:12:38.256353Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:12:38.394131Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:40.484705Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:12:40.485224Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-26T16:13:00.212562Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-26T16:16:09.426715Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T16:16:17.360179Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-26T16:17:14.477135Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T16:17:19.372141Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:22.783533Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:22.784141Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:22.78465Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:29.799977Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:29.800681Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:29.801443Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:29.80197Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:29.802434Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:35.652413Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:35.653118Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:35.653755Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T16:17:41.161836Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:17:41.31198Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:44.043722Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:17:49.153004Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:17:49.287496Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:17:53.54112Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:21:43.577958Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T16:21:50.352469Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-26T16:22:25.95469Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T16:22:30.250693Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T16:22:45.332752Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T16:23:25.654787Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:23:32.277571Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T16:23:39.643805Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T16:23:55.908844Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T16:24:28.807283Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:24:33.123842Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T16:24:40.848618Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:24:46.901745Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:24:52.924784Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:25:02.977607Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:25:19.222836Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T16:25:22.422854Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:25:24.751606Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:25:26.769228Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:25:28.852949Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-26T16:25:41.998923Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:26:31.317102Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:26:31.317866Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T16:26:31.318635Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T16:26:43.832322Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T16:26:49.133756Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T16:26:59.338278Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:27:05.177655Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:27:09.958521Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:27:15.877223Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T16:27:17.094307Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T16:27:38.032858Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:27:43.776265Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T16:27:50.76701Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T16:27:55.867958Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__addTicketComment",
+        "work": null,
+        "at": "2026-01-26T16:27:58.195922Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:28:03.077312Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:28:03.151195Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:28:03.151706Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:28:08.488236Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:28:14.145229Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:28:17.779758Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-26T16:28:37.151438Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T16:28:42.509286Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T16:28:45.710553Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:28:59.80641Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T16:29:06.434335Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T16:29:21.058011Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/projects/cortex1",
+        "summary": "## Changes\n\nExtracted a shared `Orchestrate` function in `internal/core/spawn/orchestrate.go` that both the HTTP API handler and MCP tool call. Both became thin wrappers.\n\n### New file: `internal/core/spawn/orchestrate.go`\n- `OrchestrateStore` interface (extends `StoreInterface` with `Move`)\n- `OrchestrateRequest`, `OrchestrateDeps`, `OrchestrateResult` types\n- `Outcome` enum: `OutcomeSpawned`, `OutcomeResumed`, `OutcomeAlreadyActive`\n- `Orchestrate()` function with full state/mode matrix, project config loading, agent/session/ticketsDir resolution, post-spawn move to progress\n\n### Modified: `internal/daemon/api/tickets.go`\n- Spawn handler reduced from ~185 lines to ~50 lines\n- Delegates to `spawn.Orchestrate()`, handles HTTP-specific concerns (FocusWindow for active, HTTP status codes)\n- Removed `projectconfig` and `filepath` imports\n\n### Modified: `internal/daemon/mcp/tools_architect.go`\n- handleSpawnSession reduced from ~170 lines to ~50 lines\n- Delegates to `spawn.Orchestrate()`, handles MCP-specific concerns (ToolError types, output formatting)\n- Added mode pre-validation (returns VALIDATION_ERROR for invalid modes)\n\n### Modified: `internal/daemon/mcp/tools_test.go`\n- `TestHandleSpawnSessionTicketNotFound`: updated to use `setupTestServerWithMockTmux` (needs tmux configured to reach Orchestrate)\n- `TestHandleSpawnSessionNoAutoMove` → `TestHandleSpawnSessionAutoMovesToProgress`: MCP now auto-moves backlog→progress like HTTP (unified behavior)\n- `TestHandleSpawnSession_InvalidMode`: passes (mode pre-validation returns VALIDATION_ERROR)\n\n### Divergences resolved\n| Aspect | Before (HTTP) | Before (MCP) | After (shared) |\n|--------|--------------|--------------|----------------|\n| UseWorktree | Always false | From project config | From project config |\n| CortexdPath | Not passed | From config | Passed through deps |\n| Fresh mode | Manual EndSession + Spawn | spawner.Fresh() | spawner.Fresh() |\n| State matrix | Partial | Complete | Complete |\n| Post-spawn move | In handler | Not done | In Orchestrate |\n| Agent resolution | From project config | From input or \"claude\" | Input \u003e project config \u003e \"claude\" |\n\n### Verification\n- `make build` ✅\n- `make lint` ✅ (0 issues)\n- `make test` ✅ (all unit tests pass)\n- `make test-integration` — MCP integration failures are pre-existing (verified on clean main)",
+        "requested_at": "2026-01-26T16:28:37.083525Z"
+      }
+    ]
+  }
+}

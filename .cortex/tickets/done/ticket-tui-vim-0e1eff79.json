@@ -1,0 +1,12 @@
+{
+  "id": "0e1eff79-739d-44b4-8091-9c7a78595bb6",
+  "title": "Ticket TUI Vim Scrolling",
+  "body": "## Context\n\nEarly development, no users. Breaking changes are fine. Do not accumulate tech debt.\n\n## Problem\n\nTicket detail view only has basic j/k scrolling. Missing vim-style page navigation.\n\n## Requirements\n\nAdd vim shortcuts to ticket detail TUI:\n- `ctrl+u` / `ctrl+d` - scroll half page up/down\n- `gg` - jump to top\n- `G` - jump to bottom\n\n## Implementation\n\n### Commits\n- `2f2cfbf` feat: add vim-style scrolling to ticket detail TUI\n\n### Key Files Changed\n- `internal/cli/tui/ticket/keys.go` - Added key constants (KeyCtrlU, KeyCtrlD, KeyG, KeyShiftG) and updated help text\n- `internal/cli/tui/ticket/model.go` - Added pendingG state field and key handlers for all new shortcuts\n\n### Decisions\n- Used `HalfPageUp()`/`HalfPageDown()` from viewport (non-deprecated methods) for half-page scroll\n- Followed existing kanban implementation pattern for `gg` sequence with `pendingG` state tracking\n- Updated help bar to show `[j/k/gg/G] scroll  [ctrl+u/d] page` for discoverability",
+  "dates": {
+    "created": "2026-01-24T09:39:07Z",
+    "updated": "2026-01-24T09:39:07Z",
+    "done": "2026-01-24T09:39:07Z"
+  },
+  "comments": [],
+  "session": null
+}

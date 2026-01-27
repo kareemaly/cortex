@@ -1,0 +1,12 @@
+{
+  "id": "4064b6ad-3e13-40ae-982e-0eb6342550b9",
+  "title": "Add version command to cortexd",
+  "body": "`cortexd version` is missing. Only `cortex version` exists.\n\n## Current State\n\n```bash\n$ cortex version\ncortex dev\n  Commit:     ea41837\n  Built:      2026-01-20T16:44:34Z\n  Go version: go1.25.6\n  Platform:   darwin/arm64\n\n$ cortexd version\nError: unknown command \"version\" for \"cortexd\"\n```\n\n## Requirements\n\nAdd `cortexd version` command that shows the same info as `cortex version`.\n\n## Files to reference\n\n- `cmd/cortex/commands/version.go` - existing implementation to copy\n- `pkg/version/version.go` - shared version package\n\n## Verification\n\n```bash\nmake build\ncortexd version  # Should show version info\n```\n\n## Implementation\n\n### Commits\n- `7a17456` feat: add cortexd version command\n\n### Key Files Changed\n- `cmd/cortexd/commands/version.go` (new) - Version command for cortexd\n\n### Decisions\n- Omitted daemon status check that exists in `cortex version` since `cortexd` IS the daemon\n- Used identical output format as `cortex version` for consistency\n\n### Scope\nNo scope changes from original ticket",
+  "dates": {
+    "created": "2026-01-21T10:01:15Z",
+    "updated": "2026-01-21T10:01:15Z",
+    "done": "2026-01-21T10:01:15Z"
+  },
+  "comments": [],
+  "session": null
+}

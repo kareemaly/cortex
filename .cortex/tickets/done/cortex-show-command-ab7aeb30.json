@@ -1,0 +1,12 @@
+{
+  "id": "ab7aeb30-b583-4f95-a9c9-16f116f6cd12",
+  "title": "Cortex Show Command",
+  "body": "## Problem\n\n`cortex ticket <id>` doesn't work - shows help instead of ticket details.\n\n## Expected Behavior\n\n1. Add `cortex show <id>` command to show ticket details\n2. Inject `CORTEX_TICKET_ID` env var in tmux windows when spawning ticket sessions\n3. `cortex show` (no id) should use `CORTEX_TICKET_ID` env var if available\n\n## Verification\n\n```bash\nmake lint\nmake test\nmake build\nmake test-integration\n```\n\nTest:\n1. `cortex show <ticket-id>` should show ticket TUI\n2. Inside spawned ticket session: `cortex show` should show current ticket\n\n## Implementation\n\n### Commits Pushed\n\n- `265e622` feat: add cortex show command with CORTEX_TICKET_ID auto-detect\n\n### Key Files Changed\n\n| File | Change |\n|------|--------|\n| `cmd/cortex/commands/show.go` | **NEW** - Root-level show command that accepts optional ticket ID, falls back to CORTEX_TICKET_ID env var |\n| `internal/core/spawn/spawn.go` | Inject CORTEX_TICKET_ID env var when spawning ticket agent sessions |\n\n### Important Decisions\n\n- Reused existing `printTicketPlainText` helper from `ticket_show.go` to avoid code duplication\n- Environment variable injection done at command prefix level (`CORTEX_TICKET_ID=<id> <cmd>`) rather than modifying tmux manager interface\n- Command registered directly on rootCmd (not as subcommand of ticket)\n\n### Scope Changes\n\nNone - implemented exactly as specified in the plan.",
+  "dates": {
+    "created": "2026-01-23T08:35:39Z",
+    "updated": "2026-01-23T08:35:39Z",
+    "done": "2026-01-23T08:35:39Z"
+  },
+  "comments": [],
+  "session": null
+}

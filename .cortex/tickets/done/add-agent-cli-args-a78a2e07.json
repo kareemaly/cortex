@@ -1,0 +1,307 @@
+{
+  "id": "a78a2e07-7061-48fc-8dcf-4579af8224aa",
+  "title": "Add Agent CLI Args Configuration to cortex.yaml",
+  "body": "## Problem\n\nThere's no way to configure agent CLI flags per-project. For example, passing `--model` to select a specific model or `--dangerously-skip-permissions` to skip permission prompts for trusted projects.\n\n## Solution\n\nAdd an `agent` config section in `cortex.yaml` with a list of CLI args passed to the agent command when spawning ticket sessions.\n\n### Config Format\n\n```yaml\nname: cortex\nagent: claude\nagent_args:\n  - \"--model\"\n  - \"sonnet\"\n  - \"--dangerously-skip-permissions\"\ngit:\n  worktrees: false\n```\n\n### Implementation\n\n1. **Add config field** in `internal/project/config/config.go`:\n   - Add `AgentArgs []string` field to `Config` struct\n\n2. **Pass args to spawn**:\n   - Thread `AgentArgs` through `Orchestrate()` → `SpawnRequest` → launcher script\n   - Append args to the claude CLI command in the launcher script\n\n3. **Update launcher script generation** in `internal/core/spawn/spawn.go`:\n   - When building the claude command, append the configured args\n\n## Key Files\n\n| File | Change |\n|------|--------|\n| `internal/project/config/config.go` | Add `AgentArgs` field to Config |\n| `internal/core/spawn/orchestrate.go` | Read and pass agent args |\n| `internal/core/spawn/spawn.go` | Append args to claude CLI command in launcher |\n\n## Acceptance Criteria\n\n- [ ] `agent_args` list in cortex.yaml is parsed correctly\n- [ ] Args are appended to the agent CLI command on spawn\n- [ ] Works with `--model`, `--dangerously-skip-permissions`, and any other CLI flags\n- [ ] Empty or missing `agent_args` has no effect (backwards compatible)",
+  "dates": {
+    "created": "2026-01-26T18:02:37.873668Z",
+    "updated": "2026-01-26T18:09:28.915557Z",
+    "progress": "2026-01-26T18:02:47.807647Z",
+    "reviewed": "2026-01-26T18:07:56.477427Z",
+    "done": "2026-01-26T18:09:28.915557Z"
+  },
+  "comments": [
+    {
+      "id": "d824b157-7a41-4f7a-a1a5-a39e2c1255e7",
+      "session_id": "ecdf5af5-c217-408c-86ee-916db38216e0",
+      "type": "ticket_done",
+      "content": "## Summary\n\nAdded `agent_args` configuration field to `cortex.yaml` that threads through the spawn pipeline, allowing extra CLI arguments to be appended to the claude command when spawning ticket sessions.\n\n## Changes\n\n### Files Modified\n\n1. **internal/project/config/config.go** — Added `AgentArgs []string` field (yaml tag: `agent_args`) to the `Config` struct.\n\n2. **internal/core/spawn/spawn.go** — Added `AgentArgs []string` field to `SpawnRequest` struct. Passed `req.AgentArgs` into `LauncherParams` when building the launcher.\n\n3. **internal/core/spawn/orchestrate.go** — Set `AgentArgs: projectCfg.AgentArgs` on the `SpawnRequest` built inside `Orchestrate()`, ensuring the config value flows from project config to the spawn request.\n\n4. **internal/core/spawn/launcher.go** — Added `AgentArgs []string` field to `LauncherParams` struct. In `buildLauncherScript`, appended each arg (shell-quoted) to the `parts` slice after all existing flags.\n\n## Key Decisions\n\n- **Shell quoting**: Each agent arg is individually shell-quoted using the existing `shellQuote` helper, preventing injection and handling args with spaces/special characters.\n- **Placement**: Args are appended after all built-in flags to ensure they don't interfere with existing functionality.\n- **Minimal scope**: Only added what was needed — no validation of arg values, no UI changes.\n\n## Verification\n\n- `make build` — compiles cleanly\n- `make test` — all existing tests pass\n- `make lint` — 0 issues",
+      "created_at": "2026-01-26T18:09:28.914586Z"
+    }
+  ],
+  "session": {
+    "id": "ecdf5af5-c217-408c-86ee-916db38216e0",
+    "started_at": "2026-01-26T18:02:47.770609Z",
+    "ended_at": "2026-01-26T18:09:28.915122Z",
+    "agent": "claude",
+    "tmux_window": "add-agent-cli-args-configuration-to-cortexyaml",
+    "current_status": {
+      "status": "waiting_permission",
+      "tool": null,
+      "work": null,
+      "at": "2026-01-26T18:09:26.862557Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T18:02:47.770609Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:03:02.200712Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:03:02.201101Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:03:02.201378Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-26T18:03:05.729113Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:03:08.737397Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:03:08.737991Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:03:08.738549Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:03:11.603473Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-26T18:04:10.188084Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T18:04:13.985315Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T18:04:52.055699Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:04:52.101241Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:04:52.104158Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:04:52.10457Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-26T18:04:52.105188Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T18:05:12.50344Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T18:05:12.557905Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T18:05:12.617787Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T18:05:12.675432Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T18:05:12.735882Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T18:05:12.795217Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-26T18:05:12.855989Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T18:05:20.330954Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:05:23.565677Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:05:28.743427Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:05:30.415567Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-26T18:05:37.114165Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T18:05:44.552173Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T18:07:41.012148Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T18:07:45.60817Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T18:07:45.743003Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T18:07:49.54955Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:07:56.509786Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T18:07:59.096133Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:08:15.895897Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:08:15.913469Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:08:15.943143Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:08:22.608846Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:08:27.195546Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T18:08:42.170452Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-26T18:09:14.710017Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-26T18:09:19.475759Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-26T18:09:26.862557Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/projects/cortex1",
+        "summary": "Added agent_args config field to cortex.yaml that threads through the spawn pipeline. Changes: (1) Added AgentArgs []string field to Config struct, (2) Added AgentArgs to SpawnRequest and LauncherParams, (3) Set AgentArgs from project config in Orchestrate(), (4) Appended agent args (shell-quoted) to the launcher script command. Build, tests, and lint all pass.",
+        "requested_at": "2026-01-26T18:07:56.476924Z"
+      }
+    ]
+  }
+}

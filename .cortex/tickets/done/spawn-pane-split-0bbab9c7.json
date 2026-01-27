@@ -1,0 +1,12 @@
+{
+  "id": "0bbab9c7-c56a-47fe-8487-940d70b43d2f",
+  "title": "Spawn Pane Split Ratio",
+  "body": "## Context\n\nEarly development, no users. Breaking changes are fine. Do not accumulate tech debt.\n\n## Problem\n\nCurrent tmux split gives equal space to AI and companion panes.\n\n## Requirements\n\n- Split 30% for AI pane, 70% for companion pane (kanban/ticket detail)\n\n## Implementation\n\n### Commits\n- `e792821` feat: set spawn pane split ratio to 30/70\n\n### Key Files Changed\n- `internal/tmux/pane.go` - Added `-p 70` flag to `split-window` command\n\n### Changes\n- Modified `SplitWindowHorizontal` to pass `-p 70` flag to tmux, giving the new (right) pane 70% of the horizontal space",
+  "dates": {
+    "created": "2026-01-24T09:52:43Z",
+    "updated": "2026-01-24T09:52:43Z",
+    "done": "2026-01-24T09:52:43Z"
+  },
+  "comments": [],
+  "session": null
+}

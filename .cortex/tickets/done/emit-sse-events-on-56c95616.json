@@ -1,0 +1,951 @@
+{
+  "id": "56c95616-92e6-43af-819e-07d46b6fb474",
+  "title": "Emit SSE Events on All Ticket Status Changes",
+  "body": "## Problem\n\nThe kanban TUI doesn't update in real-time when tickets move between columns. Specifically:\n\n- **Spawning a session** moves a ticket to progress, but no SSE event is emitted — the TUI only reflects the change after a manual refresh (`r`)\n- **Concluding a session** (approve) moves a ticket to done, but likely has the same issue\n\nThe TUI has SSE support for real-time updates, but not all daemon API endpoints that change ticket status are emitting events.\n\n## Solution\n\nAudit all daemon API and MCP endpoints that move tickets between statuses and ensure each one emits an SSE event so the TUI updates in real-time.\n\n## Scope\n\n- **Review all daemon API handlers** (`internal/daemon/api/`) and **MCP tool handlers** (`internal/daemon/mcp/`) for any operation that changes ticket status:\n  - `moveTicket` — explicit status change\n  - `spawnSession` — moves ticket to progress\n  - `approve` / session conclude — moves ticket to done\n  - `pickupTicket` — moves ticket to progress\n  - Any other path that calls ticket status transitions\n- Ensure each of these emits an SSE event after the status change\n- Verify the TUI's SSE handler picks up these events and refreshes the board\n\n## Acceptance Criteria\n\n- [ ] Spawning a session triggers an SSE event that the TUI receives\n- [ ] Concluding/approving a session triggers an SSE event\n- [ ] All ticket status transitions across both API and MCP emit SSE events\n- [ ] TUI updates in real-time without manual refresh for all status changes",
+  "dates": {
+    "created": "2026-01-27T10:09:35.156409Z",
+    "updated": "2026-01-27T10:37:43.706457Z",
+    "progress": "2026-01-27T10:09:48.945798Z",
+    "reviewed": "2026-01-27T10:36:34.870126Z",
+    "done": "2026-01-27T10:37:43.706457Z"
+  },
+  "comments": [
+    {
+      "id": "aba05669-46eb-4b1a-9091-4730b63f23f3",
+      "session_id": "cc335d2a-442d-4c63-bafd-de36801fb590",
+      "type": "ticket_done",
+      "content": "## Summary\n\nRouted architect MCP mutation operations (create, update, delete, move ticket) through the daemon HTTP API instead of using the local ticket store directly. This ensures all ticket status changes emit SSE events that the kanban TUI receives for real-time updates.\n\n## Root Cause\n\nThe architect MCP server (`cortexd mcp`) runs as a separate process from the daemon (`cortexd serve`). It created a local ticket store with a `nil` event bus at `internal/daemon/mcp/server.go:108`. Events emitted on this local in-memory bus never reached the daemon's bus where SSE subscribers (kanban TUI) are connected. As a result, architect MCP mutations produced no SSE events.\n\n## Key Decisions\n\n1. **Route mutations through daemon HTTP API via SDK client** — This mirrors the pattern already used by ticket sessions, which correctly emit SSE events. The SDK client discovers the ticket's current status via `GetTicketByID` then calls the appropriate status-specific endpoint.\n\n2. **Keep reads on local store** — Read operations (`handleListTickets`, `handleReadTicket`) stay on the local file-based store since they don't need to emit events and file reads are always fresh.\n\n3. **Fix StatusReview validation** — The `handleMoveTicket` status validation was missing `ticket.StatusReview`, preventing moves to the review column via the architect MCP.\n\n## Files Modified\n\n1. **`internal/cli/sdk/client.go`** (+108 lines) — Added three new SDK methods:\n   - `UpdateTicket(id, title, body *string)` — GET by-id to discover status, then PUT\n   - `DeleteTicket(id)` — GET by-id to discover status, then DELETE (expects 204)\n   - `MoveTicket(id, toStatus)` — GET by-id to discover status, then POST move\n\n2. **`internal/daemon/mcp/server.go`** (+3 lines) — Initialize SDK client for architect sessions after DaemonURL default is set (line 123)\n\n3. **`internal/daemon/mcp/tools_architect.go`** (+13/-25 lines) — Updated 4 mutation handlers:\n   - `handleCreateTicket` → `s.sdkClient.CreateTicket()` with `wrapSDKError`/`ticketResponseToOutput`\n   - `handleUpdateTicket` → `s.sdkClient.UpdateTicket()` (also removed redundant `s.store.Get` call)\n   - `handleDeleteTicket` → `s.sdkClient.DeleteTicket()`\n   - `handleMoveTicket` → `s.sdkClient.MoveTicket()` + added `ticket.StatusReview` to validation\n\n4. **`internal/daemon/mcp/tools_test.go`** (+5/-5 lines) — Updated 5 tests to use `setupArchitectWithDaemon` since mutation handlers now require a daemon backend\n\n## Verification\n\n- `make build` — passes\n- `make lint` — 0 issues\n- `make test` — all tests pass (including all 42 MCP tests)",
+      "created_at": "2026-01-27T10:37:43.704952Z"
+    }
+  ],
+  "session": {
+    "id": "cc335d2a-442d-4c63-bafd-de36801fb590",
+    "started_at": "2026-01-27T10:18:12.769195Z",
+    "ended_at": "2026-01-27T10:37:43.705881Z",
+    "agent": "claude",
+    "tmux_window": "emit-sse-events-on-all-ticket-status-changes",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/4f953ce5-2fb7-4d96-90ca-4a66c6c7c6e9",
+    "feature_branch": "ticket/emit-sse-events-on",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-27T10:37:28.798171Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:18:12.769195Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:18:27.026461Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:18:31.10128Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:18:34.82846Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:18:34.9619Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:18:35.104679Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:18:35.23167Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:38.642915Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:38.643334Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:38.643639Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:38.64394Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:42.8919Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:42.892442Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:18:43.24557Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:46.183357Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:46.18384Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:50.087721Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:18:50.428531Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:53.877481Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:18:54.221308Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:56.64284Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:18:56.643263Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:19:00.779305Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:19:00.779832Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:19:04.337097Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:19:04.68662Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:19:08.015648Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:19:08.026254Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:19:10.773138Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:19:15.856414Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:19:15.898864Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T10:19:37.561678Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:19:46.523802Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:19:46.524423Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:19:46.524908Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:19:57.465785Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:20:07.787968Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:20:12.470515Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:20:12.471335Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:20:12.472246Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:20:25.217244Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:20:25.217912Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:21:08.141129Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:21:08.279952Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:21:08.406902Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:10.47433Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:10.474852Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:10.475397Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:21:13.350831Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:21:13.485902Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:16.874875Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:16.875391Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:16.876364Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:20.872181Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:21:21.232269Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:23.779051Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:26.356366Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:29.03761Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:31.853518Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:21:34.924465Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:21:34.983305Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T10:21:55.150316Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:26.414584Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:26.415256Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:54.66628Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:22:54.666806Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:23:17.298473Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:23:17.433529Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:23:23.819661Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:23:23.820177Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:23:44.410985Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:24:37.167537Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:24:42.451381Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:25:37.416865Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:25:55.35216Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:27:35.206241Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:27:35.207059Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:27:35.207523Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:27:35.207941Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:27:41.432223Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:27:45.955691Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:27:50.768375Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:27:50.769097Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:27:50.769565Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:27:57.440315Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:28:01.097703Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:05.188295Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:05.188847Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:11.979836Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:11.980399Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:11.980856Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:28:20.193253Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:28:20.323977Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:24.040184Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:24.04101Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:28.165988Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:32.981707Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:28:32.982586Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:28:36.996821Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T10:29:46.627499Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:29:54.568545Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T10:30:17.770244Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:30:24.199046Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:31:09.554904Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:16.158459Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:16.159275Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:16.159868Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:16.160511Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:31:28.391983Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:31:28.527988Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:31.420714Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:31.421369Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:34.20855Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:36.801455Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:39.50611Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:31:39.507027Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T10:31:50.17403Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:31:58.612994Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:32:12.452917Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:32:28.382712Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:32:32.75547Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:32:43.78432Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:32:48.163911Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:33:10.852511Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:33:18.673427Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:33:25.045602Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:33:36.346436Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:33:41.01273Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:33:51.348143Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:34:00.420134Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:34:04.896602Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:34:31.17243Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:34:41.784884Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:34:45.760372Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:35:15.156079Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:35:24.631388Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:35:29.332094Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:35:33.747786Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:35:45.304768Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:35:51.419228Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:35:56.140939Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:36:04.351742Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:36:11.711025Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:36:11.726504Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:36:11.739111Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:36:21.88536Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T10:36:34.900244Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:36:42.376724Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:36:49.185919Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:37:22.102647Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:37:28.798171Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/4f953ce5-2fb7-4d96-90ca-4a66c6c7c6e9",
+        "summary": "## Summary\n\nRoute architect MCP mutation operations (create, update, delete, move ticket) through the daemon HTTP API instead of using the local ticket store directly. This ensures SSE events are emitted for all ticket status changes, so the kanban TUI updates in real-time.\n\n### Root Cause\nThe architect MCP server creates a local ticket store with a `nil` event bus. Events emitted on this local bus never reach the daemon's event bus where SSE subscribers (kanban TUI) are connected.\n\n### Changes\n\n1. **`internal/cli/sdk/client.go`** — Added 3 new SDK methods:\n   - `UpdateTicket(id, title, body)` — discovers status via `GetTicketByID`, then PUTs to the daemon\n   - `DeleteTicket(id)` — discovers status, then DELETEs via the daemon\n   - `MoveTicket(id, toStatus)` — discovers status, then POSTs move via the daemon\n\n2. **`internal/daemon/mcp/server.go`** — Initialize SDK client for architect sessions after DaemonURL default is set\n\n3. **`internal/daemon/mcp/tools_architect.go`** — Route all 4 mutation handlers through SDK:\n   - `handleCreateTicket` → `s.sdkClient.CreateTicket()`\n   - `handleUpdateTicket` → `s.sdkClient.UpdateTicket()`\n   - `handleDeleteTicket` → `s.sdkClient.DeleteTicket()`\n   - `handleMoveTicket` → `s.sdkClient.MoveTicket()`\n   - Also fixed: added missing `ticket.StatusReview` to moveTicket validation\n\n4. **`internal/daemon/mcp/tools_test.go`** — Updated 5 tests to use `setupArchitectWithDaemon` since mutations now require a daemon backend\n\n### Verification\n- `make build` passes\n- `make lint` passes (0 issues)\n- `make test` passes (all tests green)",
+        "requested_at": "2026-01-27T10:36:34.869194Z"
+      }
+    ]
+  }
+}

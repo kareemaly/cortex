@@ -1,0 +1,255 @@
+{
+  "id": "c065b195-701d-4479-8a9e-17bca1860eac",
+  "title": "Sort Kanban Tickets by Created Date Instead of Updated",
+  "body": "## Problem\n\nKanban columns currently sort tickets by `updated_at`. When agents are actively working on tickets, the updated timestamp changes constantly, causing tickets to shuffle around in the progress column. This is distracting and makes it hard to track tickets visually.\n\n## Solution\n\nSort tickets by `created_at` instead of `updated_at`, with most recently created tickets first. The created date is stable and won't change as agents work.\n\n## Scope\n\n- Identify where ticket sorting happens (likely in the API response or TUI model) and change the sort key from `updated_at` to `created_at`, descending (newest first)\n\n## Acceptance Criteria\n\n- [ ] Tickets in all kanban columns are sorted by created date (newest first)\n- [ ] Ticket order remains stable while agents are working\n- [ ] No change to the date displayed on the card metadata line",
+  "dates": {
+    "created": "2026-01-27T10:07:18.876558Z",
+    "updated": "2026-01-27T10:11:09.803089Z",
+    "progress": "2026-01-27T10:07:47.698179Z",
+    "reviewed": "2026-01-27T10:10:28.629313Z",
+    "done": "2026-01-27T10:11:09.803089Z"
+  },
+  "comments": [
+    {
+      "id": "b4e714b6-f221-424e-95f5-acdf5b41c236",
+      "session_id": "f3909381-63af-45e5-9295-429942c3b620",
+      "type": "ticket_done",
+      "content": "## Summary\n\nChanged kanban ticket sorting from `updated_at` to `created_at` (descending, newest first) in both API list handlers. This prevents tickets from constantly reordering in the kanban UI while agents are actively working on them, since `created_at` is immutable.\n\n## Changes Made\n\n**File: `internal/daemon/api/tickets.go`** (1 file, 9 insertions, 9 deletions)\n\n1. **`ListAll` handler (lines 55-62)**: Renamed sort function from `sortByUpdated` to `sortByCreated` and changed comparator from `b.Updated.Compare(a.Updated)` to `b.Created.Compare(a.Created)`. Applied to all four columns (Backlog, Progress, Review, Done).\n\n2. **`ListByStatus` handler (lines 95-98)**: Changed inline sort comparator from `b.Updated.Compare(a.Updated)` to `b.Created.Compare(a.Created)`.\n\n## Key Decisions\n\n- **Sort by `created_at` rather than removing sorting entirely**: Maintains a predictable, stable order (newest tickets first) without the churn caused by `updated_at` changing during agent work.\n- **No display changes**: The ticket card metadata line continues to show the same date fields — only the sort key changed.\n\n## Verification\n\n- `make build` — compiles successfully\n- `make test` — all unit tests pass\n- `make lint` — 0 issues\n\n## Follow-up\n\nNone. The change is minimal and self-contained.",
+      "created_at": "2026-01-27T10:11:09.802132Z"
+    }
+  ],
+  "session": {
+    "id": "f3909381-63af-45e5-9295-429942c3b620",
+    "started_at": "2026-01-27T10:07:47.663072Z",
+    "ended_at": "2026-01-27T10:11:09.802684Z",
+    "agent": "claude",
+    "tmux_window": "sort-kanban-tickets-by-created-date-instead-of-upd",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/87cc5429-58df-4b63-a041-13bb45a64ecd",
+    "feature_branch": "ticket/sort-kanban-tickets",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-27T10:10:58.952272Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:07:47.663072Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:08:00.378263Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:08:04.41989Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:08:04.593904Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:08:04.777528Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:08:05.005428Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:07.687679Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:07.688152Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:07.688708Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:07.688995Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:11.253968Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:11.254411Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:11.254746Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:14.469565Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:08:14.86211Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:17.984774Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T10:08:30.079888Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:08:35.898935Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T10:08:48.869295Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:08:53.133143Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:09:30.783589Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:09:30.821519Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:09:36.307517Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:09:45.876221Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:09:45.973647Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:09:49.740851Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:09:58.776257Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:10:02.762021Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:10:08.025943Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:10:13.890101Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:10:22.154417Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T10:10:28.667278Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:10:34.001705Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:10:55.664849Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:10:58.952272Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/87cc5429-58df-4b63-a041-13bb45a64ecd",
+        "summary": "Changed ticket sorting in both `ListAll` and `ListByStatus` API handlers from `Updated` to `Created` (descending). This prevents ticket order from shuffling while agents are actively working, since `created_at` is stable. One file changed: `internal/daemon/api/tickets.go`. Build, tests, and lint all pass.",
+        "requested_at": "2026-01-27T10:10:28.628585Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "0e8358c8-1104-45c8-b53d-3e5af7ba5794",
+  "title": "Fix CI Failures",
+  "body": "GitHub Actions CI is failing on both `build` and `lint` jobs.\n\n## Issues\n\n### 1. Test Failure - `TestHandleSpawnSession`\n\nThe test calls `binpath.FindCortexd()` which fails in CI because there's no `cortexd` binary.\n\n**Error:**\n```\ncortexd not found: exec: \"cortexd\": executable file not found in $PATH\n```\n\n**Fix:** Mock the binpath lookup in the test or make it injectable.\n\n### 2. Lint Failure - Invalid golangci-lint config\n\nThe `.golangci.yml` has fields not supported by the latest golangci-lint.\n\n**Error:**\n```\nadditional properties 'default' not allowed\nadditional properties 'version', 'formatters' not allowed\n```\n\n**Fix:** Update `.golangci.yml` to use valid schema.\n\n## Verification\n\n```bash\n# Check CI status after push\ngh run list --repo kareemaly/cortex --limit 1\n```\n\n## Implementation\n\n### Commits Pushed\n\n- `4099c67` fix: make cortexd path injectable for testing\n- `ad4fb52` fix: pin golangci-lint to v2.8.0 for v2 config compatibility\n- `3b04b02` ci: update golangci-lint-action to v7 for v2 support\n\n### Key Files Changed\n\n- `internal/daemon/mcp/server.go` - Added `CortexdPath` field to Config struct\n- `internal/daemon/mcp/tools_architect.go` - Updated `handleSpawnSession` to use injected path if provided\n- `internal/daemon/mcp/tools_test.go` - Added mock cortexd path to test setup\n- `.github/workflows/ci.yml` - Pinned golangci-lint version to v2.8.0, updated action to v7\n\n### Important Decisions\n\n- Followed established dependency injection pattern (like `TmuxManager`) for testability\n- Used `/mock/cortexd` as the test path since the actual binary isn't needed when tmux is also mocked\n- Pinned golangci-lint to v2.8.0 because `version: latest` in the action still defaults to v1.x, which doesn't support v2 config syntax\n- Updated golangci-lint-action from v6 to v7 because v6 doesn't support golangci-lint v2.x versions\n\n### Scope Changes\n\n- Both test and lint issues from the original ticket are now fixed\n- Additional fix required: golangci-lint-action@v6 doesn't support v2 versions, needed v7",
+  "dates": {
+    "created": "2026-01-21T19:11:53Z",
+    "updated": "2026-01-21T19:11:53Z",
+    "done": "2026-01-21T19:11:53Z"
+  },
+  "comments": [],
+  "session": null
+}

@@ -1,0 +1,12 @@
+{
+  "id": "b5fa510f-5d10-4f0b-8b82-fb7f5dc1d712",
+  "title": "Fix claude CLI argument order when spawning sessions",
+  "body": "When spawning architect or ticket sessions, the `--mcp-config` flag is placed before the prompt, causing Claude to hang.\n\n## Problem\n\nCurrent command generation:\n```bash\nclaude --mcp-config /tmp/config.json \"prompt\"  # HANGS\n```\n\nCorrect order:\n```bash\nclaude \"prompt\" --mcp-config /tmp/config.json  # WORKS\n```\n\nThe prompt must come immediately after `claude`, with flags after.\n\n## Files to fix\n\nSearch for where claude commands are constructed:\n- `cmd/cortex/commands/architect.go` - architect session spawning\n- `internal/daemon/mcp/tools_architect.go` - ticket session spawning via MCP\n- `internal/tmux/command.go` - if command building happens here\n\n## Requirements\n\nReorder arguments so prompt comes first, then `--mcp-config` flag.\n\n## Verification\n\n```bash\nmake build && cp bin/cortex bin/cortexd ~/.local/bin/\n\ncd ~/projects/test-cortex\ncortex architect  # Should not hang\n```\n\n## Implementation\n\n### Commits pushed\n- `c9be14f` fix: place prompt before flags in claude CLI commands to prevent hanging\n\n### Key files changed\n- `cmd/cortex/commands/architect.go` - Fixed `buildAgentCommand()` to place prompt before `--mcp-config` for both opencode and claude agents\n- `internal/daemon/mcp/tools_architect.go` - Fixed `handleSpawnSession()` to place prompt before flags\n- `internal/daemon/api/tickets.go` - Fixed `buildAgentCommand()` to place `-p 'prompt'` before `--mcp-config`\n\n### Important decisions\n- Applied consistent ordering across all three locations where claude/opencode commands are constructed\n- Prompt always comes immediately after the command name, flags follow after\n\n### Scope changes\n- None - implemented as specified in ticket",
+  "dates": {
+    "created": "2026-01-21T11:47:02Z",
+    "updated": "2026-01-21T11:47:02Z",
+    "done": "2026-01-21T11:47:02Z"
+  },
+  "comments": [],
+  "session": null
+}

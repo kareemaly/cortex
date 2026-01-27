@@ -1,0 +1,12 @@
+{
+  "id": "c28d7632-a7cc-4d45-bb20-e882df400cc1",
+  "title": "Kanban TUI Updates",
+  "body": "Update kanban TUI to handle orphaned sessions with resume/fresh prompt.\n\n## Context\n\nThis is a fresh project with no users. No backward compatibility needed. Breaking changes are fine. Do not accumulate tech debt.\n\n## Changes\n\n### Remove `a` shortcut\nArchitect is opened via `cortex architect` command. Remove the `a` keybinding from kanban.\n\n### Update `s` spawn behavior\nWhen user presses `s` on a ticket:\n\n1. Call SDK to spawn (mode=normal)\n2. If response indicates orphaned state, show prompt:\n   - `[r]esume` - call SDK with mode=resume\n   - `[f]resh` - call SDK with mode=fresh\n   - `[c]ancel` - cancel operation\n3. If active, show message \"Session already active\"\n4. If normal/ended, spawn succeeds\n\nAll spawning goes through SDK \u2192 API \u2192 Daemon. Kanban does NOT do direct tmux operations.\n\n### Prompt UI\nSimple modal or inline prompt for orphan options. Text-based is fine.\n\n## Files to Change\n\n- `internal/cli/tui/kanban/model.go` - handle spawn response, prompt logic\n- `internal/cli/tui/kanban/keys.go` - remove `a` keybinding\n\n## Verification\n\n```bash\nmake lint\nmake test\nmake build\nmake test-integration\n```\n\n## Implementation\n\n### Commits Pushed\n- `1e74009` feat: add orphaned session handling modal to kanban TUI\n\n### Key Files Changed\n- `internal/cli/sdk/client.go` - Added `APIError` type to preserve error codes from API, updated `parseError()` to return structured errors\n- `internal/cli/tui/kanban/keys.go` - Removed `KeyArchitect`, added `KeyFresh`, `KeyCancel`, `KeyEscape` for modal handling\n- `internal/cli/tui/kanban/model.go` - Added modal state fields, `OrphanedSessionMsg`, orphan detection in `spawnSession()`, modal key handler, modal rendering\n\n### Important Decisions\n- Reused `KeyRefresh` ('r') as resume key in modal context to avoid adding another key constant\n- Modal replaces both status bar and help bar when shown, keeping UI simple\n- Truncate ticket title at 30 chars in modal prompt for display\n\n### Scope Changes\n- Added `APIError` type to SDK client (not originally scoped but necessary for detecting orphaned sessions by error code)",
+  "dates": {
+    "created": "2026-01-23T07:27:18Z",
+    "updated": "2026-01-23T07:27:18Z",
+    "done": "2026-01-23T07:27:18Z"
+  },
+  "comments": [],
+  "session": null
+}

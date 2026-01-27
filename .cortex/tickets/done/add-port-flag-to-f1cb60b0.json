@@ -1,0 +1,12 @@
+{
+  "id": "f1cb60b0-931c-4d6f-b2e3-aa0e434ea1c4",
+  "title": "Add --port flag to cortexd serve",
+  "body": "Allow configuring the HTTP port for `cortexd serve` to avoid conflicts and enable testing.\n\n## Current State\n\nPort is hardcoded to 4200 in `cmd/cortexd/commands/serve.go`.\n\n## Requirements\n\n1. Add `--port` flag to `cortexd serve` command\n2. Default to 4200 (current behavior)\n3. Example: `cortexd serve --port 4201`\n\n## Verification\n\n```bash\nmake build\n\n# Test custom port\ncortexd serve --port 4201 &\ncurl http://localhost:4201/health\n# Should return {\"status\":\"ok\",\"version\":\"...\"}\n```\n\n## Implementation\n\n### Commits Pushed\n\n- `d3f297d` feat: add --port flag to cortexd serve command\n\n### Key Files Changed\n\n- `cmd/cortexd/commands/serve.go` - Added `--port` flag with default 4200, override logic when flag is set\n\n### Decisions\n\n- Used `cmd.Flags().Changed(\"port\")` to only override config when flag is explicitly set, preserving config file values when flag is not used",
+  "dates": {
+    "created": "2026-01-21T13:56:32Z",
+    "updated": "2026-01-21T13:56:32Z",
+    "done": "2026-01-21T13:56:32Z"
+  },
+  "comments": [],
+  "session": null
+}

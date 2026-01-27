@@ -1,0 +1,12 @@
+{
+  "id": "1a3247cb-a1de-4604-9a0e-759d44392e66",
+  "title": "Ticket TUI Markdown Rendering",
+  "body": "## Context\n\nEarly development, no users. Breaking changes are fine. Do not accumulate tech debt.\n\n## Problem\n\nTicket body and comments display raw markdown text instead of rendered formatting.\n\n## Requirements\n\n- Render ticket body as formatted markdown using github.com/charmbracelet/glamour\n- Render comments as formatted markdown\n- Style should fit terminal theme\n\n## Implementation\n\n### Commits pushed\n- `ff447cf` feat: add markdown rendering to ticket TUI using glamour\n\n### Key files changed\n- `go.mod` - Added glamour v0.9.1 dependency\n- `internal/cli/tui/ticket/model.go` - Integrated glamour renderer\n\n### Changes made\n- Added `mdRenderer *glamour.TermRenderer` field to Model struct\n- Initialized renderer in `New()` with 80-character word wrap and auto-style\n- Updated renderer width on window resize to match terminal width\n- Added `renderMarkdown()` helper with fallback to raw text on error\n- Modified `renderSection()` to render body as markdown\n- Modified `renderComments()` to render comment content as markdown",
+  "dates": {
+    "created": "2026-01-24T09:52:36Z",
+    "updated": "2026-01-24T09:52:36Z",
+    "done": "2026-01-24T09:52:36Z"
+  },
+  "comments": [],
+  "session": null
+}

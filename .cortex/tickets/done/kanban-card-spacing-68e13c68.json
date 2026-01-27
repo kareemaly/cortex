@@ -1,0 +1,375 @@
+{
+  "id": "68e13c68-4fcd-469d-bf5f-ec99ac464d80",
+  "title": "Kanban Card Spacing and Layout Fixes",
+  "body": "## Problem\n\nSeveral cosmetic issues with the kanban ticket card layout:\n\n1. **Unnecessary left/right padding on ticket text** — After removing the icon prefix, there are still 2 characters of left padding (`  `) on every title line and the metadata line. This wastes horizontal space in already narrow columns.\n\n2. **No vertical space between tickets** — Ticket cards are stacked directly on top of each other with no gap, making it hard to distinguish where one ticket ends and the next begins.\n\n3. **Extra top margin on first ticket in Done column** — The first ticket in the Done column has extra vertical space above it that other columns don't have.\n\n4. **Premature scroll indicator** — The scroll bar/indicator appears before tickets have filled the full vertical space of the column, wasting available space.\n\n## Scope\n\n- **`internal/cli/tui/kanban/column.go`**:\n  - Remove the 2-char left indent from title lines and metadata line\n  - Add vertical spacing (empty line) between ticket cards\n  - Fix top margin inconsistency in the Done column's first ticket\n  - Fix visible ticket count calculation so tickets fill the full column height before scroll indicators appear\n\n## Acceptance Criteria\n\n- [ ] Ticket title and metadata text use full available width (no extra left/right padding)\n- [ ] Visible vertical gap between ticket cards\n- [ ] No extra top margin on the first ticket in any column\n- [ ] Scroll indicators only appear when tickets actually overflow the column height",
+  "dates": {
+    "created": "2026-01-27T10:05:33.707926Z",
+    "updated": "2026-01-27T10:17:09.978222Z",
+    "progress": "2026-01-27T10:06:16.297585Z",
+    "reviewed": "2026-01-27T10:16:32.101364Z",
+    "done": "2026-01-27T10:17:09.978222Z"
+  },
+  "comments": [
+    {
+      "id": "58de7665-82f5-4b9b-87e1-aa41b76791ad",
+      "session_id": "435ffbd7-b79c-4b40-be02-e663187c36e2",
+      "type": "ticket_done",
+      "content": "## Summary\n\nImplemented four kanban card spacing and layout fixes in `internal/cli/tui/kanban/column.go`:\n\n### Changes Made\n\n1. **Removed 2-char left indent from title and metadata lines**\n   - Eliminated `prefix := \"  \"` from both selected and normal ticket rendering paths\n   - Eliminated `meta := \"  \"` initialization from both paths\n   - Adjusted `titleWidth` from `max(width-6, 10)` to `max(width-4, 10)` to account for the reclaimed space (still need 4 chars for lipgloss `Padding(0,1)` on ticket/column styles)\n\n2. **Added vertical gap between ticket cards**\n   - Changed inter-ticket separator from `\"\\n\"` to `\"\\n\\n\"` to insert a blank line between cards for better visual separation\n\n3. **Fixed top/bottom margin inconsistency (Done column first ticket)**\n   - Top scroll indicator: Changed from unconditionally emitting a newline when `needsScrolling` to only emitting when `needsScrolling \u0026\u0026 c.scrollOffset \u003e 0`\n   - Bottom scroll indicator: Same pattern — only emits when `needsScrolling \u0026\u0026 c.scrollOffset+visibleCount \u003c len(c.tickets)`\n   - This eliminates the extra blank line above the first ticket when scrolling isn't active at the top\n\n4. **Replaced fixed `linesPerTicket` with dynamic height calculation**\n   - Deleted `const linesPerTicket = 6`\n   - Added `ticketHeight()`: computes actual lines for a ticket (wrapped title lines + 1 metadata line)\n   - Added `totalTicketHeight()`: sums all ticket heights including gap lines between them\n   - Added `countVisibleTickets()`: counts how many tickets fit in available lines from a given start index\n   - Moved `titleWidth` calculation before scroll logic so it's available for height computation\n   - Added two-pass stabilization: compute visibleCount → EnsureCursorVisible → recompute if scrollOffset changed\n\n### Key Decisions\n\n- **Dynamic vs fixed height**: Replaced the hardcoded `linesPerTicket = 6` with actual height computation based on wrapped title text. This ensures tickets fill the full column height before scroll indicators appear, regardless of title length.\n- **Two-pass stabilization**: After computing visibleCount, EnsureCursorVisible may change scrollOffset, which could change which tickets are visible and thus the height calculation. The second pass ensures consistency.\n- **Gap lines accounted for in height**: The `countVisibleTickets` helper includes gap lines (1 per inter-ticket boundary) in its available space calculation, matching the actual render output.\n\n### Files Modified\n\n- `internal/cli/tui/kanban/column.go` — 61 insertions, 31 deletions\n\n### Verification\n\n- `make build` — compiles successfully\n- `make lint` — 0 issues\n- `make test` — all unit tests pass",
+      "created_at": "2026-01-27T10:17:09.976857Z"
+    }
+  ],
+  "session": {
+    "id": "435ffbd7-b79c-4b40-be02-e663187c36e2",
+    "started_at": "2026-01-27T10:06:16.260755Z",
+    "ended_at": "2026-01-27T10:17:09.977763Z",
+    "agent": "claude",
+    "tmux_window": "kanban-card-spacing-and-layout-fixes",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/0900feec-69c9-42f3-8410-12d2bad9dadb",
+    "feature_branch": "ticket/kanban-card-spacing",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-27T10:16:53.118363Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:06:16.260755Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:06:43.498615Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:06:46.478202Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:06:46.861295Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:06:49.782738Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:06:49.783377Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:06:49.783797Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:06:53.394807Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:06:54.31148Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T10:07:16.576938Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:07:21.993629Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:07:21.994006Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:07:21.994291Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:09:44.110464Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:09:44.171141Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:10:00.841645Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:10:03.872217Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:10:03.872773Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:10:29.81304Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T10:10:30.172659Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:10:41.86704Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:10:49.813592Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T10:10:53.422703Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T10:12:28.395402Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T10:12:48.967986Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:12:55.317726Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:14:11.63879Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:14:11.694392Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:14:18.908978Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:14:28.545511Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:14:35.029073Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:14:43.958371Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:14:49.30026Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:14:54.105742Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:15:01.129489Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:15:09.125448Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:15:13.528543Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:15:17.79646Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:15:21.90196Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:15:30.456618Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:15:36.263701Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:15:39.585853Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:15:46.5145Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:15:55.457021Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:15:59.204418Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:16:09.309044Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:16:15.787294Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:16:15.819855Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:16:15.820458Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:16:22.494518Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T10:16:32.147205Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:16:37.281136Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:16:44.530009Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:16:49.410036Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:16:53.118363Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/0900feec-69c9-42f3-8410-12d2bad9dadb",
+        "summary": "Kanban card spacing and layout fixes in `internal/cli/tui/kanban/column.go`:\n\n1. **Removed 2-char left indent** — Title and metadata lines no longer have unnecessary `\"  \"` prefix, using full column width. `titleWidth` adjusted from `width-6` to `width-4`.\n\n2. **Added vertical gap between cards** — Changed inter-ticket separator from `\"\\n\"` to `\"\\n\\n\"` for a blank line gap between tickets.\n\n3. **Fixed top/bottom margin inconsistency** — Scroll indicator lines only emit when the arrow is actually shown (`scrollOffset \u003e 0` for top, `scrollOffset+visibleCount \u003c len(tickets)` for bottom), eliminating the unconditional blank line.\n\n4. **Dynamic scroll height calculation** — Replaced fixed `const linesPerTicket = 6` with three helper functions (`ticketHeight`, `totalTicketHeight`, `countVisibleTickets`) that compute actual heights based on wrapped title lines. Includes two-pass stabilization to recompute visible count after EnsureCursorVisible adjusts scrollOffset.\n\nBuild, lint (0 issues), and all tests pass.",
+        "requested_at": "2026-01-27T10:16:32.100572Z"
+      }
+    ]
+  }
+}

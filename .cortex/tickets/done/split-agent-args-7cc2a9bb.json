@@ -1,0 +1,525 @@
+{
+  "id": "7cc2a9bb-eb7f-446e-ae37-386b8d72e180",
+  "title": "Split agent_args into Architect and Ticket Session Args",
+  "body": "## Problem\n\nCurrently `agent_args` in `cortex.yaml` is a single list of extra CLI arguments passed to all agent sessions. There's no way to pass different arguments to the architect session vs ticket sessions.\n\nFor example, you might want a higher budget for the architect and a lower one for ticket agents, or pass different flags to each.\n\n## Solution\n\nReplace the single `agent_args` field with two separate fields:\n\n```yaml\nagent_args:\n  architect:\n    - \"--budget=150000\"\n  ticket:\n    - \"--budget=50000\"\n```\n\n## Scope\n\n- Update the `Config` struct in `internal/project/config/config.go` to split `agent_args` into `architect` and `ticket` sub-fields\n- Update YAML parsing and any validation logic\n- Update all spawn paths that read `agent_args` to use the appropriate field based on session type\n- Update the prompt templates if they reference agent args\n- Ensure backward compatibility — if the old flat `agent_args` format is used, treat it as applying to both session types (or error with a clear message)\n\n## Acceptance Criteria\n\n- [ ] `cortex.yaml` supports `agent_args.architect` and `agent_args.ticket` as separate lists\n- [ ] Architect sessions receive only `agent_args.architect` arguments\n- [ ] Ticket sessions receive only `agent_args.ticket` arguments\n- [ ] Existing flat `agent_args` format is handled gracefully (backward compat or clear error)\n- [ ] Config tests cover the new structure",
+  "dates": {
+    "created": "2026-01-27T09:24:08.453053Z",
+    "updated": "2026-01-27T09:32:49.241768Z",
+    "progress": "2026-01-27T09:24:27.978659Z",
+    "reviewed": "2026-01-27T09:31:26.073359Z",
+    "done": "2026-01-27T09:32:49.241768Z"
+  },
+  "comments": [
+    {
+      "id": "722156ba-a6ac-4c13-bb1a-385ad7453e40",
+      "session_id": "4242bf65-ad13-4986-bfa4-3bf6a0b261d6",
+      "type": "ticket_done",
+      "content": "## Summary\n\nSplit the flat `agent_args` config field into a structured `AgentArgsConfig` with separate `architect` and `ticket` sub-fields, allowing different CLI arguments to be passed to architect vs ticket agent sessions.\n\n## Changes Made\n\n### 1. `internal/project/config/config.go`\n- Added `AgentArgsConfig` struct with `Architect []string` and `Ticket []string` fields\n- Implemented custom `UnmarshalYAML` using `yaml.Node` to detect YAML kind:\n  - **MappingNode** → new structured format, decoded into respective fields\n  - **SequenceNode** → old flat format, copied to both `Architect` and `Ticket` for backward compatibility\n- Changed `Config.AgentArgs` field type from `[]string` to `AgentArgsConfig`\n\n### 2. `internal/core/spawn/orchestrate.go` (line 145)\n- Changed `projectCfg.AgentArgs` → `projectCfg.AgentArgs.Ticket` so ticket sessions only receive ticket-specific args\n\n### 3. `internal/daemon/api/architect.go` (line 124)\n- Added `AgentArgs: projectCfg.AgentArgs.Architect` to the architect `SpawnRequest`, threading architect-specific args through to the spawner\n\n### 4. `internal/project/config/config_test.go`\n- Added 5 test cases:\n  - `TestAgentArgs_NewNestedFormat` — verifies independent architect/ticket parsing\n  - `TestAgentArgs_OldFlatFormat` — verifies backward compat (flat list populates both)\n  - `TestAgentArgs_Absent` — verifies both fields are empty when agent_args is absent\n  - `TestAgentArgs_PartialArchitectOnly` — only architect specified\n  - `TestAgentArgs_PartialTicketOnly` — only ticket specified\n\n## Key Decisions\n\n- **Backward compatibility via custom unmarshaler**: Rather than requiring a migration or erroring on the old format, the custom `UnmarshalYAML` transparently handles both YAML sequence (old) and mapping (new) formats. Old flat lists are copied to both `Architect` and `Ticket`, preserving existing behavior.\n- **No changes to SpawnRequest/launcher**: The `SpawnRequest.AgentArgs` field stays `[]string` — only the callers (orchestrate.go and architect.go) select the appropriate sub-field. This minimizes the blast radius.\n- **Type alias trick for unmarshaling**: Used `type plain AgentArgsConfig` to avoid infinite recursion in the custom unmarshaler.\n\n## Verification\n\n- `make test` — all tests pass (including 5 new config tests)\n- `make lint` — 0 issues\n- `make build` — clean compilation\n\n## New YAML Format\n\n```yaml\nagent_args:\n  architect:\n    - \"--budget=150000\"\n  ticket:\n    - \"--budget=50000\"\n```\n\nOld format still works:\n```yaml\nagent_args:\n  - \"--budget=100000\"\n```",
+      "created_at": "2026-01-27T09:32:49.239853Z"
+    }
+  ],
+  "session": {
+    "id": "4242bf65-ad13-4986-bfa4-3bf6a0b261d6",
+    "started_at": "2026-01-27T09:24:27.943771Z",
+    "ended_at": "2026-01-27T09:32:49.241127Z",
+    "agent": "claude",
+    "tmux_window": "split-agentargs-into-architect-and-ticket-session-",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/aa78a12b-5876-4473-b349-af22ec1125da",
+    "feature_branch": "ticket/split-agent-args",
+    "current_status": {
+      "status": "waiting_permission",
+      "tool": null,
+      "work": null,
+      "at": "2026-01-27T09:32:45.439676Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:24:27.943771Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:24:42.918091Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T09:24:45.091268Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T09:24:47.960063Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T09:24:48.08561Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T09:24:48.218237Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T09:24:48.35051Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:24:50.48175Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:24:50.482594Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:24:50.483032Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:24:53.636582Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:24:53.63717Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T09:24:53.974936Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T09:24:57.382979Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:24:58.30367Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:25:00.177754Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:25:00.178404Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:03.14213Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T09:25:03.451609Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:25:06.102504Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:06.200223Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:08.535237Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:08.561869Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:11.059525Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:11.079594Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:14.216625Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:14.233029Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:17.215416Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:17.225437Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:25:19.796206Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:19.868278Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:25:22.747019Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T09:25:46.511085Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:25:56.111543Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:25:56.112246Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:25:56.112724Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:25:56.113168Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:25:56.116421Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T09:26:04.00433Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T09:26:04.135949Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:26:09.3548Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:26:09.35539Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T09:26:24.944143Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:26:28.084451Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T09:26:50.428492Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:26:57.290163Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T09:27:42.723661Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:27:42.771887Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:27:42.774474Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:27:42.774946Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T09:27:46.624148Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:27:49.704427Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:27:56.882054Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:28:07.30443Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:28:11.616318Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:28:21.720349Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:28:21.790751Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:28:21.869057Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:28:26.487829Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T09:28:43.799157Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:28:49.580824Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:28:50.953485Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:30:33.106732Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:30:40.697167Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:30:45.804756Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:30:46.620777Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:30:52.967477Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T09:31:00.818257Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:31:07.371553Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:31:07.397058Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:31:07.397683Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:31:14.207744Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:31:15.117791Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:31:24.610147Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T09:31:26.135906Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:31:29.239654Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:31:53.872057Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:31:58.379678Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T09:32:28.528793Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:32:45.439676Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/aa78a12b-5876-4473-b349-af22ec1125da",
+        "summary": "Split `agent_args` config into separate `architect` and `ticket` sub-fields.\n\n**Changes:**\n\n1. **`internal/project/config/config.go`** — Added `AgentArgsConfig` struct with `Architect` and `Ticket` []string fields. Implemented `UnmarshalYAML` using `yaml.Node` to support both the new mapping format (`agent_args: {architect: [...], ticket: [...]}`) and the old flat sequence format (`agent_args: [\"--flag\"]`) for backward compatibility. Changed `Config.AgentArgs` from `[]string` to `AgentArgsConfig`.\n\n2. **`internal/core/spawn/orchestrate.go`** — Changed `projectCfg.AgentArgs` → `projectCfg.AgentArgs.Ticket` for ticket session spawns.\n\n3. **`internal/daemon/api/architect.go`** — Added `AgentArgs: projectCfg.AgentArgs.Architect` to the architect spawn request.\n\n4. **`internal/project/config/config_test.go`** — Added 5 tests: new nested format, old flat format (backward compat), absent field, partial architect-only, partial ticket-only.\n\nAll tests pass, lint clean, build succeeds.",
+        "requested_at": "2026-01-27T09:31:26.072403Z"
+      }
+    ]
+  }
+}

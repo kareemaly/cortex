@@ -1,0 +1,177 @@
+{
+  "id": "31fbdf10-c044-4f52-b798-0562c5e428c2",
+  "title": "Remove Left Icon Prefix from Ticket Cards",
+  "body": "## Problem\n\nThe ticket card title still has left-side icon prefixes that push content to the right:\n\n- **Unselected with active session:** `● ` (agent status icon) on title line 1\n- **Selected/focused:** `\u003e ` on title line 1\n\nSince the agent status is now shown on the bottom metadata line (`● ToolName · Jan 27`), the top-left icon is redundant. The `\u003e ` focus indicator is also unnecessary visual noise.\n\n### Current\n```\n● MCP Spawn Should\n  Delegate to Daemon\n  HTTP API\n  ● Read · Jan 27\n```\n\n### Expected\n```\n  MCP Spawn Should\n  Delegate to Daemon\n  HTTP API\n  ● Read · Jan 27\n```\n\nThe agent status icon should only appear on the metadata line — nowhere else on the card.\n\n## Scope\n\n- **`internal/cli/tui/kanban/column.go`**:\n  - Remove `\u003e ` prefix for selected/focused title line 1 (line ~188-189) — use plain `  ` instead\n  - Remove `● ` icon prefix for unselected active-session title line 1 (lines ~204-207) — use plain `  ` instead\n  - All title lines should use the same `  ` indent regardless of state\n\n## Acceptance Criteria\n\n- [ ] No icon prefix on title line 1 in any state (selected, unselected, active session, no session)\n- [ ] All title lines use uniform `  ` indent\n- [ ] Agent status still renders on the bottom metadata line next to the date\n- [ ] Selected ticket is still visually distinct (via highlight style, not prefix icon)",
+  "dates": {
+    "created": "2026-01-27T09:58:26.414508Z",
+    "updated": "2026-01-27T10:01:46.332177Z",
+    "progress": "2026-01-27T09:59:24.428364Z",
+    "reviewed": "2026-01-27T10:01:09.264371Z",
+    "done": "2026-01-27T10:01:46.332177Z"
+  },
+  "comments": [
+    {
+      "id": "69bf278f-16dc-4c0a-8cc6-dad95f983490",
+      "session_id": "b7a41d08-8bc6-49bc-b606-ed19b866225b",
+      "type": "ticket_done",
+      "content": "## Summary\n\nRemoved redundant left icon prefixes from kanban ticket card titles. The `\u003e ` prefix on selected/focused cards and the agent status icon (`●`, `▶`, `○`, `⏸`, `✗`) prefix on unselected active-session cards were both removed. All title lines now use a uniform `\"  \"` (two-space) indent regardless of card state.\n\nThe agent status icon remains visible on the metadata line at the bottom of each card (e.g., `● Read · Jan 27`), so no information is lost. Selected tickets remain visually distinct via the `selectedTicketStyle` background/foreground color highlight.\n\n## Key Decisions\n\n- **Uniform indent over prefix icons:** The title area no longer changes layout based on selection or session state. This prevents text shifting when navigating between cards and keeps the visual hierarchy clean.\n- **Minimal change:** Only the two `if` blocks controlling the prefix were removed. No other rendering logic was altered.\n\n## Files Modified\n\n- `internal/cli/tui/kanban/column.go` — Removed 8 lines (two `if` blocks and their bodies), added 2 lines (simplified loop variables from `lineIdx, line` to `_, line`). Net: -6 lines.\n\n## Verification\n\n- `make build` — compiles successfully\n- `make lint` — 0 issues\n\n## Follow-up\n\nNone required. The change is self-contained.",
+      "created_at": "2026-01-27T10:01:46.33127Z"
+    }
+  ],
+  "session": {
+    "id": "b7a41d08-8bc6-49bc-b606-ed19b866225b",
+    "started_at": "2026-01-27T09:59:24.390899Z",
+    "ended_at": "2026-01-27T10:01:46.331786Z",
+    "agent": "claude",
+    "tmux_window": "remove-left-icon-prefix-from-ticket-cards",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/3ed7a4f1-fa18-4ec7-b137-50215f326fcf",
+    "feature_branch": "ticket/remove-left-icon",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-27T10:01:34.845041Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:59:24.390899Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T09:59:33.790002Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T09:59:33.837135Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T09:59:49.509217Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T09:59:55.314196Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T10:00:06.243406Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:00:06.30982Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:00:18.05309Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T10:00:22.438913Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:00:32.120039Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:00:39.318981Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T10:00:39.379776Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:00:45.938589Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:00:48.827904Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:00:53.385616Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:01:00.956104Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:01:02.058353Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T10:01:09.302438Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T10:01:13.485494Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T10:01:19.391556Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:01:31.537096Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T10:01:34.845041Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/3ed7a4f1-fa18-4ec7-b137-50215f326fcf",
+        "summary": "Removed left icon prefixes from kanban ticket cards in `internal/cli/tui/kanban/column.go`:\n\n1. **Removed `\u003e ` prefix** on selected/focused ticket title line 1 (lines 188-190 deleted). Selected cards remain visually distinct via `selectedTicketStyle` background/foreground color.\n\n2. **Removed `● ` (agent status icon) prefix** on unselected active-session ticket title line 1 (lines 205-207 deleted). The agent status icon is still shown on the metadata line at the bottom of each card.\n\nAll title lines now use a uniform `\"  \"` indent regardless of state. Build and lint pass cleanly.",
+        "requested_at": "2026-01-27T10:01:09.263536Z"
+      }
+    ]
+  }
+}

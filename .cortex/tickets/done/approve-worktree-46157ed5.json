@@ -1,0 +1,12 @@
+{
+  "id": "46157ed5-ad17-45b9-bf09-0b6c254666c6",
+  "title": "Approve Worktree Fix and Review Status",
+  "body": "## Context\n\nEarly development, no users. Breaking changes are fine. Do not accumulate tech debt.\n\n## Problem 1: Approve uses wrong prompt for worktree sessions\n\n`sessions.go:151` always loads `approve.md`:\n```go\napprovePath := prompt.ApprovePath(projectPath)  // always non-worktree\n```\n\nShould check `session.WorktreePath` and use `ApproveWorktreePath()` for worktree sessions.\n\n## Problem 2: requestReview doesn't move ticket to review\n\n`handleRequestReview` in `tools_ticket.go` only adds to `Session.RequestedReviews` but doesn't move the ticket to review status.\n\n## Requirements\n\n1. In approve handler (`sessions.go`):\n   - Check if session has `WorktreePath`\n   - If yes, use `prompt.ApproveWorktreePath()`\n   - If no, use `prompt.ApprovePath()`\n\n2. In `handleRequestReview` (`tools_ticket.go`):\n   - After adding review request, move ticket to review status\n   - Only move if not already in review or done\n\n## Implementation\n\n### Commits\n\n- `08da38d` fix: approve handler uses worktree prompt and requestReview moves ticket to review\n\n### Key Files Changed\n\n- `internal/daemon/api/sessions.go` - Added conditional to use `approve-worktree.md` when session has `WorktreePath`\n- `internal/daemon/mcp/tools_ticket.go` - Added move to review status after `AddReviewRequest` call\n- `internal/daemon/api/integration_test.go` - Removed stale `HookExecutor` reference (bonus fix)\n\n### Decisions\n\n- Used idempotent check before moving: skip if already in review or done status\n- Pattern matches existing worktree handling in `spawn.go:427-433`",
+  "dates": {
+    "created": "2026-01-24T15:10:01Z",
+    "updated": "2026-01-24T15:10:01Z",
+    "done": "2026-01-24T15:10:01Z"
+  },
+  "comments": [],
+  "session": null
+}

@@ -1,0 +1,12 @@
+{
+  "id": "eaacd8fb-56f3-419f-8f11-a0a0c1554667",
+  "title": "Ticket Detail TUI",
+  "body": "Create a rich TUI view for `cortex ticket <id>` command.\n\n## Context\n\nThis is a fresh project with no users. No backward compatibility needed. Breaking changes are fine. Do not accumulate tech debt.\n\n## Current State\n\n`cortex ticket <id>` currently shows plain text output. Convert to interactive TUI.\n\n## TUI Display\n\nShow ticket information in a scrollable view:\n\n### Header\n- Ticket ID and status (with color)\n- Title\n\n### Body\n- Full ticket body/description\n\n### Session Info (if exists)\n- Session ID, agent, tmux window\n- Started at, ended at\n- State indicator (active/orphaned/ended)\n\n### Comments\n- List of comments with:\n  - Type (color-coded: decision=blue, scope_change=yellow, blocker=red, etc.)\n  - Content\n  - Timestamp\n\n## Interactions\n\n- `q` - quit\n- `r` - refresh\n- Arrow keys / j/k - scroll\n\n## Fallback\n\nKeep `--json` flag for non-interactive output (skip TUI, print JSON).\n\n## Files to Change\n\n- `cmd/cortex/commands/ticket_show.go` - launch TUI instead of text\n- `internal/cli/tui/ticket/` (new) - ticket detail TUI components\n\n## Verification\n\n```bash\nmake lint\nmake test\nmake build\nmake test-integration\n```\n\n## Implementation\n\n### Commits Pushed\n\n- `e1d8276` feat: add interactive TUI for ticket detail view with scrollable viewport\n\n### Key Files Changed\n\n**New files:**\n- `internal/cli/tui/ticket/keys.go` - Key bindings (q, j/k, pgup/pgdown, home/end, r)\n- `internal/cli/tui/ticket/styles.go` - Styling with status colors and comment type colors\n- `internal/cli/tui/ticket/model.go` - Main Bubbletea model with viewport for scrollable content\n\n**Modified files:**\n- `cmd/cortex/commands/ticket_show.go` - Launches TUI in TTY mode, falls back to plain text when piped\n- `go.mod` / `go.sum` - Added `github.com/charmbracelet/bubbles` dependency\n\n### Important Decisions\n\n- Used `charmbracelet/bubbles` viewport component for scrolling (new dependency)\n- TTY detection via `mattn/go-isatty` (already an indirect dependency)\n- Plain text fallback for non-TTY (piped output) preserves scriptability\n- Reused status colors from kanban TUI for consistency\n- Comment types color-coded: decision (blue), blocker (red), question (cyan), etc.\n\n### Scope Changes\n\nNone - implemented as specified.",
+  "dates": {
+    "created": "2026-01-23T07:27:23Z",
+    "updated": "2026-01-23T07:27:23Z",
+    "done": "2026-01-23T07:27:23Z"
+  },
+  "comments": [],
+  "session": null
+}
