@@ -208,8 +208,8 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	if !containsSubstr(script, "\"$(cat") {
 		t.Error("expected launcher to use $(cat) syntax for prompt")
 	}
-	if !containsSubstr(script, "--permission-mode plan") {
-		t.Error("expected launcher to have --permission-mode plan for ticket agent")
+	if containsSubstr(script, "--permission-mode") {
+		t.Error("expected no --permission-mode when AgentArgs not provided")
 	}
 	if !containsSubstr(script, "export CORTEX_TICKET_ID=") {
 		t.Error("expected launcher to export CORTEX_TICKET_ID")
@@ -605,8 +605,8 @@ func TestWriteLauncherScript(t *testing.T) {
 		SystemPromptFilePath: "/tmp/cortex-sysprompt-test.txt",
 		MCPConfigPath:        "/tmp/cortex-mcp-test.json",
 		SettingsPath:         "/tmp/cortex-settings-test.json",
-		PermissionMode:       "plan",
 		SessionID:            "session-abc",
+		AgentArgs:            []string{"--permission-mode", "plan"},
 		EnvVars: map[string]string{
 			"CORTEX_TICKET_ID": "ticket-1",
 			"CORTEX_PROJECT":   "/path/to/project",
@@ -666,8 +666,8 @@ func TestWriteLauncherScript(t *testing.T) {
 	if !containsSubstr(script, "--settings") {
 		t.Error("expected --settings flag")
 	}
-	if !containsSubstr(script, "--permission-mode plan") {
-		t.Error("expected --permission-mode plan")
+	if !containsSubstr(script, "'--permission-mode' 'plan'") {
+		t.Error("expected '--permission-mode' 'plan' via AgentArgs")
 	}
 	if !containsSubstr(script, "--session-id session-abc") {
 		t.Error("expected --session-id flag")
@@ -687,11 +687,11 @@ func TestWriteLauncherScript_Resume(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	params := LauncherParams{
-		MCPConfigPath:  "/tmp/cortex-mcp-test.json",
-		SettingsPath:   "/tmp/cortex-settings-test.json",
-		PermissionMode: "plan",
-		ResumeID:       "session-to-resume",
-		CleanupFiles:   []string{"/tmp/cortex-mcp-test.json", "/tmp/cortex-settings-test.json"},
+		MCPConfigPath: "/tmp/cortex-mcp-test.json",
+		SettingsPath:  "/tmp/cortex-settings-test.json",
+		ResumeID:      "session-to-resume",
+		AgentArgs:     []string{"--permission-mode", "plan"},
+		CleanupFiles:  []string{"/tmp/cortex-mcp-test.json", "/tmp/cortex-settings-test.json"},
 	}
 
 	path, err := WriteLauncherScript(params, "resume-test", tmpDir)
@@ -724,7 +724,7 @@ func TestWriteLauncherScript_Architect(t *testing.T) {
 		SystemPromptFilePath: "/tmp/cortex-sysprompt-arch.txt",
 		MCPConfigPath:        "/tmp/cortex-mcp-arch.json",
 		SettingsPath:         "/tmp/cortex-settings-arch.json",
-		AllowedTools:         []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
+		AgentArgs:            []string{"--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"},
 		SessionID:            "arch-session",
 		CleanupFiles: []string{
 			"/tmp/cortex-mcp-arch.json",
@@ -745,9 +745,9 @@ func TestWriteLauncherScript_Architect(t *testing.T) {
 	}
 	script := string(data)
 
-	// Should have --allowedTools
-	if !containsSubstr(script, "--allowedTools mcp__cortex__listTickets,mcp__cortex__readTicket") {
-		t.Error("expected --allowedTools flag with tools")
+	// Should have --allowedTools via AgentArgs (shell-quoted)
+	if !containsSubstr(script, "'--allowedTools' 'mcp__cortex__listTickets,mcp__cortex__readTicket'") {
+		t.Error("expected '--allowedTools' 'tools' via AgentArgs")
 	}
 
 	// Should NOT have ticket env vars

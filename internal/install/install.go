@@ -167,6 +167,16 @@ func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
 	// Create config file
 	configContent := `name: ` + name + `
 agent: claude
+agent_args:
+  architect:
+    - "--allowedTools"
+    - "mcp__cortex__listTickets,mcp__cortex__readTicket"
+  ticket:
+    - "--permission-mode"
+    - "plan"
+    - "--allow-dangerously-skip-permissions"
+    - "--allowedTools"
+    - "mcp__cortex__readTicket"
 git:
   repos:
     - path: "."

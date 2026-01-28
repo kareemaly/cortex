@@ -104,6 +104,9 @@ type ResumeRequest struct {
 
 	// For ticket agents
 	TicketID string
+
+	// Extra CLI args appended to the agent command
+	AgentArgs []string
 }
 
 // SpawnResult contains the result of a spawn operation.
@@ -256,11 +259,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		CleanupFiles:         tempFiles,
 	}
 
-	switch req.AgentType {
-	case AgentTypeArchitect:
-		launcherParams.AllowedTools = []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"}
-	case AgentTypeTicketAgent:
-		launcherParams.PermissionMode = "plan"
+	if req.AgentType == AgentTypeTicketAgent {
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": req.TicketID,
 			"CORTEX_PROJECT":   req.ProjectPath,
@@ -342,10 +341,10 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	// Build launcher script for resume (no prompt files needed)
 	tempFiles := nonEmptyStrings(mcpConfigPath, settingsPath)
 	launcherParams := LauncherParams{
-		MCPConfigPath:  mcpConfigPath,
-		SettingsPath:   settingsPath,
-		PermissionMode: "plan",
-		ResumeID:       req.SessionID,
+		MCPConfigPath: mcpConfigPath,
+		SettingsPath:  settingsPath,
+		ResumeID:      req.SessionID,
+		AgentArgs:     req.AgentArgs,
 		EnvVars: map[string]string{
 			"CORTEX_TICKET_ID": req.TicketID,
 			"CORTEX_PROJECT":   req.ProjectPath,
