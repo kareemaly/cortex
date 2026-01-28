@@ -1,6 +1,7 @@
 package ticket
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,10 @@ type Model struct {
 	modalIsReview   bool // whether selected item is a review
 	modalItemIndex  int  // index into reviews or comments slice
 	rejecting       bool
+
+	// SSE subscription state
+	eventCh      <-chan sdk.Event
+	cancelEvents context.CancelFunc
 }
 
 // Message types for async operations.
@@ -97,6 +102,15 @@ type RejectErrorMsg struct {
 // RefreshMsg triggers a ticket data reload (used by SSE).
 type RefreshMsg struct{}
 
+// sseConnectedMsg is sent when the SSE connection is established.
+type sseConnectedMsg struct {
+	ch     <-chan sdk.Event
+	cancel context.CancelFunc
+}
+
+// EventMsg is sent when an SSE event is received for this ticket.
+type EventMsg struct{}
+
 // New creates a new ticket detail model.
 func New(client *sdk.Client, ticketID string) Model {
 	renderer, _ := glamour.NewTermRenderer(
@@ -125,7 +139,10 @@ func (m Model) TicketID() string {
 
 // Init initializes the model and starts loading the ticket.
 func (m Model) Init() tea.Cmd {
-	return m.loadTicket()
+	if m.embedded {
+		return m.loadTicket()
+	}
+	return tea.Batch(m.loadTicket(), m.subscribeEvents())
 }
 
 // Update handles messages and updates the model.
@@ -254,6 +271,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case RefreshMsg:
 		m.loading = true
 		return m, m.loadTicket()
+
+	case sseConnectedMsg:
+		m.eventCh = msg.ch
+		m.cancelEvents = msg.cancel
+		return m, m.waitForEvent()
+
+	case EventMsg:
+		m.loading = true
+		return m, tea.Batch(m.loadTicket(), m.waitForEvent())
 	}
 
 	// Handle viewport scroll messages.
@@ -279,6 +305,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if isKey(msg, KeyQuit, KeyCtrlC) {
 		if m.embedded {
 			return m, func() tea.Msg { return CloseDetailMsg{} }
+		}
+		if m.cancelEvents != nil {
+			m.cancelEvents()
 		}
 		return m, tea.Quit
 	}
@@ -1405,6 +1434,36 @@ func (m Model) loadTicket() tea.Cmd {
 			return TicketErrorMsg{Err: err}
 		}
 		return TicketLoadedMsg{Ticket: ticket}
+	}
+}
+
+// subscribeEvents returns a command that connects to the SSE event stream.
+func (m Model) subscribeEvents() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithCancel(context.Background())
+		ch, err := m.client.SubscribeEvents(ctx)
+		if err != nil {
+			cancel()
+			return nil // graceful degradation
+		}
+		return sseConnectedMsg{ch: ch, cancel: cancel}
+	}
+}
+
+// waitForEvent returns a command that waits for the next SSE event relevant to this ticket.
+func (m Model) waitForEvent() tea.Cmd {
+	if m.eventCh == nil {
+		return nil
+	}
+	ch := m.eventCh
+	ticketID := m.ticketID
+	return func() tea.Msg {
+		for event := range ch {
+			if event.TicketID == ticketID {
+				return EventMsg{}
+			}
+		}
+		return nil // channel closed
 	}
 }
 
