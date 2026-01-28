@@ -259,6 +259,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	switch req.AgentType {
 	case AgentTypeArchitect:
 		launcherParams.AllowedTools = []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"}
+		launcherParams.ReplaceSystemPrompt = true
 	case AgentTypeTicketAgent:
 		launcherParams.PermissionMode = "plan"
 		launcherParams.EnvVars = map[string]string{
@@ -491,9 +492,10 @@ type promptInfo struct {
 	SystemPromptContent string
 }
 
-// buildPrompt builds the dynamic prompt and returns the system prompt path.
+// buildPrompt builds the dynamic prompt and returns the system prompt content.
 // Dynamic content (ticket details, ticket lists) is embedded in the prompt.
-// Static instructions are loaded from file via --append-system-prompt.
+// Static instructions are loaded from file via --system-prompt (architect, full replace)
+// or --append-system-prompt (ticket agent, appended to default).
 func (s *Spawner) buildPrompt(req SpawnRequest, worktreePath, featureBranch *string) (*promptInfo, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:

@@ -11,6 +11,7 @@ import (
 type LauncherParams struct {
 	PromptFilePath       string            // path to prompt temp file (empty if none)
 	SystemPromptFilePath string            // path to system prompt temp file (empty if none)
+	ReplaceSystemPrompt  bool              // if true, use --system-prompt (full replace); otherwise --append-system-prompt
 	MCPConfigPath        string            // path to MCP config file
 	SettingsPath         string            // path to settings config file
 	PermissionMode       string            // "plan" or empty
@@ -92,7 +93,11 @@ func buildLauncherScript(params LauncherParams, cleanupFiles []string) string {
 
 	// Add system prompt via $(cat file)
 	if params.SystemPromptFilePath != "" {
-		parts = append(parts, "--append-system-prompt", fmt.Sprintf("\"$(cat %s)\"", shellQuote(params.SystemPromptFilePath)))
+		flag := "--append-system-prompt"
+		if params.ReplaceSystemPrompt {
+			flag = "--system-prompt"
+		}
+		parts = append(parts, flag, fmt.Sprintf("\"$(cat %s)\"", shellQuote(params.SystemPromptFilePath)))
 	}
 
 	// Add MCP config
