@@ -123,6 +123,32 @@ var (
 	// Divider between panels.
 	dividerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("237"))
+
+	// Sidebar item selected (cursor highlight).
+	sidebarSelectedStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("237"))
+)
+
+// Modal styles.
+var (
+	modalStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62")).
+			Padding(1, 2)
+
+	modalHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("255"))
+
+	modalSeparatorStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("237"))
+
+	modalHelpStyle = lipgloss.NewStyle().
+			Foreground(mutedColor)
+
+	modalRepoStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245")).
+			Italic(true)
 )
 
 // statusStyle returns the appropriate style for a ticket status.

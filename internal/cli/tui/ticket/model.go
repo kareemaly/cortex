@@ -36,6 +36,12 @@ type Model struct {
 	mdRenderer      *glamour.TermRenderer
 	focusedPanel    int  // 0=left, 1=right
 	splitLayout     bool // true when width >= minSplitWidth
+	sidebarCursor   int  // cursor index in flat list (reviews first, then comments)
+	showDetailModal bool
+	modalViewport   viewport.Model
+	modalIsReview   bool // whether selected item is a review
+	modalItemIndex  int  // index into reviews or comments slice
+	rejecting       bool
 }
 
 // Message types for async operations.
@@ -79,6 +85,14 @@ type OrphanedSessionMsg struct{}
 
 // CloseDetailMsg is sent when user wants to close the detail view.
 type CloseDetailMsg struct{}
+
+// SessionRejectedMsg is sent when a session is successfully rejected.
+type SessionRejectedMsg struct{}
+
+// RejectErrorMsg is sent when rejecting a session fails.
+type RejectErrorMsg struct {
+	Err error
+}
 
 // RefreshMsg triggers a ticket data reload (used by SSE).
 type RefreshMsg struct{}
@@ -152,6 +166,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.leftViewport.SetContent(m.renderLeftContent())
 			}
 		}
+
+		// Resize modal viewport if open.
+		if m.showDetailModal {
+			modalInnerWidth := max(m.width*60/100-6, 20)
+			modalInnerHeight := max(m.height*70/100-7, 5)
+			m.modalViewport.Width = modalInnerWidth
+			m.modalViewport.Height = modalInnerHeight
+			m.modalViewport.SetContent(m.renderModalContent(modalInnerWidth))
+		}
+
 		return m, nil
 
 	case tea.KeyMsg:
@@ -164,6 +188,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.ready {
 			m.leftViewport.SetContent(m.renderLeftContent())
 			m.leftViewport.GotoTop()
+		}
+		// Clamp sidebar cursor to valid range.
+		if itemCount := m.sidebarItemCount(); itemCount > 0 {
+			m.sidebarCursor = min(m.sidebarCursor, itemCount-1)
+		} else {
+			m.sidebarCursor = 0
 		}
 		return m, nil
 
@@ -211,6 +241,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showOrphanModal = true
 		return m, nil
 
+	case SessionRejectedMsg:
+		m.rejecting = false
+		m.loading = true
+		return m, m.loadTicket()
+
+	case RejectErrorMsg:
+		m.rejecting = false
+		m.err = msg.Err
+		return m, nil
+
 	case RefreshMsg:
 		m.loading = true
 		return m, m.loadTicket()
@@ -225,6 +265,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKeyMsg handles keyboard input.
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Modals take priority when visible.
+	if m.showDetailModal {
+		return m.handleDetailModalKey(msg)
+	}
 	if m.showKillModal {
 		return m.handleKillModalKey(msg)
 	}
@@ -245,8 +288,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseDetailMsg{} }
 	}
 
-	// If loading, killing, approving, or spawning, don't process other keys.
-	if m.loading || m.killing || m.approving || m.spawning {
+	// If loading, killing, approving, spawning, or rejecting, don't process other keys.
+	if m.loading || m.killing || m.approving || m.spawning || m.rejecting {
 		return m, nil
 	}
 
@@ -276,6 +319,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.focusedPanel = 1
 			return m, nil
 		}
+	}
+
+	// Right panel navigation (split layout, right focused).
+	if m.splitLayout && m.focusedPanel == 1 {
+		return m.handleRightPanelKey(msg)
 	}
 
 	// Kill session.
@@ -388,6 +436,121 @@ func (m Model) handleKillModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleRightPanelKey handles keyboard input when the right panel is focused.
+func (m Model) handleRightPanelKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	itemCount := m.sidebarItemCount()
+
+	// Open detail modal.
+	if isKey(msg, KeyO, KeyEnter) {
+		if itemCount > 0 {
+			m.openDetailModal()
+		}
+		return m, nil
+	}
+
+	// Cursor movement.
+	if isKey(msg, KeyDown, KeyJ) {
+		if itemCount > 0 {
+			m.sidebarCursor = min(m.sidebarCursor+1, itemCount-1)
+		}
+		return m, nil
+	}
+	if isKey(msg, KeyUp, KeyK) {
+		if itemCount > 0 {
+			m.sidebarCursor = max(m.sidebarCursor-1, 0)
+		}
+		return m, nil
+	}
+
+	// Handle 'G' - jump to last item.
+	if isKey(msg, KeyShiftG) {
+		m.pendingG = false
+		if itemCount > 0 {
+			m.sidebarCursor = itemCount - 1
+		}
+		return m, nil
+	}
+
+	// Handle 'g' key for 'gg' sequence.
+	if isKey(msg, KeyG) {
+		if m.pendingG {
+			m.pendingG = false
+			m.sidebarCursor = 0
+		} else {
+			m.pendingG = true
+		}
+		return m, nil
+	}
+
+	// Handle 'ga' - focus architect window.
+	if m.pendingG && isKey(msg, KeyApprove) {
+		m.pendingG = false
+		return m, m.focusArchitect()
+	}
+
+	// Clear pending g on any other key.
+	m.pendingG = false
+
+	// Global shortcuts available from right panel.
+	if isKey(msg, KeyRefresh) {
+		m.loading = true
+		return m, m.loadTicket()
+	}
+	if isKey(msg, KeyKillSession) {
+		if m.hasActiveSession() {
+			m.showKillModal = true
+		}
+		return m, nil
+	}
+	if isKey(msg, KeySpawn) {
+		if m.canSpawn() {
+			m.spawning = true
+			return m, m.spawnSession()
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// handleDetailModalKey handles keyboard input when the detail modal is open.
+func (m Model) handleDetailModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Close modal.
+	if isKey(msg, KeyEscape, KeyQuit) {
+		m.showDetailModal = false
+		return m, nil
+	}
+
+	// Scroll modal content.
+	if isKey(msg, KeyDown, KeyJ) {
+		m.modalViewport.ScrollDown(1)
+		return m, nil
+	}
+	if isKey(msg, KeyUp, KeyK) {
+		m.modalViewport.ScrollUp(1)
+		return m, nil
+	}
+
+	// Review-specific actions.
+	if m.modalIsReview {
+		if isKey(msg, KeyApprove) {
+			if m.hasActiveSession() && m.hasReviewRequests() {
+				m.showDetailModal = false
+				m.approving = true
+				return m, m.approveSession()
+			}
+			return m, nil
+		}
+		if isKey(msg, KeyKillSession) { // 'x' for reject
+			m.showDetailModal = false
+			m.rejecting = true
+			return m, m.rejectSession()
+		}
+	}
+
+	return m, nil
+}
+
 // hasActiveSession returns true if there's an active (not ended) session.
 func (m Model) hasActiveSession() bool {
 	return m.ticket != nil && m.ticket.Session != nil && m.ticket.Session.EndedAt == nil
@@ -439,6 +602,42 @@ func (m Model) canSpawn() bool {
 		return false
 	}
 	return !m.hasActiveSession()
+}
+
+// sidebarItemCount returns the total number of items in the sidebar (reviews + comments).
+func (m Model) sidebarItemCount() int {
+	count := len(m.ticket.Comments)
+	if m.ticket.Session != nil {
+		count += len(m.ticket.Session.RequestedReviews)
+	}
+	return count
+}
+
+// sidebarReviewCount returns the number of reviews in the sidebar.
+func (m Model) sidebarReviewCount() int {
+	if m.ticket == nil || m.ticket.Session == nil {
+		return 0
+	}
+	return len(m.ticket.Session.RequestedReviews)
+}
+
+// isSidebarReview returns true if the given flat index points to a review item.
+func (m Model) isSidebarReview(index int) bool {
+	return index < m.sidebarReviewCount()
+}
+
+// rejectSession returns a command to reject the current session review.
+func (m Model) rejectSession() tea.Cmd {
+	return func() tea.Msg {
+		if m.ticket == nil {
+			return RejectErrorMsg{Err: fmt.Errorf("no ticket")}
+		}
+		_, err := m.client.AddComment(m.ticket.ID, "rejection", "Review rejected", "Review rejected from TUI")
+		if err != nil {
+			return RejectErrorMsg{Err: err}
+		}
+		return SessionRejectedMsg{}
+	}
 }
 
 // spawnSession returns a command to spawn a session for the current ticket.
@@ -497,6 +696,111 @@ func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+// openDetailModal opens the detail modal for the currently selected sidebar item.
+func (m *Model) openDetailModal() {
+	reviewCount := m.sidebarReviewCount()
+	m.showDetailModal = true
+
+	if m.isSidebarReview(m.sidebarCursor) {
+		m.modalIsReview = true
+		m.modalItemIndex = m.sidebarCursor
+	} else {
+		m.modalIsReview = false
+		m.modalItemIndex = m.sidebarCursor - reviewCount
+	}
+
+	// Size: ~60% width, ~70% height minus chrome (border + padding + header + separator + help).
+	modalInnerWidth := max(m.width*60/100-6, 20)  // 6 = border(2) + padding(4)
+	modalInnerHeight := max(m.height*70/100-7, 5) // 7 = border(2) + padding(2) + header(1) + separator(1) + help(1)
+
+	m.modalViewport = viewport.New(modalInnerWidth, modalInnerHeight)
+	m.modalViewport.SetContent(m.renderModalContent(modalInnerWidth))
+}
+
+// renderDetailModal renders the centered detail modal overlay.
+func (m Model) renderDetailModal() string {
+	modalInnerWidth := max(m.width*60/100-6, 20)
+
+	header := m.renderModalHeader()
+	separator := modalSeparatorStyle.Render(strings.Repeat("─", modalInnerWidth))
+	body := m.modalViewport.View()
+	help := modalHelpStyle.Render(modalHelpText(m.modalIsReview))
+
+	content := header + "\n" + separator + "\n" + body + "\n" + help
+
+	modal := modalStyle.Render(content)
+
+	return lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, modal)
+}
+
+// renderModalHeader renders the header line for the detail modal.
+func (m Model) renderModalHeader() string {
+	if m.modalIsReview {
+		if m.ticket != nil && m.ticket.Session != nil && m.modalItemIndex < len(m.ticket.Session.RequestedReviews) {
+			review := m.ticket.Session.RequestedReviews[m.modalItemIndex]
+			return modalHeaderStyle.Render("Review Request") + "  " + sidebarLabelStyle.Render(formatTimeAgo(review.RequestedAt))
+		}
+		return modalHeaderStyle.Render("Review Request")
+	}
+
+	if m.ticket != nil && m.modalItemIndex < len(m.ticket.Comments) {
+		comment := m.ticket.Comments[m.modalItemIndex]
+		typeStr := commentTypeStyle(comment.Type).Render(comment.Type)
+		date := sidebarLabelStyle.Render(comment.CreatedAt.Format("Jan 02, 15:04"))
+		return typeStr + "  " + sidebarDotStyle.Render("·") + "  " + date
+	}
+	return modalHeaderStyle.Render("Comment")
+}
+
+// renderModalContent renders the scrollable content for the detail modal.
+func (m Model) renderModalContent(width int) string {
+	if m.modalIsReview {
+		if m.ticket == nil || m.ticket.Session == nil || m.modalItemIndex >= len(m.ticket.Session.RequestedReviews) {
+			return ""
+		}
+		review := m.ticket.Session.RequestedReviews[m.modalItemIndex]
+		var b strings.Builder
+
+		if review.RepoPath != "" && review.RepoPath != "." {
+			b.WriteString(modalRepoStyle.Render("Repo: " + review.RepoPath))
+			b.WriteString("\n\n")
+		}
+
+		// Render content as markdown with modal-appropriate width.
+		renderer, _ := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(width),
+		)
+		if renderer != nil {
+			rendered, err := renderer.Render(review.Content)
+			if err == nil {
+				b.WriteString(strings.TrimSpace(rendered))
+				return b.String()
+			}
+		}
+		b.WriteString(review.Content)
+		return b.String()
+	}
+
+	// Comment modal.
+	if m.ticket == nil || m.modalItemIndex >= len(m.ticket.Comments) {
+		return ""
+	}
+	comment := m.ticket.Comments[m.modalItemIndex]
+
+	renderer, _ := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width),
+	)
+	if renderer != nil {
+		rendered, err := renderer.Render(comment.Content)
+		if err == nil {
+			return strings.TrimSpace(rendered)
+		}
+	}
+	return comment.Content
 }
 
 // renderOrphanModal renders the orphaned session modal.
@@ -561,6 +865,12 @@ func (m Model) View() string {
 		return b.String()
 	}
 
+	// Handle rejecting state.
+	if m.rejecting {
+		b.WriteString(loadingStyle.Render("Rejecting session..."))
+		return b.String()
+	}
+
 	// Kill confirmation modal.
 	if m.showKillModal {
 		b.WriteString(m.renderKillModal())
@@ -573,6 +883,11 @@ func (m Model) View() string {
 		return b.String()
 	}
 
+	// Detail modal (overlay).
+	if m.showDetailModal {
+		return m.renderDetailModal()
+	}
+
 	// Scrollable content.
 	if m.splitLayout {
 		b.WriteString(m.renderSplitLayout())
@@ -582,10 +897,11 @@ func (m Model) View() string {
 	b.WriteString("\n")
 
 	// Help bar.
+	rightFocused := m.splitLayout && m.focusedPanel == 1
 	b.WriteString(helpBarStyle.Render(helpText(
 		int(m.leftViewport.ScrollPercent()*100),
 		m.hasActiveSession(), m.hasReviewRequests(), m.canSpawn(),
-		m.embedded, m.splitLayout,
+		m.embedded, m.splitLayout, rightFocused,
 	)))
 
 	return b.String()
@@ -860,9 +1176,9 @@ func (m Model) renderSidebarReviews(width int) string {
 
 		var line string
 		if repo != "" {
-			line = repo + " " + sidebarDotStyle.Render("·") + " " + review.Summary
+			line = repo + " " + sidebarDotStyle.Render("·") + " " + review.Title
 		} else {
-			line = review.Summary
+			line = review.Title
 		}
 
 		// Truncate to fit.
@@ -870,7 +1186,11 @@ func (m Model) renderSidebarReviews(width int) string {
 			line = line[:max(maxLineWidth-1, 0)] + "…"
 		}
 
-		b.WriteString(sidebarValueStyle.Render(line))
+		if m.focusedPanel == 1 && m.sidebarCursor == i {
+			b.WriteString(sidebarSelectedStyle.Render(line))
+		} else {
+			b.WriteString(sidebarValueStyle.Render(line))
+		}
 		if i < len(reviews)-1 {
 			b.WriteString("\n")
 		}
@@ -889,19 +1209,30 @@ func (m Model) renderSidebarComments(width int) string {
 
 	maxLineWidth := max(width-3, 10)
 
+	reviewCount := m.sidebarReviewCount()
+
 	for i, comment := range comments {
-		// Replace newlines with spaces for one-liner display.
-		content := strings.ReplaceAll(comment.Content, "\n", " ")
+		// Use title if available, otherwise first line of content.
+		display := comment.Title
+		if display == "" {
+			display = strings.SplitN(comment.Content, "\n", 2)[0]
+		}
+		display = strings.ReplaceAll(display, "\n", " ")
 
 		typeStr := commentTypeStyle(comment.Type).Render(comment.Type)
-		line := typeStr + " " + sidebarDotStyle.Render("·") + " " + content
+		line := typeStr + " " + sidebarDotStyle.Render("·") + " " + display
 
 		// Truncate to fit.
 		if lipgloss.Width(line) > maxLineWidth {
 			line = line[:max(maxLineWidth-1, 0)] + "…"
 		}
 
-		b.WriteString(line)
+		flatIndex := reviewCount + i
+		if m.focusedPanel == 1 && m.sidebarCursor == flatIndex {
+			b.WriteString(sidebarSelectedStyle.Render(line))
+		} else {
+			b.WriteString(line)
+		}
 		if i < len(comments)-1 {
 			b.WriteString("\n")
 		}

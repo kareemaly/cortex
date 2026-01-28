@@ -36,6 +36,8 @@ const (
 	KeyCancel      Key = "c"
 	KeyH           Key = "h"
 	KeyL           Key = "l"
+	KeyO           Key = "o"
+	KeyEnter       Key = "enter"
 )
 
 // isKey checks if a key message matches a key constant.
@@ -49,7 +51,7 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 }
 
 // helpText returns the help bar text for the ticket detail view.
-func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, embedded, splitLayout bool) string {
+func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, embedded, splitLayout, rightFocused bool) string {
 	var quit string
 	if embedded {
 		quit = "[q/esc] back"
@@ -62,7 +64,12 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, 
 		panelHint = "[h/l] panel  "
 	}
 
-	scroll := "[j/k/gg/G] scroll  [ctrl+u/d] page"
+	var scroll string
+	if rightFocused {
+		scroll = "[j/k] select  [gg/G] first/last  [o/Enter] open"
+	} else {
+		scroll = "[j/k/gg/G] scroll  [ctrl+u/d] page"
+	}
 	actions := "[r]efresh  [ga] architect"
 
 	if hasActiveSession {
@@ -76,6 +83,15 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, 
 	}
 
 	return panelHint + scroll + "  " + actions + "  " + quit + "  " + percentStr(scrollPercent)
+}
+
+// modalHelpText returns help text for the detail modal.
+func modalHelpText(isReview bool) string {
+	base := "[Esc/q] close  [j/k] scroll"
+	if isReview {
+		return base + "  [a]pprove  [x] reject"
+	}
+	return base
 }
 
 // percentStr formats a scroll percentage string.
