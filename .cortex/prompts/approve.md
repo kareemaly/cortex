@@ -6,8 +6,8 @@ Your changes have been reviewed and approved. Complete the following steps:
    - Run `git status` to check for uncommitted changes
    - Commit any remaining changes
 
-2. **Push your branch** (if not already pushed)
-   - Run `git push`
+2. **Push to origin** (if not already pushed)
+   - Run `git push origin HEAD`
 
 3. **Call concludeSession**
    - Call `mcp__cortex__concludeSession` with a complete report including:
