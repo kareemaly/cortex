@@ -9,7 +9,10 @@ Your changes have been reviewed and approved. Complete the following steps:
 2. **Merge to main**
    - Run `cd {{.ProjectPath}} && git merge {{.WorktreeBranch}}`
 
-3. **Call concludeSession**
+3. **Push to origin**
+   - Run `cd {{.ProjectPath}} && git push`
+
+4. **Call concludeSession**
    - Call `mcp__cortex__concludeSession` with a complete report including:
      - Summary of all changes made
      - Key decisions and their rationale
