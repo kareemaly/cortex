@@ -722,6 +722,7 @@ func TestWriteLauncherScript_Architect(t *testing.T) {
 	params := LauncherParams{
 		PromptFilePath:       "/tmp/cortex-prompt-arch.txt",
 		SystemPromptFilePath: "/tmp/cortex-sysprompt-arch.txt",
+		ReplaceSystemPrompt:  true,
 		MCPConfigPath:        "/tmp/cortex-mcp-arch.json",
 		SettingsPath:         "/tmp/cortex-settings-arch.json",
 		AllowedTools:         []string{"mcp__cortex__listTickets", "mcp__cortex__readTicket"},
@@ -748,6 +749,14 @@ func TestWriteLauncherScript_Architect(t *testing.T) {
 	// Should have --allowedTools
 	if !containsSubstr(script, "--allowedTools mcp__cortex__listTickets,mcp__cortex__readTicket") {
 		t.Error("expected --allowedTools flag with tools")
+	}
+
+	// Should use --system-prompt (full replace), NOT --append-system-prompt
+	if !containsSubstr(script, "--system-prompt") {
+		t.Error("expected --system-prompt flag for architect")
+	}
+	if containsSubstr(script, "--append-system-prompt") {
+		t.Error("architect should use --system-prompt, not --append-system-prompt")
 	}
 
 	// Should NOT have ticket env vars
