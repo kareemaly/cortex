@@ -2,6 +2,12 @@ package ticket
 
 import "github.com/charmbracelet/lipgloss"
 
+// Comment row layout constants.
+const (
+	CommentRowLines   = 4 // header line + 3 preview lines
+	CommentRowPadding = 1 // blank line between rows
+)
+
 // Status colors (reused from kanban).
 var (
 	backlogColor  = lipgloss.Color("245") // gray
@@ -33,7 +39,7 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("255")).
 			Background(lipgloss.Color("62")).
-			Padding(0, 1)
+			Padding(1, 1)
 
 	// Ticket ID style.
 	ticketIDStyle = lipgloss.NewStyle().
@@ -109,10 +115,6 @@ var (
 	// Attribute field values.
 	attributeValueStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("255"))
-
-	// Dot separator.
-	dotStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240"))
 
 	// Vertical divider between body and attributes.
 	dividerStyle = lipgloss.NewStyle().

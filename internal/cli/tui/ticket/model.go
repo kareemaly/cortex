@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
@@ -328,8 +329,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Tab/Shift+Tab to switch row focus.
-	if isKey(msg, KeyTab, KeyShiftTab) {
+	// Tab/Shift+Tab/[/] to switch row focus.
+	if isKey(msg, KeyTab, KeyShiftTab, KeyLeftBracket, KeyRightBracket) {
 		m.focusedRow = 1 - m.focusedRow // toggle 0↔1
 		m.updateRowSizes()
 		return m, nil
@@ -944,8 +945,8 @@ func (m Model) renderHeader() string {
 
 // rowHeights computes the vertical split between Row 1 and Row 2.
 func (m Model) rowHeights() (row1H, row2H int) {
-	// available = height - 3 (header + row separator + help bar)
-	available := max(m.height-3, 2)
+	// available = height - 4 (header with padding + row separator + help bar)
+	available := max(m.height-4, 2)
 	if m.focusedRow == 0 {
 		row1H = available * 70 / 100
 	} else {
@@ -1088,7 +1089,13 @@ func (m Model) renderCommentList(width, height int) string {
 	for i := start; i < end; i++ {
 		b.WriteString("\n")
 		selected := m.focusedRow == 1 && i == m.commentCursor
-		b.WriteString(m.renderCommentLine(m.ticket.Comments[i], contentWidth, selected))
+		b.WriteString(m.renderCommentRow(m.ticket.Comments[i], contentWidth, selected))
+		// Add padding between rows (except after last).
+		if i < end-1 {
+			for j := 0; j < CommentRowPadding; j++ {
+				b.WriteString("\n")
+			}
+		}
 	}
 
 	content := b.String()
@@ -1098,52 +1105,138 @@ func (m Model) renderCommentList(width, height int) string {
 	return row2Style.Width(width).Height(height).Render(content)
 }
 
-// renderCommentLine renders a single comment as a one-line preview.
-func (m Model) renderCommentLine(comment sdk.CommentResponse, width int, selected bool) string {
+// renderCommentRow renders a single comment as a multi-line row (4 lines: header + 3 preview lines).
+func (m Model) renderCommentRow(comment sdk.CommentResponse, width int, selected bool) string {
 	badge := commentBadge(comment.Type)
 	timeAgo := formatTimeAgo(comment.CreatedAt)
 
-	// Compute available width for the preview text.
-	badgeWidth := lipgloss.Width(badge)
-	timeWidth := len(timeAgo)
-	// badge + 2 spaces + preview + 2 spaces + timeAgo
-	previewMaxWidth := max(width-badgeWidth-timeWidth-4, 5)
+	// Build header line: [badge]  repo-prefix (if review)  ────  time-ago
+	var headerParts []string
+	headerParts = append(headerParts, badge)
 
-	preview := stripMarkdownPreview(comment.Content)
-	if preview == "" {
-		preview = "(empty)"
-	}
-	preview = truncateToWidth(preview, previewMaxWidth)
-
-	// For review requests, show repo name if available.
+	// For review requests, show repo name.
 	if comment.Type == "review_requested" {
 		repoPath := extractRepoPath(comment)
 		repo := filepath.Base(repoPath)
 		if repo != "" && repo != "." && repo != "/" {
-			repoPrefix := attributeLabelStyle.Render(repo) + " " + dotStyle.Render("·") + " "
-			repoPrefixWidth := lipgloss.Width(repoPrefix)
-			if repoPrefixWidth+5 < previewMaxWidth {
-				preview = stripMarkdownPreview(comment.Content)
-				if preview == "" {
-					preview = "(empty)"
-				}
-				preview = truncateToWidth(preview, previewMaxWidth-repoPrefixWidth)
-				preview = repoPrefix + preview
-			}
+			headerParts = append(headerParts, attributeLabelStyle.Render(repo))
 		}
 	}
 
-	line := badge + "  " + preview
+	headerLeft := strings.Join(headerParts, "  ")
+	headerLeftWidth := lipgloss.Width(headerLeft)
+	timeWidth := lipgloss.Width(timeAgo)
 
-	// Pad to push time ago to the right.
-	lineWidth := lipgloss.Width(line)
-	padding := max(width-lineWidth-timeWidth, 1)
-	line += strings.Repeat(" ", padding) + attributeLabelStyle.Render(timeAgo)
+	// Fill with separator dashes between header and time.
+	separatorWidth := max(width-headerLeftWidth-timeWidth-4, 1) // 4 = 2 spaces on each side
+	separator := attributeLabelStyle.Render(strings.Repeat("─", separatorWidth))
 
-	if selected {
-		return commentSelectedStyle.Width(width).Render(line)
+	headerLine := headerLeft + "  " + separator + "  " + attributeLabelStyle.Render(timeAgo)
+
+	// Render markdown content and get up to 3 lines.
+	previewLines := m.renderCommentPreview(comment.Content, width, 3)
+
+	// Build the full row (4 lines total).
+	var lines []string
+	lines = append(lines, headerLine)
+	lines = append(lines, previewLines...)
+	// Pad to exactly CommentRowLines lines.
+	for len(lines) < CommentRowLines {
+		lines = append(lines, "")
 	}
-	return line
+
+	// Apply background to entire block if selected.
+	if selected {
+		return m.applyBackgroundToBlock(lines, width, commentSelectedStyle.GetBackground())
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderCommentPreview renders markdown and returns up to maxLines lines.
+func (m Model) renderCommentPreview(content string, width, maxLines int) []string {
+	if content == "" {
+		return []string{attributeLabelStyle.Render("(empty)")}
+	}
+
+	// Create a renderer for the preview width.
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil || renderer == nil {
+		// Fallback to plain text.
+		return m.plainTextPreview(content, width, maxLines)
+	}
+
+	rendered, err := renderer.Render(content)
+	if err != nil {
+		return m.plainTextPreview(content, width, maxLines)
+	}
+
+	// Split rendered output into lines and take up to maxLines.
+	rendered = strings.TrimSpace(rendered)
+	allLines := strings.Split(rendered, "\n")
+
+	var result []string
+	for _, line := range allLines {
+		if len(result) >= maxLines {
+			break
+		}
+		// Skip empty lines at the start.
+		if len(result) == 0 && strings.TrimSpace(line) == "" {
+			continue
+		}
+		// Truncate line to width, preserving ANSI codes.
+		truncated := ansi.Truncate(line, width, "…")
+		result = append(result, truncated)
+	}
+
+	if len(result) == 0 {
+		return []string{attributeLabelStyle.Render("(empty)")}
+	}
+
+	return result
+}
+
+// plainTextPreview returns plain text lines as a fallback.
+func (m Model) plainTextPreview(content string, width, maxLines int) []string {
+	lines := strings.Split(content, "\n")
+	var result []string
+	for _, line := range lines {
+		if len(result) >= maxLines {
+			break
+		}
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" && len(result) == 0 {
+			continue // Skip leading empty lines.
+		}
+		// Strip markdown syntax.
+		trimmed = strings.TrimLeft(trimmed, "#*-> ")
+		trimmed = strings.TrimSpace(trimmed)
+		if trimmed != "" {
+			result = append(result, truncateToWidth(trimmed, width))
+		}
+	}
+	if len(result) == 0 {
+		return []string{attributeLabelStyle.Render("(empty)")}
+	}
+	return result
+}
+
+// applyBackgroundToBlock applies a background color to all lines of a block.
+func (m Model) applyBackgroundToBlock(lines []string, width int, bgColor lipgloss.TerminalColor) string {
+	style := lipgloss.NewStyle().Background(bgColor).Width(width)
+	var result []string
+	for _, line := range lines {
+		// Pad line to full width before applying background.
+		lineWidth := lipgloss.Width(line)
+		if lineWidth < width {
+			line += strings.Repeat(" ", width-lineWidth)
+		}
+		result = append(result, style.Render(line))
+	}
+	return strings.Join(result, "\n")
 }
 
 // commentBadge returns a styled badge string for a comment type.
@@ -1154,24 +1247,6 @@ func commentBadge(commentType string) string {
 		badgeText = "review"
 	}
 	return commentTypeStyle(commentType).Render("[" + badgeText + "]")
-}
-
-// stripMarkdownPreview extracts the first non-empty, non-heading line from markdown content.
-func stripMarkdownPreview(content string) string {
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		// Strip markdown heading prefixes, list markers, and emphasis.
-		trimmed = strings.TrimLeft(trimmed, "#*-> ")
-		trimmed = strings.TrimSpace(trimmed)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }
 
 // truncateToWidth truncates a string to fit within maxWidth, appending "…" if truncated.
@@ -1204,16 +1279,22 @@ func (m Model) commentVisibleRange(visibleHeight int) (start, end int) {
 		return 0, 0
 	}
 
+	// Each comment row takes CommentRowLines lines, with CommentRowPadding between rows.
+	// For n comments, total lines = n * CommentRowLines + (n-1) * CommentRowPadding
+	// Simplified: rowHeight per comment = CommentRowLines + CommentRowPadding (except last)
+	rowHeight := CommentRowLines + CommentRowPadding // 5 lines per comment
+	visibleCount := max(visibleHeight/rowHeight, 1)
+
 	start = 0
-	end = min(visibleHeight, total)
+	end = min(visibleCount, total)
 
 	if m.commentCursor >= end {
 		end = min(m.commentCursor+1, total)
-		start = max(end-visibleHeight, 0)
+		start = max(end-visibleCount, 0)
 	}
 	if m.commentCursor < start {
 		start = m.commentCursor
-		end = min(start+visibleHeight, total)
+		end = min(start+visibleCount, total)
 	}
 
 	return start, end
