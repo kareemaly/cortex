@@ -222,8 +222,11 @@ func (c *Client) GetTicket(status, id string) (*TicketResponse, error) {
 }
 
 // CreateTicket creates a new ticket.
-func (c *Client) CreateTicket(title, body string) (*TicketResponse, error) {
+func (c *Client) CreateTicket(title, body, ticketType string) (*TicketResponse, error) {
 	reqBody := map[string]string{"title": title, "body": body}
+	if ticketType != "" {
+		reqBody["type"] = ticketType
+	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)

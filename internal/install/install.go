@@ -8,10 +8,10 @@ import (
 	"github.com/kareemaly/cortex/internal/prompt"
 )
 
-// defaultArchitectPrompt contains the full self-contained system prompt for the architect agent.
+// defaultArchitectSystemPrompt contains the full self-contained system prompt for the architect agent.
 // This fully replaces the default Claude Code engineer prompt via --system-prompt.
-// Dynamic content (ticket list) is injected via the prompt argument.
-const defaultArchitectPrompt = `# Role
+// Dynamic content (ticket list) is injected via the KICKOFF prompt.
+const defaultArchitectSystemPrompt = `# Role
 
 You are a project architect. You orchestrate development by managing tickets
 and delegating implementation to ticket agents. You do not write code or
@@ -92,6 +92,15 @@ Be direct and concise. Provide fact-based assessments. When brainstorming
 with the user, focus on trade-offs and constraints rather than code details.
 Ask clarifying questions before creating tickets when requirements are
 ambiguous.
+`
+
+// defaultArchitectKickoffPrompt is the template for the architect kickoff prompt.
+// Variables: {{.ProjectName}}, {{.TicketList}}
+const defaultArchitectKickoffPrompt = `# Project: {{.ProjectName}}
+
+# Tickets
+
+{{.TicketList}}
 `
 
 // Options configures the installation.
@@ -226,20 +235,22 @@ func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
 
 	// Create config file
 	configContent := `name: ` + name + `
-agent: claude
-agent_args:
-  architect:
+architect:
+  agent: claude
+  args:
     - "--allowedTools"
     - "mcp__cortex__listTickets,mcp__cortex__readTicket"
-  ticket:
-    - "--permission-mode"
-    - "plan"
-    - "--allow-dangerously-skip-permissions"
-    - "--allowedTools"
-    - "mcp__cortex__readTicket"
+ticket:
+  work:
+    agent: claude
+    args:
+      - "--permission-mode"
+      - "plan"
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readTicket"
 git:
-  repos:
-    - path: "."
+  worktrees: false
 `
 	item := ensureConfigFile(configPath, configContent, force)
 	items = append(items, item)
@@ -247,52 +258,52 @@ git:
 		return items, item.Error
 	}
 
-	// Create prompts directory and default templates
+	// Create prompts directory structure
 	promptsDir := prompt.PromptsDir(absPath)
-	item = ensureDir(promptsDir)
+	architectPromptsDir := filepath.Join(promptsDir, "architect")
+	ticketWorkPromptsDir := filepath.Join(promptsDir, "ticket", "work")
+
+	promptDirs := []string{promptsDir, architectPromptsDir, ticketWorkPromptsDir}
+	for _, dir := range promptDirs {
+		item = ensureDir(dir)
+		items = append(items, item)
+		if item.Error != nil {
+			return items, item.Error
+		}
+	}
+
+	// Architect prompts
+	architectSystemPath := prompt.ArchitectPromptPath(absPath, prompt.StageSystem)
+	item = ensureConfigFile(architectSystemPath, defaultArchitectSystemPrompt, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
 	}
 
-	architectPath := prompt.ArchitectPath(absPath)
-	item = ensureConfigFile(architectPath, defaultArchitectPrompt, force)
+	architectKickoffPath := prompt.ArchitectPromptPath(absPath, prompt.StageKickoff)
+	item = ensureConfigFile(architectKickoffPath, defaultArchitectKickoffPrompt, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
 	}
 
-	// Workflow prompts
-	ticketSystemPath := prompt.TicketSystemPath(absPath)
+	// Ticket work prompts
+	ticketSystemPath := prompt.TicketPromptPath(absPath, "work", prompt.StageSystem)
 	item = ensureConfigFile(ticketSystemPath, DefaultTicketSystemPrompt, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
 	}
 
-	ticketPath := prompt.TicketPath(absPath)
-	item = ensureConfigFile(ticketPath, DefaultTicketPrompt, force)
+	ticketKickoffPath := prompt.TicketPromptPath(absPath, "work", prompt.StageKickoff)
+	item = ensureConfigFile(ticketKickoffPath, DefaultTicketKickoffPrompt, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
 	}
 
-	ticketWorktreePath := prompt.TicketWorktreePath(absPath)
-	item = ensureConfigFile(ticketWorktreePath, DefaultTicketWorktreePrompt, force)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
-	approvePath := prompt.ApprovePath(absPath)
-	item = ensureConfigFile(approvePath, DefaultApprovePrompt, force)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
-	approveWorktreePath := prompt.ApproveWorktreePath(absPath)
-	item = ensureConfigFile(approveWorktreePath, DefaultApproveWorktreePrompt, force)
+	ticketApprovePath := prompt.TicketPromptPath(absPath, "work", prompt.StageApprove)
+	item = ensureConfigFile(ticketApprovePath, DefaultTicketApprovePrompt, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error

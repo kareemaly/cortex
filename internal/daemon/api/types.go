@@ -28,6 +28,7 @@ type (
 type CreateTicketRequest struct {
 	Title string `json:"title"`
 	Body  string `json:"body"`
+	Type  string `json:"type,omitempty"`
 }
 
 // UpdateTicketRequest is the request body for updating a ticket.

@@ -90,6 +90,7 @@ func ToTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 
 	return TicketResponse{
 		ID:       t.ID,
+		Type:     t.Type,
 		Title:    t.Title,
 		Body:     t.Body,
 		Status:   string(status),
@@ -104,6 +105,7 @@ func ToTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 func ToTicketSummary(t *ticket.Ticket, status ticket.Status, includeAgentStatus bool) TicketSummary {
 	summary := TicketSummary{
 		ID:               t.ID,
+		Type:             t.Type,
 		Title:            t.Title,
 		Status:           string(status),
 		Created:          t.Dates.Created,

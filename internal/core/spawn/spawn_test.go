@@ -130,13 +130,12 @@ func createTestTicket(id, title, body string) *ticket.Ticket {
 	}
 }
 
-func createTestPromptFile(t *testing.T, projectPath, filename, content string) {
+func createTestPromptFile(t *testing.T, projectPath, relPath, content string) {
 	t.Helper()
-	dir := filepath.Join(projectPath, ".cortex", "prompts")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	path := filepath.Join(projectPath, ".cortex", "prompts", relPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, filename)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +152,7 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket-system.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -273,7 +272,7 @@ func TestSpawn_CleanupOnFailure(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket-system.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -416,7 +415,7 @@ func TestFresh_ClearsExisting(t *testing.T) {
 	store.tickets["ticket-1"] = testTicket
 	store.sessions["ticket-1"] = testTicket.Session
 
-	createTestPromptFile(t, tmpDir, "ticket-system.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,

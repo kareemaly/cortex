@@ -115,7 +115,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := store.Create(req.Title, req.Body)
+	t, err := store.Create(req.Title, req.Body, req.Type)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return

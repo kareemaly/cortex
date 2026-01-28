@@ -118,14 +118,19 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		TmuxManager: h.deps.TmuxManager,
 	})
 
+	architectAgent := string(projectCfg.Architect.Agent)
+	if architectAgent == "" {
+		architectAgent = "claude"
+	}
+
 	result, err := spawner.Spawn(r.Context(), spawn.SpawnRequest{
 		AgentType:   spawn.AgentTypeArchitect,
-		Agent:       "claude",
+		Agent:       architectAgent,
 		TmuxSession: sessionName,
 		ProjectPath: projectPath,
 		TicketsDir:  ticketsDir,
 		ProjectName: sessionName,
-		AgentArgs:   projectCfg.AgentArgs.Architect,
+		AgentArgs:   projectCfg.Architect.Args,
 	})
 
 	if err != nil {

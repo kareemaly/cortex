@@ -127,13 +127,12 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		tmuxSession = projectCfg.Name
 	}
 
-	// Load and render approve prompt (use worktree version if session has worktree)
-	var approvePath string
-	if session.WorktreePath != nil {
-		approvePath = prompt.ApproveWorktreePath(projectPath)
-	} else {
-		approvePath = prompt.ApprovePath(projectPath)
+	// Load and render approve prompt
+	ticketType := t.Type
+	if ticketType == "" {
+		ticketType = ticket.DefaultTicketType
 	}
+	approvePath := prompt.TicketPromptPath(projectPath, ticketType, prompt.StageApprove)
 	approveContent, err := prompt.LoadPromptFile(approvePath)
 	if err != nil {
 		// Use a default message if file doesn't exist
@@ -146,6 +145,7 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		TicketID:    t.ID,
 		TicketTitle: t.Title,
 		TicketBody:  t.Body,
+		IsWorktree:  session.WorktreePath != nil,
 	}
 	if session.WorktreePath != nil {
 		vars.WorktreePath = *session.WorktreePath

@@ -59,6 +59,7 @@ type SessionResponse struct {
 // TicketResponse is the full ticket response with status.
 type TicketResponse struct {
 	ID       string            `json:"id"`
+	Type     string            `json:"type"`
 	Title    string            `json:"title"`
 	Body     string            `json:"body"`
 	Status   string            `json:"status"`
@@ -70,6 +71,7 @@ type TicketResponse struct {
 // TicketSummary is a brief view of a ticket for lists.
 type TicketSummary struct {
 	ID               string    `json:"id"`
+	Type             string    `json:"type"`
 	Title            string    `json:"title"`
 	Status           string    `json:"status"`
 	Created          time.Time `json:"created"`

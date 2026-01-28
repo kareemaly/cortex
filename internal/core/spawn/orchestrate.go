@@ -86,10 +86,25 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 		return nil, &ConfigError{Field: "ProjectPath", Message: "failed to load project config: " + err.Error()}
 	}
 
-	// 4. Resolve agent: request > project config > "claude"
+	// 4. Resolve ticket type and agent config
+	t, ticketStatus, err := deps.Store.Get(req.TicketID)
+	if err != nil {
+		return nil, err
+	}
+
+	ticketType := t.Type
+	if ticketType == "" {
+		ticketType = ticket.DefaultTicketType
+	}
+
+	ticketRoleCfg, ticketCfgErr := projectCfg.TicketRoleConfig(ticketType)
+	if ticketCfgErr != nil {
+		return nil, &ConfigError{Field: "ticket." + ticketType, Message: ticketCfgErr.Error()}
+	}
+
 	agent := req.Agent
 	if agent == "" {
-		agent = string(projectCfg.Agent)
+		agent = string(ticketRoleCfg.Agent)
 	}
 	if agent == "" {
 		agent = "claude"
@@ -110,13 +125,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 		ticketsDir = filepath.Join(req.ProjectPath, ".cortex", "tickets")
 	}
 
-	// 7. Get ticket from store
-	t, ticketStatus, err := deps.Store.Get(req.TicketID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 8. Detect state
+	// 7. Detect state
 	stateInfo, err := DetectTicketState(t, tmuxSession, deps.TmuxManager)
 	if err != nil {
 		return nil, err
@@ -142,7 +151,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 			TicketID:    req.TicketID,
 			Ticket:      t,
 			UseWorktree: useWorktree,
-			AgentArgs:   projectCfg.AgentArgs.Ticket,
+			AgentArgs:   ticketRoleCfg.Args,
 		}
 	}
 
@@ -201,7 +210,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				SessionID:   stateInfo.Session.ID,
 				WindowName:  stateInfo.Session.TmuxWindow,
 				TicketID:    req.TicketID,
-				AgentArgs:   projectCfg.AgentArgs.Ticket,
+				AgentArgs:   ticketRoleCfg.Args,
 			})
 			outcome = OutcomeResumed
 		case "fresh":

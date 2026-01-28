@@ -510,23 +510,22 @@ func (s *Spawner) buildPrompt(req SpawnRequest, worktreePath, featureBranch *str
 
 // buildTicketAgentPrompt creates the dynamic ticket prompt.
 func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, featureBranch *string) (*promptInfo, error) {
+	// Determine ticket type
+	ticketType := req.Ticket.Type
+	if ticketType == "" {
+		ticketType = ticket.DefaultTicketType
+	}
+
 	// Load system prompt (MCP tool instructions and workflow)
-	systemPromptPath := prompt.TicketSystemPath(req.ProjectPath)
+	systemPromptPath := prompt.TicketPromptPath(req.ProjectPath, ticketType, prompt.StageSystem)
 	systemPromptContent, err := prompt.LoadPromptFile(systemPromptPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Choose template based on worktree mode
-	var ticketTemplatePath string
-	if worktreePath != nil {
-		ticketTemplatePath = prompt.TicketWorktreePath(req.ProjectPath)
-	} else {
-		ticketTemplatePath = prompt.TicketPath(req.ProjectPath)
-	}
-
-	// Load ticket template
-	ticketTemplate, err := prompt.LoadPromptFile(ticketTemplatePath)
+	// Load kickoff template
+	kickoffPath := prompt.TicketPromptPath(req.ProjectPath, ticketType, prompt.StageKickoff)
+	kickoffTemplate, err := prompt.LoadPromptFile(kickoffPath)
 	if err != nil {
 		// Fall back to simple format if template doesn't exist
 		promptText := fmt.Sprintf("# Ticket: %s\n\n%s", req.Ticket.Title, req.Ticket.Body)
@@ -542,6 +541,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 		TicketID:    req.TicketID,
 		TicketTitle: req.Ticket.Title,
 		TicketBody:  req.Ticket.Body,
+		IsWorktree:  worktreePath != nil,
 	}
 	if worktreePath != nil {
 		vars.WorktreePath = *worktreePath
@@ -550,7 +550,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 		vars.WorktreeBranch = *featureBranch
 	}
 
-	promptText, err := prompt.RenderTemplate(ticketTemplate, vars)
+	promptText, err := prompt.RenderTemplate(kickoffTemplate, vars)
 	if err != nil {
 		return nil, err
 	}
@@ -563,7 +563,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 
 // buildArchitectPrompt creates the dynamic architect prompt with ticket list.
 func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
-	systemPromptPath := prompt.ArchitectPath(req.ProjectPath)
+	systemPromptPath := prompt.ArchitectPromptPath(req.ProjectPath, prompt.StageSystem)
 	systemPromptContent, err := prompt.LoadPromptFile(systemPromptPath)
 	if err != nil {
 		return nil, err
@@ -576,10 +576,8 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 		return nil, fmt.Errorf("failed to list tickets: %w", err)
 	}
 
-	// Build formatted ticket list with project name
+	// Build formatted ticket list
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("# Project: %s\n\n", req.ProjectName))
-	sb.WriteString("# Tickets\n\n")
 
 	writeSection := func(name string, items []sdk.TicketSummary) {
 		sb.WriteString(fmt.Sprintf("## %s\n", name))
@@ -602,8 +600,30 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	}
 	writeSection("Done", doneTickets)
 
+	ticketList := sb.String()
+
+	// Try to load and render KICKOFF template
+	kickoffPath := prompt.ArchitectPromptPath(req.ProjectPath, prompt.StageKickoff)
+	kickoffTemplate, kickoffErr := prompt.LoadPromptFile(kickoffPath)
+	if kickoffErr == nil {
+		vars := prompt.ArchitectKickoffVars{
+			ProjectName: req.ProjectName,
+			TicketList:  ticketList,
+		}
+		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
+		if renderErr == nil {
+			return &promptInfo{
+				PromptText:          rendered,
+				SystemPromptContent: systemPromptContent,
+			}, nil
+		}
+	}
+
+	// Fallback: inline format
+	promptText := fmt.Sprintf("# Project: %s\n\n# Tickets\n\n%s", req.ProjectName, ticketList)
+
 	return &promptInfo{
-		PromptText:          sb.String(),
+		PromptText:          promptText,
 		SystemPromptContent: systemPromptContent,
 	}, nil
 }

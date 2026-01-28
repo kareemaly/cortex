@@ -136,6 +136,7 @@ func ticketResponseToOutput(r *types.TicketResponse) TicketOutput {
 
 	return TicketOutput{
 		ID:       r.ID,
+		Type:     r.Type,
 		Title:    r.Title,
 		Body:     r.Body,
 		Status:   r.Status,

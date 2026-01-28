@@ -120,7 +120,7 @@ func (s *Server) handleCreateTicket(
 	req *mcp.CallToolRequest,
 	input CreateTicketInput,
 ) (*mcp.CallToolResult, CreateTicketOutput, error) {
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body)
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Type)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}

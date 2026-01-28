@@ -56,14 +56,19 @@ func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, e
 }
 
 // Create creates a new ticket in the backlog.
-func (s *Store) Create(title, body string) (*Ticket, error) {
+func (s *Store) Create(title, body, ticketType string) (*Ticket, error) {
 	if title == "" {
 		return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
+	}
+
+	if ticketType == "" {
+		ticketType = DefaultTicketType
 	}
 
 	now := time.Now().UTC()
 	ticket := &Ticket{
 		ID:    uuid.New().String(),
+		Type:  ticketType,
 		Title: title,
 		Body:  body,
 		Dates: Dates{

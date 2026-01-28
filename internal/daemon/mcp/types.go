@@ -37,6 +37,7 @@ type ReadTicketInput struct {
 type CreateTicketInput struct {
 	Title string `json:"title" jsonschema:"The ticket title (required)"`
 	Body  string `json:"body,omitempty" jsonschema:"The ticket body/description"`
+	Type  string `json:"type,omitempty" jsonschema:"The ticket type (e.g. 'work'). Defaults to 'work' if not specified."`
 }
 
 // UpdateTicketInput is the input for the updateTicket tool.
@@ -108,6 +109,7 @@ type CommentOutput = types.CommentResponse
 // MCP version is simpler: no Updated, AgentStatus, AgentTool fields.
 type TicketSummary struct {
 	ID               string    `json:"id"`
+	Type             string    `json:"type"`
 	Title            string    `json:"title"`
 	Status           string    `json:"status"`
 	Created          time.Time `json:"created"`
@@ -130,6 +132,7 @@ type SessionOutput struct {
 // Uses MCP-specific SessionOutput.
 type TicketOutput struct {
 	ID       string          `json:"id"`
+	Type     string          `json:"type"`
 	Title    string          `json:"title"`
 	Body     string          `json:"body"`
 	Status   string          `json:"status"`
@@ -211,6 +214,7 @@ type ConcludeSessionOutput struct {
 func ticketSummaryResponseToMCP(s *types.TicketSummary) TicketSummary {
 	return TicketSummary{
 		ID:               s.ID,
+		Type:             s.Type,
 		Title:            s.Title,
 		Status:           s.Status,
 		Created:          s.Created,

@@ -87,7 +87,19 @@ func TestLoad_FullConfig(t *testing.T) {
 	projectRoot := setupTestProject(t)
 	writeConfig(t, projectRoot, `
 name: my-project
-agent: opencode
+architect:
+  agent: opencode
+  args:
+    - "--verbose"
+ticket:
+  work:
+    agent: opencode
+    args:
+      - "--budget=50000"
+  investigation:
+    agent: claude
+    args:
+      - "--fast"
 git:
   worktrees: true
 `)
@@ -100,8 +112,28 @@ git:
 	if cfg.Name != "my-project" {
 		t.Errorf("expected name 'my-project', got %q", cfg.Name)
 	}
-	if cfg.Agent != AgentOpenCode {
-		t.Errorf("expected agent 'opencode', got %q", cfg.Agent)
+	if cfg.Architect.Agent != AgentOpenCode {
+		t.Errorf("expected architect agent 'opencode', got %q", cfg.Architect.Agent)
+	}
+	if len(cfg.Architect.Args) != 1 || cfg.Architect.Args[0] != "--verbose" {
+		t.Errorf("expected architect args [--verbose], got %v", cfg.Architect.Args)
+	}
+	workRole, err := cfg.TicketRoleConfig("work")
+	if err != nil {
+		t.Fatalf("unexpected error getting work role: %v", err)
+	}
+	if workRole.Agent != AgentOpenCode {
+		t.Errorf("expected work agent 'opencode', got %q", workRole.Agent)
+	}
+	if len(workRole.Args) != 1 || workRole.Args[0] != "--budget=50000" {
+		t.Errorf("expected work args [--budget=50000], got %v", workRole.Args)
+	}
+	invRole, err := cfg.TicketRoleConfig("investigation")
+	if err != nil {
+		t.Fatalf("unexpected error getting investigation role: %v", err)
+	}
+	if invRole.Agent != AgentClaude {
+		t.Errorf("expected investigation agent 'claude', got %q", invRole.Agent)
 	}
 	if !cfg.Git.Worktrees {
 		t.Errorf("expected worktrees true, got %v", cfg.Git.Worktrees)
@@ -123,8 +155,15 @@ name: minimal
 		t.Errorf("expected name 'minimal', got %q", cfg.Name)
 	}
 	// Should have defaults
-	if cfg.Agent != AgentClaude {
-		t.Errorf("expected default agent 'claude', got %q", cfg.Agent)
+	if cfg.Architect.Agent != AgentClaude {
+		t.Errorf("expected default architect agent 'claude', got %q", cfg.Architect.Agent)
+	}
+	workRole, err := cfg.TicketRoleConfig("work")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if workRole.Agent != AgentClaude {
+		t.Errorf("expected default work agent 'claude', got %q", workRole.Agent)
 	}
 }
 
@@ -138,8 +177,8 @@ func TestLoad_NoConfigFile(t *testing.T) {
 	}
 
 	// Should return defaults
-	if cfg.Agent != AgentClaude {
-		t.Errorf("expected default agent 'claude', got %q", cfg.Agent)
+	if cfg.Architect.Agent != AgentClaude {
+		t.Errorf("expected default architect agent 'claude', got %q", cfg.Architect.Agent)
 	}
 }
 
@@ -159,9 +198,9 @@ name: [invalid yaml
 	}
 }
 
-func TestValidate_InvalidAgent(t *testing.T) {
+func TestValidate_InvalidArchitectAgent(t *testing.T) {
 	cfg := &Config{
-		Agent: "invalid-agent",
+		Architect: RoleConfig{Agent: "invalid-agent"},
 	}
 
 	err := cfg.Validate()
@@ -173,8 +212,29 @@ func TestValidate_InvalidAgent(t *testing.T) {
 	}
 
 	valErr := err.(*ValidationError)
-	if valErr.Field != "agent" {
-		t.Errorf("expected field 'agent', got %q", valErr.Field)
+	if valErr.Field != "architect.agent" {
+		t.Errorf("expected field 'architect.agent', got %q", valErr.Field)
+	}
+}
+
+func TestValidate_InvalidTicketAgent(t *testing.T) {
+	cfg := &Config{
+		Ticket: TicketConfig{
+			"work": RoleConfig{Agent: "bad-agent"},
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !IsValidationError(err) {
+		t.Errorf("expected ValidationError, got %T", err)
+	}
+
+	valErr := err.(*ValidationError)
+	if valErr.Field != "ticket.work.agent" {
+		t.Errorf("expected field 'ticket.work.agent', got %q", valErr.Field)
 	}
 }
 
@@ -214,16 +274,20 @@ func TestLoadFromPath_NotFound(t *testing.T) {
 	}
 }
 
-func TestAgentArgs_NewNestedFormat(t *testing.T) {
+func TestNestedConfig_ArchitectAndTicket(t *testing.T) {
 	projectRoot := setupTestProject(t)
 	writeConfig(t, projectRoot, `
 name: test
-agent_args:
-  architect:
+architect:
+  agent: claude
+  args:
     - "--budget=150000"
     - "--verbose"
-  ticket:
-    - "--budget=50000"
+ticket:
+  work:
+    agent: claude
+    args:
+      - "--budget=50000"
 `)
 
 	cfg, err := Load(projectRoot)
@@ -231,55 +295,29 @@ agent_args:
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(cfg.AgentArgs.Architect) != 2 {
-		t.Fatalf("expected 2 architect args, got %d", len(cfg.AgentArgs.Architect))
+	if len(cfg.Architect.Args) != 2 {
+		t.Fatalf("expected 2 architect args, got %d", len(cfg.Architect.Args))
 	}
-	if cfg.AgentArgs.Architect[0] != "--budget=150000" {
-		t.Errorf("expected --budget=150000, got %q", cfg.AgentArgs.Architect[0])
+	if cfg.Architect.Args[0] != "--budget=150000" {
+		t.Errorf("expected --budget=150000, got %q", cfg.Architect.Args[0])
 	}
-	if cfg.AgentArgs.Architect[1] != "--verbose" {
-		t.Errorf("expected --verbose, got %q", cfg.AgentArgs.Architect[1])
+	if cfg.Architect.Args[1] != "--verbose" {
+		t.Errorf("expected --verbose, got %q", cfg.Architect.Args[1])
 	}
 
-	if len(cfg.AgentArgs.Ticket) != 1 {
-		t.Fatalf("expected 1 ticket arg, got %d", len(cfg.AgentArgs.Ticket))
-	}
-	if cfg.AgentArgs.Ticket[0] != "--budget=50000" {
-		t.Errorf("expected --budget=50000, got %q", cfg.AgentArgs.Ticket[0])
-	}
-}
-
-func TestAgentArgs_OldFlatFormat(t *testing.T) {
-	projectRoot := setupTestProject(t)
-	writeConfig(t, projectRoot, `
-name: test
-agent_args:
-  - "--budget=100000"
-  - "--verbose"
-`)
-
-	cfg, err := Load(projectRoot)
+	workRole, err := cfg.TicketRoleConfig("work")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	// Old flat format should populate both Architect and Ticket
-	if len(cfg.AgentArgs.Architect) != 2 {
-		t.Fatalf("expected 2 architect args, got %d", len(cfg.AgentArgs.Architect))
+	if len(workRole.Args) != 1 {
+		t.Fatalf("expected 1 work arg, got %d", len(workRole.Args))
 	}
-	if cfg.AgentArgs.Architect[0] != "--budget=100000" {
-		t.Errorf("expected --budget=100000, got %q", cfg.AgentArgs.Architect[0])
-	}
-
-	if len(cfg.AgentArgs.Ticket) != 2 {
-		t.Fatalf("expected 2 ticket args, got %d", len(cfg.AgentArgs.Ticket))
-	}
-	if cfg.AgentArgs.Ticket[0] != "--budget=100000" {
-		t.Errorf("expected --budget=100000, got %q", cfg.AgentArgs.Ticket[0])
+	if workRole.Args[0] != "--budget=50000" {
+		t.Errorf("expected --budget=50000, got %q", workRole.Args[0])
 	}
 }
 
-func TestAgentArgs_Absent(t *testing.T) {
+func TestNestedConfig_NoArgs(t *testing.T) {
 	projectRoot := setupTestProject(t)
 	writeConfig(t, projectRoot, `
 name: test
@@ -290,21 +328,24 @@ name: test
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(cfg.AgentArgs.Architect) != 0 {
-		t.Errorf("expected empty architect args, got %v", cfg.AgentArgs.Architect)
-	}
-	if len(cfg.AgentArgs.Ticket) != 0 {
-		t.Errorf("expected empty ticket args, got %v", cfg.AgentArgs.Ticket)
+	if len(cfg.Architect.Args) != 0 {
+		t.Errorf("expected empty architect args, got %v", cfg.Architect.Args)
 	}
 }
 
-func TestAgentArgs_PartialArchitectOnly(t *testing.T) {
+func TestNestedConfig_MultipleTicketTypes(t *testing.T) {
 	projectRoot := setupTestProject(t)
 	writeConfig(t, projectRoot, `
 name: test
-agent_args:
-  architect:
-    - "--budget=150000"
+ticket:
+  work:
+    agent: claude
+    args:
+      - "--budget=50000"
+  investigation:
+    agent: opencode
+    args:
+      - "--fast"
 `)
 
 	cfg, err := Load(projectRoot)
@@ -312,38 +353,41 @@ agent_args:
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(cfg.AgentArgs.Architect) != 1 {
-		t.Fatalf("expected 1 architect arg, got %d", len(cfg.AgentArgs.Architect))
-	}
-	if cfg.AgentArgs.Architect[0] != "--budget=150000" {
-		t.Errorf("expected --budget=150000, got %q", cfg.AgentArgs.Architect[0])
-	}
-	if len(cfg.AgentArgs.Ticket) != 0 {
-		t.Errorf("expected empty ticket args, got %v", cfg.AgentArgs.Ticket)
-	}
-}
-
-func TestAgentArgs_PartialTicketOnly(t *testing.T) {
-	projectRoot := setupTestProject(t)
-	writeConfig(t, projectRoot, `
-name: test
-agent_args:
-  ticket:
-    - "--budget=50000"
-`)
-
-	cfg, err := Load(projectRoot)
+	workRole, err := cfg.TicketRoleConfig("work")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if workRole.Agent != AgentClaude {
+		t.Errorf("expected work agent 'claude', got %q", workRole.Agent)
+	}
 
-	if len(cfg.AgentArgs.Architect) != 0 {
-		t.Errorf("expected empty architect args, got %v", cfg.AgentArgs.Architect)
+	invRole, err := cfg.TicketRoleConfig("investigation")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(cfg.AgentArgs.Ticket) != 1 {
-		t.Fatalf("expected 1 ticket arg, got %d", len(cfg.AgentArgs.Ticket))
+	if invRole.Agent != AgentOpenCode {
+		t.Errorf("expected investigation agent 'opencode', got %q", invRole.Agent)
 	}
-	if cfg.AgentArgs.Ticket[0] != "--budget=50000" {
-		t.Errorf("expected --budget=50000, got %q", cfg.AgentArgs.Ticket[0])
+}
+
+func TestTicketRoleConfig_MissingType(t *testing.T) {
+	cfg := &Config{
+		Ticket: TicketConfig{
+			"work": RoleConfig{Agent: AgentClaude},
+		},
+	}
+
+	_, err := cfg.TicketRoleConfig("nonexistent")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestTicketRoleConfig_NilTicketConfig(t *testing.T) {
+	cfg := &Config{}
+
+	_, err := cfg.TicketRoleConfig("work")
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

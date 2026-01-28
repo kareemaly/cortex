@@ -15,11 +15,19 @@ func TestPromptsDir(t *testing.T) {
 	}
 }
 
-func TestArchitectPath(t *testing.T) {
-	got := ArchitectPath("/project/root")
-	want := "/project/root/.cortex/prompts/architect.md"
+func TestArchitectPromptPath(t *testing.T) {
+	got := ArchitectPromptPath("/project/root", StageSystem)
+	want := "/project/root/.cortex/prompts/architect/SYSTEM.md"
 	if got != want {
-		t.Errorf("ArchitectPath() = %q, want %q", got, want)
+		t.Errorf("ArchitectPromptPath() = %q, want %q", got, want)
+	}
+}
+
+func TestTicketPromptPath(t *testing.T) {
+	got := TicketPromptPath("/project/root", "work", StageKickoff)
+	want := "/project/root/.cortex/prompts/ticket/work/KICKOFF.md"
+	if got != want {
+		t.Errorf("TicketPromptPath() = %q, want %q", got, want)
 	}
 }
 

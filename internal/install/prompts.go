@@ -30,18 +30,20 @@ Use ` + "`mcp__cortex__addTicketComment`" + ` to document:
 - Always commit your work before requesting review
 - Wait for explicit approval before concluding the session
 - Include a comprehensive report when concluding
+
+## Context Awareness
+
+- Your context window may be compacted during long sessions — earlier messages could be summarized or removed
+- Commit your work frequently so progress is saved even if context is lost
+- Use ` + "`addTicketComment`" + ` with type ` + "`progress`" + ` to log key milestones so you can recover context from the ticket if needed
 `
 
-// DefaultTicketPrompt is the template for ticket content.
-const DefaultTicketPrompt = `# Ticket: {{.TicketTitle}}
+// DefaultTicketKickoffPrompt is the unified template for ticket content.
+// Uses {{if .IsWorktree}} conditionals instead of separate worktree files.
+const DefaultTicketKickoffPrompt = `# Ticket: {{.TicketTitle}}
 
 {{.TicketBody}}
-`
-
-// DefaultTicketWorktreePrompt includes worktree-specific information.
-const DefaultTicketWorktreePrompt = `# Ticket: {{.TicketTitle}}
-
-{{.TicketBody}}
+{{if .IsWorktree}}
 
 ## Worktree Information
 
@@ -49,44 +51,32 @@ const DefaultTicketWorktreePrompt = `# Ticket: {{.TicketTitle}}
 - **Branch**: {{.WorktreeBranch}}
 
 All changes should be made in this worktree. The branch will be merged on approval.
+{{end}}
 `
 
-// DefaultApprovePrompt contains instructions for the approval workflow.
-const DefaultApprovePrompt = `## Review Approved
+// DefaultTicketApprovePrompt contains instructions for the approval workflow.
+// Uses {{if .IsWorktree}} conditionals instead of separate worktree files.
+const DefaultTicketApprovePrompt = `## Review Approved
 
 Your changes have been reviewed and approved. Complete the following steps:
 
 1. **Verify all changes are committed**
    - Run ` + "`git status`" + ` to check for uncommitted changes
    - Commit any remaining changes
+{{if .IsWorktree}}
+2. **Merge to main**
+   - Run ` + "`cd {{.ProjectPath}} && git merge {{.WorktreeBranch}}`" + `
 
+3. **Push your branch** (if not already pushed)
+   - Run ` + "`git push`" + `
+
+4. **Call concludeSession**
+{{else}}
 2. **Push your branch** (if not already pushed)
    - Run ` + "`git push`" + `
 
 3. **Call concludeSession**
-   - Call ` + "`mcp__cortex__concludeSession`" + ` with a complete report including:
-     - Summary of all changes made
-     - Key decisions and their rationale
-     - List of files modified
-     - Any follow-up tasks or notes
-
-This will mark the ticket as done and end your session.
-`
-
-// DefaultApproveWorktreePrompt contains instructions for approving worktree changes.
-const DefaultApproveWorktreePrompt = `## Review Approved
-
-Your changes have been reviewed and approved. Complete the following steps:
-
-1. **Commit all changes**
-   - Run ` + "`git status`" + ` to check for uncommitted changes
-   - Commit any remaining changes
-
-2. **Merge to main**
-   - Run ` + "`cd {{.ProjectPath}} && git merge {{.WorktreeBranch}}`" + `
-
-3. **Call concludeSession**
-   - Call ` + "`mcp__cortex__concludeSession`" + ` with a complete report including:
+{{end}}   - Call ` + "`mcp__cortex__concludeSession`" + ` with a complete report including:
      - Summary of all changes made
      - Key decisions and their rationale
      - List of files modified

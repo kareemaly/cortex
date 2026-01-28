@@ -47,9 +47,13 @@ const (
 	AgentStatusError             AgentStatus = "error"
 )
 
+// DefaultTicketType is the default type for tickets when none is specified.
+const DefaultTicketType = "work"
+
 // Ticket represents a work item with sessions and metadata.
 type Ticket struct {
 	ID       string    `json:"id"`
+	Type     string    `json:"type"`
 	Title    string    `json:"title"`
 	Body     string    `json:"body"`
 	Dates    Dates     `json:"dates"`

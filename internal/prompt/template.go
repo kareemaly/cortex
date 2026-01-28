@@ -11,12 +11,19 @@ type TicketVars struct {
 	TicketID       string
 	TicketTitle    string
 	TicketBody     string
+	IsWorktree     bool   // true when running in a worktree
 	WorktreePath   string // worktree only
 	WorktreeBranch string // worktree only
 }
 
+// ArchitectKickoffVars contains variables for the architect kickoff template.
+type ArchitectKickoffVars struct {
+	ProjectName string
+	TicketList  string
+}
+
 // RenderTemplate renders a template string with the given variables.
-func RenderTemplate(content string, vars TicketVars) (string, error) {
+func RenderTemplate(content string, vars any) (string, error) {
 	tmpl, err := template.New("prompt").Parse(content)
 	if err != nil {
 		return "", &TemplateError{Message: "failed to parse template", Err: err}
