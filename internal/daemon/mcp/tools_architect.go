@@ -50,6 +50,12 @@ func (s *Server) registerArchitectTools() {
 		Description: "Move a ticket to a different status",
 	}, s.handleMoveTicket)
 
+	// Add comment to a ticket
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "addTicketComment",
+		Description: "Add a comment to a ticket (types: scope_change, decision, blocker, progress, question, rejection, general, ticket_done)",
+	}, s.handleArchitectAddComment)
+
 	// Spawn session (stub)
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "spawnSession",
@@ -192,6 +198,30 @@ func (s *Server) handleMoveTicket(
 		Success: true,
 		ID:      input.ID,
 		Status:  input.Status,
+	}, nil
+}
+
+// handleArchitectAddComment adds a comment to a ticket by ID.
+func (s *Server) handleArchitectAddComment(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input ArchitectAddCommentInput,
+) (*mcp.CallToolResult, AddCommentOutput, error) {
+	if input.ID == "" {
+		return nil, AddCommentOutput{}, NewValidationError("id", "cannot be empty")
+	}
+	if input.Title == "" {
+		return nil, AddCommentOutput{}, NewValidationError("title", "cannot be empty")
+	}
+
+	resp, err := s.sdkClient.AddComment(input.ID, input.Type, input.Title, input.Content)
+	if err != nil {
+		return nil, AddCommentOutput{}, wrapSDKError(err)
+	}
+
+	return nil, AddCommentOutput{
+		Success: resp.Success,
+		Comment: resp.Comment,
 	}, nil
 }
 

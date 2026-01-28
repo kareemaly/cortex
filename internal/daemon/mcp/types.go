@@ -63,6 +63,14 @@ type SpawnSessionInput struct {
 	Mode     string `json:"mode,omitempty" jsonschema:"Spawn mode: 'normal' (default), 'resume', or 'fresh'"`
 }
 
+// ArchitectAddCommentInput is the input for the architect's addTicketComment tool.
+type ArchitectAddCommentInput struct {
+	ID      string `json:"id" jsonschema:"The ticket ID to add a comment to"`
+	Type    string `json:"type" jsonschema:"Comment type (scope_change/decision/blocker/progress/question/rejection/general/ticket_done)"`
+	Title   string `json:"title" jsonschema:"Short one-liner title for the comment (required)"`
+	Content string `json:"content" jsonschema:"The comment content"`
+}
+
 // Input types for ticket tools
 
 // AddCommentInput is the input for the addTicketComment tool.
