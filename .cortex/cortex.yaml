@@ -2,8 +2,14 @@ name: cortex
 agent: claude
 agent_args:
   architect:
-    - "--allow-dangerously-skip-permissions"
+    - "--allowedTools"
+    - "mcp__cortex__listTickets,mcp__cortex__readTicket"
   ticket:
+    - "--permission-mode"
+    - "plan"
     - "--allow-dangerously-skip-permissions"
+    - "--allowedTools"
+    - "mcp__cortex__readTicket"
 git:
-  worktrees: true
+  repos:
+    - path: "."
