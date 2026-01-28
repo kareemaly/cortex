@@ -12,7 +12,7 @@ var (
 
 // Comment type colors.
 var (
-	reviewRequestedColor = lipgloss.Color("39")  // blue
+	reviewRequestedColor = lipgloss.Color("214") // yellow
 	doneTypeColor        = lipgloss.Color("82")  // green
 	blockerColor         = lipgloss.Color("196") // red
 	commentColor         = lipgloss.Color("245") // gray
@@ -77,53 +77,46 @@ var (
 			Bold(true)
 )
 
-// Split layout styles.
+// Row layout styles.
 var (
-	// Left panel with focus border.
-	leftPanelFocusedStyle = lipgloss.NewStyle().
+	// Row 2 (comment list) with focus border.
+	row2FocusedStyle = lipgloss.NewStyle().
 				BorderLeft(true).
 				BorderStyle(lipgloss.NormalBorder()).
 				BorderForeground(focusColor)
 
-	// Left panel without focus.
-	leftPanelStyle = lipgloss.NewStyle().
+	// Row 2 without focus.
+	row2Style = lipgloss.NewStyle().
 			PaddingLeft(1)
 
-	// Sidebar with focus border.
-	sidebarFocusedStyle = lipgloss.NewStyle().
-				BorderLeft(true).
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(focusColor).
-				PaddingLeft(1)
+	// Comment selected (cursor highlight) in comment list.
+	commentSelectedStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("237"))
 
-	// Sidebar without focus.
-	sidebarStyle = lipgloss.NewStyle().
-			PaddingLeft(2)
+	// Thin horizontal line between rows.
+	rowSeparatorStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("237"))
 
-	// Sidebar section headers (DETAILS, SESSION, etc.).
-	sidebarHeaderStyle = lipgloss.NewStyle().
+	// Section headers in attributes panel (DETAILS, SESSION).
+	attributeHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("255"))
 
-	// Sidebar field labels.
-	sidebarLabelStyle = lipgloss.NewStyle().
+	// Attribute field labels.
+	attributeLabelStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245"))
 
-	// Sidebar field values.
-	sidebarValueStyle = lipgloss.NewStyle().
+	// Attribute field values.
+	attributeValueStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("255"))
 
-	// Sidebar dot separator.
-	sidebarDotStyle = lipgloss.NewStyle().
+	// Dot separator.
+	dotStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240"))
 
-	// Divider between panels.
+	// Vertical divider between body and attributes.
 	dividerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("237"))
-
-	// Sidebar item selected (cursor highlight).
-	sidebarSelectedStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("237"))
 )
 
 // Modal styles.

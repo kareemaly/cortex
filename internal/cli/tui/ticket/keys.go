@@ -38,6 +38,8 @@ const (
 	KeyL           Key = "l"
 	KeyO           Key = "o"
 	KeyEnter       Key = "enter"
+	KeyTab         Key = "tab"
+	KeyShiftTab    Key = "shift+tab"
 )
 
 // isKey checks if a key message matches a key constant.
@@ -51,7 +53,7 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 }
 
 // helpText returns the help bar text for the ticket detail view.
-func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, embedded, splitLayout, rightFocused bool) string {
+func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, embedded bool, focusedRow int) string {
 	var quit string
 	if embedded {
 		quit = "[q/esc] back"
@@ -59,17 +61,13 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, 
 		quit = "[q]uit"
 	}
 
-	var panelHint string
-	if splitLayout {
-		panelHint = "[h/l] panel  "
+	var scroll string
+	if focusedRow == 1 {
+		scroll = "[Tab] body  [j/k] select  [gg/G] first/last  [o/Enter] open"
+	} else {
+		scroll = "[Tab] comments  [j/k/gg/G] scroll  [ctrl+u/d] page"
 	}
 
-	var scroll string
-	if rightFocused {
-		scroll = "[j/k] select  [gg/G] first/last  [o/Enter] open"
-	} else {
-		scroll = "[j/k/gg/G] scroll  [ctrl+u/d] page"
-	}
 	actions := "[r]efresh  [ga] architect"
 
 	if hasActiveSession {
@@ -82,7 +80,7 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, 
 		actions = "[r]efresh  [s]pawn  [ga] architect"
 	}
 
-	return panelHint + scroll + "  " + actions + "  " + quit + "  " + percentStr(scrollPercent)
+	return scroll + "  " + actions + "  " + quit + "  " + percentStr(scrollPercent)
 }
 
 // modalHelpText returns help text for the detail modal.

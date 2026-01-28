@@ -14,14 +14,14 @@ import (
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
-const minSplitWidth = 100
+const wideLayoutMinWidth = 100
 
 // Model is the main Bubbletea model for the ticket detail view.
 type Model struct {
 	client          *sdk.Client
 	ticketID        string
 	ticket          *sdk.TicketResponse
-	leftViewport    viewport.Model
+	bodyViewport    viewport.Model
 	width           int
 	height          int
 	ready           bool
@@ -35,13 +35,11 @@ type Model struct {
 	embedded        bool // if true, send CloseDetailMsg instead of tea.Quit
 	pendingG        bool // tracking 'g' key for 'gg' sequence
 	mdRenderer      *glamour.TermRenderer
-	focusedPanel    int  // 0=left, 1=right
-	splitLayout     bool // true when width >= minSplitWidth
-	sidebarCursor   int  // cursor index in flat list (reviews first, then comments)
+	focusedRow      int // 0=Row1 (body), 1=Row2 (comments)
+	commentCursor   int // cursor index in ticket.Comments
 	showDetailModal bool
 	modalViewport   viewport.Model
-	modalIsReview   bool // whether selected item is a review
-	modalItemIndex  int  // index into reviews or comments slice
+	modalCommentIdx int // index into ticket.Comments
 	rejecting       bool
 
 	// SSE subscription state
@@ -151,18 +149,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.splitLayout = m.width >= minSplitWidth
 
-		// Header (1 line) + blank (1) + help bar (1) = 3 lines overhead.
-		viewportHeight := max(m.height-3, 1)
+		row1H, _ := m.rowHeights()
 
-		// Viewport width depends on split mode.
+		// Viewport width depends on wide mode.
 		vpWidth := m.width
-		if m.splitLayout {
-			vpWidth = m.leftPanelWidth()
+		if m.width >= wideLayoutMinWidth {
+			vpWidth = m.width * 70 / 100
 		}
 
-		// Update renderer width to match the left panel.
+		// Update renderer width to match the body panel.
 		renderer, _ := glamour.NewTermRenderer(
 			glamour.WithAutoStyle(),
 			glamour.WithWordWrap(vpWidth),
@@ -170,17 +166,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mdRenderer = renderer
 
 		if !m.ready {
-			m.leftViewport = viewport.New(vpWidth, viewportHeight)
-			m.leftViewport.YPosition = 2 // Below header.
+			m.bodyViewport = viewport.New(vpWidth, row1H)
+			m.bodyViewport.YPosition = 2 // Below header.
 			m.ready = true
 			if m.ticket != nil {
-				m.leftViewport.SetContent(m.renderLeftContent())
+				m.bodyViewport.SetContent(m.renderBodyContent())
 			}
 		} else {
-			m.leftViewport.Width = vpWidth
-			m.leftViewport.Height = viewportHeight
+			m.bodyViewport.Width = vpWidth
+			m.bodyViewport.Height = row1H
 			if m.ticket != nil {
-				m.leftViewport.SetContent(m.renderLeftContent())
+				m.bodyViewport.SetContent(m.renderBodyContent())
 			}
 		}
 
@@ -203,14 +199,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.ticket = msg.Ticket
 		if m.ready {
-			m.leftViewport.SetContent(m.renderLeftContent())
-			m.leftViewport.GotoTop()
+			m.bodyViewport.SetContent(m.renderBodyContent())
+			m.bodyViewport.GotoTop()
 		}
-		// Clamp sidebar cursor to valid range.
-		if itemCount := m.sidebarItemCount(); itemCount > 0 {
-			m.sidebarCursor = min(m.sidebarCursor, itemCount-1)
+		// Clamp comment cursor to valid range.
+		if count := len(m.ticket.Comments); count > 0 {
+			m.commentCursor = min(m.commentCursor, count-1)
 		} else {
-			m.sidebarCursor = 0
+			m.commentCursor = 0
 		}
 		return m, nil
 
@@ -284,7 +280,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Handle viewport scroll messages.
 	var cmd tea.Cmd
-	m.leftViewport, cmd = m.leftViewport.Update(msg)
+	m.bodyViewport, cmd = m.bodyViewport.Update(msg)
 	return m, cmd
 }
 
@@ -332,28 +328,25 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Tab/Shift+Tab to switch row focus.
+	if isKey(msg, KeyTab, KeyShiftTab) {
+		m.focusedRow = 1 - m.focusedRow // toggle 0↔1
+		m.updateRowSizes()
+		return m, nil
+	}
+
 	// Refresh.
 	if isKey(msg, KeyRefresh) {
 		m.loading = true
 		return m, m.loadTicket()
 	}
 
-	// Panel focus switching (split layout only).
-	if m.splitLayout {
-		if isKey(msg, KeyH) {
-			m.focusedPanel = 0
-			return m, nil
-		}
-		if isKey(msg, KeyL) {
-			m.focusedPanel = 1
-			return m, nil
-		}
+	// Comment list navigation (Row 2 focused).
+	if m.focusedRow == 1 {
+		return m.handleCommentListKey(msg)
 	}
 
-	// Right panel navigation (split layout, right focused).
-	if m.splitLayout && m.focusedPanel == 1 {
-		return m.handleRightPanelKey(msg)
-	}
+	// Body viewport navigation (Row 1 focused).
 
 	// Kill session.
 	if isKey(msg, KeyKillSession) {
@@ -390,7 +383,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle 'G' - jump to bottom.
 	if isKey(msg, KeyShiftG) {
 		m.pendingG = false
-		m.leftViewport.GotoBottom()
+		m.bodyViewport.GotoBottom()
 		return m, nil
 	}
 
@@ -399,7 +392,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.pendingG {
 			// Second 'g' - jump to top.
 			m.pendingG = false
-			m.leftViewport.GotoTop()
+			m.bodyViewport.GotoTop()
 		} else {
 			// First 'g' - set pending state.
 			m.pendingG = true
@@ -412,62 +405,52 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Half-page scroll (ctrl+u/d).
 	if isKey(msg, KeyCtrlU) {
-		m.leftViewport.HalfPageUp()
+		m.bodyViewport.HalfPageUp()
 		return m, nil
 	}
 	if isKey(msg, KeyCtrlD) {
-		m.leftViewport.HalfPageDown()
+		m.bodyViewport.HalfPageDown()
 		return m, nil
 	}
 
 	// Scroll navigation.
 	if isKey(msg, KeyUp, KeyK) {
-		m.leftViewport.ScrollUp(1)
+		m.bodyViewport.ScrollUp(1)
 		return m, nil
 	}
 	if isKey(msg, KeyDown, KeyJ) {
-		m.leftViewport.ScrollDown(1)
+		m.bodyViewport.ScrollDown(1)
 		return m, nil
 	}
 	if isKey(msg, KeyPgUp) {
-		m.leftViewport.PageUp()
+		m.bodyViewport.PageUp()
 		return m, nil
 	}
 	if isKey(msg, KeyPgDown) {
-		m.leftViewport.PageDown()
+		m.bodyViewport.PageDown()
 		return m, nil
 	}
 	if isKey(msg, KeyHome) {
-		m.leftViewport.GotoTop()
+		m.bodyViewport.GotoTop()
 		return m, nil
 	}
 	if isKey(msg, KeyEnd) {
-		m.leftViewport.GotoBottom()
+		m.bodyViewport.GotoBottom()
 		return m, nil
 	}
 
 	// Pass to viewport for mouse scroll, etc.
 	var cmd tea.Cmd
-	m.leftViewport, cmd = m.leftViewport.Update(msg)
+	m.bodyViewport, cmd = m.bodyViewport.Update(msg)
 	return m, cmd
 }
 
-// handleKillModalKey handles keyboard input when the kill confirmation modal is shown.
-func (m Model) handleKillModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if isKey(msg, KeyYes) {
-		m.killing = true
-		return m, m.killSession()
+// handleCommentListKey handles keyboard input when Row 2 (comment list) is focused.
+func (m Model) handleCommentListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	itemCount := 0
+	if m.ticket != nil {
+		itemCount = len(m.ticket.Comments)
 	}
-	if isKey(msg, KeyNo, KeyEscape) {
-		m.showKillModal = false
-		return m, nil
-	}
-	return m, nil
-}
-
-// handleRightPanelKey handles keyboard input when the right panel is focused.
-func (m Model) handleRightPanelKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	itemCount := m.sidebarItemCount()
 
 	// Open detail modal.
 	if isKey(msg, KeyO, KeyEnter) {
@@ -480,13 +463,13 @@ func (m Model) handleRightPanelKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Cursor movement.
 	if isKey(msg, KeyDown, KeyJ) {
 		if itemCount > 0 {
-			m.sidebarCursor = min(m.sidebarCursor+1, itemCount-1)
+			m.commentCursor = min(m.commentCursor+1, itemCount-1)
 		}
 		return m, nil
 	}
 	if isKey(msg, KeyUp, KeyK) {
 		if itemCount > 0 {
-			m.sidebarCursor = max(m.sidebarCursor-1, 0)
+			m.commentCursor = max(m.commentCursor-1, 0)
 		}
 		return m, nil
 	}
@@ -495,7 +478,7 @@ func (m Model) handleRightPanelKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if isKey(msg, KeyShiftG) {
 		m.pendingG = false
 		if itemCount > 0 {
-			m.sidebarCursor = itemCount - 1
+			m.commentCursor = itemCount - 1
 		}
 		return m, nil
 	}
@@ -504,7 +487,7 @@ func (m Model) handleRightPanelKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if isKey(msg, KeyG) {
 		if m.pendingG {
 			m.pendingG = false
-			m.sidebarCursor = 0
+			m.commentCursor = 0
 		} else {
 			m.pendingG = true
 		}
@@ -520,11 +503,7 @@ func (m Model) handleRightPanelKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Clear pending g on any other key.
 	m.pendingG = false
 
-	// Global shortcuts available from right panel.
-	if isKey(msg, KeyRefresh) {
-		m.loading = true
-		return m, m.loadTicket()
-	}
+	// Global shortcuts available from comment list.
 	if isKey(msg, KeyKillSession) {
 		if m.hasActiveSession() {
 			m.showKillModal = true
@@ -538,7 +517,27 @@ func (m Model) handleRightPanelKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if isKey(msg, KeyApprove) {
+		if m.hasActiveSession() && m.hasReviewRequests() {
+			m.approving = true
+			return m, m.approveSession()
+		}
+		return m, nil
+	}
 
+	return m, nil
+}
+
+// handleKillModalKey handles keyboard input when the kill confirmation modal is shown.
+func (m Model) handleKillModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if isKey(msg, KeyYes) {
+		m.killing = true
+		return m, m.killSession()
+	}
+	if isKey(msg, KeyNo, KeyEscape) {
+		m.showKillModal = false
+		return m, nil
+	}
 	return m, nil
 }
 
@@ -561,7 +560,8 @@ func (m Model) handleDetailModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Review-specific actions.
-	if m.modalIsReview {
+	if m.ticket != nil && m.modalCommentIdx < len(m.ticket.Comments) &&
+		m.ticket.Comments[m.modalCommentIdx].Type == "review_requested" {
 		if isKey(msg, KeyApprove) {
 			if m.hasActiveSession() && m.hasReviewRequests() {
 				m.showDetailModal = false
@@ -587,7 +587,15 @@ func (m Model) hasActiveSession() bool {
 
 // hasReviewRequests returns true if there are review_requested comments.
 func (m Model) hasReviewRequests() bool {
-	return m.sidebarReviewCount() > 0
+	if m.ticket == nil {
+		return false
+	}
+	for _, c := range m.ticket.Comments {
+		if c.Type == "review_requested" {
+			return true
+		}
+	}
+	return false
 }
 
 // killSession returns a command to kill the current session.
@@ -629,62 +637,6 @@ func (m Model) canSpawn() bool {
 		return false
 	}
 	return !m.hasActiveSession()
-}
-
-// sidebarItemCount returns the total number of items in the sidebar.
-func (m Model) sidebarItemCount() int {
-	if m.ticket == nil {
-		return 0
-	}
-	return len(m.ticket.Comments)
-}
-
-// sidebarReviewCount returns the number of review_requested comments.
-func (m Model) sidebarReviewCount() int {
-	if m.ticket == nil {
-		return 0
-	}
-	count := 0
-	for _, c := range m.ticket.Comments {
-		if c.Type == "review_requested" {
-			count++
-		}
-	}
-	return count
-}
-
-// reviewComments returns only review_requested comments.
-func (m Model) reviewComments() []sdk.CommentResponse {
-	if m.ticket == nil {
-		return nil
-	}
-	var reviews []sdk.CommentResponse
-	for _, c := range m.ticket.Comments {
-		if c.Type == "review_requested" {
-			reviews = append(reviews, c)
-		}
-	}
-	return reviews
-}
-
-// nonReviewComments returns comments that are not review_requested.
-func (m Model) nonReviewComments() []sdk.CommentResponse {
-	if m.ticket == nil {
-		return nil
-	}
-	var comments []sdk.CommentResponse
-	for _, c := range m.ticket.Comments {
-		if c.Type != "review_requested" {
-			comments = append(comments, c)
-		}
-	}
-	return comments
-}
-
-// isSidebarReview returns true if the given flat index points to a review item.
-// Sidebar ordering: reviews first, then non-review comments.
-func (m Model) isSidebarReview(index int) bool {
-	return index < m.sidebarReviewCount()
 }
 
 // rejectSession returns a command to reject the current session review.
@@ -759,18 +711,10 @@ func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// openDetailModal opens the detail modal for the currently selected sidebar item.
+// openDetailModal opens the detail modal for the currently selected comment.
 func (m *Model) openDetailModal() {
-	reviewCount := m.sidebarReviewCount()
 	m.showDetailModal = true
-
-	if m.isSidebarReview(m.sidebarCursor) {
-		m.modalIsReview = true
-		m.modalItemIndex = m.sidebarCursor // index into reviewComments()
-	} else {
-		m.modalIsReview = false
-		m.modalItemIndex = m.sidebarCursor - reviewCount // index into nonReviewComments()
-	}
+	m.modalCommentIdx = m.commentCursor
 
 	// Size: ~60% width, ~70% height minus chrome (border + padding + header + separator + help).
 	modalInnerWidth := max(m.width*60/100-6, 20)  // 6 = border(2) + padding(4)
@@ -787,7 +731,12 @@ func (m Model) renderDetailModal() string {
 	header := m.renderModalHeader()
 	separator := modalSeparatorStyle.Render(strings.Repeat("─", modalInnerWidth))
 	body := m.modalViewport.View()
-	help := modalHelpStyle.Render(modalHelpText(m.modalIsReview))
+
+	isReview := false
+	if m.ticket != nil && m.modalCommentIdx < len(m.ticket.Comments) {
+		isReview = m.ticket.Comments[m.modalCommentIdx].Type == "review_requested"
+	}
+	help := modalHelpStyle.Render(modalHelpText(isReview))
 
 	content := header + "\n" + separator + "\n" + body + "\n" + help
 
@@ -798,65 +747,34 @@ func (m Model) renderDetailModal() string {
 
 // renderModalHeader renders the header line for the detail modal.
 func (m Model) renderModalHeader() string {
-	if m.modalIsReview {
-		reviews := m.reviewComments()
-		if m.modalItemIndex < len(reviews) {
-			review := reviews[m.modalItemIndex]
-			return modalHeaderStyle.Render("Review Request") + "  " + sidebarLabelStyle.Render(formatTimeAgo(review.CreatedAt))
-		}
-		return modalHeaderStyle.Render("Review Request")
+	if m.ticket == nil || m.modalCommentIdx >= len(m.ticket.Comments) {
+		return modalHeaderStyle.Render("Comment")
 	}
-
-	comments := m.nonReviewComments()
-	if m.modalItemIndex < len(comments) {
-		comment := comments[m.modalItemIndex]
-		typeStr := commentTypeStyle(comment.Type).Render(comment.Type)
-		date := sidebarLabelStyle.Render(comment.CreatedAt.Format("Jan 02, 15:04"))
-		return typeStr + "  " + sidebarDotStyle.Render("·") + "  " + date
-	}
-	return modalHeaderStyle.Render("Comment")
+	comment := m.ticket.Comments[m.modalCommentIdx]
+	badge := commentBadge(comment.Type)
+	date := attributeLabelStyle.Render(formatTimeAgo(comment.CreatedAt))
+	return badge + "  " + date
 }
 
 // renderModalContent renders the scrollable content for the detail modal.
 func (m Model) renderModalContent(width int) string {
-	if m.modalIsReview {
-		reviews := m.reviewComments()
-		if m.modalItemIndex >= len(reviews) {
-			return ""
-		}
-		review := reviews[m.modalItemIndex]
-		var b strings.Builder
+	if m.ticket == nil || m.modalCommentIdx >= len(m.ticket.Comments) {
+		return ""
+	}
+	comment := m.ticket.Comments[m.modalCommentIdx]
 
-		// Extract repo_path from action args
-		repoPath := extractRepoPath(review)
+	var b strings.Builder
+
+	// Show repo path for review requests.
+	if comment.Type == "review_requested" {
+		repoPath := extractRepoPath(comment)
 		if repoPath != "" && repoPath != "." {
 			b.WriteString(modalRepoStyle.Render("Repo: " + repoPath))
 			b.WriteString("\n\n")
 		}
-
-		// Render content as markdown with modal-appropriate width.
-		renderer, _ := glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
-			glamour.WithWordWrap(width),
-		)
-		if renderer != nil {
-			rendered, err := renderer.Render(review.Content)
-			if err == nil {
-				b.WriteString(strings.TrimSpace(rendered))
-				return b.String()
-			}
-		}
-		b.WriteString(review.Content)
-		return b.String()
 	}
 
-	// Comment modal.
-	comments := m.nonReviewComments()
-	if m.modalItemIndex >= len(comments) {
-		return ""
-	}
-	comment := comments[m.modalItemIndex]
-
+	// Render content as markdown with modal-appropriate width.
 	renderer, _ := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(width),
@@ -864,10 +782,12 @@ func (m Model) renderModalContent(width int) string {
 	if renderer != nil {
 		rendered, err := renderer.Render(comment.Content)
 		if err == nil {
-			return strings.TrimSpace(rendered)
+			b.WriteString(strings.TrimSpace(rendered))
+			return b.String()
 		}
 	}
-	return comment.Content
+	b.WriteString(comment.Content)
+	return b.String()
 }
 
 // extractRepoPath extracts repo_path from a review comment's Action.Args.
@@ -968,20 +888,24 @@ func (m Model) View() string {
 		return m.renderDetailModal()
 	}
 
-	// Scrollable content.
-	if m.splitLayout {
-		b.WriteString(m.renderSplitLayout())
-	} else {
-		b.WriteString(m.leftViewport.View())
-	}
+	// Row 1 (body + attributes).
+	row1H, row2H := m.rowHeights()
+	b.WriteString(m.renderRow1(row1H))
+
+	// Row separator.
 	b.WriteString("\n")
+	b.WriteString(m.renderRowSeparator())
+
+	// Row 2 (comment list).
+	b.WriteString("\n")
+	b.WriteString(m.renderCommentList(m.width, row2H))
 
 	// Help bar.
-	rightFocused := m.splitLayout && m.focusedPanel == 1
+	b.WriteString("\n")
 	b.WriteString(helpBarStyle.Render(helpText(
-		int(m.leftViewport.ScrollPercent()*100),
+		int(m.bodyViewport.ScrollPercent()*100),
 		m.hasActiveSession(), m.hasReviewRequests(), m.canSpawn(),
-		m.embedded, m.splitLayout, rightFocused,
+		m.embedded, m.focusedRow,
 	)))
 
 	return b.String()
@@ -1018,91 +942,354 @@ func (m Model) renderHeader() string {
 	return left + strings.Repeat(" ", padding) + right
 }
 
-// renderContent renders the scrollable content for the viewport.
-func (m Model) renderContent() string {
+// rowHeights computes the vertical split between Row 1 and Row 2.
+func (m Model) rowHeights() (row1H, row2H int) {
+	// available = height - 3 (header + row separator + help bar)
+	available := max(m.height-3, 2)
+	if m.focusedRow == 0 {
+		row1H = available * 70 / 100
+	} else {
+		row1H = available * 30 / 100
+	}
+	row1H = max(row1H, 1)
+	row2H = max(available-row1H, 1)
+	return
+}
+
+// renderRow1 renders Row 1: body viewport + attributes panel (wide) or body only (narrow).
+func (m Model) renderRow1(height int) string {
+	if m.width >= wideLayoutMinWidth {
+		// Wide: body viewport | divider | attributes panel.
+		bodyWidth := m.width * 70 / 100
+		attrWidth := m.width - bodyWidth - 1
+
+		body := m.bodyViewport.View()
+		bodyBlock := lipgloss.NewStyle().
+			Width(bodyWidth).
+			Height(height).
+			Render(body)
+
+		divider := m.renderPanelDivider(height)
+		attrs := m.renderAttributes(attrWidth, height)
+
+		return lipgloss.JoinHorizontal(lipgloss.Top, bodyBlock, divider, attrs)
+	}
+
+	// Narrow: full-width body viewport only.
+	return m.bodyViewport.View()
+}
+
+// renderAttributes renders the DETAILS + SESSION sections for the attributes panel.
+func (m Model) renderAttributes(width, height int) string {
 	if m.ticket == nil {
 		return ""
 	}
 
 	var b strings.Builder
 
-	// Dates section.
-	b.WriteString(m.renderDates())
+	// DETAILS section.
+	b.WriteString(attributeHeaderStyle.Render("DETAILS"))
 	b.WriteString("\n")
 
-	// Body section.
-	if m.ticket.Body != "" {
-		b.WriteString(m.renderSection("Description", m.ticket.Body))
+	b.WriteString(attributeLabelStyle.Render("Created  "))
+	b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Created.Format("Jan 02, 15:04")))
+
+	b.WriteString("\n")
+	b.WriteString(attributeLabelStyle.Render("Updated  "))
+	b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Updated.Format("Jan 02, 15:04")))
+
+	if m.ticket.Dates.Progress != nil {
 		b.WriteString("\n")
+		b.WriteString(attributeLabelStyle.Render("Progress "))
+		b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Progress.Format("Jan 02, 15:04")))
 	}
 
-	// Session section.
+	if m.ticket.Dates.Reviewed != nil {
+		b.WriteString("\n")
+		b.WriteString(attributeLabelStyle.Render("Reviewed "))
+		b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Reviewed.Format("Jan 02, 15:04")))
+	}
+
+	if m.ticket.Dates.Done != nil {
+		b.WriteString("\n")
+		b.WriteString(attributeLabelStyle.Render("Done     "))
+		b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Done.Format("Jan 02, 15:04")))
+	}
+
+	// SESSION section.
 	if m.ticket.Session != nil {
-		b.WriteString(m.renderSession())
+		session := m.ticket.Session
+		b.WriteString("\n\n")
+		b.WriteString(attributeHeaderStyle.Render("SESSION"))
 		b.WriteString("\n")
+
+		b.WriteString(attributeLabelStyle.Render("Agent    "))
+		b.WriteString(attributeValueStyle.Render(session.Agent))
+
+		b.WriteString("\n")
+		b.WriteString(attributeLabelStyle.Render("Status   "))
+		if session.EndedAt == nil {
+			b.WriteString(statusStyle("progress").Render("ACTIVE"))
+		} else {
+			b.WriteString(statusStyle("done").Render("ENDED"))
+		}
+
+		if session.CurrentStatus != nil && session.CurrentStatus.Tool != nil {
+			b.WriteString("\n")
+			b.WriteString(attributeLabelStyle.Render("Tool     "))
+			b.WriteString(attributeValueStyle.Render(*session.CurrentStatus.Tool))
+		}
+
+		b.WriteString("\n")
+		b.WriteString(attributeLabelStyle.Render("Window   "))
+		b.WriteString(attributeValueStyle.Render(session.TmuxWindow))
+
+		b.WriteString("\n")
+		b.WriteString(attributeLabelStyle.Render("Started  "))
+		b.WriteString(attributeValueStyle.Render(session.StartedAt.Format("Jan 02, 15:04")))
+
+		if session.EndedAt != nil {
+			b.WriteString("\n")
+			b.WriteString(attributeLabelStyle.Render("Ended    "))
+			b.WriteString(attributeValueStyle.Render(session.EndedAt.Format("Jan 02, 15:04")))
+		}
 	}
 
-	// Review requests section (after session, before comments).
-	if m.hasReviewRequests() {
-		b.WriteString(m.renderReviewRequests())
+	return lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		PaddingLeft(1).
+		Render(b.String())
+}
+
+// renderCommentList renders the unified comment list for Row 2.
+func (m Model) renderCommentList(width, height int) string {
+	if m.ticket == nil || len(m.ticket.Comments) == 0 {
+		content := attributeLabelStyle.Render("No comments")
+		if m.focusedRow == 1 {
+			return row2FocusedStyle.Width(width).Height(height).Render(content)
+		}
+		return row2Style.Width(width).Height(height).Render(content)
 	}
 
-	// Comments section.
-	if len(m.ticket.Comments) > 0 {
-		b.WriteString(m.renderComments())
+	// Header line takes 1 row.
+	headerLine := attributeHeaderStyle.Render(fmt.Sprintf("COMMENTS (%d)", len(m.ticket.Comments)))
+	availableHeight := max(height-1, 1) // 1 for header
+
+	// Determine visible range.
+	start, end := m.commentVisibleRange(availableHeight)
+
+	// Content width: account for border/padding (~2 chars).
+	contentWidth := max(width-2, 10)
+
+	var b strings.Builder
+	b.WriteString(headerLine)
+
+	for i := start; i < end; i++ {
+		b.WriteString("\n")
+		selected := m.focusedRow == 1 && i == m.commentCursor
+		b.WriteString(m.renderCommentLine(m.ticket.Comments[i], contentWidth, selected))
+	}
+
+	content := b.String()
+	if m.focusedRow == 1 {
+		return row2FocusedStyle.Width(width).Height(height).Render(content)
+	}
+	return row2Style.Width(width).Height(height).Render(content)
+}
+
+// renderCommentLine renders a single comment as a one-line preview.
+func (m Model) renderCommentLine(comment sdk.CommentResponse, width int, selected bool) string {
+	badge := commentBadge(comment.Type)
+	timeAgo := formatTimeAgo(comment.CreatedAt)
+
+	// Compute available width for the preview text.
+	badgeWidth := lipgloss.Width(badge)
+	timeWidth := len(timeAgo)
+	// badge + 2 spaces + preview + 2 spaces + timeAgo
+	previewMaxWidth := max(width-badgeWidth-timeWidth-4, 5)
+
+	preview := stripMarkdownPreview(comment.Content)
+	if preview == "" {
+		preview = "(empty)"
+	}
+	preview = truncateToWidth(preview, previewMaxWidth)
+
+	// For review requests, show repo name if available.
+	if comment.Type == "review_requested" {
+		repoPath := extractRepoPath(comment)
+		repo := filepath.Base(repoPath)
+		if repo != "" && repo != "." && repo != "/" {
+			repoPrefix := attributeLabelStyle.Render(repo) + " " + dotStyle.Render("·") + " "
+			repoPrefixWidth := lipgloss.Width(repoPrefix)
+			if repoPrefixWidth+5 < previewMaxWidth {
+				preview = stripMarkdownPreview(comment.Content)
+				if preview == "" {
+					preview = "(empty)"
+				}
+				preview = truncateToWidth(preview, previewMaxWidth-repoPrefixWidth)
+				preview = repoPrefix + preview
+			}
+		}
+	}
+
+	line := badge + "  " + preview
+
+	// Pad to push time ago to the right.
+	lineWidth := lipgloss.Width(line)
+	padding := max(width-lineWidth-timeWidth, 1)
+	line += strings.Repeat(" ", padding) + attributeLabelStyle.Render(timeAgo)
+
+	if selected {
+		return commentSelectedStyle.Width(width).Render(line)
+	}
+	return line
+}
+
+// commentBadge returns a styled badge string for a comment type.
+func commentBadge(commentType string) string {
+	badgeText := commentType
+	switch commentType {
+	case "review_requested":
+		badgeText = "review"
+	}
+	return commentTypeStyle(commentType).Render("[" + badgeText + "]")
+}
+
+// stripMarkdownPreview extracts the first non-empty, non-heading line from markdown content.
+func stripMarkdownPreview(content string) string {
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Strip markdown heading prefixes, list markers, and emphasis.
+		trimmed = strings.TrimLeft(trimmed, "#*-> ")
+		trimmed = strings.TrimSpace(trimmed)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+// truncateToWidth truncates a string to fit within maxWidth, appending "…" if truncated.
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= maxWidth {
+		return s
+	}
+	// Truncate rune by rune.
+	var result strings.Builder
+	currentWidth := 0
+	for _, r := range s {
+		charWidth := lipgloss.Width(string(r))
+		if currentWidth+charWidth+1 > maxWidth { // +1 for "…"
+			result.WriteString("…")
+			return result.String()
+		}
+		result.WriteRune(r)
+		currentWidth += charWidth
+	}
+	return result.String()
+}
+
+// commentVisibleRange computes the visible window of comments keeping the cursor visible.
+func (m Model) commentVisibleRange(visibleHeight int) (start, end int) {
+	total := len(m.ticket.Comments)
+	if total == 0 {
+		return 0, 0
+	}
+
+	start = 0
+	end = min(visibleHeight, total)
+
+	if m.commentCursor >= end {
+		end = min(m.commentCursor+1, total)
+		start = max(end-visibleHeight, 0)
+	}
+	if m.commentCursor < start {
+		start = m.commentCursor
+		end = min(start+visibleHeight, total)
+	}
+
+	return start, end
+}
+
+// renderRowSeparator renders a thin horizontal line between rows.
+func (m Model) renderRowSeparator() string {
+	return rowSeparatorStyle.Render(strings.Repeat("─", m.width))
+}
+
+// updateRowSizes resizes the bodyViewport after a focus change.
+func (m *Model) updateRowSizes() {
+	if !m.ready {
+		return
+	}
+	row1H, _ := m.rowHeights()
+	vpWidth := m.width
+	if m.width >= wideLayoutMinWidth {
+		vpWidth = m.width * 70 / 100
+	}
+	m.bodyViewport.Width = vpWidth
+	m.bodyViewport.Height = row1H
+	if m.ticket != nil {
+		m.bodyViewport.SetContent(m.renderBodyContent())
+	}
+}
+
+// renderBodyContent returns the content for the body viewport.
+// In wide mode: just the markdown body. In narrow mode: dates + body + session.
+func (m Model) renderBodyContent() string {
+	if m.ticket == nil {
+		return ""
+	}
+
+	if m.width >= wideLayoutMinWidth {
+		// Wide mode: just body markdown.
+		if m.ticket.Body == "" {
+			return ""
+		}
+		return m.renderMarkdown(m.ticket.Body)
+	}
+
+	// Narrow mode: inline dates + body + session.
+	var b strings.Builder
+
+	// Inline dates.
+	b.WriteString(labelStyle.Render("Created: "))
+	b.WriteString(valueStyle.Render(m.ticket.Dates.Created.Format("Jan 02, 2006 15:04")))
+	b.WriteString("  ")
+	b.WriteString(labelStyle.Render("Updated: "))
+	b.WriteString(valueStyle.Render(m.ticket.Dates.Updated.Format("Jan 02, 2006 15:04")))
+
+	// Body.
+	if m.ticket.Body != "" {
+		b.WriteString("\n\n")
+		b.WriteString(m.renderMarkdown(m.ticket.Body))
+	}
+
+	// Session.
+	if m.ticket.Session != nil {
+		session := m.ticket.Session
+		b.WriteString("\n\n")
+		b.WriteString(sectionHeaderStyle.Render("─── Session ───"))
+		b.WriteString("\n")
+		b.WriteString(labelStyle.Render("Agent: "))
+		b.WriteString(valueStyle.Render(session.Agent))
+		b.WriteString("  ")
+		b.WriteString(labelStyle.Render("Status: "))
+		if session.EndedAt == nil {
+			b.WriteString(statusStyle("progress").Render("ACTIVE"))
+		} else {
+			b.WriteString(statusStyle("done").Render("ENDED"))
+		}
 	}
 
 	return b.String()
-}
-
-// leftPanelWidth returns the width of the left panel in split mode.
-func (m Model) leftPanelWidth() int {
-	return m.width * 70 / 100
-}
-
-// rightPanelWidth returns the width of the right panel in split mode.
-func (m Model) rightPanelWidth() int {
-	return m.width - m.leftPanelWidth() - 1 // 1 for divider
-}
-
-// renderLeftContent returns content for the left viewport.
-// In split mode: just the markdown body. Otherwise: full stacked layout.
-func (m Model) renderLeftContent() string {
-	if !m.splitLayout {
-		return m.renderContent()
-	}
-	if m.ticket == nil || m.ticket.Body == "" {
-		return ""
-	}
-	return m.renderMarkdown(m.ticket.Body)
-}
-
-// renderSplitLayout renders the side-by-side split layout.
-func (m Model) renderSplitLayout() string {
-	contentHeight := m.leftViewport.Height
-
-	// Left panel with optional focus style.
-	leftContent := m.leftViewport.View()
-	var left string
-	if m.focusedPanel == 0 {
-		left = leftPanelFocusedStyle.
-			Width(m.leftPanelWidth()).
-			Height(contentHeight).
-			Render(leftContent)
-	} else {
-		left = leftPanelStyle.
-			Width(m.leftPanelWidth()).
-			Height(contentHeight).
-			Render(leftContent)
-	}
-
-	// Divider column.
-	divider := m.renderPanelDivider(contentHeight)
-
-	// Right sidebar.
-	right := m.renderSidebar(m.rightPanelWidth(), contentHeight)
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 }
 
 // renderPanelDivider renders a vertical divider column.
@@ -1117,226 +1304,6 @@ func (m Model) renderPanelDivider(height int) string {
 	return b.String()
 }
 
-// renderSidebar renders the right-side metadata panel.
-func (m Model) renderSidebar(width, height int) string {
-	if m.ticket == nil {
-		return ""
-	}
-
-	var b strings.Builder
-
-	// DETAILS section.
-	b.WriteString(m.renderSidebarDetails(width))
-
-	// SESSION section.
-	if m.ticket.Session != nil {
-		b.WriteString("\n\n")
-		b.WriteString(m.renderSidebarSession(width))
-	}
-
-	// REVIEWS section.
-	if m.hasReviewRequests() {
-		b.WriteString("\n\n")
-		b.WriteString(m.renderSidebarReviews(width))
-	}
-
-	// COMMENTS section (non-review comments).
-	if len(m.nonReviewComments()) > 0 {
-		b.WriteString("\n\n")
-		b.WriteString(m.renderSidebarComments(width))
-	}
-
-	content := b.String()
-
-	// Apply sidebar style with focus.
-	if m.focusedPanel == 1 {
-		return sidebarFocusedStyle.
-			Width(width).
-			Height(height).
-			Render(content)
-	}
-	return sidebarStyle.
-		Width(width).
-		Height(height).
-		Render(content)
-}
-
-// renderSidebarDetails renders the DETAILS section of the sidebar.
-func (m Model) renderSidebarDetails(width int) string {
-	var b strings.Builder
-	b.WriteString(sidebarHeaderStyle.Render("DETAILS"))
-	b.WriteString("\n")
-
-	b.WriteString(sidebarLabelStyle.Render("Created  "))
-	b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Created.Format("Jan 02, 15:04")))
-
-	b.WriteString("\n")
-	b.WriteString(sidebarLabelStyle.Render("Updated  "))
-	b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Updated.Format("Jan 02, 15:04")))
-
-	if m.ticket.Dates.Progress != nil {
-		b.WriteString("\n")
-		b.WriteString(sidebarLabelStyle.Render("Progress "))
-		b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Progress.Format("Jan 02, 15:04")))
-	}
-
-	if m.ticket.Dates.Reviewed != nil {
-		b.WriteString("\n")
-		b.WriteString(sidebarLabelStyle.Render("Reviewed "))
-		b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Reviewed.Format("Jan 02, 15:04")))
-	}
-
-	if m.ticket.Dates.Done != nil {
-		b.WriteString("\n")
-		b.WriteString(sidebarLabelStyle.Render("Done     "))
-		b.WriteString(sidebarValueStyle.Render(m.ticket.Dates.Done.Format("Jan 02, 15:04")))
-	}
-
-	return b.String()
-}
-
-// renderSidebarSession renders the SESSION section of the sidebar.
-func (m Model) renderSidebarSession(_ int) string {
-	session := m.ticket.Session
-	var b strings.Builder
-
-	b.WriteString(sidebarHeaderStyle.Render("SESSION"))
-	b.WriteString("\n")
-
-	b.WriteString(sidebarLabelStyle.Render("Agent    "))
-	b.WriteString(sidebarValueStyle.Render(session.Agent))
-
-	b.WriteString("\n")
-	b.WriteString(sidebarLabelStyle.Render("Status   "))
-	if session.EndedAt == nil {
-		b.WriteString(statusStyle("progress").Render("ACTIVE"))
-	} else {
-		b.WriteString(statusStyle("done").Render("ENDED"))
-	}
-
-	if session.CurrentStatus != nil && session.CurrentStatus.Tool != nil {
-		b.WriteString("\n")
-		b.WriteString(sidebarLabelStyle.Render("Tool     "))
-		b.WriteString(sidebarValueStyle.Render(*session.CurrentStatus.Tool))
-	}
-
-	b.WriteString("\n")
-	b.WriteString(sidebarLabelStyle.Render("Window   "))
-	b.WriteString(sidebarValueStyle.Render(session.TmuxWindow))
-
-	b.WriteString("\n")
-	b.WriteString(sidebarLabelStyle.Render("Started  "))
-	b.WriteString(sidebarValueStyle.Render(session.StartedAt.Format("Jan 02, 15:04")))
-
-	if session.EndedAt != nil {
-		b.WriteString("\n")
-		b.WriteString(sidebarLabelStyle.Render("Ended    "))
-		b.WriteString(sidebarValueStyle.Render(session.EndedAt.Format("Jan 02, 15:04")))
-	}
-
-	return b.String()
-}
-
-// renderSidebarReviews renders the REVIEWS section of the sidebar.
-func (m Model) renderSidebarReviews(width int) string {
-	reviews := m.reviewComments()
-	var b strings.Builder
-
-	b.WriteString(sidebarHeaderStyle.Render(fmt.Sprintf("REVIEWS (%d)", len(reviews))))
-	b.WriteString("\n")
-
-	// Available width for content (account for sidebar padding/border ~3 chars).
-	maxLineWidth := max(width-3, 10)
-
-	for i, review := range reviews {
-		repoPath := extractRepoPath(review)
-		repo := filepath.Base(repoPath)
-		if repo == "." || repo == "" || repo == "/" {
-			repo = ""
-		}
-
-		// Use first line of Content as display text.
-		display := strings.SplitN(review.Content, "\n", 2)[0]
-		display = strings.ReplaceAll(display, "\n", " ")
-
-		var line string
-		if repo != "" {
-			line = repo + " " + sidebarDotStyle.Render("·") + " " + display
-		} else {
-			line = display
-		}
-
-		// Truncate to fit.
-		if lipgloss.Width(line) > maxLineWidth {
-			line = line[:max(maxLineWidth-1, 0)] + "…"
-		}
-
-		if m.focusedPanel == 1 && m.sidebarCursor == i {
-			b.WriteString(sidebarSelectedStyle.Render(line))
-		} else {
-			b.WriteString(sidebarValueStyle.Render(line))
-		}
-		if i < len(reviews)-1 {
-			b.WriteString("\n")
-		}
-	}
-
-	return b.String()
-}
-
-// renderSidebarComments renders the COMMENTS section of the sidebar.
-func (m Model) renderSidebarComments(width int) string {
-	comments := m.nonReviewComments()
-	var b strings.Builder
-
-	b.WriteString(sidebarHeaderStyle.Render(fmt.Sprintf("COMMENTS (%d)", len(comments))))
-	b.WriteString("\n")
-
-	maxLineWidth := max(width-3, 10)
-
-	reviewCount := m.sidebarReviewCount()
-
-	for i, comment := range comments {
-		// Use first line of content as display text.
-		display := strings.SplitN(comment.Content, "\n", 2)[0]
-		display = strings.ReplaceAll(display, "\n", " ")
-
-		typeStr := commentTypeStyle(comment.Type).Render(comment.Type)
-		line := typeStr + " " + sidebarDotStyle.Render("·") + " " + display
-
-		// Truncate to fit.
-		if lipgloss.Width(line) > maxLineWidth {
-			line = line[:max(maxLineWidth-1, 0)] + "…"
-		}
-
-		flatIndex := reviewCount + i
-		if m.focusedPanel == 1 && m.sidebarCursor == flatIndex {
-			b.WriteString(sidebarSelectedStyle.Render(line))
-		} else {
-			b.WriteString(line)
-		}
-		if i < len(comments)-1 {
-			b.WriteString("\n")
-		}
-	}
-
-	return b.String()
-}
-
-// renderDates renders the dates section.
-func (m Model) renderDates() string {
-	var b strings.Builder
-
-	b.WriteString(labelStyle.Render("Created:   "))
-	b.WriteString(valueStyle.Render(m.ticket.Dates.Created.Format("Jan 02, 2006 15:04")))
-	b.WriteString("\n")
-
-	b.WriteString(labelStyle.Render("Updated:   "))
-	b.WriteString(valueStyle.Render(m.ticket.Dates.Updated.Format("Jan 02, 2006 15:04")))
-
-	return b.String()
-}
-
 // renderMarkdown renders content as markdown using glamour.
 func (m Model) renderMarkdown(content string) string {
 	if m.mdRenderer == nil {
@@ -1347,135 +1314,6 @@ func (m Model) renderMarkdown(content string) string {
 		return content // fallback to raw on error
 	}
 	return strings.TrimSpace(rendered)
-}
-
-// renderSection renders a labeled section with content.
-func (m Model) renderSection(title, content string) string {
-	var b strings.Builder
-
-	b.WriteString("\n")
-	b.WriteString(sectionHeaderStyle.Render("─── " + title + " ───"))
-	b.WriteString("\n")
-	b.WriteString(m.renderMarkdown(content))
-
-	return b.String()
-}
-
-// renderSession renders the session section.
-func (m Model) renderSession() string {
-	session := m.ticket.Session
-	var b strings.Builder
-
-	b.WriteString("\n")
-	b.WriteString(sectionHeaderStyle.Render("─── Session ───"))
-	b.WriteString("\n")
-
-	b.WriteString(labelStyle.Render("ID:        "))
-	b.WriteString(valueStyle.Render(session.ID[:8]))
-	b.WriteString("\n")
-
-	b.WriteString(labelStyle.Render("Agent:     "))
-	b.WriteString(valueStyle.Render(session.Agent))
-	b.WriteString("\n")
-
-	b.WriteString(labelStyle.Render("Status:    "))
-	if session.EndedAt == nil {
-		b.WriteString(statusStyle("progress").Render("ACTIVE"))
-	} else {
-		b.WriteString(statusStyle("done").Render("ENDED"))
-	}
-	b.WriteString("\n")
-
-	b.WriteString(labelStyle.Render("Started:   "))
-	b.WriteString(valueStyle.Render(session.StartedAt.Format("Jan 02, 2006 15:04")))
-
-	if session.EndedAt != nil {
-		b.WriteString("\n")
-		b.WriteString(labelStyle.Render("Ended:     "))
-		b.WriteString(valueStyle.Render(session.EndedAt.Format("Jan 02, 2006 15:04")))
-	}
-
-	// Current status if present.
-	if session.CurrentStatus != nil {
-		b.WriteString("\n\n")
-		b.WriteString(labelStyle.Render("Current:   "))
-		b.WriteString(valueStyle.Render(session.CurrentStatus.Status))
-		if session.CurrentStatus.Tool != nil {
-			b.WriteString(" (")
-			b.WriteString(valueStyle.Render(*session.CurrentStatus.Tool))
-			b.WriteString(")")
-		}
-		if session.CurrentStatus.Work != nil && *session.CurrentStatus.Work != "" {
-			b.WriteString("\n")
-			b.WriteString(labelStyle.Render("           "))
-			b.WriteString(valueStyle.Render(*session.CurrentStatus.Work))
-		}
-	}
-
-	return b.String()
-}
-
-// renderReviewRequests renders the review requests section.
-func (m Model) renderReviewRequests() string {
-	reviews := m.reviewComments()
-	if len(reviews) == 0 {
-		return ""
-	}
-
-	var b strings.Builder
-	b.WriteString("\n")
-	b.WriteString(sectionHeaderStyle.Render("─── Review Requests ───"))
-	b.WriteString("\n")
-
-	for _, review := range reviews {
-		// Extract repo from action args
-		repo := extractRepoPath(review)
-		if repo == "" || repo == "." {
-			repo = "."
-		}
-		// Use first line of content as summary
-		summary := strings.SplitN(review.Content, "\n", 2)[0]
-		b.WriteString(labelStyle.Render("[repo: " + repo + "]"))
-		b.WriteString("  ")
-		b.WriteString(valueStyle.Render("\"" + summary + "\""))
-		b.WriteString("  ")
-		b.WriteString(labelStyle.Render("(" + formatTimeAgo(review.CreatedAt) + ")"))
-		b.WriteString("\n")
-	}
-
-	return b.String()
-}
-
-// renderComments renders the comments section.
-func (m Model) renderComments() string {
-	var b strings.Builder
-
-	b.WriteString("\n")
-	b.WriteString(sectionHeaderStyle.Render(fmt.Sprintf("─── Comments (%d) ───", len(m.ticket.Comments))))
-	b.WriteString("\n")
-
-	for i, comment := range m.ticket.Comments {
-		// Comment type badge and date.
-		typeStyle := commentTypeStyle(comment.Type)
-		badge := typeStyle.Render("[" + comment.Type + "]")
-		date := labelStyle.Render(comment.CreatedAt.Format("Jan 02 15:04"))
-
-		b.WriteString(badge)
-		b.WriteString(strings.Repeat(" ", max(15-len(comment.Type), 1)))
-		b.WriteString(date)
-		b.WriteString("\n")
-
-		// Comment content rendered as markdown.
-		b.WriteString(m.renderMarkdown(comment.Content))
-		b.WriteString("\n")
-
-		// Add spacing between comments, but not after the last one.
-		if i < len(m.ticket.Comments)-1 {
-			b.WriteString("\n")
-		}
-	}
-
-	return b.String()
 }
 
 // loadTicket returns a command to load the ticket.
