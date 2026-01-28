@@ -1,0 +1,677 @@
+{
+  "id": "b213cc6d-e9e1-4a47-9bbd-b6517cdd7389",
+  "title": "Ticket TUI: Split Panel Layout with Description and Sidebar",
+  "body": "## Summary\n\nRedesign the ticket detail TUI (`cortex show`) with a Jira-style 70/30 split layout. Left panel shows the scrollable description, right panel shows metadata sidebar.\n\n## Layout\n\n```\n┌──────────────────────────────────────────────────────────────────────────┐\n│  [a1b2c3d4] Fix spawn bug                                    progress   │  ← 5% header\n├───────────────────────────────────────────────┬──────────────────────────┤\n│                                               │  DETAILS                 │\n│  ## Description                               │  Created  Jan 27, 14:05  │\n│                                               │  Updated  Jan 27, 15:30  │\n│  The spawn operation fails when the tmux      │  Progress Jan 27, 14:10  │\n│  session target uses prefix matching...       │                          │\n│                                               │  SESSION                 │\n│  ### Steps to reproduce                       │  Agent    claude          │\n│  1. Open the kanban                           │  Status   in_progress     │\n│  2. Select a backlog ticket                   │  Tool     Bash            │\n│  3. Press 's' to spawn                        │  Window   fix-spawn-bug   │\n│                                               │  Started  Jan 27, 14:10  │\n│                                               │                          │\n│                                               │  REVIEWS (1)             │\n│                                               │    cortex1 · Fix tmux..  │\n│                                               │                          │\n│                                               │  COMMENTS (3)            │\n│                                               │    progress · Found...   │\n│                                               │    decision · Switch..   │\n│                                               │    blocker · Need...     │\n│                                               │                          │\n│  [LEFT FOCUSED]                               │                          │\n├───────────────────────────────────────────────┴──────────────────────────┤\n│  [h/l] panel  [j/k] scroll  [r]efresh  [f]ocus  [ga] architect    75%  │\n└──────────────────────────────────────────────────────────────────────────┘\n```\n\n## Changes\n\n### Split layout\n- Left panel (70%): scrollable viewport with glamour-rendered description/body\n- Right panel (30%): static metadata sidebar — details, session, reviews list, comments list\n- Header (5%): ticket ID + title + status badge (unchanged)\n- Help bar: context-sensitive based on focused panel\n\n### Panel focus with h/l\n- `h` focuses left panel (description scrolling)\n- `l` focuses right panel (list navigation — implemented in follow-up ticket)\n- Visual indicator showing which panel is focused (e.g., border highlight or label)\n- Default focus: left panel\n\n### Left panel behavior\n- Scrollable viewport with `j/k`, `gg/G`, `Ctrl+D/U`\n- Glamour markdown rendering of ticket body\n- Scroll percentage shown in help bar\n\n### Right panel rendering\n- DETAILS section: Created, Updated, Progress, Reviewed, Done timestamps\n- SESSION section (if exists): Agent, Status, Tool, Window, Started, Ended\n- REVIEWS section: one-liner per review (repo path + summary/title)\n- COMMENTS section: one-liner per comment (type + title)\n- Review repo path should be relative to project folder; omit if same as project\n\n### Narrow terminal fallback\n- Below ~100 columns, collapse to single-column stacked layout (current behavior)\n\n## Files\n- `internal/cli/tui/ticket/model.go` — restructure View(), add split layout, panel focus state\n- `internal/cli/tui/ticket/styles.go` — add panel styles, focus indicators\n- `internal/cli/tui/ticket/keys.go` — add h/l panel switching, update help text",
+  "dates": {
+    "created": "2026-01-27T15:19:30.493441Z",
+    "updated": "2026-01-27T15:44:22.791187Z",
+    "progress": "2026-01-27T15:19:51.49512Z",
+    "reviewed": "2026-01-27T15:41:34.998644Z",
+    "done": "2026-01-27T15:44:22.791187Z"
+  },
+  "comments": [
+    {
+      "id": "423bde43-0233-4774-933a-f4464770f14e",
+      "session_id": "2ade8383-5673-454a-8512-b669aab70fea",
+      "type": "progress",
+      "content": "Completed full codebase exploration. Read all three target files (model.go, styles.go, keys.go), the SDK types (response.go), and reference TUI components (kanban, dashboard). Now producing the detailed implementation plan.",
+      "created_at": "2026-01-27T15:23:50.871109Z"
+    },
+    {
+      "id": "db85d12c-5441-4a5a-9d80-8eabff6d27ea",
+      "session_id": "2ade8383-5673-454a-8512-b669aab70fea",
+      "type": "progress",
+      "content": "Implementation complete: 70/30 split panel layout for ticket detail TUI. 370 lines added across 3 files. Build, lint, all tests pass. Review requested.",
+      "created_at": "2026-01-27T15:41:39.249227Z"
+    },
+    {
+      "id": "f37af025-250d-4243-aea2-2ca9ec5b79ee",
+      "session_id": "2ade8383-5673-454a-8512-b669aab70fea",
+      "type": "ticket_done",
+      "content": "## Summary\n\nImplemented a 70/30 horizontal split panel layout for the ticket detail TUI (`cortex show`). The left panel shows the scrollable glamour-rendered ticket description, while the right panel displays a static metadata sidebar with details, session info, reviews, and comments. Panel focus is toggleable with `h`/`l` keys. The layout gracefully falls back to the existing single-column stacked layout when the terminal is narrower than 100 columns.\n\n## Files Modified\n\n- **`internal/cli/tui/ticket/styles.go`** (+46 lines) — Added `focusColor` (purple, matching header), split layout styles: `leftPanelFocusedStyle`/`leftPanelStyle`, `sidebarFocusedStyle`/`sidebarStyle`, `sidebarHeaderStyle`, `sidebarLabelStyle`, `sidebarValueStyle`, `sidebarDotStyle`, `dividerStyle`.\n\n- **`internal/cli/tui/ticket/keys.go`** (+21/-9 lines) — Added `KeyH`/`KeyL` constants. Updated `helpText` signature to accept `splitLayout bool`, prepending `[h/l] panel` hint in split mode. Separated `[ga] architect` from the scroll group for clarity.\n\n- **`internal/cli/tui/ticket/model.go`** (+333/-21 lines) — Renamed `viewport` → `leftViewport`. Added `focusedPanel`, `splitLayout` fields and `minSplitWidth` constant. Added `leftPanelWidth()`/`rightPanelWidth()` helpers. Updated `WindowSizeMsg` handler to set split mode and size viewport/renderer to left panel width. Added `renderLeftContent()`, `renderSplitLayout()`, `renderPanelDivider()`, `renderSidebar()`, `renderSidebarDetails()`, `renderSidebarSession()`, `renderSidebarReviews()`, `renderSidebarComments()`. Added `h`/`l` key handling for panel focus switching.\n\n## Key Decisions\n\n- **70/30 split ratio**: Left panel gets 70% of terminal width, right gets remainder minus 1 column for the divider. This gives the markdown body ample room while keeping the sidebar compact.\n- **Focus indicator**: Purple left border on the focused panel, matching the header color. Unfocused panel uses padding instead of a border to maintain alignment.\n- **Sidebar content**: One-liner format for reviews (repo · summary) and comments (type · content) with truncation to fit panel width. Review repo paths use `filepath.Base()` to save space.\n- **Narrow fallback at 100 columns**: Below this threshold, the layout reverts to the existing single-column stacked view. The `h`/`l` keys are not consumed in narrow mode.\n- **Scroll always targets left viewport**: Regardless of panel focus, scroll keys operate on the left (description) viewport. Right-panel scrolling is deferred to a follow-up ticket.\n\n## Verification\n\n- `make build` — compiles cleanly\n- `make lint` — 0 issues\n- `make test` — all unit tests pass\n\n## Follow-up Notes\n\n- Right-panel scrolling (when focused) could be added in a follow-up ticket for navigating long review/comment lists.\n- The sidebar currently renders all sections statically; a future enhancement could add collapsible sections.",
+      "created_at": "2026-01-27T15:44:22.789999Z"
+    }
+  ],
+  "session": {
+    "id": "2ade8383-5673-454a-8512-b669aab70fea",
+    "started_at": "2026-01-27T15:19:51.455238Z",
+    "ended_at": "2026-01-27T15:44:22.790671Z",
+    "agent": "claude",
+    "tmux_window": "ticket-tui-split-panel-layout-with-description-and",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/27ff46a1-77df-4cf6-a42f-eb787271deb0",
+    "feature_branch": "ticket/ticket-tui-split",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-27T15:44:05.463837Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T15:19:51.455238Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T15:20:21.431576Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:20:24.80965Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T15:20:26.656878Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:28.749355Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:32.085652Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:32.086341Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T15:20:34.944628Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T15:20:35.080015Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:36.75097Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:36.751623Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:40.231099Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:20:43.099177Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:45.497113Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T15:20:47.780961Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:49.227071Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:20:52.600465Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:54.531347Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:54.532221Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:20:56.844905Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:20:59.360158Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:21:01.427298Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:21:03.103458Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:21:04.584568Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:21:06.343936Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:21:08.811688Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:21:11.356048Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:21:13.248312Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T15:21:42.724892Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:21:49.752069Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:21:49.752672Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:21:49.753852Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:21:58.712861Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:21:58.847382Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:21:58.980555Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:22:03.09236Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:22:07.180207Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T15:22:10.730715Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:22:14.775241Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:22:18.245181Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:22:21.990213Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:22:25.101019Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T15:22:56.567378Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:23:01.915631Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:23:01.916374Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:23:01.917015Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T15:23:10.82723Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:23:10.970188Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:23:11.105684Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:23:15.84899Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:23:16.206049Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:23:19.929666Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:23:23.251183Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:23:25.973864Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:23:30.58254Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:23:36.418291Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:23:36.803704Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:23:39.988436Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:23:45.331059Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:23:45.471859Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__addTicketComment",
+        "work": null,
+        "at": "2026-01-27T15:23:50.905318Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T15:25:49.586047Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T15:26:46.322386Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T15:26:53.000577Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T15:37:47.5932Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:37:52.922819Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:37:52.92358Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:37:52.924221Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:37:59.119712Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T15:37:59.694723Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:38:03.64156Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:38:06.641165Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:38:11.432592Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:38:15.463431Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T15:38:21.941341Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:38:27.978678Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:38:37.66835Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T15:38:41.378104Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:38:46.412488Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:38:58.615705Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T15:39:03.671335Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:39:13.71084Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:39:23.968504Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:39:28.381034Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:39:40.270173Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:39:45.657084Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:39:52.689595Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:39:59.775876Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:40:05.580429Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:40:37.147214Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T15:40:43.560659Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:40:50.098824Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:40:59.763569Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:41:03.951333Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:41:08.906445Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T15:41:14.964996Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:41:19.073191Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:41:27.582627Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T15:41:35.067929Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__addTicketComment",
+        "work": null,
+        "at": "2026-01-27T15:41:39.326727Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T15:41:51.77059Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:44:01.277366Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:44:05.463837Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/27ff46a1-77df-4cf6-a42f-eb787271deb0",
+        "summary": "Implemented the 70/30 split panel layout for the ticket detail TUI (`cortex show`). Left panel: scrollable glamour-rendered description. Right panel: static metadata sidebar with DETAILS (timestamps), SESSION (agent/status/tool/window), REVIEWS (one-liner per review), and COMMENTS (one-liner per comment). Panel focus toggleable with h/l keys, indicated by a purple left border. Falls back to current single-column stacked layout below 100 columns. Changes span 3 files: styles.go (sidebar/divider/focus styles), keys.go (h/l key constants, updated helpText), model.go (struct changes, split layout rendering, panel width helpers, sidebar render methods). Build, lint, and all unit tests pass.",
+        "requested_at": "2026-01-27T15:41:34.997887Z"
+      }
+    ]
+  }
+}

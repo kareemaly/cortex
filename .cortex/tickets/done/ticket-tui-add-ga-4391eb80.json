@@ -1,0 +1,507 @@
+{
+  "id": "4391eb80-c1e8-4fa3-8630-7134b8b09cb9",
+  "title": "Ticket TUI: Add \"ga\" Shortcut to Focus Architect Window",
+  "body": "## Summary\n\nAdd a `ga` (go architect) two-key shortcut to the ticket detail TUI that focuses the architect window (window 0) of the current tmux session.\n\n## Changes\n\n- Add `ga` key sequence to the ticket detail TUI (follows same `pendingG` pattern as kanban's `gd`)\n- On `ga`, call the daemon API to focus tmux window 0 of the current project's tmux session (the architect window)\n- The focus operation needs both `select-window` and `switch-client` (lesson from the `gd` fix — both are required for cross-session switching)\n\n## Implementation Notes\n\n- The ticket TUI runs inside a ticket agent's tmux window. The architect is window 0 of the same tmux session (the project session, e.g., \"cortex\")\n- May need a new daemon API endpoint like `POST /architect/focus` or reuse existing focus infrastructure\n- The project's tmux session name comes from the project config (`name` field in `.cortex/cortex.yaml`)\n\n## Files\n- `internal/cli/tui/ticket/` — ticket detail TUI model, keys\n- `internal/daemon/api/` — may need a focus endpoint for architect window\n- `internal/cli/sdk/client.go` — SDK method for the focus call",
+  "dates": {
+    "created": "2026-01-27T14:07:40.772235Z",
+    "updated": "2026-01-27T14:44:43.152723Z",
+    "progress": "2026-01-27T14:13:47.544738Z",
+    "reviewed": "2026-01-27T14:20:20.695287Z",
+    "done": "2026-01-27T14:44:43.152723Z"
+  },
+  "comments": [
+    {
+      "id": "9b3e4847-c68c-48c1-a98c-3af08937c3a4",
+      "session_id": "5eb41a6e-22b2-4e50-95c8-c094c9381280",
+      "type": "ticket_done",
+      "content": "## Summary\n\nAdded a `ga` (go architect) two-key shortcut to the ticket detail TUI that focuses the architect window (window 0) of the project's tmux session. This follows the same `pendingG` pattern established by the kanban's `gd` shortcut.\n\n## Changes Made\n\n### 1. `internal/daemon/api/architect.go`\n- Added `Focus` method to `ArchitectHandlers`\n- Loads project config to get tmux session name (same pattern as `GetState`/`Spawn`)\n- Calls `FocusWindowByIndex(sessionName, 0)` to select window 0 (architect)\n- Calls `SwitchClient(sessionName)` for cross-session switching (non-fatal on failure)\n- Returns `FocusResponse{Success: true, Window: \"architect\"}`\n\n### 2. `internal/daemon/api/server.go`\n- Added `r.Post(\"/focus\", architectHandlers.Focus)` route inside the `/architect` group\n\n### 3. `internal/cli/sdk/client.go`\n- Added `FocusArchitect()` method — `POST /architect/focus` with project header via `doRequest`\n- Follows same pattern as `FocusTicket()` and `FocusDaemonDashboard()`\n\n### 4. `internal/cli/tui/ticket/model.go`\n- Added `ga` key handler: `if m.pendingG \u0026\u0026 isKey(msg, KeyApprove)` — clears pendingG and calls `focusArchitect()`\n- Guarded approve handler with `!m.pendingG` to prevent `a` from triggering approve during `ga` sequence\n- Added fire-and-forget `focusArchitect()` tea.Cmd (on success user lands on architect window; on failure they stay in TUI)\n\n### 5. `internal/cli/tui/ticket/keys.go`\n- Updated all help text variants from `[j/k/gg/G]` to `[j/k/gg/G/ga]`\n\n## Key Decisions\n\n- **Guard on approve handler**: Since `a` is `KeyApprove`, pressing `ga` would trigger approve on the second keystroke. Added `!m.pendingG` guard to prevent this, ensuring `a` after `g` is always interpreted as `ga`.\n- **Fire-and-forget pattern**: The `focusArchitect()` command ignores errors — on success the tmux focus switches to the architect window; on failure the user remains in the TUI with no disruption.\n- **`SwitchClient` non-fatal**: Matches the existing `DaemonFocusHandler` pattern where `SwitchClient` failure is logged but doesn't block the response.\n\n## Verification\n\n- `make build` — compiles successfully\n- `make lint` — 0 issues\n- `make test` — all unit tests pass",
+      "created_at": "2026-01-27T14:44:43.151584Z"
+    }
+  ],
+  "session": {
+    "id": "5eb41a6e-22b2-4e50-95c8-c094c9381280",
+    "started_at": "2026-01-27T14:13:47.511402Z",
+    "ended_at": "2026-01-27T14:44:43.152248Z",
+    "agent": "claude",
+    "tmux_window": "ticket-tui-add-ga-shortcut-to-focus-architect-wind",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/78d65411-bf44-4cff-86ef-e83ed2910dca",
+    "feature_branch": "ticket/ticket-tui-add-ga",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-27T14:44:28.880984Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T14:13:47.511402Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T14:14:04.599654Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T14:14:07.558647Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T14:14:07.712762Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T14:14:07.84792Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T14:14:07.986263Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:11.100587Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:11.100959Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:11.101807Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:11.102118Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:14.618111Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:14:14.962209Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:19.337018Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:19.337814Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:14:19.717135Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:23.043997Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:14:23.400104Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T14:14:27.524769Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T14:14:27.663469Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:14:27.79923Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:30.92347Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:30.924194Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:30.924655Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:14:34.682647Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:37.298472Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:14:37.298993Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T14:15:03.864961Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:15:30.940641Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:15:30.941637Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:15:30.942084Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:15:30.942638Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:15:39.881868Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:15:39.882488Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:15:39.882882Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:15:39.883296Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:17:07.526316Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T14:17:28.775418Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T14:17:33.504532Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T14:17:49.350556Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:17:49.426971Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:17:49.438508Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:17:49.439271Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:17:49.439989Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:17:49.442753Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:17:57.843514Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:18:02.943921Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:18:03.072475Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:18:08.654775Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:18:08.655563Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:18:09.022384Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:18:17.528817Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:18:22.565088Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:18:29.531593Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:18:36.367664Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:18:41.784703Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:18:46.70937Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:18:53.800585Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:19:00.777205Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:19:06.626146Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:19:12.159082Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:19:17.728678Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:19:21.986699Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:19:26.795624Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:19:31.299157Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:19:38.771109Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:19:46.580619Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:19:50.611591Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:19:54.302964Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:19:59.271637Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:20:04.439046Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:20:04.467046Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:20:04.467672Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:20:09.984018Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T14:20:20.742752Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T14:20:24.105805Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:44:25.111092Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:44:28.880984Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/78d65411-bf44-4cff-86ef-e83ed2910dca",
+        "summary": "Added `ga` (go architect) two-key shortcut to the ticket detail TUI. Changes across 5 files:\n\n1. **API** (`architect.go`): New `Focus` handler on `ArchitectHandlers` — loads project config for session name, calls `FocusWindowByIndex(session, 0)` + `SwitchClient` for cross-session switching, returns `FocusResponse`.\n2. **Routes** (`server.go`): Added `POST /architect/focus` route inside the `/architect` group.\n3. **SDK** (`client.go`): New `FocusArchitect()` method — `POST /architect/focus` with project header via `doRequest`.\n4. **TUI model** (`model.go`): Added `ga` key handler (checks `pendingG \u0026\u0026 isKey(msg, KeyApprove)`), guarded approve handler with `!m.pendingG` to prevent `a` from triggering approve during `ga` sequence, added fire-and-forget `focusArchitect()` tea.Cmd.\n5. **Help text** (`keys.go`): Updated all help string variants from `[j/k/gg/G]` to `[j/k/gg/G/ga]`.\n\nBuild, lint (0 issues), and all unit tests pass.",
+        "requested_at": "2026-01-27T14:20:20.694324Z"
+      }
+    ]
+  }
+}

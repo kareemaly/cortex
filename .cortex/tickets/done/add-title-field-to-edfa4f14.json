@@ -1,0 +1,831 @@
+{
+  "id": "edfa4f14-d529-40f2-8318-6cb42ad4cdc8",
+  "title": "Add Title Field to Comments and Reviews, Rename Review Summary to Content",
+  "body": "## Summary\n\nNormalize the data model for comments and reviews so both have a required `Title` + `Content` pattern. Currently comments have `Type` + `Content` (no title), and reviews have `Summary` (which is actually full markdown content, not a title).\n\n## Changes\n\n### Comments: Add required `Title` field\n- Add `Title string` to the `Comment` struct\n- Title is a short one-liner summary, `Content` remains the full markdown body\n- Both `Title` and `Content` are required\n\n### Reviews: Add required `Title`, rename `Summary` → `Content`\n- Add `Title string` to `RequestedReview` struct\n- Rename `Summary` → `Content` (it contains full markdown, not a summary)\n- Both `Title` and `Content` are required\n\n### Enforce required fields everywhere\n\nAudit and update ALL of the following to require both `title` and `content`:\n\n**Schema:**\n- `internal/ticket/ticket.go` — `Comment` struct, `RequestedReview` struct\n\n**Store:**\n- `internal/ticket/store.go` — `AddComment`, `RequestReview` methods — validate both fields are non-empty\n\n**API Types:**\n- `internal/types/response.go` — `CommentResponse`, `RequestedReviewResponse` — add Title, rename Summary→Content\n\n**HTTP API handlers:**\n- `internal/daemon/api/tickets.go` — `AddComment` handler, `RequestReview` handler — require title+content in request body, return validation error if missing\n\n**MCP Tools:**\n- `internal/daemon/mcp/tools_ticket.go` — `addTicketComment` tool, `requestReview` tool — add title input parameter, require both fields\n- Update MCP tool schemas/descriptions\n\n**SDK Client:**\n- `internal/cli/sdk/client.go` — `AddComment`, `RequestReview` methods — accept title parameter\n\n**Tests:**\n- Update all tests that create comments or reviews to include title\n- Add validation tests for missing title/content\n\n## Notes\n\n- This is a breaking change to the review schema (Summary→Content rename). Existing review JSON files will need the field renamed.\n- Existing comments without titles: handle gracefully during migration (treat as empty string or derive from first line of content)\n\n## Files\n- `internal/ticket/ticket.go` — Comment, RequestedReview structs\n- `internal/ticket/store.go` — AddComment, RequestReview methods\n- `internal/types/response.go` — CommentResponse, RequestedReviewResponse\n- `internal/daemon/api/tickets.go` — AddComment, RequestReview handlers\n- `internal/daemon/mcp/tools_ticket.go` — addTicketComment, requestReview tools\n- `internal/cli/sdk/client.go` — SDK methods\n- `internal/daemon/mcp/tools_test.go` — MCP tests\n- `internal/daemon/api/integration_test.go` — API tests",
+  "dates": {
+    "created": "2026-01-27T15:19:30.266338Z",
+    "updated": "2026-01-27T16:34:08.404464Z",
+    "progress": "2026-01-27T15:19:51.259634Z",
+    "reviewed": "2026-01-27T16:32:16.011265Z",
+    "done": "2026-01-27T16:34:08.404464Z"
+  },
+  "comments": [
+    {
+      "id": "42179c34-9238-457a-8566-960b1a95746e",
+      "session_id": "2dc1accf-35da-44b8-b054-56bf4aadd38d",
+      "type": "ticket_done",
+      "content": "## Summary\n\nAdded a required `Title` field to both `Comment` and `ReviewRequest` structs, and renamed `ReviewRequest.Summary` to `Content`. This normalizes the data model so both comments and reviews follow a consistent `Title` + `Content` pattern, where Title is a short one-liner and Content is the full markdown body.\n\n## Changes Made\n\n### Core Structs (`internal/ticket/ticket.go`)\n- Added `Title string` field to `Comment` struct (after `Type`)\n- Added `Title string` field to `ReviewRequest` struct (after `RepoPath`)\n- Renamed `ReviewRequest.Summary` → `Content` with updated json tag\n\n### Store Methods (`internal/ticket/store.go`)\n- `AddComment`: Added `title` parameter, added non-empty validation for both `title` and `content`\n- `AddReviewRequest`: Added `title` parameter, renamed `summary` → `content`, added non-empty validation for both\n\n### Response Types (`internal/types/response.go`)\n- Added `Title` to `CommentResponse` and `RequestedReviewResponse`\n- Renamed `Summary` → `Content` in `RequestedReviewResponse`\n\n### Type Conversions (`internal/types/convert.go`)\n- Updated `ToCommentResponse` to map `Title`\n- Updated `ToRequestedReviewResponse` to map `Title` and `Content` (was `Summary`)\n\n### API Types (`internal/daemon/api/types.go`)\n- Added `Title` to `AddCommentRequest`\n- Added `Title` and renamed `Summary` → `Content` in `RequestReviewRequest`\n\n### API Handlers (`internal/daemon/api/tickets.go`)\n- `AddComment` handler: Added title validation (400 if empty), passes title to store\n- `RequestReview` handler: Added title validation, renamed summary → content validation and passing\n- `Conclude` handler: Passes \"Session concluded\" as title when creating ticket_done comment\n\n### MCP Types (`internal/daemon/mcp/types.go`)\n- Added `Title` to `AddCommentInput` and `RequestReviewInput` with jsonschema descriptions\n- Renamed `Summary` → `Content` in `RequestReviewInput`\n\n### MCP Tool Handlers (`internal/daemon/mcp/tools_ticket.go`)\n- `handleAddTicketComment`: Added title validation, passes title to SDK client\n- `handleRequestReview`: Added title/content validation, passes both to SDK client\n\n### SDK Client (`internal/cli/sdk/client.go`)\n- `AddComment`: Added `title` parameter, includes in request body\n- `RequestReview`: Added `title` parameter, renamed `summary` → `content` in request body\n\n### TUI (`internal/cli/tui/ticket/model.go`)\n- Review requests: Display `review.Title` instead of `review.Summary`\n- Comments: Show `comment.Title` on the badge line after type badge and before date\n\n### Tests\n- `ticket_test.go`: Added `Title` to Comment in JSON round-trip test\n- `store_test.go`: Updated existing AddComment tests with title param, added `TestStoreAddCommentValidation`, `TestStoreAddReviewRequest`, `TestStoreAddReviewRequestValidation`\n- `tools_test.go`: Updated existing comment tests with Title field, added `TestHandleAddTicketCommentMissingTitle`, `TestHandleRequestReview`, `TestHandleRequestReviewValidation`\n\n## Key Decisions\n- **Title required everywhere**: Both title and content are required (non-empty) at the store level and MCP handler level, enforced with ValidationError\n- **Conclude uses fixed title**: The Conclude handler passes \"Session concluded\" as the title for the auto-generated ticket_done comment\n- **TUI displays title prominently**: Review requests show title as the primary text; comments show title inline on the badge line\n\n## Verification\n- `make build` — compilation succeeds\n- `make test` — all 11 test suites pass (including 6 new test cases)\n- `make lint` — 0 issues\n\n## Files Modified (13)\n1. `internal/ticket/ticket.go`\n2. `internal/ticket/store.go`\n3. `internal/ticket/ticket_test.go`\n4. `internal/ticket/store_test.go`\n5. `internal/types/response.go`\n6. `internal/types/convert.go`\n7. `internal/daemon/api/types.go`\n8. `internal/daemon/api/tickets.go`\n9. `internal/daemon/mcp/types.go`\n10. `internal/daemon/mcp/tools_ticket.go`\n11. `internal/daemon/mcp/tools_test.go`\n12. `internal/cli/sdk/client.go`\n13. `internal/cli/tui/ticket/model.go`\n\n## Follow-up Notes\n- This is a breaking change to the JSON schema (Summary → Content rename). Existing review JSON files with the old `summary` field will need migration or will have empty Content on deserialization.",
+      "created_at": "2026-01-27T16:34:08.40313Z"
+    }
+  ],
+  "session": {
+    "id": "2dc1accf-35da-44b8-b054-56bf4aadd38d",
+    "started_at": "2026-01-27T15:30:49.156155Z",
+    "ended_at": "2026-01-27T16:34:08.403851Z",
+    "agent": "claude",
+    "tmux_window": "add-title-field-to-comments-and-reviews-rename-rev",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/3bf87966-1107-4460-9e55-0e4163573d02",
+    "feature_branch": "ticket/add-title-field-to",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-27T16:33:45.685952Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T15:30:49.156155Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T15:31:07.020094Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:10.435468Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:10.43616Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:10.43679Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:13.504011Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:13.504794Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:13.505268Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:18.339481Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:31:18.717043Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:20.774011Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:24.63372Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:31:25.014088Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:28.285613Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:28.286446Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:31.501131Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:31.501951Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:31:35.720477Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:31:36.93243Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:31:40.370413Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T15:31:40.403747Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T15:32:02.695437Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:11.141524Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:11.142152Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:11.143138Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:11.143596Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:11.144031Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:19.132257Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:19.13293Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:19.134389Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:19.135286Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:26.668966Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:26.669581Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:26.670028Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:32:35.464568Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:32:35.599504Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:44.205068Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:44.205782Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:44.206296Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:51.509353Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T15:32:51.510409Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:32:59.650525Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:32:59.789593Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:33:06.101369Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:33:11.441601Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:33:19.852943Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T15:33:24.83725Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T15:34:15.054899Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T15:34:35.972439Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T15:34:44.236324Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T16:26:09.500874Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T16:26:09.586486Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.675616Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.676698Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.677442Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.678044Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.679784Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.680494Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.682073Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.682971Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.683685Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:18.684284Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:26.503717Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:26.504853Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:26:28.09046Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T16:26:37.728545Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:26:47.713818Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:26:47.785787Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T16:26:54.576722Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:28.67529Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:28.756803Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:28.84704Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:28.938016Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:29.022869Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:29.111521Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:29.193436Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:29.285409Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:29.38522Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:27:29.484157Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:03.231855Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:03.358306Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:03.475798Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:03.610838Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:03.745331Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:03.876678Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:04.017125Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:04.162897Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:04.311077Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T16:28:16.889295Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:28:17.547362Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:28:17.921527Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:28:18.064028Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:28:23.16059Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:41.94265Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:42.132539Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:42.315968Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:42.500798Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:28:42.682157Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:28:51.823035Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:28:51.823659Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:29:04.292738Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:29:14.085656Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:29:19.247235Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:29:32.106483Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:29:35.839435Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:29:40.751034Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:29:44.600927Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:29:49.541622Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:29:53.146433Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:30:07.022507Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:30:11.757567Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:30:15.425162Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T16:30:28.909607Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:30:34.292281Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:30:39.516087Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T16:30:47.166528Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:31:01.320022Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:31:09.458011Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:31:13.959977Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:31:24.514335Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:31:34.435229Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T16:31:41.573062Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:31:47.541707Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:31:47.593876Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:31:47.594546Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:31:53.396713Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:32:02.227057Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T16:32:16.084458Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T16:32:21.865686Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:33:41.07014Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T16:33:45.685952Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/3bf87966-1107-4460-9e55-0e4163573d02",
+        "summary": "Added required `Title` field to both `Comment` and `ReviewRequest` structs. Renamed `ReviewRequest.Summary` to `Content` since it holds full markdown, not a short summary. Changes propagated through all 13 files across all layers:\n\n**Schema**: `ticket.go` - Added `Title` to `Comment` and `ReviewRequest`, renamed `Summary` → `Content`\n**Store**: `store.go` - Updated `AddComment` and `AddReviewRequest` signatures with `title` param, added non-empty validation for both `title` and `content`\n**Response types**: `response.go` - Added `Title` to `CommentResponse` and `RequestedReviewResponse`, renamed `Summary` → `Content`\n**Conversions**: `convert.go` - Updated `ToCommentResponse` and `ToRequestedReviewResponse` to map `Title` and `Content`\n**API types**: `api/types.go` - Added `Title` to `AddCommentRequest`, renamed `Summary` → `Content` in `RequestReviewRequest`\n**API handlers**: `tickets.go` - Added title validation, passed title through to store, Conclude handler passes \"Session concluded\" as title\n**MCP types**: `mcp/types.go` - Added `Title` to `AddCommentInput` and `RequestReviewInput`, renamed `Summary` → `Content`\n**MCP handlers**: `tools_ticket.go` - Added title validation, passed title/content through to SDK client\n**SDK client**: `client.go` - Updated `AddComment` and `RequestReview` signatures with `title` param\n**TUI**: `model.go` - Display `review.Title` instead of `review.Summary`, show `comment.Title` on badge line\n\n**Tests**: Added validation tests for empty title/content on both `AddComment` and `AddReviewRequest` in store_test.go. Added MCP tests for missing title and RequestReview happy-path/validation. Updated all existing tests to include title field.\n\nAll builds, 11 test suites pass, lint reports 0 issues.",
+        "requested_at": "2026-01-27T16:32:16.010392Z"
+      }
+    ]
+  }
+}

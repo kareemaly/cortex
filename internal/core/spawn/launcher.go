@@ -14,8 +14,6 @@ type LauncherParams struct {
 	ReplaceSystemPrompt  bool              // if true, use --system-prompt (full replace); otherwise --append-system-prompt
 	MCPConfigPath        string            // path to MCP config file
 	SettingsPath         string            // path to settings config file
-	PermissionMode       string            // "plan" or empty
-	AllowedTools         []string          // tools that don't require approval
 	ResumeID             string            // claude session ID to resume
 	SessionID            string            // session ID for --session-id flag
 	AgentArgs            []string          // extra CLI args appended to the agent command
@@ -108,16 +106,6 @@ func buildLauncherScript(params LauncherParams, cleanupFiles []string) string {
 	// Add settings config
 	if params.SettingsPath != "" {
 		parts = append(parts, "--settings", shellQuote(params.SettingsPath))
-	}
-
-	// Add permission mode
-	if params.PermissionMode != "" {
-		parts = append(parts, "--permission-mode", params.PermissionMode)
-	}
-
-	// Add allowed tools
-	if len(params.AllowedTools) > 0 {
-		parts = append(parts, "--allowedTools", strings.Join(params.AllowedTools, ","))
 	}
 
 	// Add resume flag

@@ -1,0 +1,1173 @@
+{
+  "id": "f3b6bdd3-9a7b-44a3-9393-b4e5ebba3b9a",
+  "title": "Daemon Dashboard TUI",
+  "body": "## Problem\n\nThere is no central command center for managing all cortex projects. Users must navigate individual project sessions manually. The daemon (`cortexd`) runs headless with raw log output.\n\n## Solution\n\nTwo new CLI commands that together form the cortex command center:\n\n### 1. `cortex start` — Orchestrator\n\nCreates (or attaches to) a `CortexDaemon` tmux session with two panes:\n\n```\nCortexDaemon tmux session\n┌──────────────────────────────┬───────────────┐\n│                              │               │\n│  cortex dashboard            │   cortexd     │\n│  (client TUI, 70%)          │   (logs, 30%) │\n│                              │               │\n└──────────────────────────────┴───────────────┘\n```\n\nLogic:\n1. Check if `CortexDaemon` tmux session exists\n2. If yes — attach/switch to it\n3. If no — create session, run `cortexd` in initial pane, split left (70%) for `cortex dashboard`\n\n### 2. `cortex dashboard` — Client TUI\n\nStandalone bubbletea TUI that calls daemon HTTP APIs. Displays a navigable tree of all registered projects with nested active sessions.\n\n```\n┌──────────────────────────────────────────────────┐\n│  Cortex Dashboard                                │\n├──────────────────────────────────────────────────┤\n│                                                  │\n│  ▼ Cortex (3 backlog · 1 prog · 0 review)       │\n│    ● architect              running     2h 15m   │\n│    ● fix-auth-bug           progress       45m   │\n│  ▼ My App (12 backlog · 2 prog · 1 review)      │\n│    ● architect              running     1h 30m   │\n│    ○ add-dark-mode          review         12m   │\n│  ▶ Backend API (5 backlog · 0 prog · 0 review)  │\n│                                                  │\n├──────────────────────────────────────────────────┤\n│  [f]ocus  [s]pawn architect  [q]uit              │\n└──────────────────────────────────────────────────┘\n```\n\n**Tree nodes:**\n- **Project header** — expandable/collapsible, shows aggregated ticket counts by status\n- **Session row** — leaf node, shows ticket/window name + status + duration since session started\n\n**Keybindings:**\n- `j/k` — navigate tree up/down\n- `enter` / `l` — expand/collapse project\n- `f` — focus session: `tmux select-window` to jump to that agent's tmux window\n- `s` — spawn architect session for the selected project\n- `q` — quit dashboard\n\n**Data flow:**\n- Reads project list from global registry (`~/.cortex/settings.yaml` `projects` list)\n- For each project: fetches ticket counts via `GET /tickets` with `X-Cortex-Project` header\n- Active sessions: tickets in progress/review where `has_active_session: true`\n- SSE subscription per project for real-time updates (ticket moves refresh counts and session list)\n\n## Architecture\n\n**Key design principle: dashboard is a pure client.** It uses the same HTTP API as CLI, MCP, and TUI. The daemon stays headless — no TUI complexity in the daemon process.\n\nBenefits:\n- Dashboard can crash/restart without killing the daemon\n- Clean separation of concerns\n- Multiple dashboards could run simultaneously\n- Dashboard is testable against the HTTP API\n\n## Dependencies\n\n- **Global Project Registry** (`~/.cortex/settings.yaml` `projects` list) — needed to know which projects exist\n- **`GET /projects` endpoint** — daemon API to list registered projects with basic stats\n\n## Scope\n\n### `cortex start` command (`cmd/cortex/commands/start.go`)\n- Create/attach to `CortexDaemon` tmux session\n- Split panes: left 70% dashboard, right 30% daemon\n- Minimal command — just tmux orchestration\n\n### `cortex dashboard` command (`cmd/cortex/commands/dashboard.go`)\n- New bubbletea TUI in `internal/cli/tui/dashboard/`\n- Tree model with project headers and session rows\n- HTTP client calls to daemon for data\n- SSE subscription for real-time updates\n- Keybindings: j/k navigation, enter expand/collapse, f focus, s spawn, q quit\n\n### Daemon changes\n- None for the daemon itself (stays headless)\n- Depends on `GET /projects` endpoint from the registry ticket\n\n## Acceptance Criteria\n\n- [ ] `cortex start` creates CortexDaemon tmux session with dashboard + daemon panes\n- [ ] `cortex start` attaches to existing session if already running\n- [ ] `cortex dashboard` shows all registered projects in a tree view\n- [ ] Project headers display ticket counts (backlog, progress, review)\n- [ ] Active sessions listed under each project with status and duration\n- [ ] `f` key focuses (jumps to) the selected session's tmux window\n- [ ] `s` key spawns an architect session for the selected project\n- [ ] Tree updates in real-time via SSE when tickets move\n- [ ] `j/k` navigation and `enter` expand/collapse work correctly",
+  "dates": {
+    "created": "2026-01-27T10:40:00.537456Z",
+    "updated": "2026-01-27T12:15:38.97823Z",
+    "progress": "2026-01-27T11:44:11.230675Z",
+    "reviewed": "2026-01-27T12:14:29.289415Z",
+    "done": "2026-01-27T12:15:38.97823Z"
+  },
+  "comments": [
+    {
+      "id": "01a18590-f720-4282-9acd-75fa390c7bc3",
+      "session_id": "ed1099cc-4a3b-4863-a9c9-42c8fa49f289",
+      "type": "ticket_done",
+      "content": "## Daemon Dashboard TUI - Implementation Report\n\n### Summary\nImplemented two new CLI commands that together form the Cortex command center: `cortex dashboard` (a global bubbletea TUI showing all registered projects with active sessions) and `cortex start` (a tmux orchestrator creating a CortexDaemon session with dashboard + daemon panes).\n\n### Files Created (5)\n\n1. **`cmd/cortex/commands/dashboard.go`** — `cortex dashboard` cobra command. Global command (no project context required). Creates an `sdk.DefaultClient(\"\")` and launches the dashboard TUI with `tea.WithAltScreen()`. Follows the pattern established by `kanban.go`.\n\n2. **`cmd/cortex/commands/start.go`** — `cortex start` cobra command. Creates/attaches to a `CortexDaemon` tmux session. If the session exists, attaches directly. If not, creates the session, splits horizontally (30% right pane for `cortexd`, 70% left for `cortex dashboard`), runs both commands, focuses the dashboard pane, and attaches. Follows the pattern from `architect.go`.\n\n3. **`internal/cli/tui/dashboard/model.go`** (900 lines) — Main bubbletea model implementing:\n   - **Data model**: `projectData` structs holding project info, expansion state, loaded tickets, and architect state. Flattened `[]row` tree for cursor navigation with `rowProject` and `rowSession` kinds.\n   - **Initial load**: `ListProjects()` via global client. Projects start collapsed with counts from `ProjectResponse.Counts`.\n   - **Expand/collapse**: On expand, creates per-project `sdk.DefaultClient(projectPath)` to fetch `ListAllTickets(\"\")` and `GetArchitect()`. On collapse, cancels SSE and clears data.\n   - **SSE**: Per-project SSE subscription on expand, cancel on collapse. Any event triggers reload of that project's data. Follows kanban's `subscribeEvents`/`waitForEvent`/`EventMsg` pattern.\n   - **Duration tick**: 30-second `tea.Tick` for re-rendering duration display.\n   - **Key bindings**: j/k/up/down (navigate), enter/l (expand), h (collapse), f (focus session), s (spawn architect), r (refresh all), gg/G (jump first/last), ctrl+u/ctrl+d (half-page scroll), q/ctrl+c (quit).\n   - **View**: Header bar, scrollable tree with project rows (expand indicator + title + counts) and indented session rows (agent status icon + name + status badge + duration), status bar, help bar.\n\n4. **`internal/cli/tui/dashboard/keys.go`** — Key constants and `isKey` helper function, following the kanban pattern.\n\n5. **`internal/cli/tui/dashboard/styles.go`** — Lipgloss styles matching the existing kanban color scheme (selected = white on blue, progress = yellow/orange, review = blue, etc.).\n\n### Files Modified (1)\n\n6. **`internal/tmux/pane.go`** — Added `SplitWindowHorizontalWithPercent(session, windowIndex, percent, workingDir)` method alongside existing `SplitWindowHorizontal`. The existing method hardcodes `-p 70`; the new method accepts a custom percent parameter for the new right pane.\n\n### Key Decisions\n\n- **Pure client architecture**: Dashboard uses the same HTTP API as CLI/MCP/TUI. No daemon changes needed. Dashboard can crash/restart independently.\n- **Per-project SSE subscriptions**: Only expanded projects subscribe to SSE, avoiding unnecessary connections. Subscriptions are cancelled on collapse.\n- **Flattened tree model**: Projects and sessions are flattened into a `[]row` slice for simple cursor-based navigation, rebuilt on expand/collapse.\n- **Reused kanban patterns**: Same key binding style, lipgloss color scheme, SSE subscription pattern, and async command pattern as the existing kanban TUI.\n- **No daemon modifications**: All existing API endpoints (`GET /projects`, `GET /tickets`, `GET /architect`, `POST /architect/spawn`, `POST /tickets/{id}/focus`, `GET /events`) are sufficient.\n\n### Verification\n- `make build` — passes\n- `make lint` — 0 issues\n- `make test` — all tests pass\n- Merged to main via fast-forward",
+      "created_at": "2026-01-27T12:15:38.976154Z"
+    }
+  ],
+  "session": {
+    "id": "ed1099cc-4a3b-4863-a9c9-42c8fa49f289",
+    "started_at": "2026-01-27T11:49:01.60315Z",
+    "ended_at": "2026-01-27T12:15:38.97739Z",
+    "agent": "claude",
+    "tmux_window": "daemon-dashboard-tui",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/fded7527-4f4e-4283-bbde-31cc2fb40264",
+    "feature_branch": "ticket/daemon-dashboard-tui",
+    "current_status": {
+      "status": "waiting_permission",
+      "tool": null,
+      "work": null,
+      "at": "2026-01-27T12:15:36.967052Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T11:49:01.60315Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T11:49:17.265915Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T11:50:59.76063Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:22.398758Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:22.399629Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:51:22.464379Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:51:22.575506Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:51:22.765296Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:51:22.909583Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:51:23.053338Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:51:23.194361Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:51:23.528052Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T11:51:23.556798Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:51:23.670946Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:26.723507Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:26.724115Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T11:51:26.756001Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:26.842828Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:26.843273Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:26.843732Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:26.84429Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:26.844664Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:26.84597Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:27.126324Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:27.126794Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:27.127183Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:27.127636Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:29.112985Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:29.116211Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:29.117118Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:31.153891Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:31.15458Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:31.305551Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:31.306112Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:31.307265Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:31.307897Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:31.310274Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:51:31.499674Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:31.94804Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:31.948602Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:34.346774Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:34.347324Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:36.22441Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:36.224963Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:36.225442Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:36.586007Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:36.586519Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:36.586965Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:38.698368Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:38.698894Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:38.699556Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:38.700175Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:39.570908Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:51:39.917022Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:41.189115Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:41.189724Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:41.190192Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:41.279484Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:41.280032Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:42.821606Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:51:43.466819Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:44.579743Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:44.58051Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:44.581232Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:45.735109Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:48.376431Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:48.377046Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:51:52.349031Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T11:51:52.386953Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T11:52:14.409992Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T11:52:15.339332Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T11:52:30.335286Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:52:40.79219Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:52:40.792913Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:52:49.791422Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:52:49.929526Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:52:56.576264Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:52:56.576896Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:52:56.577423Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:52:56.577841Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:53:04.004994Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:53:04.005632Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:53:04.006101Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:53:12.827349Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:53:12.827963Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T11:55:27.19341Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:55:33.663599Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:55:33.808648Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:55:33.952208Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:55:34.094945Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:39.668382Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:39.669021Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:39.66963Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:39.670532Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:39.671004Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:48.493113Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:48.493849Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:48.494512Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:48.495034Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:48.495516Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:48.495996Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:56.291017Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:55:56.29164Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:55:56.667121Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:01.373929Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:01.374633Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:01.37522Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:10.250448Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:56:10.667206Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:56:10.806317Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:56:18.807842Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:56:18.946948Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:23.943272Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:23.943865Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:29.558624Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:56:29.933622Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:36.296773Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:36.297356Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:36.297853Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:56:43.511533Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:56:43.646644Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:47.423519Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:56:54.298898Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:56:57.558324Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:57:06.654511Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:57:07.216069Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T11:59:18.00732Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:59:25.099636Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:59:25.100574Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T11:59:33.630614Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T11:59:38.27175Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T11:59:43.303609Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T12:00:50.604346Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T12:01:03.306096Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T12:02:10.391052Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T12:02:17.219233Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:02:23.317107Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:02:23.317998Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:02:23.318914Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:02:23.319439Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:02:33.063866Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T12:02:35.186824Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:02:37.563519Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:02:37.564199Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:02:37.564763Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:02:37.565323Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T12:02:55.75937Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T12:03:01.136881Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T12:03:01.271395Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:03:08.045767Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:03:08.046491Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:03:08.047148Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:03:08.047727Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:03:08.048268Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:03:14.614775Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T12:03:14.617034Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T12:03:23.933634Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T12:03:34.270574Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T12:03:39.347135Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:03:42.960158Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T12:04:03.947523Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T12:04:04.039715Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T12:04:10.471876Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T12:05:54.386437Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T12:06:02.054544Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T12:06:11.902777Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T12:06:31.935483Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T12:06:32.03769Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T12:06:37.827474Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T12:06:43.199865Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:13:13.535778Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T12:13:21.282199Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:13:33.222137Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T12:13:34.552121Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:13:39.387569Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T12:13:48.134044Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:13:55.300327Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:13:55.32161Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:13:55.322311Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T12:14:07.173759Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:14:09.115372Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T12:14:22.809674Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T12:14:29.346099Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T12:14:32.74969Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:14:58.088175Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T12:15:02.027062Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T12:15:08.016773Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T12:15:36.967052Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/fded7527-4f4e-4283-bbde-31cc2fb40264",
+        "summary": "## Summary\n\nImplemented the Daemon Dashboard TUI feature with two new CLI commands:\n\n### New Files (5)\n- **`cmd/cortex/commands/dashboard.go`** — `cortex dashboard` cobra command. Global command (no project context needed). Launches the dashboard TUI with alt-screen.\n- **`cmd/cortex/commands/start.go`** — `cortex start` cobra command. Creates/attaches to `CortexDaemon` tmux session with dashboard (70% left) + cortexd (30% right) panes.\n- **`internal/cli/tui/dashboard/model.go`** — Main bubbletea model. Implements expandable project tree with nested session rows, SSE per-project subscriptions, async data loading, vim navigation (j/k/gg/G/ctrl+u/ctrl+d), focus/spawn actions, duration display with 30s tick.\n- **`internal/cli/tui/dashboard/keys.go`** — Key constants and `isKey` helper, following kanban pattern.\n- **`internal/cli/tui/dashboard/styles.go`** — Lipgloss styles matching existing kanban color scheme.\n\n### Modified Files (1)\n- **`internal/tmux/pane.go`** — Added `SplitWindowHorizontalWithPercent` method alongside existing `SplitWindowHorizontal`. Accepts custom percent for the new right pane instead of hardcoded 70%.\n\n### Verification\n- `make build` — passes\n- `make lint` — 0 issues\n- `make test` — all tests pass",
+        "requested_at": "2026-01-27T12:14:29.28789Z"
+      }
+    ]
+  }
+}

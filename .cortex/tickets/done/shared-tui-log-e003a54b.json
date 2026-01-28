@@ -1,0 +1,891 @@
+{
+  "id": "e003a54b-3cd4-44fd-80ce-af5d2d097f1e",
+  "title": "Shared TUI Log Viewer: In-Memory Ring Buffer with ! Shortcut",
+  "body": "## Summary\n\nAdd shared logging infrastructure for all TUI views (kanban, dashboard, ticket detail). An in-memory ring buffer captures logs from SDK client, SSE subscriber, and command handlers. A `!` shortcut opens an overlay log viewer for real-time debugging.\n\n## Design\n\n### Log Buffer (`internal/cli/tui/tuilog/`)\n\nShared package providing an in-memory ring buffer:\n\n```go\ntype Level int // Debug, Info, Warn, Error\n\ntype Entry struct {\n    Time    time.Time\n    Level   Level\n    Source  string // \"sse\", \"api\", \"spawn\", \"tui\", etc.\n    Message string\n}\n\ntype Buffer struct {\n    // Thread-safe ring buffer, ~1000 entries\n}\n\nfunc (b *Buffer) Log(level Level, source, message string)\nfunc (b *Buffer) Entries() []Entry\nfunc (b *Buffer) ErrorCount() int\nfunc (b *Buffer) WarnCount() int\n```\n\n- Thread-safe (TUI and background goroutines write concurrently)\n- Fixed capacity ring buffer — oldest entries evicted when full\n- No file I/O, purely in-memory\n\n### Log Viewer Overlay\n\n- Toggled with `!` shortcut from any TUI view\n- Overlay panel (not a page navigation — preserves underlying view state)\n- Newest entries first\n- Navigate with `j`/`k`, scroll with `Ctrl+D`/`Ctrl+U`\n- Filter by level: `1` = all, `2` = info+, `3` = warn+, `4` = error only\n- `!` or `Esc` to dismiss\n- Status bar badge shows error/warning count (e.g., `⚠ 2 errors`) when the viewer is closed, so user knows to check\n\n### Integration Points\n\nLog calls to add across TUI infrastructure:\n\n**SSE subscriber:**\n- `info` \"sse\" — \"connected to event stream\"\n- `error` \"sse\" — \"failed to connect: {err}\"\n- `debug` \"sse\" — \"event received: {type} ticket={id}\"\n- `warn` \"sse\" — \"connection dropped, no reconnect\"\n\n**SDK client / API calls:**\n- `error` \"api\" — \"GET /tickets failed: {status} {err}\"\n- `debug` \"api\" — \"GET /tickets 200 ({duration})\"\n- `error` \"api\" — \"POST /spawn failed: {err}\"\n\n**TUI commands (spawn, focus, move, approve):**\n- `info` \"spawn\" — \"spawning session for {ticket}\"\n- `error` \"spawn\" — \"spawn failed: {err}\"\n- `info` \"focus\" — \"focusing session {window}\"\n\n### Wiring\n\n- Create `Buffer` at TUI entry point (kanban.go, dashboard.go, etc.)\n- Pass buffer pointer into the TUI model\n- Pass buffer into SDK client or wrap SDK calls with logging\n- Each TUI embeds a `LogViewer` bubbletea model that reads from the buffer\n- `!` key toggles the overlay in the top-level Update handler\n\n## Files\n\n- `internal/cli/tui/tuilog/buffer.go` — ring buffer implementation\n- `internal/cli/tui/tuilog/entry.go` — entry types and levels\n- `internal/cli/tui/tuilog/viewer.go` — bubbletea model for the log overlay\n- `internal/cli/tui/kanban/model.go` — integrate buffer + viewer\n- `internal/cli/tui/dashboard/model.go` — integrate buffer + viewer\n- `internal/cli/tui/kanban/model.go` — add log calls to SSE, API, commands\n- `internal/cli/tui/dashboard/model.go` — add log calls to SSE, API, commands",
+  "dates": {
+    "created": "2026-01-27T13:55:15.478061Z",
+    "updated": "2026-01-27T14:14:14.793729Z",
+    "progress": "2026-01-27T13:56:00.885301Z",
+    "reviewed": "2026-01-27T14:11:49.320672Z",
+    "done": "2026-01-27T14:14:14.793729Z"
+  },
+  "comments": [
+    {
+      "id": "fce00a50-2413-4287-81bc-bfd29515a478",
+      "session_id": "b7bf9abd-4173-4ef5-825b-4e29eb53c438",
+      "type": "ticket_done",
+      "content": "## Summary\n\nImplemented a shared TUI log viewer infrastructure for the kanban and dashboard views. The feature provides an in-memory ring buffer for capturing operational logs and a full-screen overlay viewer toggled with the `!` key.\n\n## Changes Made\n\n### New Files (4)\n\n- **`internal/cli/tui/tuilog/entry.go`** — `Level` type (Debug/Info/Warn/Error) with `String()` and `ShortString()` methods, and `Entry` struct (Time, Level, Source, Message).\n\n- **`internal/cli/tui/tuilog/buffer.go`** — Thread-safe ring buffer with 1000-entry default capacity. Uses fixed-size `[]Entry` slice with modular index arithmetic and `sync.Mutex`. Tracks error/warn counts in O(1) by incrementing on write and decrementing when overwriting old entries. Provides convenience methods: `Debug/Info/Warn/Error` and `Debugf/Infof/Warnf/Errorf`.\n\n- **`internal/cli/tui/tuilog/buffer_test.go`** — 7 test cases covering: basic log + newest-first ordering, ring wrap behavior, error/warn count tracking, counts through overwrites, empty buffer, formatted methods, and level string methods.\n\n- **`internal/cli/tui/tuilog/viewer.go`** — Bubbletea sub-model rendering a full-screen overlay. Features: j/k scroll, ctrl+d/u page scroll, 1-4 level filters (all/info+/warn+/error), !/esc dismiss. Styled with dark red title bar, colored level indicators (red=error, orange=warn, green=info, gray=debug), blue source, gray timestamps.\n\n### Modified Files (8)\n\n- **`internal/cli/tui/kanban/keys.go`** — Added `KeyExclaim` constant, updated help text with `[!] logs`.\n- **`internal/cli/tui/kanban/styles.go`** — Added `warnBadgeStyle` (foreground Color(\"214\")).\n- **`internal/cli/tui/kanban/model.go`** — Added `logBuf`, `logViewer`, `showLogViewer` fields. Changed `New()` to accept `*tuilog.Buffer`. Added DismissLogViewerMsg handler and viewer delegation at top of Update. Added log calls to 9 message handlers (TicketsLoaded, TicketsError, SessionSpawned, SessionError, OrphanedSession, FocusSuccess, FocusError, sseConnected, EventMsg). Added `!` toggle in handleKeyMsg. Added log viewer overlay in View. Added `logBadge()` helper rendering E:/W: counts in status bar.\n- **`cmd/cortex/commands/kanban.go`** — Creates `logBuf` and passes to `kanban.New()`.\n- **`internal/cli/tui/dashboard/keys.go`** — Added `KeyExclaim`, updated help text.\n- **`internal/cli/tui/dashboard/styles.go`** — Added `warnBadgeStyle`.\n- **`internal/cli/tui/dashboard/model.go`** — Same pattern as kanban: added fields, changed constructor, added viewer handling, log calls to 8 message handlers (ProjectsLoaded, ProjectsError, ProjectDetailLoaded, SSEConnected, SSEEvent, SpawnArchitect, FocusSuccess, FocusError), `!` toggle, overlay view, `logBadge()`.\n- **`cmd/cortex/commands/dashboard.go`** — Creates `logBuf` and passes to `dashboard.New()`.\n\n## Key Decisions\n\n- **Ring buffer over unbounded list**: Fixed 1000-entry capacity prevents memory growth in long-running TUI sessions. Old entries are silently evicted.\n- **O(1) count tracking**: Error/warn counts are maintained incrementally rather than recomputed on each access, keeping the status bar badge efficient.\n- **Viewer reads fresh on each frame**: `View()` calls `buf.Entries()` every render rather than caching, ensuring the overlay always shows latest logs without additional message plumbing.\n- **Used `any` instead of `interface{}`**: Addressed linter modernize warnings for Go 1.24 compatibility.\n- **No ticket detail view integration**: As specified in the plan, the ticket detail view doesn't get a log viewer since it has no background operations worth logging.\n\n## Verification\n\n- `make build` — compiles cleanly\n- `make lint` — 0 issues\n- `make test` — all tests pass (7 new tuilog tests + all existing tests)",
+      "created_at": "2026-01-27T14:14:14.791789Z"
+    }
+  ],
+  "session": {
+    "id": "b7bf9abd-4173-4ef5-825b-4e29eb53c438",
+    "started_at": "2026-01-27T13:56:00.850728Z",
+    "ended_at": "2026-01-27T14:14:14.792645Z",
+    "agent": "claude",
+    "tmux_window": "shared-tui-log-viewer-in-memory-ring-buffer-with-s",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/a90f9d0b-b513-48c9-86fb-7fc8a95bb431",
+    "feature_branch": "ticket/shared-tui-log",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-27T14:13:48.062017Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T13:56:00.850728Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T13:57:18.977103Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:35.6965Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:35.697011Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T13:57:35.848532Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T13:57:36.118839Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T13:57:36.261163Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T13:57:37.34781Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T13:57:38.733337Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:40.328094Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:40.328816Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:40.329322Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:40.329666Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:42.62564Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:42.626076Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:42.626532Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:42.627263Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:42.628162Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:44.32665Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:44.327265Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:44.327989Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:47.349199Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:47.349886Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:47.350775Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:47.351338Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:47.353108Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:48.347003Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:48.348964Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T13:57:48.747835Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T13:57:51.030698Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:52.224435Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T13:57:52.560689Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:53.466929Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:55.8608Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T13:57:56.226659Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T13:57:56.997402Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:58.896959Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:58.898224Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:59.325609Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:57:59.326255Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T13:58:02.619765Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T13:58:05.401246Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:58:07.49425Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T13:58:34.179833Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T13:58:43.272661Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T13:59:29.167406Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:38.472068Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:38.472744Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:38.47325Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:38.473767Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:38.474265Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:38.474771Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:38.475801Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:38.481597Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:53.098791Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T13:59:53.626562Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:59.08873Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:59.089492Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:59.090085Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T13:59:59.09217Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:00:07.395403Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:00:07.443123Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T14:00:07.772174Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:00:14.418361Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T14:00:14.757433Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T14:02:56.494177Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:03:18.291834Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:03:18.292541Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:03:22.047501Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T14:04:08.756029Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T14:04:12.254801Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T14:05:03.930886Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:05:10.417941Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:05:19.304101Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:05:19.304784Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:05:19.306272Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:05:19.307071Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:05:19.30776Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:05:19.308333Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:05:19.309846Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T14:05:19.31084Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:05:26.453827Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:05:26.465371Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:05:32.18805Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:05:35.774052Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T14:05:41.849269Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:05:46.262689Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T14:06:00.289939Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:06:05.015645Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:06:12.722389Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:06:12.818719Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:06:12.901944Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:06:12.976698Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T14:06:32.196691Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:06:37.482492Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:06:42.895895Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T14:06:43.025214Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T14:07:09.148456Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:07:14.516731Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:07:24.364839Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:07:24.476307Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:07:29.098904Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:07:37.170796Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:07:41.794912Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:07:48.589915Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:08:00.331303Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:08:19.515763Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:08:27.300136Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:08:32.972538Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:08:41.301119Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:08:48.315283Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:08:54.455523Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:08:59.970887Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:09:06.839028Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:09:14.443605Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:09:14.612459Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:09:20.705977Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:09:27.055578Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:09:31.447005Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:09:37.239916Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:09:45.41949Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:10:07.828249Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:10:14.910969Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:10:19.999646Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:10:30.688285Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:10:36.851968Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:10:41.867681Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:10:47.467072Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:10:53.992087Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:11:08.285596Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-27T14:11:13.429588Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:11:17.328904Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-27T14:11:23.054157Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:11:28.643153Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:11:28.718295Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:11:28.718969Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:11:36.367698Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-27T14:11:49.392391Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T14:11:52.068321Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:13:43.523184Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-27T14:13:48.062017Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/a90f9d0b-b513-48c9-86fb-7fc8a95bb431",
+        "summary": "Added shared TUI log viewer infrastructure:\n\n**New package: `internal/cli/tui/tuilog/`**\n- `entry.go`: Level (Debug/Info/Warn/Error) and Entry types with String/ShortString methods\n- `buffer.go`: Thread-safe ring buffer (1000 capacity) with O(1) error/warn counts, convenience log methods (Debug/Info/Warn/Error + formatted variants)\n- `buffer_test.go`: 7 tests covering ordering, ring wrap, count tracking through overwrites, empty buffer, formatting, level strings\n- `viewer.go`: Bubbletea sub-model rendering full-screen overlay with j/k scroll, ctrl+d/u page, 1-4 level filters, !/esc dismiss\n\n**Integrated into kanban** (`keys.go`, `styles.go`, `model.go`, `kanban.go`):\n- `!` key toggles log viewer overlay\n- Log calls on: tickets loaded/error, session spawned/error, orphaned session, focus success/error, SSE connected, events received\n- Status bar badge shows `E:N W:N` when errors/warnings exist\n\n**Integrated into dashboard** (`keys.go`, `styles.go`, `model.go`, `dashboard.go`):\n- Same `!` toggle and log viewer overlay\n- Log calls on: projects loaded/error, project detail loaded/error, SSE connected, events received, architect spawn success/error, focus success/error\n- Status bar badge\n\nBuild passes, lint clean (0 issues), all tests pass.",
+        "requested_at": "2026-01-27T14:11:49.319731Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,537 @@
+{
+  "id": "2414eb46-2c2f-458a-b804-8de7da57e2cf",
+  "title": "Ticket TUI: Add SSE Subscription for Real-Time Updates",
+  "body": "## Summary\n\nThe ticket detail TUI (`cortex show`) has no SSE subscription. It defines a `RefreshMsg` type that the kanban pushes into it when embedded, but when opened standalone it never receives real-time updates. Comments, review requests, status changes, and session updates all require a manual refresh.\n\n## Current Behavior\n\n- `RefreshMsg` exists at `model.go:78` but is only triggered externally by the kanban's SSE handler\n- Standalone `cortex show \u003cid\u003e` has no event subscription — ticket data is static after initial load\n\n## Expected Behavior\n\n- Ticket TUI subscribes to the project SSE event stream on init\n- Filters for events relevant to the current ticket (by ticket ID)\n- Automatically reloads ticket data on: `comment_added`, `review_requested`, `session_status`, `session_started`, `session_ended`, `ticket_updated`, `ticket_moved`\n- When embedded in kanban, skip own SSE subscription (kanban already handles it via `RefreshMsg`)\n\n## Implementation\n\n- Follow the same pattern as kanban SSE: `subscribeEvents()` → `sseConnectedMsg` → `waitForEvent()` → `RefreshMsg` loop\n- Add a flag (e.g., `embedded bool`) to the ticket model constructor so it skips SSE when hosted inside kanban\n- Graceful degradation: if SSE connection fails, continue with manual refresh only\n\n## Files\n- `internal/cli/tui/ticket/model.go` — add SSE subscription, event filtering, embedded flag\n- `cmd/cortex/commands/show.go` — ensure SDK client with project path is passed through",
+  "dates": {
+    "created": "2026-01-27T15:04:26.277294Z",
+    "updated": "2026-01-28T06:03:11.657879Z",
+    "progress": "2026-01-28T05:54:14.671758Z",
+    "reviewed": "2026-01-28T06:02:40.627921Z",
+    "done": "2026-01-28T06:03:11.657879Z"
+  },
+  "comments": [
+    {
+      "id": "e415e575-1d5d-4a27-94fa-70ad11889bbd",
+      "session_id": "724d52e2-f037-452c-9bcb-bd348f5e47cd",
+      "type": "ticket_done",
+      "content": "## Summary\n\nAdded SSE (Server-Sent Events) subscription to the standalone ticket TUI (`cortex show \u003cid\u003e`) so it auto-refreshes when relevant events occur, matching the real-time behavior already present in the kanban board.\n\n## Changes Made\n\n### File Modified\n- **`internal/cli/tui/ticket/model.go`** (+60 lines, -1 line)\n\n### Specific Changes\n\n1. **Added `\"context\"` import** — required for SSE context management.\n\n2. **Added SSE fields to `Model` struct** — `eventCh \u003c-chan sdk.Event` and `cancelEvents context.CancelFunc` to hold the SSE channel and cancellation function.\n\n3. **Added SSE message types** — `sseConnectedMsg` (carries channel + cancel func) and `EventMsg` (signals a relevant event was received).\n\n4. **Modified `Init()`** — When not embedded, batches `loadTicket()` + `subscribeEvents()`. When embedded (kanban host), only calls `loadTicket()` since kanban already handles SSE.\n\n5. **Added SSE message handlers in `Update()`**:\n   - `sseConnectedMsg`: stores channel/cancel, starts `waitForEvent()` loop\n   - `EventMsg`: sets loading state, batches `loadTicket()` + next `waitForEvent()`\n\n6. **Added SSE cancellation on quit** — calls `m.cancelEvents()` before `tea.Quit` in the standalone quit path to cleanly close the SSE connection.\n\n7. **Added `subscribeEvents()` method** — creates a background context, calls `client.SubscribeEvents(ctx)`, returns `sseConnectedMsg`. On error, cancels context and returns nil (graceful degradation).\n\n8. **Added `waitForEvent()` method** — reads from the event channel in a loop, filtering by ticket ID. Only returns `EventMsg{}` when `event.TicketID` matches the current ticket. Events for other tickets are silently consumed. Returns nil when channel closes.\n\n## Key Decisions\n\n- **Ticket ID filtering in `waitForEvent()`**: Unlike the kanban (which refreshes on all events), the ticket TUI filters events by ticket ID since it only displays a single ticket. This avoids unnecessary reloads.\n- **Skip SSE when embedded**: The `embedded` flag (already present) is used to avoid duplicate SSE subscriptions when the ticket view is hosted inside the kanban board.\n- **Graceful degradation**: If SSE connection fails, the TUI continues working with manual refresh (`r` key) only — no error displayed.\n- **Same pattern as kanban**: Followed the exact same `subscribeEvents()` → `sseConnectedMsg` → `waitForEvent()` → `EventMsg` loop pattern from `internal/cli/tui/kanban/model.go` for consistency.\n\n## Verification\n- `make build` — compiled successfully\n- `make lint` — 0 issues\n- `make test` — all tests pass",
+      "created_at": "2026-01-28T06:03:11.656699Z"
+    }
+  ],
+  "session": {
+    "id": "724d52e2-f037-452c-9bcb-bd348f5e47cd",
+    "started_at": "2026-01-28T05:54:14.635928Z",
+    "ended_at": "2026-01-28T06:03:11.657394Z",
+    "agent": "claude",
+    "tmux_window": "ticket-tui-add-sse-subscription-for-real-time-upda",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/924606fd-3381-40c4-bc70-fcc4ae689bce",
+    "feature_branch": "ticket/ticket-tui-add-sse",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-28T06:02:56.080332Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T05:54:14.635928Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T05:54:29.284492Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:54:33.938158Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:54:34.074528Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:54:34.214719Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:54:34.354779Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:54:34.499558Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:54:34.63564Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:54:38.328659Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:54:38.329392Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:54:38.330218Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:54:38.330639Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:54:38.670658Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:54:44.52041Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:54:47.68909Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:54:50.458951Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T05:54:50.717008Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:54:53.687281Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:54:53.7101Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:54:56.427931Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:54:59.54592Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:54:59.546591Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:55:04.554775Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T05:55:09.229416Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T05:55:11.75388Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T05:55:14.67322Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:55:19.192144Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:55:21.799821Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:55:25.179937Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:55:29.504704Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:55:32.85281Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T05:56:13.893833Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:56:26.958852Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:56:26.959356Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:56:26.959811Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:56:36.063172Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:56:36.0637Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:56:36.064538Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:56:36.064954Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:56:41.657973Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:56:41.658722Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:57:13.726188Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:57:13.726836Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:57:13.727861Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:57:14.06722Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:57:22.611291Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T05:57:22.897255Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:57:26.734108Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:57:27.237395Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:57:32.61641Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T05:57:39.075589Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T05:58:35.482006Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-28T05:58:52.285489Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T05:58:54.976082Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T06:00:28.715007Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T06:00:28.784544Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T06:00:29.14421Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T06:00:35.930116Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T06:00:44.792329Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T06:00:48.888073Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T06:00:54.004058Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T06:00:58.554181Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T06:01:04.37901Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T06:01:09.602374Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T06:01:14.45474Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T06:01:19.79336Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T06:01:26.106414Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T06:01:30.872062Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T06:01:39.544812Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T06:01:44.764792Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T06:01:51.661025Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T06:02:01.546827Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T06:02:06.398306Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T06:02:10.590011Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T06:02:14.942515Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T06:02:20.772898Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T06:02:25.014992Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T06:02:31.645063Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-28T06:02:40.686138Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T06:02:48.088905Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T06:02:52.630487Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T06:02:56.080332Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/924606fd-3381-40c4-bc70-fcc4ae689bce",
+        "summary": "Added SSE event subscription to the standalone ticket TUI (`cortex show \u003cid\u003e`) so it auto-refreshes on relevant events.\n\n**Changes in `internal/cli/tui/ticket/model.go`:**\n- Added `context` import and SSE fields (`eventCh`, `cancelEvents`) to `Model` struct\n- Added `sseConnectedMsg` and `EventMsg` message types\n- Modified `Init()` to batch `loadTicket()` + `subscribeEvents()` when not embedded; embedded mode (kanban) skips SSE\n- Added `sseConnectedMsg` and `EventMsg` handlers in `Update()` \n- Added SSE cancellation on quit (`cancelEvents()` before `tea.Quit`)\n- Added `subscribeEvents()` method (same pattern as kanban's)\n- Added `waitForEvent()` method with ticket ID filter — silently consumes events for other tickets, only returns `EventMsg{}` when `event.TicketID` matches\n\n**Verification:** `make build` ✓, `make lint` (0 issues) ✓, `make test` (all pass) ✓",
+        "requested_at": "2026-01-28T06:02:40.625865Z"
+      }
+    ]
+  }
+}

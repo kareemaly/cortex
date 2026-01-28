@@ -1,0 +1,699 @@
+{
+  "id": "21d1e994-4c6a-497e-a552-9cde44648e44",
+  "title": "Move Agent CLI Flags to Config agent_args with Sensible Defaults",
+  "body": "## Summary\n\nMake Cortex agent-agnostic by moving all agent-specific CLI flags (permission mode, allowed tools, etc.) from hardcoded spawn logic into configurable `agent_args` in `.cortex/cortex.yaml`. Update `cortex init` to generate sensible defaults per agent type.\n\n## Motivation\n\nPreparing for multi-agent support. The spawn code currently hardcodes Claude-specific flags (`--permission-mode plan`, `--allowedTools`). These should live in user-editable config so swapping agents doesn't require Cortex source changes.\n\n## Changes\n\n### 1. Update `cortex init` defaults\n\nGenerate `agent_args` in `.cortex/cortex.yaml` with these defaults:\n\n```yaml\nagent: claude\nagent_args:\n  architect:\n    - \"--allowedTools\"\n    - \"mcp__cortex__listTickets,mcp__cortex__readTicket\"\n  ticket:\n    - \"--permission-mode\"\n    - \"plan\"\n    - \"--allow-dangerously-skip-permissions\"\n    - \"--allowedTools\"\n    - \"mcp__cortex__readTicket\"\n```\n\n### 2. Remove hardcoded flags from spawn code\n\nIn `internal/core/spawn/spawn.go`:\n- Remove `LauncherParams.PermissionMode` field and its handling\n- Remove `LauncherParams.AllowedTools` field and its handling\n- Remove the `switch AgentType` block that sets these per agent type\n- Launcher builder just appends `AgentArgs` from config to the command\n\n### 3. Update launcher script generation\n\nIn `internal/core/spawn/launcher.go`:\n- Remove `PermissionMode` and `AllowedTools` from `LauncherParams` struct\n- Remove template logic that renders these fields\n- `AgentArgs` already gets appended — that's the only mechanism now\n\n### What stays in spawn code (Cortex-level concerns)\n\n- Env vars (`CORTEX_TICKET_ID`, `CORTEX_PROJECT`)\n- MCP config (`--mcp-config`)\n- Settings/hooks (`--settings`)\n- System prompt (`--append-system-prompt`)\n- Session ID (`--session-id`)\n- Companion pane commands",
+  "dates": {
+    "created": "2026-01-28T06:52:37.434604Z",
+    "updated": "2026-01-28T07:44:10.396969Z",
+    "progress": "2026-01-28T07:31:51.235532Z",
+    "reviewed": "2026-01-28T07:42:13.883855Z"
+  },
+  "comments": [
+    {
+      "id": "6d56ad02-432f-4e3c-92e2-29464ae434c2",
+      "session_id": "ebb79e67-ab00-4028-aa25-37c8daf3bd9f",
+      "type": "progress",
+      "title": "Codebase exploration complete, designing implementation plan",
+      "content": "Explored all relevant files: launcher.go, spawn.go, orchestrate.go, install.go, config.go, and all test files. Identified all references to PermissionMode, AllowedTools, and AgentArgs across the codebase. Now designing a detailed step-by-step implementation plan covering 4 files to modify and 1 test file to update.",
+      "created_at": "2026-01-28T07:35:30.593253Z"
+    }
+  ],
+  "session": {
+    "id": "ebb79e67-ab00-4028-aa25-37c8daf3bd9f",
+    "started_at": "2026-01-28T07:31:51.194586Z",
+    "agent": "claude",
+    "tmux_window": "move-agent-cli-flags-to-config-agentargs-with-sens",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/6d9951bc-de37-484e-b5c7-516d42612b33",
+    "feature_branch": "ticket/move-agent-cli",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-28T07:44:10.396969Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T07:31:51.194586Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T07:32:07.452834Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:32:09.642326Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:32:09.642911Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:32:09.643311Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:32:12.295563Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:32:12.430207Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:32:14.850084Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:32:14.850829Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:32:18.252595Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:32:18.634107Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:32:22.471635Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T07:32:45.589854Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:32:56.658799Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:32:56.806556Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:32:56.944151Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:32:57.085674Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:32:59.925814Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:00.369188Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:33:01.315409Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:06.808707Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:33:06.890452Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:33:07.433555Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:12.870999Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:12.872413Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:33:18.200584Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:33:18.553495Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T07:33:33.417491Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:39.546128Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:39.546999Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:46.773085Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:46.773995Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:52.476032Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:33:52.94801Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:33:57.519675Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:34:02.267734Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T07:34:35.094766Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:34:41.425221Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:34:41.425866Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:34:41.426401Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:34:41.428199Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:34:41.431963Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:34:49.426757Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:34:49.556543Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:34:55.507282Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:35:01.598446Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:35:01.963083Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:35:07.906177Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:35:08.27793Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:35:15.0321Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:35:15.420889Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:35:23.10413Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__addTicketComment",
+        "work": null,
+        "at": "2026-01-28T07:35:30.624574Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T07:36:43.886023Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:36:50.543804Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:36:57.277254Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-28T07:37:27.627608Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T07:37:34.89408Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T07:38:34.54736Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:38:34.625214Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:38:34.633382Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:38:34.634182Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:38:34.634767Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:38:34.957306Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:38:41.011533Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:38:50.723088Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:38:56.215338Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:39:01.168872Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:39:06.76927Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:39:12.112228Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:39:20.569021Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:39:27.608479Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:39:34.732608Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:39:40.734212Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:39:48.046833Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:39:53.792215Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:40:01.940897Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:40:06.94913Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:40:18.371298Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:40:25.785279Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:40:31.412509Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:40:37.679754Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:40:44.125329Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:40:49.559559Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:40:55.927574Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:41:01.904863Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:41:13.242688Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:41:20.617899Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:41:26.875357Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:41:31.063905Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:41:36.647937Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:41:43.067142Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:41:48.963724Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:41:49.005206Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:41:49.005932Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:41:57.078716Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-28T07:42:13.933154Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T07:42:19.381602Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:43:05.725607Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:43:13.559382Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:43:18.560928Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:43:25.264722Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:43:32.933817Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:43:42.381233Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:43:48.189188Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:43:54.572325Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:44:00.018606Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:44:08.24773Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:44:10.396969Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/6d9951bc-de37-484e-b5c7-516d42612b33",
+        "title": "Move agent CLI flags from hardcoded spawn logic to config agent_args",
+        "content": "## Changes\n\nRemoved hardcoded `PermissionMode` and `AllowedTools` from spawn logic, making `AgentArgs` the sole mechanism for passing agent-specific CLI flags.\n\n### Files Modified\n\n1. **`internal/core/spawn/launcher.go`** — Removed `PermissionMode` and `AllowedTools` fields from `LauncherParams` struct and their rendering logic in `buildLauncherScript`. These flags now flow through the existing `AgentArgs` field.\n\n2. **`internal/core/spawn/spawn.go`** — Replaced the `switch req.AgentType` block (which set `AllowedTools` for architect and `PermissionMode` for ticket agents) with a simple `if` that only sets `EnvVars` for ticket agents (Cortex-internal concern). Added `AgentArgs []string` field to `ResumeRequest`. Updated `Resume()` to pass `req.AgentArgs` instead of hardcoded `PermissionMode: \"plan\"`.\n\n3. **`internal/core/spawn/orchestrate.go`** — Added `AgentArgs: projectCfg.AgentArgs.Ticket` to the `ResumeRequest` construction in the resume path, ensuring resumed sessions get the same agent args as fresh spawns.\n\n4. **`internal/install/install.go`** — Added `agent_args` defaults to the `cortex init` config template with sensible defaults:\n   - Architect: `--allowedTools mcp__cortex__listTickets,mcp__cortex__readTicket`\n   - Ticket: `--permission-mode plan`, `--allow-dangerously-skip-permissions`, `--allowedTools mcp__cortex__readTicket`\n\n5. **`internal/core/spawn/spawn_test.go`** — Updated 4 tests:\n   - `TestSpawn_TicketAgent_Success`: Inverted assertion to verify `--permission-mode` is absent when no `AgentArgs` provided\n   - `TestWriteLauncherScript`: Replaced `PermissionMode` with `AgentArgs`, updated assertion to match shell-quoted output\n   - `TestWriteLauncherScript_Resume`: Same replacement pattern\n   - `TestWriteLauncherScript_Architect`: Replaced `AllowedTools` with `AgentArgs`, updated assertion\n\n### What stays in spawn code (Cortex-internal concerns)\n- `EnvVars` (`CORTEX_TICKET_ID`, `CORTEX_PROJECT`)\n- `MCPConfigPath`, `SettingsPath`, `SystemPromptFilePath`, `SessionID`, `ResumeID`\n\n### Verification\n- `make test` — All unit tests pass\n- `make lint` — 0 issues\n- `make build` — Compiles cleanly",
+        "requested_at": "2026-01-28T07:42:13.882276Z"
+      }
+    ]
+  }
+}

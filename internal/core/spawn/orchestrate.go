@@ -201,6 +201,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				SessionID:   stateInfo.Session.ID,
 				WindowName:  stateInfo.Session.TmuxWindow,
 				TicketID:    req.TicketID,
+				AgentArgs:   projectCfg.AgentArgs.Ticket,
 			})
 			outcome = OutcomeResumed
 		case "fresh":

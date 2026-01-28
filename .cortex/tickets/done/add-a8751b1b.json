@@ -1,0 +1,263 @@
+{
+  "id": "a8751b1b-f56f-44a1-b17d-384577decc89",
+  "title": "Add addTicketComment to Architect MCP Tools",
+  "body": "## Summary\n\nExpose `addTicketComment` in the architect MCP tool set so the architect can add comments to any ticket, not just read them.\n\n## Motivation\n\nThe architect needs to:\n- Respond to agent questions (blocker comments)\n- Add architectural guidance mid-flight on tickets in progress\n- Record decisions as comments (type: decision)\n- Provide review feedback on completed work\n\nCurrently `addTicketComment` is only available in the ticket agent MCP session. The architect can only communicate through ticket body updates, which is insufficient.\n\n## Changes\n\n### 1. Update `internal/daemon/mcp/tools_architect.go`\n\nAdd `addTicketComment` to the architect tool registration. Unlike the ticket agent version (which implicitly uses the session's ticket ID), the architect version should require a ticket ID parameter since the architect operates across all tickets.\n\n## Acceptance Criteria\n\n- Architect MCP session exposes `addTicketComment` tool\n- Tool requires a ticket ID parameter (architect is not scoped to a single ticket)\n- Tool supports all comment types: decision, blocker, progress, question, scope_change, general\n- Existing ticket agent `addTicketComment` behavior is unchanged",
+  "dates": {
+    "created": "2026-01-28T07:24:07.327263Z",
+    "updated": "2026-01-28T07:32:47.394528Z",
+    "progress": "2026-01-28T07:24:24.932097Z",
+    "reviewed": "2026-01-28T07:31:28.401904Z",
+    "done": "2026-01-28T07:32:47.394528Z"
+  },
+  "comments": [
+    {
+      "id": "77bf50aa-8c1b-454e-90af-a2312cafbafd",
+      "session_id": "168194c3-986f-43c0-8417-625b385721f4",
+      "type": "ticket_done",
+      "title": "Session concluded",
+      "content": "## Summary\n\nAdded `addTicketComment` as an architect MCP tool, enabling the architect agent to add comments to any ticket by ID. Previously, only ticket agents could add comments (scoped to their own session ticket).\n\n## Changes Made\n\n### `internal/daemon/mcp/types.go`\n- Added `ArchitectAddCommentInput` struct with fields: `id` (ticket ID), `type` (comment type), `title`, and `content`. Follows the same pattern as existing architect input types (`ReadTicketInput`, `UpdateTicketInput`, etc.).\n\n### `internal/daemon/mcp/tools_architect.go`\n- Registered `addTicketComment` tool in `registerArchitectTools()` with description listing valid comment types.\n- Added `handleArchitectAddComment` handler method that validates `id` and `title` fields, then delegates to `s.sdkClient.AddComment()` — the same SDK call used by the ticket agent version, but taking the ticket ID from input rather than session context.\n\n## Key Decisions\n\n- **Separate input type**: Created `ArchitectAddCommentInput` (with an `id` field) rather than reusing `AddCommentInput` (which has no `id` field). This keeps the architect and ticket tool input types cleanly separated, matching the existing pattern where architect tools always take an explicit ticket ID.\n- **No changes to ticket tools**: `tools_ticket.go` remains unchanged — the ticket agent's `addTicketComment` continues to use `s.session.TicketID` implicitly.\n- **Same validation pattern**: Validates `id` and `title` as required, consistent with other architect tool handlers.\n\n## Verification\n- `make build` — compiles successfully\n- `make test` — all unit tests pass\n- `make lint` — 0 issues\n\n## Files Modified\n- `internal/daemon/mcp/types.go` (+8 lines)\n- `internal/daemon/mcp/tools_architect.go` (+30 lines)",
+      "created_at": "2026-01-28T07:32:47.393331Z"
+    }
+  ],
+  "session": {
+    "id": "168194c3-986f-43c0-8417-625b385721f4",
+    "started_at": "2026-01-28T07:24:24.895606Z",
+    "ended_at": "2026-01-28T07:32:47.394059Z",
+    "agent": "claude",
+    "tmux_window": "add-addticketcomment-to-architect-mcp-tools",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/36be3039-2d2b-4353-b78b-8a44e0df2b10",
+    "feature_branch": "ticket/add",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-28T07:32:36.783109Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T07:24:24.895606Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T07:24:45.599167Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:49.495577Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:49.496268Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:53.296152Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:53.296788Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:56.362048Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:24:59.220961Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:01.438802Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:04.600062Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T07:25:25.854579Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:35.155745Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:35.156453Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:35.156866Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-28T07:25:53.576831Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T07:25:56.27491Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:30:00.872806Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:30:00.874412Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:30:00.875478Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:30:07.562961Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:30:15.624441Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:30:19.234067Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:30:26.369883Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:30:33.958305Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:30:39.096718Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:30:49.553305Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:30:54.835029Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:31:00.073855Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:31:04.443899Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:31:08.844148Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:31:12.642677Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:31:19.054384Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-28T07:31:28.432256Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T07:31:33.622001Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:32:33.519555Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:32:36.783109Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/36be3039-2d2b-4353-b78b-8a44e0df2b10",
+        "title": "Add addTicketComment to architect MCP tools",
+        "content": "## Summary\n\nAdded `addTicketComment` as an architect MCP tool so the architect agent can add comments to any ticket by ID.\n\n## Changes\n\n### `internal/daemon/mcp/types.go`\n- Added `ArchitectAddCommentInput` struct with `id`, `type`, `title`, and `content` fields, following the same pattern as other architect input types (e.g., `ReadTicketInput`, `UpdateTicketInput`).\n\n### `internal/daemon/mcp/tools_architect.go`\n- Registered the `addTicketComment` tool in `registerArchitectTools()`.\n- Added `handleArchitectAddComment` handler that validates `id` and `title`, then calls `s.sdkClient.AddComment()` — same SDK call as the ticket version, but takes the ticket ID from input instead of session context.\n\n### No changes to ticket tools\n`tools_ticket.go` is unchanged — the ticket agent's `addTicketComment` continues to derive the ticket ID from `s.session.TicketID`.\n\n## Verification\n- `make build` — compiles successfully\n- `make test` — all tests pass\n- `make lint` — 0 issues",
+        "requested_at": "2026-01-28T07:31:28.401094Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,437 @@
+{
+  "id": "4e5c6ea5-6bc9-4d41-ba31-bd07efd4aa61",
+  "title": "Replace Architect System Prompt with Full Custom Prompt",
+  "body": "## Summary\n\nReplace `--append-system-prompt` with `--system-prompt` for architect sessions so the default Claude Code engineer prompt is fully replaced by a purpose-built architect prompt. The architect should orchestrate, not implement.\n\n## Motivation\n\nThe current architect prompt is a 23-line append on top of the default Claude Code system prompt (~130 lines of engineer instructions). The default prompt tells the agent to read files, edit code, use TodoWrite, track implementation tasks, etc. This causes the architect to behave like an engineer — exploring codebases, offering to implement, and polluting its context with code details.\n\n## Changes\n\n### 1. Update `.cortex/prompts/architect.md`\n\nReplace the current content with the full self-contained prompt below:\n\n```markdown\n# Role\n\nYou are a project architect. You orchestrate development by managing tickets\nand delegating implementation to ticket agents. You do not write code or\nread source files directly.\n\n\u003cdo_not_act_before_instructions\u003e\nNever implement changes, edit files, or write code yourself. When the user\ndescribes a feature, bug, or improvement, your job is to create a well-scoped\nticket and spawn an agent session to do the work. Default to creating tickets\nand delegating rather than taking direct action. Only proceed with spawning\nwhen the user explicitly approves.\n\u003c/do_not_act_before_instructions\u003e\n\n\u003cstay_high_level\u003e\nDo not read source files, explore codebases, or engage with implementation\ndetails directly. This pollutes your context with low-level jargon that\nis not your concern. When you need technical context to properly scope a\nticket, spawn an explore agent to investigate and return a high-level\nsummary. Focus your context on requirements, architecture, and ticket\nmanagement — leave implementation details to the ticket agents.\n\u003c/stay_high_level\u003e\n\n\u003cinvestigate_before_answering\u003e\nAlways read ticket details before making decisions about them. Never assume\nticket state or contents — use readTicket to inspect before acting. When\nreviewing completed work, read the ticket comments and review history before\napproving.\n\u003c/investigate_before_answering\u003e\n\n## Context Awareness\n\nYour context window will be automatically compacted as it approaches its limit.\nSave important decisions and context into ticket bodies and comments so state\npersists across compactions. Use ticket comments (type: decision) to record\narchitectural choices.\n\n## Cortex MCP Tools\n\n### Read Operations (auto-approved)\n- `listTickets` — List tickets by status (backlog, progress, review, done)\n- `readTicket` — Read full ticket details by ID\n\n### Write Operations (require approval)\n- `createTicket` — Create a new ticket with title and body\n- `updateTicket` — Update ticket title or body\n- `deleteTicket` — Delete a ticket by ID\n- `moveTicket` — Move ticket to a different status\n- `addTicketComment` — Add comments to tickets (types: decision, blocker,\n  progress, question, scope_change)\n- `spawnSession` — Spawn a ticket agent session to do the work\n\n## Workflow\n\n1. Discuss requirements with the user to clarify scope\n2. If technical context is needed, spawn an explore agent to investigate — do\n   not read source files yourself\n3. Create well-scoped tickets with clear requirements and acceptance criteria\n4. Use `spawnSession` to assign work to a ticket agent\n5. Monitor progress by reading ticket comments\n6. Review completed work when tickets move to review status\n7. Use `addTicketComment` to provide feedback or record decisions\n8. Approve or request changes\n\n## Writing Good Tickets\n\nA ticket body should contain:\n- **Summary** — What needs to change and why\n- **Requirements** — Expected behavior and constraints\n- **Acceptance criteria** — How to verify the work is complete\n\nOnly include implementation guidance when it involves an architectural\ndecision (e.g., choice of protocol, data model, API design). Leave\nimplementation details and code-level decisions to the ticket agent.\n\n## Communication Style\n\nBe direct and concise. Provide fact-based assessments. When brainstorming\nwith the user, focus on trade-offs and constraints rather than code details.\nAsk clarifying questions before creating tickets when requirements are\nambiguous.\n```\n\n### 2. Update spawn code to use `--system-prompt` for architect\n\nIn `internal/core/spawn/spawn.go` and `internal/core/spawn/launcher.go`:\n- For architect sessions, use `--system-prompt` (full replace) instead of `--append-system-prompt` (append)\n- For ticket sessions, keep `--append-system-prompt` (the default engineer prompt is correct for ticket agents)\n\n### 3. Update `cortex init` to install the new prompt\n\nThe init command installs default prompts into `.cortex/prompts/`. Ensure `architect.md` installed during init contains the full prompt above, not the old 23-line version.\n\n## Acceptance Criteria\n\n- Architect sessions use `--system-prompt` with the full custom prompt\n- Ticket sessions continue using `--append-system-prompt`\n- `cortex init` installs the updated `architect.md`\n- Architect agent does not exhibit engineer behaviors (no file reading, no code editing, no implementation offers)",
+  "dates": {
+    "created": "2026-01-28T07:24:07.180596Z",
+    "updated": "2026-01-28T07:34:30.364852Z",
+    "progress": "2026-01-28T07:24:25.121031Z",
+    "reviewed": "2026-01-28T07:33:21.035811Z",
+    "done": "2026-01-28T07:34:30.364852Z"
+  },
+  "comments": [
+    {
+      "id": "1aa5d854-bb04-4ee2-b286-9d44c64bd78b",
+      "session_id": "a029e894-42ed-4334-a52b-7afd3e014b72",
+      "type": "ticket_done",
+      "title": "Session concluded",
+      "content": "## Summary\n\nReplaced the architect agent's system prompt mechanism from `--append-system-prompt` (which appends to the default Claude Code engineer prompt) to `--system-prompt` (which fully replaces it). The architect prompt is now a self-contained system prompt that prevents the architect from behaving like an engineer — no file reading, no code editing, no implementation.\n\n## Key Decisions\n\n- **`--system-prompt` for architect only**: Ticket agent sessions continue using `--append-system-prompt` since the default Claude Code engineer prompt is appropriate for agents that write code. The architect needs a fundamentally different prompt that excludes engineer behaviors.\n- **Boolean field on LauncherParams**: Added `ReplaceSystemPrompt bool` rather than encoding the flag name directly, keeping the launcher abstraction clean and testable.\n- **Prompt content matches ticket spec exactly**: The full prompt includes behavioral guardrails (`do_not_act_before_instructions`, `stay_high_level`, `investigate_before_answering`), context awareness guidance, MCP tool documentation, workflow steps, ticket writing guidance, and communication style.\n\n## Files Modified\n\n1. **`internal/core/spawn/launcher.go`** — Added `ReplaceSystemPrompt bool` field to `LauncherParams`; `buildLauncherScript` selects `--system-prompt` or `--append-system-prompt` based on this flag.\n2. **`internal/core/spawn/spawn.go`** — Sets `launcherParams.ReplaceSystemPrompt = true` for `AgentTypeArchitect` in `Spawn()`; updated `buildPrompt` comment to document both modes.\n3. **`internal/install/install.go`** — Replaced 23-line `defaultArchitectPrompt` with full self-contained prompt (~80 lines) used during `cortex init`.\n4. **`.cortex/prompts/architect.md`** — Replaced with identical full prompt content for the current project.\n5. **`internal/core/spawn/spawn_test.go`** — `TestWriteLauncherScript_Architect`: added `ReplaceSystemPrompt: true` and assertions for `--system-prompt` (not `--append-system-prompt`). Ticket agent test unchanged.\n\n## Verification\n\n- `make test` — all tests pass\n- `make lint` — 0 issues\n- `make build` — builds successfully\n- Branch merged to main",
+      "created_at": "2026-01-28T07:34:30.363564Z"
+    }
+  ],
+  "session": {
+    "id": "a029e894-42ed-4334-a52b-7afd3e014b72",
+    "started_at": "2026-01-28T07:24:25.084306Z",
+    "ended_at": "2026-01-28T07:34:30.364325Z",
+    "agent": "claude",
+    "tmux_window": "replace-architect-system-prompt-with-full-custom-p",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/57d69035-cc1c-45e0-9985-7141293784ba",
+    "feature_branch": "ticket/replace-architect",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-28T07:34:17.465836Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T07:24:25.084306Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T07:24:48.386045Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:24:51.230967Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:24:51.364888Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:24:51.498381Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:24:51.638515Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:54.057434Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:54.058041Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:54.058527Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:57.899822Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:57.900519Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:24:57.901678Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:01.984103Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:01.984748Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:01.985297Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:06.357187Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:06.357917Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T07:25:06.725195Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:09.805529Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:09.807174Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:14.109888Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:25:14.510894Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:18.092201Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:18.093252Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:25:21.872064Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:25:22.271461Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T07:25:57.359337Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:26:06.594187Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:26:06.595278Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:26:06.596429Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:26:16.418504Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T07:26:16.550608Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:26:20.874745Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-28T07:26:41.590467Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T07:26:46.605358Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T07:30:01.576343Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:30:07.845893Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:30:13.662995Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:30:13.663833Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:30:13.665988Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:30:13.667888Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T07:30:13.925877Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:30:25.684717Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:30:38.903575Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:30:45.163256Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:30:51.61224Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:30:57.943876Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:31:03.183628Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:31:34.74104Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-28T07:31:44.428359Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T07:32:03.563723Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:32:11.104339Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:32:24.516758Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:32:29.850686Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:32:32.46411Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:32:39.775804Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T07:32:46.684727Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:32:52.382279Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:32:52.411676Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:32:52.412415Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:33:05.218693Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-28T07:33:21.07282Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T07:33:26.790075Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:34:12.779698Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T07:34:17.465836Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/57d69035-cc1c-45e0-9985-7141293784ba",
+        "title": "Replace architect system prompt with full custom prompt",
+        "content": "## Summary\n\nSwitched architect sessions from `--append-system-prompt` (appends to default Claude Code engineer prompt) to `--system-prompt` (fully replaces it). The architect prompt is now a self-contained system prompt that prevents the architect from behaving like an engineer.\n\n## Changes\n\n### `internal/core/spawn/launcher.go`\n- Added `ReplaceSystemPrompt bool` field to `LauncherParams` struct\n- In `buildLauncherScript`: when `ReplaceSystemPrompt` is true, uses `--system-prompt` flag; otherwise uses `--append-system-prompt`\n\n### `internal/core/spawn/spawn.go`\n- In `Spawn()`: sets `launcherParams.ReplaceSystemPrompt = true` for `AgentTypeArchitect`\n- Updated `buildPrompt` comment to document both modes\n\n### `internal/install/install.go`\n- Replaced 23-line `defaultArchitectPrompt` with full self-contained prompt (~80 lines)\n- Includes role definition, behavioral guardrails (`do_not_act_before_instructions`, `stay_high_level`, `investigate_before_answering`), MCP tool docs, workflow, ticket writing guidance, and communication style\n\n### `.cortex/prompts/architect.md`\n- Replaced with identical full prompt content\n\n### `internal/core/spawn/spawn_test.go`\n- `TestWriteLauncherScript_Architect`: Added `ReplaceSystemPrompt: true` to params, added assertions that script contains `--system-prompt` and does NOT contain `--append-system-prompt`\n- `TestWriteLauncherScript` (ticket agent): Kept existing `--append-system-prompt` assertion unchanged\n\n## Verification\n- `make test` — all tests pass\n- `make lint` — 0 issues\n- `make build` — builds successfully",
+        "requested_at": "2026-01-28T07:33:21.034804Z"
+      }
+    ]
+  }
+}

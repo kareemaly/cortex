@@ -1,0 +1,699 @@
+{
+  "id": "78dbea17-ad2d-4145-97e6-5e9c84409887",
+  "title": "Ticket TUI: Right Panel Navigation and Detail Modals",
+  "body": "## Summary\n\nAdd interactive navigation to the ticket TUI right panel. Reviews and comments become a navigable cursor list. Opening an item shows a scrollable detail modal with context-specific actions.\n\n## Depends On\n\n- Ticket TUI: Split Panel Layout with Description and Sidebar\n\n## Right Panel Navigation\n\nWhen right panel is focused (`l`):\n- `j/k` moves cursor through reviews + comments as a flat list\n- `gg` jumps to first item, `G` jumps to last\n- Selected item is highlighted\n- `o` or `Enter` opens the detail modal for the selected item\n\n### Item rendering (one-liner each)\n- **Review**: `{relative_repo_path} · {summary/title}` — repo path relative to project folder, omitted if same as project\n- **Comment**: `{type} · {title}` — falls back to first line of content if no title\n\n## Detail Modal\n\nCentered overlay modal (~60% width, ~70% height), rendered on top of the split layout.\n\n### Comment modal\n```\n┌───────────────────────────────────────┐\n│  progress · Jan 27, 14:20             │\n│───────────────────────────────────────│\n│                                       │\n│  Found the root cause in session.go.  │\n│  The prefix matching logic is too     │\n│  greedy and matches multiple sessions │\n│  when the name is a prefix of another.│\n│                                       │\n│  ## Solution                          │\n│  Use exact match with `=` suffix in   │\n│  the tmux target specification.       │\n│                                       │\n│  [Esc/q] close          [j/k] scroll  │\n└───────────────────────────────────────┘\n```\n\n### Review modal (with actions)\n```\n┌───────────────────────────────────────┐\n│  Review Request · 2m ago              │\n│───────────────────────────────────────│\n│  Repo: src/services (relative path)   │\n│                                       │\n│  Changed session target resolution    │\n│  to use exact match. Prevents         │\n│  ambiguous target errors when         │\n│  session names share prefixes.        │\n│                                       │\n│  [Esc/q] close  [a]pprove  [x]reject  │\n└───────────────────────────────────────┘\n```\n\n## Modal behavior\n- Content rendered with glamour markdown\n- `j/k` scrolls modal content (uses its own viewport)\n- `Esc` or `q` closes the modal\n- Review modals: `a` approves, `x` rejects (calls existing API)\n- Modal takes input priority (all other keys ignored while open)\n\n## Navigation summary\n\n| Context | Key | Action |\n|---------|-----|--------|\n| Any | `h` | Focus left panel |\n| Any | `l` | Focus right panel |\n| Left focused | `j/k` | Scroll description |\n| Left focused | `gg/G` | Jump top/bottom |\n| Right focused | `j/k` | Move cursor through items |\n| Right focused | `gg/G` | First/last item |\n| Right focused | `o/Enter` | Open detail modal |\n| Modal open | `j/k` | Scroll modal content |\n| Modal open | `Esc/q` | Close modal |\n| Modal (review) | `a` | Approve |\n| Modal (review) | `x` | Reject |\n\n## Files\n- `internal/cli/tui/ticket/model.go` — right panel cursor state, modal state, modal rendering\n- `internal/cli/tui/ticket/styles.go` — modal styles, cursor highlight\n- `internal/cli/tui/ticket/keys.go` — right panel keys, modal keys",
+  "dates": {
+    "created": "2026-01-27T15:19:30.64136Z",
+    "updated": "2026-01-28T05:15:00.998784Z",
+    "progress": "2026-01-27T16:34:37.120187Z",
+    "reviewed": "2026-01-28T05:07:21.215454Z",
+    "done": "2026-01-28T05:15:00.998784Z"
+  },
+  "comments": [
+    {
+      "id": "6b4a4cec-df97-4f88-8abd-af0bde7c15d8",
+      "session_id": "7060de24-61de-494e-830c-6aa0b4fde7c1",
+      "type": "ticket_done",
+      "content": "## Summary\n\nImplemented right panel navigation and detail modals for the ticket TUI. The right panel sidebar items (reviews and comments) are now a navigable cursor list with a centered detail modal overlay for viewing full content and taking actions.\n\n## Files Modified\n\n### `internal/cli/tui/ticket/keys.go`\n- Added `KeyO` (\"o\") and `KeyEnter` (\"enter\") key constants\n- Updated `helpText()` signature with `rightFocused bool` param — when right panel is focused, shows cursor-specific hints (`[j/k] select  [gg/G] first/last  [o/Enter] open`) instead of scroll hints\n- Added `modalHelpText(isReview bool)` function for modal-specific help text\n\n### `internal/cli/tui/ticket/styles.go`\n- Added `sidebarSelectedStyle` with background color 237 for cursor highlight\n- Added modal style block: `modalStyle` (rounded border, purple border color, padding), `modalHeaderStyle`, `modalSeparatorStyle`, `modalHelpStyle`, `modalRepoStyle`\n\n### `internal/cli/tui/ticket/model.go`\n- **Bug fix**: Changed `review.Summary` to `review.Title` in `renderSidebarReviews()` (broken by prior field rename in commit a4a0cfd)\n- **New state fields**: `sidebarCursor`, `showDetailModal`, `modalViewport`, `modalIsReview`, `modalItemIndex`, `rejecting`\n- **New message types**: `SessionRejectedMsg`, `RejectErrorMsg`\n- **Helper methods**: `sidebarItemCount()`, `sidebarReviewCount()`, `isSidebarReview()`, `rejectSession()`\n- **`handleRightPanelKey()`**: j/k cursor movement, gg/G first/last jump, o/Enter opens modal, plus global shortcuts (r refresh, x kill, s spawn, ga architect)\n- **`handleDetailModalKey()`**: Esc/q close, j/k scroll viewport, a approve (review only), x reject (review only)\n- **`openDetailModal()`**: Creates viewport sized ~60% width x ~70% height minus chrome, renders markdown content\n- **`renderDetailModal()`**: Centered overlay using `lipgloss.Place` with header + separator + scrollable viewport + help bar\n- **`renderModalHeader()`**: Review shows \"Review Request · {time_ago}\", Comment shows \"{type} · {date}\"\n- **`renderModalContent()`**: Renders markdown with glamour; reviews include optional repo path line\n- **Sidebar cursor highlight**: Both `renderSidebarReviews()` and `renderSidebarComments()` apply `sidebarSelectedStyle` at cursor position\n- **Comments display**: Updated to use `comment.Title` with fallback to first line of content\n- **Integration**: WindowSizeMsg resizes modal viewport, TicketLoadedMsg clamps cursor bounds, rejecting state in loading guard and View, detail modal check is highest priority in key dispatch\n\n## Key Decisions\n\n1. **Flat list ordering**: Reviews appear first in the cursor list, followed by comments, matching the sidebar rendering order\n2. **Pointer receiver for openDetailModal**: Used `*Model` receiver since it mutates multiple fields; callers on value receivers can still call it since the local copy is addressable\n3. **Rejection via AddComment**: No dedicated reject API exists; used `AddComment` with type \"rejection\" per existing codebase pattern\n4. **Modal as full overlay**: Detail modal replaces the entire view content (returned early from View()) rather than rendering on top, keeping the implementation simple\n5. **Markdown rendering per-modal**: Creates a fresh glamour renderer with modal-appropriate width rather than reusing the left panel renderer\n\n## Verification\n\n- `make build` — compiles cleanly\n- `make lint` — 0 issues\n- `make test` — all unit tests pass\n- Merged to main via fast-forward",
+      "created_at": "2026-01-28T05:15:00.997333Z"
+    }
+  ],
+  "session": {
+    "id": "7060de24-61de-494e-830c-6aa0b4fde7c1",
+    "started_at": "2026-01-27T16:34:37.083382Z",
+    "ended_at": "2026-01-28T05:15:00.998111Z",
+    "agent": "claude",
+    "tmux_window": "ticket-tui-right-panel-navigation-and-detail-modal",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/4e15d582-9370-412c-ae83-eaeb51e9ac4d",
+    "feature_branch": "ticket/ticket-tui-right",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-28T05:14:39.502473Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T16:34:37.083382Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T16:34:55.259218Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T16:34:57.769438Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T16:34:57.899294Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T16:34:58.034381Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-27T16:34:58.171789Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:35:00.375249Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:35:00.510784Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:35:00.642824Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:03.653493Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:03.654113Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:03.654529Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:03.654899Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:05.00158Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:07.595626Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:11.593741Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:35:11.940298Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:15.412738Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T16:35:43.531911Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:50.431442Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:50.432453Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:35:52.193657Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:36:05.568738Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:36:05.569836Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:36:15.069458Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:36:15.670858Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:36:15.80332Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:36:26.023635Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:36:26.167498Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:36:37.453352Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:36:37.589516Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:36:43.524186Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-27T16:38:55.047062Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:39:06.797244Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:39:06.797718Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:39:08.885645Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:39:20.466782Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:39:21.023623Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:39:21.170134Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:39:31.246291Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:39:31.585024Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:39:40.335464Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:39:40.33634Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:39:46.729707Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-27T16:39:46.868222Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:39:54.181201Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-27T16:39:58.603927Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-27T16:42:00.867401Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-27T16:43:04.642408Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-27T16:43:13.413187Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T05:01:00.634214Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:01:06.121012Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:01:06.121841Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:01:06.501447Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:01:16.257288Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:01:16.675007Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:01:18.42243Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T05:01:21.495713Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T05:01:23.458721Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:01:27.412Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T05:01:30.369387Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:01:31.723857Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T05:01:35.414409Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T05:01:41.285426Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:01:51.370815Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:01:57.202398Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:02:14.493235Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:02:14.581856Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:02:14.63732Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:02:21.374089Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:02:29.208168Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:02:34.885756Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:02:43.568904Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:02:49.187052Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:02:58.641763Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:03:06.07575Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:03:16.934879Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:03:23.758845Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:03:40.728731Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:03:47.936987Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:04:09.334963Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:04:25.297071Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:04:30.671918Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:04:34.261859Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:04:42.757245Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:04:51.479109Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:05:06.442613Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:05:10.690587Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:05:18.086984Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:05:23.634043Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:05:28.943158Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:05:36.521413Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T05:05:42.214573Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T05:05:54.954703Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:06:02.713205Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:06:11.523931Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:06:26.146051Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:06:32.801154Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:06:40.986738Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:06:45.884386Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T05:06:52.007328Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:06:58.252489Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:06:58.325762Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:06:58.326556Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:07:06.044499Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-28T05:07:21.293551Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T05:07:27.519697Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:14:35.620714Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T05:14:39.502473Z"
+      }
+    ],
+    "requested_reviews": [
+      {
+        "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/4e15d582-9370-412c-ae83-eaeb51e9ac4d",
+        "summary": "Implemented right panel navigation and detail modals for the ticket TUI.\n\n**Changes across 3 files:**\n\n**keys.go** - Added `KeyO` and `KeyEnter` constants. Updated `helpText()` with `rightFocused` param that shows cursor-specific hints. Added `modalHelpText()` for modal help display.\n\n**styles.go** - Added `sidebarSelectedStyle` for cursor highlight (background color 237). Added modal styles: `modalStyle` (rounded border), `modalHeaderStyle`, `modalSeparatorStyle`, `modalHelpStyle`, `modalRepoStyle`.\n\n**model.go** - Core implementation:\n- New state fields: `sidebarCursor`, `showDetailModal`, `modalViewport`, `modalIsReview`, `modalItemIndex`, `rejecting`\n- New message types: `SessionRejectedMsg`, `RejectErrorMsg`\n- Helper methods: `sidebarItemCount()`, `sidebarReviewCount()`, `isSidebarReview()`, `rejectSession()`\n- `handleRightPanelKey()` - j/k cursor movement, gg/G jump, o/Enter opens modal, plus global shortcuts (r, x, s, ga)\n- `handleDetailModalKey()` - Esc/q close, j/k scroll viewport, a approve (review), x reject (review)\n- `openDetailModal()` - Creates viewport sized ~60%w x ~70%h, renders markdown content\n- `renderDetailModal()` - Centered overlay with header, separator, scrollable content, help bar\n- Sidebar cursor highlight in both `renderSidebarReviews()` and `renderSidebarComments()`\n- Fixed `review.Summary` -\u003e `review.Title` bug from prior field rename\n- Integration: WindowSizeMsg resizes modal, TicketLoadedMsg clamps cursor, rejecting state in loading guard and View\n\n**Verification:** `make build` passes, `make lint` 0 issues, `make test` all pass.",
+        "requested_at": "2026-01-28T05:07:21.214501Z"
+      }
+    ]
+  }
+}
