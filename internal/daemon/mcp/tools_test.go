@@ -637,17 +637,15 @@ func TestHandleReadOwnTicket(t *testing.T) {
 
 // New tool tests
 
-func TestHandleAddTicketComment(t *testing.T) {
+func TestHandleAddComment(t *testing.T) {
 	server, _, cleanup := setupTicketSession(t)
 	defer cleanup()
 
-	_, output, err := server.handleAddTicketComment(context.Background(), nil, AddCommentInput{
-		Type:    "decision",
-		Title:   "API decision",
+	_, output, err := server.handleAddComment(context.Background(), nil, AddCommentInput{
 		Content: "Decided to use new API",
 	})
 	if err != nil {
-		t.Fatalf("handleAddTicketComment failed: %v", err)
+		t.Fatalf("handleAddComment failed: %v", err)
 	}
 
 	if !output.Success {
@@ -656,25 +654,30 @@ func TestHandleAddTicketComment(t *testing.T) {
 	if output.Comment.ID == "" {
 		t.Error("comment ID should not be empty")
 	}
-	if output.Comment.Type != "decision" {
-		t.Errorf("comment type = %q, want 'decision'", output.Comment.Type)
+	if output.Comment.Type != "comment" {
+		t.Errorf("comment type = %q, want 'comment'", output.Comment.Type)
 	}
 	if output.Comment.Content != "Decided to use new API" {
 		t.Errorf("comment content = %q, want 'Decided to use new API'", output.Comment.Content)
 	}
 }
 
-func TestHandleAddTicketCommentInvalidType(t *testing.T) {
+func TestHandleAddBlocker(t *testing.T) {
 	server, _, cleanup := setupTicketSession(t)
 	defer cleanup()
 
-	_, _, err := server.handleAddTicketComment(context.Background(), nil, AddCommentInput{
-		Type:    "invalid_type",
-		Title:   "Test title",
-		Content: "Test content",
+	_, output, err := server.handleAddBlocker(context.Background(), nil, AddBlockerInput{
+		Content: "Blocked by dependency issue",
 	})
-	if err == nil {
-		t.Error("expected error for invalid comment type")
+	if err != nil {
+		t.Fatalf("handleAddBlocker failed: %v", err)
+	}
+
+	if !output.Success {
+		t.Error("add blocker should succeed")
+	}
+	if output.Comment.Type != "blocker" {
+		t.Errorf("comment type = %q, want 'blocker'", output.Comment.Type)
 	}
 }
 
@@ -970,7 +973,7 @@ func TestHandleConcludeSession(t *testing.T) {
 	defer cleanup()
 
 	_, output, err := server.handleConcludeSession(context.Background(), nil, ConcludeSessionInput{
-		FullReport: "Work completed successfully",
+		Content: "Work completed successfully",
 	})
 	if err != nil {
 		t.Fatalf("handleConcludeSession failed: %v", err)
@@ -984,17 +987,15 @@ func TestHandleConcludeSession(t *testing.T) {
 	}
 }
 
-func TestHandleAddTicketCommentMissingTitle(t *testing.T) {
+func TestHandleAddCommentMissingContent(t *testing.T) {
 	server, _, cleanup := setupTicketSession(t)
 	defer cleanup()
 
-	_, _, err := server.handleAddTicketComment(context.Background(), nil, AddCommentInput{
-		Type:    "decision",
-		Title:   "",
-		Content: "Some content",
+	_, _, err := server.handleAddComment(context.Background(), nil, AddCommentInput{
+		Content: "",
 	})
 	if err == nil {
-		t.Error("expected error for missing title")
+		t.Error("expected error for missing content")
 	}
 	toolErr, ok := err.(*ToolError)
 	if !ok {
@@ -1011,7 +1012,6 @@ func TestHandleRequestReview(t *testing.T) {
 
 	_, output, err := server.handleRequestReview(context.Background(), nil, RequestReviewInput{
 		RepoPath: ".",
-		Title:    "Review changes",
 		Content:  "Please review the implementation",
 	})
 	if err != nil {
@@ -1021,8 +1021,11 @@ func TestHandleRequestReview(t *testing.T) {
 	if !output.Success {
 		t.Error("request review should succeed")
 	}
-	if output.ReviewCount != 1 {
-		t.Errorf("review count = %d, want 1", output.ReviewCount)
+	if output.Comment.ID == "" {
+		t.Error("comment ID should not be empty")
+	}
+	if output.Comment.Type != "review_requested" {
+		t.Errorf("comment type = %q, want 'review_requested'", output.Comment.Type)
 	}
 }
 
@@ -1030,14 +1033,13 @@ func TestHandleRequestReviewValidation(t *testing.T) {
 	server, _, cleanup := setupTicketSession(t)
 	defer cleanup()
 
-	// Missing title
+	// Missing repo_path
 	_, _, err := server.handleRequestReview(context.Background(), nil, RequestReviewInput{
-		RepoPath: ".",
-		Title:    "",
+		RepoPath: "",
 		Content:  "Some content",
 	})
 	if err == nil {
-		t.Error("expected error for missing title")
+		t.Error("expected error for missing repo_path")
 	}
 	toolErr, ok := err.(*ToolError)
 	if !ok {
@@ -1050,7 +1052,6 @@ func TestHandleRequestReviewValidation(t *testing.T) {
 	// Missing content
 	_, _, err = server.handleRequestReview(context.Background(), nil, RequestReviewInput{
 		RepoPath: ".",
-		Title:    "Some title",
 		Content:  "",
 	})
 	if err == nil {

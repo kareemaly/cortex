@@ -15,14 +15,20 @@ func ToDatesResponse(d ticket.Dates) DatesResponse {
 
 // ToCommentResponse converts a ticket.Comment to CommentResponse.
 func ToCommentResponse(c *ticket.Comment) CommentResponse {
-	return CommentResponse{
+	resp := CommentResponse{
 		ID:        c.ID,
 		SessionID: c.SessionID,
 		Type:      string(c.Type),
-		Title:     c.Title,
 		Content:   c.Content,
 		CreatedAt: c.CreatedAt,
 	}
+	if c.Action != nil {
+		resp.Action = &CommentActionResponse{
+			Type: c.Action.Type,
+			Args: c.Action.Args,
+		}
+	}
+	return resp
 }
 
 // ToStatusEntryResponse converts a ticket.StatusEntry to StatusEntryResponse.
@@ -32,16 +38,6 @@ func ToStatusEntryResponse(s ticket.StatusEntry) StatusEntryResponse {
 		Tool:   s.Tool,
 		Work:   s.Work,
 		At:     s.At,
-	}
-}
-
-// ToRequestedReviewResponse converts a ticket.ReviewRequest to RequestedReviewResponse.
-func ToRequestedReviewResponse(r ticket.ReviewRequest) RequestedReviewResponse {
-	return RequestedReviewResponse{
-		RepoPath:    r.RepoPath,
-		Title:       r.Title,
-		Content:     r.Content,
-		RequestedAt: r.RequestedAt,
 	}
 }
 
@@ -58,20 +54,14 @@ func ToSessionResponse(s ticket.Session) SessionResponse {
 		currentStatus = &cs
 	}
 
-	reviews := make([]RequestedReviewResponse, len(s.RequestedReviews))
-	for i, r := range s.RequestedReviews {
-		reviews[i] = ToRequestedReviewResponse(r)
-	}
-
 	return SessionResponse{
-		ID:               s.ID,
-		StartedAt:        s.StartedAt,
-		EndedAt:          s.EndedAt,
-		Agent:            s.Agent,
-		TmuxWindow:       s.TmuxWindow,
-		CurrentStatus:    currentStatus,
-		StatusHistory:    history,
-		RequestedReviews: reviews,
+		ID:            s.ID,
+		StartedAt:     s.StartedAt,
+		EndedAt:       s.EndedAt,
+		Agent:         s.Agent,
+		TmuxWindow:    s.TmuxWindow,
+		CurrentStatus: currentStatus,
+		StatusHistory: history,
 	}
 }
 

@@ -18,9 +18,15 @@ func (s *Server) registerTicketTools() {
 
 	// Add comment tool
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "addTicketComment",
-		Description: "Add a comment to your assigned ticket (types: scope_change, decision, blocker, progress, question, rejection, general, ticket_done)",
-	}, s.handleAddTicketComment)
+		Name:        "addComment",
+		Description: "Add a comment to your assigned ticket",
+	}, s.handleAddComment)
+
+	// Add blocker tool
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "addBlocker",
+		Description: "Report a blocker on your assigned ticket",
+	}, s.handleAddBlocker)
 
 	// Request review tool
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -54,17 +60,38 @@ func (s *Server) handleReadOwnTicket(
 	}, nil
 }
 
-// handleAddTicketComment adds a comment to the assigned ticket via the daemon API.
-func (s *Server) handleAddTicketComment(
+// handleAddComment adds a general comment to the assigned ticket via the daemon API.
+func (s *Server) handleAddComment(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input AddCommentInput,
 ) (*mcp.CallToolResult, AddCommentOutput, error) {
-	if input.Title == "" {
-		return nil, AddCommentOutput{}, NewValidationError("title", "cannot be empty")
+	if input.Content == "" {
+		return nil, AddCommentOutput{}, NewValidationError("content", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.AddComment(s.session.TicketID, input.Type, input.Title, input.Content)
+	resp, err := s.sdkClient.AddComment(s.session.TicketID, "comment", input.Content)
+	if err != nil {
+		return nil, AddCommentOutput{}, wrapSDKError(err)
+	}
+
+	return nil, AddCommentOutput{
+		Success: resp.Success,
+		Comment: resp.Comment,
+	}, nil
+}
+
+// handleAddBlocker adds a blocker comment to the assigned ticket via the daemon API.
+func (s *Server) handleAddBlocker(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input AddBlockerInput,
+) (*mcp.CallToolResult, AddCommentOutput, error) {
+	if input.Content == "" {
+		return nil, AddCommentOutput{}, NewValidationError("content", "cannot be empty")
+	}
+
+	resp, err := s.sdkClient.AddComment(s.session.TicketID, "blocker", input.Content)
 	if err != nil {
 		return nil, AddCommentOutput{}, wrapSDKError(err)
 	}
@@ -84,22 +111,19 @@ func (s *Server) handleRequestReview(
 	if input.RepoPath == "" {
 		return nil, RequestReviewOutput{}, NewValidationError("repo_path", "cannot be empty")
 	}
-	if input.Title == "" {
-		return nil, RequestReviewOutput{}, NewValidationError("title", "cannot be empty")
-	}
 	if input.Content == "" {
 		return nil, RequestReviewOutput{}, NewValidationError("content", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.RequestReview(s.session.TicketID, input.RepoPath, input.Title, input.Content)
+	resp, err := s.sdkClient.RequestReview(s.session.TicketID, input.RepoPath, input.Content, input.Commit)
 	if err != nil {
 		return nil, RequestReviewOutput{}, wrapSDKError(err)
 	}
 
 	return nil, RequestReviewOutput{
-		Success:     resp.Success,
-		Message:     resp.Message,
-		ReviewCount: resp.ReviewCount,
+		Success: resp.Success,
+		Message: resp.Message,
+		Comment: resp.Comment,
 	}, nil
 }
 
@@ -110,11 +134,11 @@ func (s *Server) handleConcludeSession(
 	req *mcp.CallToolRequest,
 	input ConcludeSessionInput,
 ) (*mcp.CallToolResult, ConcludeSessionOutput, error) {
-	if input.FullReport == "" {
-		return nil, ConcludeSessionOutput{}, NewValidationError("full_report", "cannot be empty")
+	if input.Content == "" {
+		return nil, ConcludeSessionOutput{}, NewValidationError("content", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.ConcludeSession(s.session.TicketID, input.FullReport)
+	resp, err := s.sdkClient.ConcludeSession(s.session.TicketID, input.Content)
 	if err != nil {
 		return nil, ConcludeSessionOutput{}, wrapSDKError(err)
 	}

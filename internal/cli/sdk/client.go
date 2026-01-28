@@ -56,7 +56,6 @@ type (
 	DatesResponse            = types.DatesResponse
 	CommentResponse          = types.CommentResponse
 	StatusEntryResponse      = types.StatusEntryResponse
-	RequestedReviewResponse  = types.RequestedReviewResponse
 	SessionResponse          = types.SessionResponse
 	TicketResponse           = types.TicketResponse
 	TicketSummary            = types.TicketSummary
@@ -468,9 +467,9 @@ type AddCommentResponse struct {
 
 // RequestReviewResponse is the response from the request review endpoint.
 type RequestReviewResponse struct {
-	Success     bool   `json:"success"`
-	Message     string `json:"message"`
-	ReviewCount int    `json:"review_count"`
+	Success bool            `json:"success"`
+	Message string          `json:"message"`
+	Comment CommentResponse `json:"comment"`
 }
 
 // ConcludeSessionResponse is the response from the conclude session endpoint.
@@ -614,8 +613,8 @@ func (c *Client) GetTicketByID(id string) (*TicketResponse, error) {
 }
 
 // AddComment adds a comment to a ticket.
-func (c *Client) AddComment(ticketID, commentType, title, content string) (*AddCommentResponse, error) {
-	reqBody := map[string]string{"type": commentType, "title": title, "content": content}
+func (c *Client) AddComment(ticketID, commentType, content string) (*AddCommentResponse, error) {
+	reqBody := map[string]string{"type": commentType, "content": content}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)
@@ -646,8 +645,11 @@ func (c *Client) AddComment(ticketID, commentType, title, content string) (*AddC
 }
 
 // RequestReview requests a review for a ticket.
-func (c *Client) RequestReview(ticketID, repoPath, title, content string) (*RequestReviewResponse, error) {
-	reqBody := map[string]string{"repo_path": repoPath, "title": title, "content": content}
+func (c *Client) RequestReview(ticketID, repoPath, content, commit string) (*RequestReviewResponse, error) {
+	reqBody := map[string]string{"repo_path": repoPath, "content": content}
+	if commit != "" {
+		reqBody["commit"] = commit
+	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)
@@ -678,8 +680,8 @@ func (c *Client) RequestReview(ticketID, repoPath, title, content string) (*Requ
 }
 
 // ConcludeSession concludes a ticket session.
-func (c *Client) ConcludeSession(ticketID, fullReport string) (*ConcludeSessionResponse, error) {
-	reqBody := map[string]string{"full_report": fullReport}
+func (c *Client) ConcludeSession(ticketID, content string) (*ConcludeSessionResponse, error) {
+	reqBody := map[string]string{"content": content}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)

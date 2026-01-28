@@ -53,7 +53,7 @@ func (s *Server) registerArchitectTools() {
 	// Add comment to a ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "addTicketComment",
-		Description: "Add a comment to a ticket (types: scope_change, decision, blocker, progress, question, rejection, general, ticket_done)",
+		Description: "Add a comment to a ticket (types: review_requested, done, blocker, comment)",
 	}, s.handleArchitectAddComment)
 
 	// Spawn session (stub)
@@ -210,11 +210,8 @@ func (s *Server) handleArchitectAddComment(
 	if input.ID == "" {
 		return nil, AddCommentOutput{}, NewValidationError("id", "cannot be empty")
 	}
-	if input.Title == "" {
-		return nil, AddCommentOutput{}, NewValidationError("title", "cannot be empty")
-	}
 
-	resp, err := s.sdkClient.AddComment(input.ID, input.Type, input.Title, input.Content)
+	resp, err := s.sdkClient.AddComment(input.ID, input.Type, input.Content)
 	if err != nil {
 		return nil, AddCommentOutput{}, wrapSDKError(err)
 	}

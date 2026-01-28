@@ -67,30 +67,32 @@ type SpawnSessionInput struct {
 // ArchitectAddCommentInput is the input for the architect's addTicketComment tool.
 type ArchitectAddCommentInput struct {
 	ID      string `json:"id" jsonschema:"The ticket ID to add a comment to"`
-	Type    string `json:"type" jsonschema:"Comment type (scope_change/decision/blocker/progress/question/rejection/general/ticket_done)"`
-	Title   string `json:"title" jsonschema:"Short one-liner title for the comment (required)"`
+	Type    string `json:"type" jsonschema:"Comment type (review_requested/done/blocker/comment)"`
 	Content string `json:"content" jsonschema:"The comment content"`
 }
 
 // Input types for ticket tools
 
-// AddCommentInput is the input for the addTicketComment tool.
+// AddCommentInput is the input for the addComment tool.
 type AddCommentInput struct {
-	Type    string `json:"type" jsonschema:"Comment type (scope_change/decision/blocker/progress/question/rejection/general/ticket_done)"`
-	Title   string `json:"title" jsonschema:"Short one-liner title for the comment (required)"`
 	Content string `json:"content" jsonschema:"The comment content"`
+}
+
+// AddBlockerInput is the input for the addBlocker tool.
+type AddBlockerInput struct {
+	Content string `json:"content" jsonschema:"Description of the blocker"`
 }
 
 // RequestReviewInput is the input for the requestReview tool.
 type RequestReviewInput struct {
 	RepoPath string `json:"repo_path" jsonschema:"Path to the repository being reviewed"`
-	Title    string `json:"title" jsonschema:"Short one-liner title for the review request (required)"`
 	Content  string `json:"content" jsonschema:"Full description of changes for the reviewer"`
+	Commit   string `json:"commit,omitempty" jsonschema:"Optional commit hash to review"`
 }
 
 // ConcludeSessionInput is the input for the concludeSession tool.
 type ConcludeSessionInput struct {
-	FullReport string `json:"full_report" jsonschema:"Complete summary of work done, decisions made, and files changed"`
+	Content string `json:"content" jsonschema:"Complete summary of work done, decisions made, and files changed"`
 }
 
 // Type aliases for identical types (map to shared types)
@@ -195,9 +197,9 @@ type AddCommentOutput struct {
 
 // RequestReviewOutput is the output for the requestReview tool.
 type RequestReviewOutput struct {
-	Success     bool   `json:"success"`
-	Message     string `json:"message"`
-	ReviewCount int    `json:"review_count"`
+	Success bool          `json:"success"`
+	Message string        `json:"message"`
+	Comment CommentOutput `json:"comment"`
 }
 
 // ConcludeSessionOutput is the output for the concludeSession tool.

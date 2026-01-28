@@ -585,11 +585,9 @@ func (m Model) hasActiveSession() bool {
 	return m.ticket != nil && m.ticket.Session != nil && m.ticket.Session.EndedAt == nil
 }
 
-// hasReviewRequests returns true if the session has pending review requests.
+// hasReviewRequests returns true if there are review_requested comments.
 func (m Model) hasReviewRequests() bool {
-	return m.ticket != nil &&
-		m.ticket.Session != nil &&
-		len(m.ticket.Session.RequestedReviews) > 0
+	return m.sidebarReviewCount() > 0
 }
 
 // killSession returns a command to kill the current session.
@@ -633,24 +631,58 @@ func (m Model) canSpawn() bool {
 	return !m.hasActiveSession()
 }
 
-// sidebarItemCount returns the total number of items in the sidebar (reviews + comments).
+// sidebarItemCount returns the total number of items in the sidebar.
 func (m Model) sidebarItemCount() int {
-	count := len(m.ticket.Comments)
-	if m.ticket.Session != nil {
-		count += len(m.ticket.Session.RequestedReviews)
+	if m.ticket == nil {
+		return 0
+	}
+	return len(m.ticket.Comments)
+}
+
+// sidebarReviewCount returns the number of review_requested comments.
+func (m Model) sidebarReviewCount() int {
+	if m.ticket == nil {
+		return 0
+	}
+	count := 0
+	for _, c := range m.ticket.Comments {
+		if c.Type == "review_requested" {
+			count++
+		}
 	}
 	return count
 }
 
-// sidebarReviewCount returns the number of reviews in the sidebar.
-func (m Model) sidebarReviewCount() int {
-	if m.ticket == nil || m.ticket.Session == nil {
-		return 0
+// reviewComments returns only review_requested comments.
+func (m Model) reviewComments() []sdk.CommentResponse {
+	if m.ticket == nil {
+		return nil
 	}
-	return len(m.ticket.Session.RequestedReviews)
+	var reviews []sdk.CommentResponse
+	for _, c := range m.ticket.Comments {
+		if c.Type == "review_requested" {
+			reviews = append(reviews, c)
+		}
+	}
+	return reviews
+}
+
+// nonReviewComments returns comments that are not review_requested.
+func (m Model) nonReviewComments() []sdk.CommentResponse {
+	if m.ticket == nil {
+		return nil
+	}
+	var comments []sdk.CommentResponse
+	for _, c := range m.ticket.Comments {
+		if c.Type != "review_requested" {
+			comments = append(comments, c)
+		}
+	}
+	return comments
 }
 
 // isSidebarReview returns true if the given flat index points to a review item.
+// Sidebar ordering: reviews first, then non-review comments.
 func (m Model) isSidebarReview(index int) bool {
 	return index < m.sidebarReviewCount()
 }
@@ -661,7 +693,7 @@ func (m Model) rejectSession() tea.Cmd {
 		if m.ticket == nil {
 			return RejectErrorMsg{Err: fmt.Errorf("no ticket")}
 		}
-		_, err := m.client.AddComment(m.ticket.ID, "rejection", "Review rejected", "Review rejected from TUI")
+		_, err := m.client.AddComment(m.ticket.ID, "comment", "Review rejected from TUI")
 		if err != nil {
 			return RejectErrorMsg{Err: err}
 		}
@@ -734,10 +766,10 @@ func (m *Model) openDetailModal() {
 
 	if m.isSidebarReview(m.sidebarCursor) {
 		m.modalIsReview = true
-		m.modalItemIndex = m.sidebarCursor
+		m.modalItemIndex = m.sidebarCursor // index into reviewComments()
 	} else {
 		m.modalIsReview = false
-		m.modalItemIndex = m.sidebarCursor - reviewCount
+		m.modalItemIndex = m.sidebarCursor - reviewCount // index into nonReviewComments()
 	}
 
 	// Size: ~60% width, ~70% height minus chrome (border + padding + header + separator + help).
@@ -767,15 +799,17 @@ func (m Model) renderDetailModal() string {
 // renderModalHeader renders the header line for the detail modal.
 func (m Model) renderModalHeader() string {
 	if m.modalIsReview {
-		if m.ticket != nil && m.ticket.Session != nil && m.modalItemIndex < len(m.ticket.Session.RequestedReviews) {
-			review := m.ticket.Session.RequestedReviews[m.modalItemIndex]
-			return modalHeaderStyle.Render("Review Request") + "  " + sidebarLabelStyle.Render(formatTimeAgo(review.RequestedAt))
+		reviews := m.reviewComments()
+		if m.modalItemIndex < len(reviews) {
+			review := reviews[m.modalItemIndex]
+			return modalHeaderStyle.Render("Review Request") + "  " + sidebarLabelStyle.Render(formatTimeAgo(review.CreatedAt))
 		}
 		return modalHeaderStyle.Render("Review Request")
 	}
 
-	if m.ticket != nil && m.modalItemIndex < len(m.ticket.Comments) {
-		comment := m.ticket.Comments[m.modalItemIndex]
+	comments := m.nonReviewComments()
+	if m.modalItemIndex < len(comments) {
+		comment := comments[m.modalItemIndex]
 		typeStr := commentTypeStyle(comment.Type).Render(comment.Type)
 		date := sidebarLabelStyle.Render(comment.CreatedAt.Format("Jan 02, 15:04"))
 		return typeStr + "  " + sidebarDotStyle.Render("·") + "  " + date
@@ -786,14 +820,17 @@ func (m Model) renderModalHeader() string {
 // renderModalContent renders the scrollable content for the detail modal.
 func (m Model) renderModalContent(width int) string {
 	if m.modalIsReview {
-		if m.ticket == nil || m.ticket.Session == nil || m.modalItemIndex >= len(m.ticket.Session.RequestedReviews) {
+		reviews := m.reviewComments()
+		if m.modalItemIndex >= len(reviews) {
 			return ""
 		}
-		review := m.ticket.Session.RequestedReviews[m.modalItemIndex]
+		review := reviews[m.modalItemIndex]
 		var b strings.Builder
 
-		if review.RepoPath != "" && review.RepoPath != "." {
-			b.WriteString(modalRepoStyle.Render("Repo: " + review.RepoPath))
+		// Extract repo_path from action args
+		repoPath := extractRepoPath(review)
+		if repoPath != "" && repoPath != "." {
+			b.WriteString(modalRepoStyle.Render("Repo: " + repoPath))
 			b.WriteString("\n\n")
 		}
 
@@ -814,10 +851,11 @@ func (m Model) renderModalContent(width int) string {
 	}
 
 	// Comment modal.
-	if m.ticket == nil || m.modalItemIndex >= len(m.ticket.Comments) {
+	comments := m.nonReviewComments()
+	if m.modalItemIndex >= len(comments) {
 		return ""
 	}
-	comment := m.ticket.Comments[m.modalItemIndex]
+	comment := comments[m.modalItemIndex]
 
 	renderer, _ := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
@@ -830,6 +868,19 @@ func (m Model) renderModalContent(width int) string {
 		}
 	}
 	return comment.Content
+}
+
+// extractRepoPath extracts repo_path from a review comment's Action.Args.
+func extractRepoPath(comment sdk.CommentResponse) string {
+	if comment.Action == nil {
+		return ""
+	}
+	argsMap, ok := comment.Action.Args.(map[string]any)
+	if !ok {
+		return ""
+	}
+	repoPath, _ := argsMap["repo_path"].(string)
+	return repoPath
 }
 
 // renderOrphanModal renders the orphaned session modal.
@@ -1089,8 +1140,8 @@ func (m Model) renderSidebar(width, height int) string {
 		b.WriteString(m.renderSidebarReviews(width))
 	}
 
-	// COMMENTS section.
-	if len(m.ticket.Comments) > 0 {
+	// COMMENTS section (non-review comments).
+	if len(m.nonReviewComments()) > 0 {
 		b.WriteString("\n\n")
 		b.WriteString(m.renderSidebarComments(width))
 	}
@@ -1188,7 +1239,7 @@ func (m Model) renderSidebarSession(_ int) string {
 
 // renderSidebarReviews renders the REVIEWS section of the sidebar.
 func (m Model) renderSidebarReviews(width int) string {
-	reviews := m.ticket.Session.RequestedReviews
+	reviews := m.reviewComments()
 	var b strings.Builder
 
 	b.WriteString(sidebarHeaderStyle.Render(fmt.Sprintf("REVIEWS (%d)", len(reviews))))
@@ -1198,16 +1249,21 @@ func (m Model) renderSidebarReviews(width int) string {
 	maxLineWidth := max(width-3, 10)
 
 	for i, review := range reviews {
-		repo := filepath.Base(review.RepoPath)
+		repoPath := extractRepoPath(review)
+		repo := filepath.Base(repoPath)
 		if repo == "." || repo == "" || repo == "/" {
 			repo = ""
 		}
 
+		// Use first line of Content as display text.
+		display := strings.SplitN(review.Content, "\n", 2)[0]
+		display = strings.ReplaceAll(display, "\n", " ")
+
 		var line string
 		if repo != "" {
-			line = repo + " " + sidebarDotStyle.Render("·") + " " + review.Title
+			line = repo + " " + sidebarDotStyle.Render("·") + " " + display
 		} else {
-			line = review.Title
+			line = display
 		}
 
 		// Truncate to fit.
@@ -1230,7 +1286,7 @@ func (m Model) renderSidebarReviews(width int) string {
 
 // renderSidebarComments renders the COMMENTS section of the sidebar.
 func (m Model) renderSidebarComments(width int) string {
-	comments := m.ticket.Comments
+	comments := m.nonReviewComments()
 	var b strings.Builder
 
 	b.WriteString(sidebarHeaderStyle.Render(fmt.Sprintf("COMMENTS (%d)", len(comments))))
@@ -1241,11 +1297,8 @@ func (m Model) renderSidebarComments(width int) string {
 	reviewCount := m.sidebarReviewCount()
 
 	for i, comment := range comments {
-		// Use title if available, otherwise first line of content.
-		display := comment.Title
-		if display == "" {
-			display = strings.SplitN(comment.Content, "\n", 2)[0]
-		}
+		// Use first line of content as display text.
+		display := strings.SplitN(comment.Content, "\n", 2)[0]
 		display = strings.ReplaceAll(display, "\n", " ")
 
 		typeStr := commentTypeStyle(comment.Type).Render(comment.Type)
@@ -1364,7 +1417,8 @@ func (m Model) renderSession() string {
 
 // renderReviewRequests renders the review requests section.
 func (m Model) renderReviewRequests() string {
-	if m.ticket == nil || m.ticket.Session == nil || len(m.ticket.Session.RequestedReviews) == 0 {
+	reviews := m.reviewComments()
+	if len(reviews) == 0 {
 		return ""
 	}
 
@@ -1373,17 +1427,19 @@ func (m Model) renderReviewRequests() string {
 	b.WriteString(sectionHeaderStyle.Render("─── Review Requests ───"))
 	b.WriteString("\n")
 
-	for _, review := range m.ticket.Session.RequestedReviews {
-		// Format: [repo: .]  "Title text"  (2 min ago)
-		repo := review.RepoPath
+	for _, review := range reviews {
+		// Extract repo from action args
+		repo := extractRepoPath(review)
 		if repo == "" || repo == "." {
 			repo = "."
 		}
+		// Use first line of content as summary
+		summary := strings.SplitN(review.Content, "\n", 2)[0]
 		b.WriteString(labelStyle.Render("[repo: " + repo + "]"))
 		b.WriteString("  ")
-		b.WriteString(valueStyle.Render("\"" + review.Title + "\""))
+		b.WriteString(valueStyle.Render("\"" + summary + "\""))
 		b.WriteString("  ")
-		b.WriteString(labelStyle.Render("(" + formatTimeAgo(review.RequestedAt) + ")"))
+		b.WriteString(labelStyle.Render("(" + formatTimeAgo(review.CreatedAt) + ")"))
 		b.WriteString("\n")
 	}
 
@@ -1399,17 +1455,13 @@ func (m Model) renderComments() string {
 	b.WriteString("\n")
 
 	for i, comment := range m.ticket.Comments {
-		// Comment type badge, title, and date.
+		// Comment type badge and date.
 		typeStyle := commentTypeStyle(comment.Type)
 		badge := typeStyle.Render("[" + comment.Type + "]")
 		date := labelStyle.Render(comment.CreatedAt.Format("Jan 02 15:04"))
 
 		b.WriteString(badge)
 		b.WriteString(strings.Repeat(" ", max(15-len(comment.Type), 1)))
-		if comment.Title != "" {
-			b.WriteString(valueStyle.Render(comment.Title))
-			b.WriteString("  ")
-		}
 		b.WriteString(date)
 		b.WriteString("\n")
 

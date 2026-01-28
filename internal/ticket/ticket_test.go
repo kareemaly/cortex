@@ -30,8 +30,7 @@ func TestTicketJSONRoundTrip(t *testing.T) {
 			{
 				ID:        "comment-1",
 				SessionID: "session-1",
-				Type:      CommentDecision,
-				Title:     "Test title",
+				Type:      CommentGeneral,
 				Content:   "Test decision",
 				CreatedAt: now,
 			},

@@ -13,7 +13,6 @@ type (
 	DatesResponse            = types.DatesResponse
 	CommentResponse          = types.CommentResponse
 	StatusEntryResponse      = types.StatusEntryResponse
-	RequestedReviewResponse  = types.RequestedReviewResponse
 	SessionResponse          = types.SessionResponse
 	TicketResponse           = types.TicketResponse
 	TicketSummary            = types.TicketSummary
@@ -50,9 +49,9 @@ type SpawnResponse struct {
 
 // AddCommentRequest is the request body for adding a comment to a ticket.
 type AddCommentRequest struct {
-	Type    string `json:"type"`
-	Title   string `json:"title"`
-	Content string `json:"content"`
+	Type    string                       `json:"type"`
+	Content string                       `json:"content"`
+	Action  *types.CommentActionResponse `json:"action,omitempty"`
 }
 
 // AddCommentResponse is the response for adding a comment.
@@ -64,20 +63,20 @@ type AddCommentResponse struct {
 // RequestReviewRequest is the request body for requesting a review.
 type RequestReviewRequest struct {
 	RepoPath string `json:"repo_path"`
-	Title    string `json:"title"`
 	Content  string `json:"content"`
+	Commit   string `json:"commit,omitempty"`
 }
 
 // RequestReviewResponse is the response for requesting a review.
 type RequestReviewResponse struct {
-	Success     bool   `json:"success"`
-	Message     string `json:"message"`
-	ReviewCount int    `json:"review_count"`
+	Success bool            `json:"success"`
+	Message string          `json:"message"`
+	Comment CommentResponse `json:"comment"`
 }
 
 // ConcludeSessionRequest is the request body for concluding a session.
 type ConcludeSessionRequest struct {
-	FullReport string `json:"full_report"`
+	Content string `json:"content"`
 }
 
 // ConcludeSessionResponse is the response for concluding a session.

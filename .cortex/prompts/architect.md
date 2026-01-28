@@ -46,8 +46,8 @@ architectural choices.
 - `updateTicket` — Update ticket title or body
 - `deleteTicket` — Delete a ticket by ID
 - `moveTicket` — Move ticket to a different status
-- `addTicketComment` — Add comments to tickets (types: decision, blocker,
-  progress, question, scope_change)
+- `addTicketComment` — Add comments to tickets (types: review_requested, done,
+  blocker, comment)
 - `spawnSession` — Spawn a ticket agent session to do the work
 
 ## Workflow

@@ -352,10 +352,7 @@ func (s *Store) UpdateSessionStatus(ticketID string, agentStatus AgentStatus, to
 }
 
 // AddComment adds a comment to a ticket.
-func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, title, content string) (*Comment, error) {
-	if title == "" {
-		return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
-	}
+func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, content string, action *CommentAction) (*Comment, error) {
 	if content == "" {
 		return nil, &ValidationError{Field: "content", Message: "cannot be empty"}
 	}
@@ -374,8 +371,8 @@ func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, 
 		ID:        uuid.New().String(),
 		SessionID: sessionID,
 		Type:      commentType,
-		Title:     title,
 		Content:   content,
+		Action:    action,
 		CreatedAt: now,
 	}
 
@@ -388,52 +385,6 @@ func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, 
 
 	s.emit(events.CommentAdded, ticketID, nil)
 	return &comment, nil
-}
-
-// AddReviewRequest adds a review request to the ticket's active session.
-// Returns the total number of review requests after adding.
-func (s *Store) AddReviewRequest(ticketID, repoPath, title, content string) (int, error) {
-	if title == "" {
-		return 0, &ValidationError{Field: "title", Message: "cannot be empty"}
-	}
-	if content == "" {
-		return 0, &ValidationError{Field: "content", Message: "cannot be empty"}
-	}
-
-	mu := s.ticketMu(ticketID)
-	mu.Lock()
-	defer mu.Unlock()
-
-	ticket, status, err := s.Get(ticketID)
-	if err != nil {
-		return 0, err
-	}
-
-	if ticket.Session == nil {
-		return 0, &NotFoundError{Resource: "session", ID: ticketID}
-	}
-
-	if !ticket.Session.IsActive() {
-		return 0, &ValidationError{Field: "session", Message: "session is not active"}
-	}
-
-	now := time.Now().UTC()
-	review := ReviewRequest{
-		RepoPath:    repoPath,
-		Title:       title,
-		Content:     content,
-		RequestedAt: now,
-	}
-
-	ticket.Session.RequestedReviews = append(ticket.Session.RequestedReviews, review)
-	ticket.Dates.Updated = now
-
-	if err := s.save(ticket, status); err != nil {
-		return 0, fmt.Errorf("save ticket: %w", err)
-	}
-
-	s.emit(events.ReviewRequested, ticketID, nil)
-	return len(ticket.Session.RequestedReviews), nil
 }
 
 // filename generates the filename for a ticket: {slug}-{id}.json

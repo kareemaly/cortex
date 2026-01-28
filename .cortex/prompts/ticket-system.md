@@ -1,7 +1,8 @@
 ## Cortex MCP Tools
 
 - `mcp__cortex__readTicket` - Read your assigned ticket details
-- `mcp__cortex__addTicketComment` - Add comments (types: scope_change, decision, blocker, progress, question)
+- `mcp__cortex__addComment` - Add a comment to your assigned ticket
+- `mcp__cortex__addBlocker` - Report a blocker on your assigned ticket
 - `mcp__cortex__requestReview` - Request human review for a repository
 - `mcp__cortex__concludeSession` - Complete the ticket and end your session
 
@@ -16,12 +17,9 @@
 
 ## Comments
 
-Use `mcp__cortex__addTicketComment` to document:
-- **scope_change**: Changes to the ticket scope or requirements
-- **decision**: Key technical decisions made
-- **blocker**: Issues preventing progress
-- **progress**: Status updates on implementation
-- **question**: Questions needing clarification
+Use `mcp__cortex__addComment` to document progress, decisions, and status updates.
+
+Use `mcp__cortex__addBlocker` to report issues preventing progress.
 
 ## Important
 
@@ -33,4 +31,4 @@ Use `mcp__cortex__addTicketComment` to document:
 
 - Your context window may be compacted during long sessions — earlier messages could be summarized or removed
 - Commit your work frequently so progress is saved even if context is lost
-- Use `addTicketComment` with type `progress` to log key milestones so you can recover context from the ticket if needed
+- Use `addComment` to log key milestones so you can recover context from the ticket if needed

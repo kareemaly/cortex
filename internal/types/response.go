@@ -20,12 +20,18 @@ type DatesResponse struct {
 
 // CommentResponse is a comment in a ticket response.
 type CommentResponse struct {
-	ID        string    `json:"id"`
-	SessionID string    `json:"session_id,omitempty"`
-	Type      string    `json:"type"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string                 `json:"id"`
+	SessionID string                 `json:"session_id,omitempty"`
+	Type      string                 `json:"type"`
+	Content   string                 `json:"content"`
+	Action    *CommentActionResponse `json:"action,omitempty"`
+	CreatedAt time.Time              `json:"created_at"`
+}
+
+// CommentActionResponse is the action attached to a comment.
+type CommentActionResponse struct {
+	Type string `json:"type"`
+	Args any    `json:"args"`
 }
 
 // StatusEntryResponse is a status entry in a session response.
@@ -36,24 +42,15 @@ type StatusEntryResponse struct {
 	At     time.Time `json:"at"`
 }
 
-// RequestedReviewResponse is a review request in a session response.
-type RequestedReviewResponse struct {
-	RepoPath    string    `json:"repo_path"`
-	Title       string    `json:"title"`
-	Content     string    `json:"content"`
-	RequestedAt time.Time `json:"requested_at"`
-}
-
 // SessionResponse is a session in a ticket response.
 type SessionResponse struct {
-	ID               string                    `json:"id"`
-	StartedAt        time.Time                 `json:"started_at"`
-	EndedAt          *time.Time                `json:"ended_at,omitempty"`
-	Agent            string                    `json:"agent"`
-	TmuxWindow       string                    `json:"tmux_window"`
-	CurrentStatus    *StatusEntryResponse      `json:"current_status,omitempty"`
-	StatusHistory    []StatusEntryResponse     `json:"status_history"`
-	RequestedReviews []RequestedReviewResponse `json:"requested_reviews,omitempty"`
+	ID            string                `json:"id"`
+	StartedAt     time.Time             `json:"started_at"`
+	EndedAt       *time.Time            `json:"ended_at,omitempty"`
+	Agent         string                `json:"agent"`
+	TmuxWindow    string                `json:"tmux_window"`
+	CurrentStatus *StatusEntryResponse  `json:"current_status,omitempty"`
+	StatusHistory []StatusEntryResponse `json:"status_history"`
 }
 
 // TicketResponse is the full ticket response with status.

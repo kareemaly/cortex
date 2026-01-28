@@ -426,17 +426,11 @@ func (h *TicketHandlers) AddComment(w http.ResponseWriter, r *http.Request) {
 	// Validate comment type
 	commentType := ticket.CommentType(req.Type)
 	switch commentType {
-	case ticket.CommentScopeChange, ticket.CommentDecision, ticket.CommentBlocker,
-		ticket.CommentProgress, ticket.CommentQuestion, ticket.CommentRejection,
-		ticket.CommentGeneral, ticket.CommentTicketDone:
+	case ticket.CommentReviewRequested, ticket.CommentDone, ticket.CommentBlocker,
+		ticket.CommentGeneral:
 		// Valid type
 	default:
-		writeError(w, http.StatusBadRequest, "validation_error", "invalid comment type")
-		return
-	}
-
-	if req.Title == "" {
-		writeError(w, http.StatusBadRequest, "validation_error", "title cannot be empty")
+		writeError(w, http.StatusBadRequest, "validation_error", "invalid comment type: must be review_requested, done, blocker, or comment")
 		return
 	}
 
@@ -446,7 +440,16 @@ func (h *TicketHandlers) AddComment(w http.ResponseWriter, r *http.Request) {
 		activeSessionID = t.Session.ID
 	}
 
-	comment, err := store.AddComment(id, activeSessionID, commentType, req.Title, req.Content)
+	// Convert action from request
+	var action *ticket.CommentAction
+	if req.Action != nil {
+		action = &ticket.CommentAction{
+			Type: req.Action.Type,
+			Args: req.Action.Args,
+		}
+	}
+
+	comment, err := store.AddComment(id, activeSessionID, commentType, req.Content, action)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -480,16 +483,33 @@ func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "validation_error", "repo_path cannot be empty")
 		return
 	}
-	if req.Title == "" {
-		writeError(w, http.StatusBadRequest, "validation_error", "title cannot be empty")
-		return
-	}
 	if req.Content == "" {
 		writeError(w, http.StatusBadRequest, "validation_error", "content cannot be empty")
 		return
 	}
 
-	reviewCount, err := store.AddReviewRequest(id, req.RepoPath, req.Title, req.Content)
+	// Find active session ID
+	t, _, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+	var activeSessionID string
+	if t.Session != nil && t.Session.IsActive() {
+		activeSessionID = t.Session.ID
+	}
+
+	// Build git_diff action
+	args := ticket.GitDiffArgs{RepoPath: req.RepoPath}
+	if req.Commit != "" {
+		args.Commit = req.Commit
+	}
+	action := &ticket.CommentAction{
+		Type: "git_diff",
+		Args: args,
+	}
+
+	comment, err := store.AddComment(id, activeSessionID, ticket.CommentReviewRequested, req.Content, action)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -509,9 +529,9 @@ func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := RequestReviewResponse{
-		Success:     true,
-		Message:     "Review request added. Wait for human approval.",
-		ReviewCount: reviewCount,
+		Success: true,
+		Message: "Review request added. Wait for human approval.",
+		Comment: types.ToCommentResponse(comment),
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -586,8 +606,8 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.FullReport == "" {
-		writeError(w, http.StatusBadRequest, "validation_error", "full_report cannot be empty")
+	if req.Content == "" {
+		writeError(w, http.StatusBadRequest, "validation_error", "content cannot be empty")
 		return
 	}
 
@@ -604,8 +624,8 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Add ticket_done comment with the full report
-	_, err = store.AddComment(id, activeSessionID, ticket.CommentTicketDone, "Session concluded", req.FullReport)
+	// Add done comment with the report
+	_, err = store.AddComment(id, activeSessionID, ticket.CommentDone, req.Content, nil)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return

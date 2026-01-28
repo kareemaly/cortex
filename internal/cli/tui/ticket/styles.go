@@ -12,13 +12,10 @@ var (
 
 // Comment type colors.
 var (
-	decisionColor     = lipgloss.Color("39")  // blue
-	scopeChangeColor  = lipgloss.Color("214") // yellow
-	blockerColor      = lipgloss.Color("196") // red
-	progressTypeColor = lipgloss.Color("82")  // green
-	questionColor     = lipgloss.Color("87")  // cyan
-	rejectionColor    = lipgloss.Color("197") // magenta
-	generalColor      = lipgloss.Color("245") // gray
+	reviewRequestedColor = lipgloss.Color("39")  // blue
+	doneTypeColor        = lipgloss.Color("82")  // green
+	blockerColor         = lipgloss.Color("196") // red
+	commentColor         = lipgloss.Color("245") // gray
 )
 
 // General colors.
@@ -177,20 +174,14 @@ func statusStyle(status string) lipgloss.Style {
 func commentTypeStyle(commentType string) lipgloss.Style {
 	var color lipgloss.Color
 	switch commentType {
-	case "decision":
-		color = decisionColor
-	case "scope_change":
-		color = scopeChangeColor
+	case "review_requested":
+		color = reviewRequestedColor
+	case "done":
+		color = doneTypeColor
 	case "blocker":
 		color = blockerColor
-	case "progress":
-		color = progressTypeColor
-	case "question":
-		color = questionColor
-	case "rejection":
-		color = rejectionColor
 	default:
-		color = generalColor
+		color = commentColor
 	}
 	return lipgloss.NewStyle().
 		Foreground(color)
