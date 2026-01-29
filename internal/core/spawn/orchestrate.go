@@ -143,15 +143,16 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 
 	buildSpawnReq := func() SpawnRequest {
 		return SpawnRequest{
-			AgentType:   AgentTypeTicketAgent,
-			Agent:       agent,
-			TmuxSession: tmuxSession,
-			ProjectPath: req.ProjectPath,
-			TicketsDir:  ticketsDir,
-			TicketID:    req.TicketID,
-			Ticket:      t,
-			UseWorktree: useWorktree,
-			AgentArgs:   ticketRoleCfg.Args,
+			AgentType:      AgentTypeTicketAgent,
+			Agent:          agent,
+			TmuxSession:    tmuxSession,
+			ProjectPath:    req.ProjectPath,
+			TicketsDir:     ticketsDir,
+			TicketID:       req.TicketID,
+			Ticket:         t,
+			UseWorktree:    useWorktree,
+			AgentArgs:      ticketRoleCfg.Args,
+			BaseConfigPath: projectCfg.ResolvedExtendPath(),
 		}
 	}
 

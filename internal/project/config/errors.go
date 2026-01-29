@@ -52,3 +52,37 @@ func IsValidationError(err error) bool {
 	_, ok := err.(*ValidationError)
 	return ok
 }
+
+// ExtendPathNotFoundError indicates the extend path doesn't exist.
+type ExtendPathNotFoundError struct {
+	Path       string
+	ResolvedTo string
+}
+
+func (e *ExtendPathNotFoundError) Error() string {
+	if e.Path == e.ResolvedTo {
+		return fmt.Sprintf("extend path not found: %s", e.Path)
+	}
+	return fmt.Sprintf("extend path not found: %s (resolved to %s)", e.Path, e.ResolvedTo)
+}
+
+// IsExtendPathNotFound returns true if err is an ExtendPathNotFoundError.
+func IsExtendPathNotFound(err error) bool {
+	_, ok := err.(*ExtendPathNotFoundError)
+	return ok
+}
+
+// CircularExtendError indicates a circular reference in extend chain.
+type CircularExtendError struct {
+	Path string
+}
+
+func (e *CircularExtendError) Error() string {
+	return fmt.Sprintf("circular extend reference detected at: %s", e.Path)
+}
+
+// IsCircularExtend returns true if err is a CircularExtendError.
+func IsCircularExtend(err error) bool {
+	_, ok := err.(*CircularExtendError)
+	return ok
+}

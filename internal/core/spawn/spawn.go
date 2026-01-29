@@ -91,6 +91,10 @@ type SpawnRequest struct {
 
 	// Extra CLI args appended to the agent command
 	AgentArgs []string
+
+	// BaseConfigPath is the resolved extend path from project config.
+	// Used for prompt fallback resolution.
+	BaseConfigPath string
 }
 
 // ResumeRequest contains parameters for resuming an orphaned session.
@@ -516,16 +520,17 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 		ticketType = ticket.DefaultTicketType
 	}
 
+	// Create prompt resolver with fallback support
+	resolver := prompt.NewPromptResolver(req.ProjectPath, req.BaseConfigPath)
+
 	// Load system prompt (MCP tool instructions and workflow)
-	systemPromptPath := prompt.TicketPromptPath(req.ProjectPath, ticketType, prompt.StageSystem)
-	systemPromptContent, err := prompt.LoadPromptFile(systemPromptPath)
+	systemPromptContent, err := resolver.ResolveTicketPrompt(ticketType, prompt.StageSystem)
 	if err != nil {
 		return nil, err
 	}
 
 	// Load kickoff template
-	kickoffPath := prompt.TicketPromptPath(req.ProjectPath, ticketType, prompt.StageKickoff)
-	kickoffTemplate, err := prompt.LoadPromptFile(kickoffPath)
+	kickoffTemplate, err := resolver.ResolveTicketPrompt(ticketType, prompt.StageKickoff)
 	if err != nil {
 		// Fall back to simple format if template doesn't exist
 		promptText := fmt.Sprintf("# Ticket: %s\n\n%s", req.Ticket.Title, req.Ticket.Body)
@@ -563,8 +568,10 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 
 // buildArchitectPrompt creates the dynamic architect prompt with ticket list.
 func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
-	systemPromptPath := prompt.ArchitectPromptPath(req.ProjectPath, prompt.StageSystem)
-	systemPromptContent, err := prompt.LoadPromptFile(systemPromptPath)
+	// Create prompt resolver with fallback support
+	resolver := prompt.NewPromptResolver(req.ProjectPath, req.BaseConfigPath)
+
+	systemPromptContent, err := resolver.ResolveArchitectPrompt(prompt.StageSystem)
 	if err != nil {
 		return nil, err
 	}
@@ -603,8 +610,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	ticketList := sb.String()
 
 	// Try to load and render KICKOFF template
-	kickoffPath := prompt.ArchitectPromptPath(req.ProjectPath, prompt.StageKickoff)
-	kickoffTemplate, kickoffErr := prompt.LoadPromptFile(kickoffPath)
+	kickoffTemplate, kickoffErr := resolver.ResolveArchitectPrompt(prompt.StageKickoff)
 	if kickoffErr == nil {
 		vars := prompt.ArchitectKickoffVars{
 			ProjectName: req.ProjectName,

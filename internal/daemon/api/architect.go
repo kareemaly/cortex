@@ -124,13 +124,14 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := spawner.Spawn(r.Context(), spawn.SpawnRequest{
-		AgentType:   spawn.AgentTypeArchitect,
-		Agent:       architectAgent,
-		TmuxSession: sessionName,
-		ProjectPath: projectPath,
-		TicketsDir:  ticketsDir,
-		ProjectName: sessionName,
-		AgentArgs:   projectCfg.Architect.Args,
+		AgentType:      spawn.AgentTypeArchitect,
+		Agent:          architectAgent,
+		TmuxSession:    sessionName,
+		ProjectPath:    projectPath,
+		TicketsDir:     ticketsDir,
+		ProjectName:    sessionName,
+		AgentArgs:      projectCfg.Architect.Args,
+		BaseConfigPath: projectCfg.ResolvedExtendPath(),
 	})
 
 	if err != nil {

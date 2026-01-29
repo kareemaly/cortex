@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/kareemaly/cortex/internal/daemon/config"
-	"github.com/kareemaly/cortex/internal/prompt"
 )
 
 // defaultArchitectSystemPrompt contains the full self-contained system prompt for the architect agent.
@@ -203,28 +202,30 @@ git_diff_tool: diff
 		return items, item.Error
 	}
 
+	// Create defaults/basic directory with full config and prompts
+	basicItems, err := setupBasicDefaults(homeDir, force)
+	if err != nil {
+		return append(items, basicItems...), err
+	}
+	items = append(items, basicItems...)
+
 	return items, nil
 }
 
-// setupProject creates the project .cortex/ directory and config.
-func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
-	absPath, err := filepath.Abs(projectPath)
-	if err != nil {
-		return nil, err
-	}
-
-	cortexDir := filepath.Join(absPath, ".cortex")
-	ticketsDir := filepath.Join(cortexDir, "tickets")
-	backlogDir := filepath.Join(ticketsDir, "backlog")
-	progressDir := filepath.Join(ticketsDir, "progress")
-	reviewDir := filepath.Join(ticketsDir, "review")
-	doneDir := filepath.Join(ticketsDir, "done")
-	configPath := filepath.Join(cortexDir, "cortex.yaml")
+// setupBasicDefaults creates the ~/.cortex/defaults/basic/ directory with default config and prompts.
+func setupBasicDefaults(homeDir string, force bool) ([]SetupItem, error) {
+	basicDir := filepath.Join(homeDir, ".cortex", "defaults", "basic")
 
 	var items []SetupItem
 
-	// Create directories
-	dirs := []string{cortexDir, ticketsDir, backlogDir, progressDir, reviewDir, doneDir}
+	// Create directory structure
+	dirs := []string{
+		basicDir,
+		filepath.Join(basicDir, "prompts"),
+		filepath.Join(basicDir, "prompts", "architect"),
+		filepath.Join(basicDir, "prompts", "ticket"),
+		filepath.Join(basicDir, "prompts", "ticket", "work"),
+	}
 	for _, dir := range dirs {
 		item := ensureDir(dir)
 		items = append(items, item)
@@ -233,8 +234,10 @@ func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
 		}
 	}
 
-	// Create config file
-	configContent := `name: ` + name + `
+	// Create cortex.yaml with full defaults (no extend - this IS the base)
+	configContent := `# Default configuration for Cortex projects
+# Projects can extend this via: extend: ~/.cortex/defaults/basic
+
 architect:
   agent: claude
   args:
@@ -252,58 +255,101 @@ ticket:
 git:
   worktrees: false
 `
-	item := ensureConfigFile(configPath, configContent, force)
+	item := ensureConfigFile(filepath.Join(basicDir, "cortex.yaml"), configContent, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
-	}
-
-	// Create prompts directory structure
-	promptsDir := prompt.PromptsDir(absPath)
-	architectPromptsDir := filepath.Join(promptsDir, "architect")
-	ticketWorkPromptsDir := filepath.Join(promptsDir, "ticket", "work")
-
-	promptDirs := []string{promptsDir, architectPromptsDir, ticketWorkPromptsDir}
-	for _, dir := range promptDirs {
-		item = ensureDir(dir)
-		items = append(items, item)
-		if item.Error != nil {
-			return items, item.Error
-		}
 	}
 
 	// Architect prompts
-	architectSystemPath := prompt.ArchitectPromptPath(absPath, prompt.StageSystem)
-	item = ensureConfigFile(architectSystemPath, defaultArchitectSystemPrompt, force)
+	item = ensureConfigFile(
+		filepath.Join(basicDir, "prompts", "architect", "SYSTEM.md"),
+		defaultArchitectSystemPrompt,
+		force,
+	)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
 	}
 
-	architectKickoffPath := prompt.ArchitectPromptPath(absPath, prompt.StageKickoff)
-	item = ensureConfigFile(architectKickoffPath, defaultArchitectKickoffPrompt, force)
+	item = ensureConfigFile(
+		filepath.Join(basicDir, "prompts", "architect", "KICKOFF.md"),
+		defaultArchitectKickoffPrompt,
+		force,
+	)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
 	}
 
 	// Ticket work prompts
-	ticketSystemPath := prompt.TicketPromptPath(absPath, "work", prompt.StageSystem)
-	item = ensureConfigFile(ticketSystemPath, DefaultTicketSystemPrompt, force)
+	item = ensureConfigFile(
+		filepath.Join(basicDir, "prompts", "ticket", "work", "SYSTEM.md"),
+		DefaultTicketSystemPrompt,
+		force,
+	)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
 	}
 
-	ticketKickoffPath := prompt.TicketPromptPath(absPath, "work", prompt.StageKickoff)
-	item = ensureConfigFile(ticketKickoffPath, DefaultTicketKickoffPrompt, force)
+	item = ensureConfigFile(
+		filepath.Join(basicDir, "prompts", "ticket", "work", "KICKOFF.md"),
+		DefaultTicketKickoffPrompt,
+		force,
+	)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
 	}
 
-	ticketApprovePath := prompt.TicketPromptPath(absPath, "work", prompt.StageApprove)
-	item = ensureConfigFile(ticketApprovePath, DefaultTicketApprovePrompt, force)
+	item = ensureConfigFile(
+		filepath.Join(basicDir, "prompts", "ticket", "work", "APPROVE.md"),
+		DefaultTicketApprovePrompt,
+		force,
+	)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	return items, nil
+}
+
+// setupProject creates the project .cortex/ directory and config.
+// Creates a minimal config that extends ~/.cortex/defaults/basic.
+// Prompts are inherited from the base config, not copied to the project.
+func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
+	absPath, err := filepath.Abs(projectPath)
+	if err != nil {
+		return nil, err
+	}
+
+	cortexDir := filepath.Join(absPath, ".cortex")
+	ticketsDir := filepath.Join(cortexDir, "tickets")
+	backlogDir := filepath.Join(ticketsDir, "backlog")
+	progressDir := filepath.Join(ticketsDir, "progress")
+	reviewDir := filepath.Join(ticketsDir, "review")
+	doneDir := filepath.Join(ticketsDir, "done")
+	configPath := filepath.Join(cortexDir, "cortex.yaml")
+
+	var items []SetupItem
+
+	// Create directories (no prompts directory - inherited from base)
+	dirs := []string{cortexDir, ticketsDir, backlogDir, progressDir, reviewDir, doneDir}
+	for _, dir := range dirs {
+		item := ensureDir(dir)
+		items = append(items, item)
+		if item.Error != nil {
+			return items, item.Error
+		}
+	}
+
+	// Create minimal config file that extends the basic defaults
+	configContent := `name: ` + name + `
+extend: ~/.cortex/defaults/basic
+`
+	item := ensureConfigFile(configPath, configContent, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error

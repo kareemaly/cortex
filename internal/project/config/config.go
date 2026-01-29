@@ -27,10 +27,21 @@ type TicketConfig map[string]RoleConfig
 
 // Config holds the project configuration.
 type Config struct {
+	Extend    string       `yaml:"extend,omitempty"`
 	Name      string       `yaml:"name"`
 	Architect RoleConfig   `yaml:"architect"`
 	Ticket    TicketConfig `yaml:"ticket"`
 	Git       GitConfig    `yaml:"git"`
+
+	// resolvedExtendPath is the absolute path of the resolved extend directory.
+	// Set during Load() if Extend is specified.
+	resolvedExtendPath string
+}
+
+// ResolvedExtendPath returns the resolved absolute path of the extend directory,
+// or empty string if no extend is configured.
+func (c *Config) ResolvedExtendPath() string {
+	return c.resolvedExtendPath
 }
 
 // GitConfig holds git-related configuration.
@@ -88,27 +99,72 @@ func FindProjectRoot(startPath string) (string, error) {
 
 // Load loads configuration from projectRoot/.cortex/cortex.yaml.
 // Returns default config if file doesn't exist.
+// If the config has an extend field, it recursively loads and merges the base config.
 func Load(projectRoot string) (*Config, error) {
-	cfg := DefaultConfig()
+	return loadWithVisited(projectRoot, make(map[string]bool))
+}
+
+// loadWithVisited loads config with circular reference detection.
+func loadWithVisited(projectRoot string, visited map[string]bool) (*Config, error) {
+	absPath, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for circular reference
+	if visited[absPath] {
+		return nil, &CircularExtendError{Path: absPath}
+	}
+	visited[absPath] = true
 
 	configPath := filepath.Join(projectRoot, ".cortex", "cortex.yaml")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return cfg, nil
+			return DefaultConfig(), nil
 		}
 		return nil, err
 	}
 
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+	// Parse raw config (without merging defaults yet)
+	var rawCfg Config
+	if err := yaml.Unmarshal(data, &rawCfg); err != nil {
 		return nil, &ConfigParseError{Path: configPath, Err: err}
 	}
 
-	if err := cfg.Validate(); err != nil {
+	// If no extend, apply defaults and return
+	if rawCfg.Extend == "" {
+		cfg := DefaultConfig()
+		if err := yaml.Unmarshal(data, cfg); err != nil {
+			return nil, &ConfigParseError{Path: configPath, Err: err}
+		}
+		if err := cfg.Validate(); err != nil {
+			return nil, err
+		}
+		return cfg, nil
+	}
+
+	// Resolve and validate extend path
+	resolvedExtendPath, err := ValidateExtendPath(rawCfg.Extend, projectRoot)
+	if err != nil {
 		return nil, err
 	}
 
-	return cfg, nil
+	// Recursively load base config
+	baseCfg, err := loadWithVisited(resolvedExtendPath, visited)
+	if err != nil {
+		return nil, err
+	}
+
+	// Merge: base first, then overlay project config
+	merged := MergeConfigs(baseCfg, &rawCfg)
+	merged.resolvedExtendPath = resolvedExtendPath
+
+	if err := merged.Validate(); err != nil {
+		return nil, err
+	}
+
+	return merged, nil
 }
 
 // LoadFromPath finds the project root from the given path and loads config.

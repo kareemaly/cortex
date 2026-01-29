@@ -391,3 +391,266 @@ func TestTicketRoleConfig_NilTicketConfig(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+// setupBaseConfig creates a base config directory with cortex.yaml.
+func setupBaseConfig(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	cortexDir := filepath.Join(dir, ".cortex")
+	if err := os.Mkdir(cortexDir, 0755); err != nil {
+		t.Fatalf("failed to create .cortex dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cortexDir, "cortex.yaml"), []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	return dir
+}
+
+func TestLoad_WithExtend(t *testing.T) {
+	// Create base config
+	baseRoot := setupBaseConfig(t, `
+architect:
+  agent: opencode
+  args:
+    - "--base-arg"
+ticket:
+  work:
+    agent: claude
+    args:
+      - "--work-arg"
+git:
+  worktrees: true
+`)
+
+	// Create project that extends base
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: my-project
+extend: `+baseRoot+`
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check name comes from project
+	if cfg.Name != "my-project" {
+		t.Errorf("expected name 'my-project', got %q", cfg.Name)
+	}
+
+	// Check architect inherited from base
+	if cfg.Architect.Agent != AgentOpenCode {
+		t.Errorf("expected architect agent 'opencode', got %q", cfg.Architect.Agent)
+	}
+	if len(cfg.Architect.Args) != 1 || cfg.Architect.Args[0] != "--base-arg" {
+		t.Errorf("expected architect args ['--base-arg'], got %v", cfg.Architect.Args)
+	}
+
+	// Check ticket config inherited
+	workRole, err := cfg.TicketRoleConfig("work")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if workRole.Agent != AgentClaude {
+		t.Errorf("expected work agent 'claude', got %q", workRole.Agent)
+	}
+
+	// Check git config inherited
+	if !cfg.Git.Worktrees {
+		t.Error("expected worktrees true from base")
+	}
+
+	// Check resolved extend path is set
+	if cfg.ResolvedExtendPath() != baseRoot {
+		t.Errorf("expected resolved extend path %q, got %q", baseRoot, cfg.ResolvedExtendPath())
+	}
+}
+
+func TestLoad_WithExtendOverride(t *testing.T) {
+	// Create base config
+	baseRoot := setupBaseConfig(t, `
+architect:
+  agent: opencode
+  args:
+    - "--base-arg1"
+    - "--base-arg2"
+ticket:
+  work:
+    agent: claude
+    args:
+      - "--work-arg"
+`)
+
+	// Create project that extends base but overrides architect
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: override-project
+extend: `+baseRoot+`
+architect:
+  agent: claude
+  args:
+    - "--project-arg"
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check architect overridden by project
+	if cfg.Architect.Agent != AgentClaude {
+		t.Errorf("expected architect agent 'claude', got %q", cfg.Architect.Agent)
+	}
+	if len(cfg.Architect.Args) != 1 || cfg.Architect.Args[0] != "--project-arg" {
+		t.Errorf("expected architect args ['--project-arg'], got %v", cfg.Architect.Args)
+	}
+
+	// Check ticket config still inherited
+	workRole, err := cfg.TicketRoleConfig("work")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if workRole.Agent != AgentClaude {
+		t.Errorf("expected work agent 'claude', got %q", workRole.Agent)
+	}
+}
+
+func TestLoad_ExtendPathNotFound(t *testing.T) {
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: broken-project
+extend: /does/not/exist
+`)
+
+	_, err := Load(projectRoot)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !IsExtendPathNotFound(err) {
+		t.Errorf("expected ExtendPathNotFoundError, got %T: %v", err, err)
+	}
+}
+
+func TestLoad_CircularExtend(t *testing.T) {
+	// Create two configs that extend each other
+	dir1 := setupTestProject(t)
+	dir2 := setupTestProject(t)
+
+	// dir1 extends dir2
+	writeConfig(t, dir1, `
+name: project1
+extend: `+dir2+`
+`)
+
+	// dir2 extends dir1 (circular!)
+	writeConfig(t, dir2, `
+name: project2
+extend: `+dir1+`
+`)
+
+	_, err := Load(dir1)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !IsCircularExtend(err) {
+		t.Errorf("expected CircularExtendError, got %T: %v", err, err)
+	}
+}
+
+func TestLoad_SelfExtend(t *testing.T) {
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: self-referential
+extend: `+projectRoot+`
+`)
+
+	_, err := Load(projectRoot)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !IsCircularExtend(err) {
+		t.Errorf("expected CircularExtendError, got %T: %v", err, err)
+	}
+}
+
+func TestLoad_ChainedExtend(t *testing.T) {
+	// Create a chain: project -> middle -> base
+	baseRoot := setupBaseConfig(t, `
+architect:
+  agent: opencode
+`)
+
+	middleRoot := setupBaseConfig(t, `
+extend: `+baseRoot+`
+ticket:
+  work:
+    agent: claude
+`)
+
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: chained-project
+extend: `+middleRoot+`
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check name from project
+	if cfg.Name != "chained-project" {
+		t.Errorf("expected name 'chained-project', got %q", cfg.Name)
+	}
+
+	// Check architect inherited from base (through middle)
+	if cfg.Architect.Agent != AgentOpenCode {
+		t.Errorf("expected architect agent 'opencode', got %q", cfg.Architect.Agent)
+	}
+
+	// Check ticket inherited from middle
+	workRole, err := cfg.TicketRoleConfig("work")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if workRole.Agent != AgentClaude {
+		t.Errorf("expected work agent 'claude', got %q", workRole.Agent)
+	}
+}
+
+func TestLoad_NoExtendBackwardCompatible(t *testing.T) {
+	// Test that configs without extend still work as before
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: no-extend-project
+architect:
+  agent: opencode
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Name != "no-extend-project" {
+		t.Errorf("expected name 'no-extend-project', got %q", cfg.Name)
+	}
+	if cfg.Architect.Agent != AgentOpenCode {
+		t.Errorf("expected architect agent 'opencode', got %q", cfg.Architect.Agent)
+	}
+
+	// Should still get defaults for missing fields
+	workRole, err := cfg.TicketRoleConfig("work")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if workRole.Agent != AgentClaude {
+		t.Errorf("expected default work agent 'claude', got %q", workRole.Agent)
+	}
+
+	// No extend path should be set
+	if cfg.ResolvedExtendPath() != "" {
+		t.Errorf("expected empty resolved extend path, got %q", cfg.ResolvedExtendPath())
+	}
+}
