@@ -455,6 +455,9 @@ extend: `+baseRoot+`
 	if workRole.Agent != AgentClaude {
 		t.Errorf("expected work agent 'claude', got %q", workRole.Agent)
 	}
+	if len(workRole.Args) != 1 || workRole.Args[0] != "--work-arg" {
+		t.Errorf("expected work args ['--work-arg'] inherited from base, got %v", workRole.Args)
+	}
 
 	// Check git config inherited
 	if !cfg.Git.Worktrees {
@@ -652,5 +655,42 @@ architect:
 	// No extend path should be set
 	if cfg.ResolvedExtendPath() != "" {
 		t.Errorf("expected empty resolved extend path, got %q", cfg.ResolvedExtendPath())
+	}
+}
+
+func TestLoad_WithExtend_TicketArgsInherited(t *testing.T) {
+	// Create base with ticket args (mirrors ~/.cortex/defaults/claude-code)
+	baseRoot := setupBaseConfig(t, `
+ticket:
+  work:
+    agent: claude
+    args:
+      - "--permission-mode"
+      - "plan"
+`)
+
+	// Project extends base WITHOUT defining ticket config
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: radius-like-project
+extend: `+baseRoot+`
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	workRole, err := cfg.TicketRoleConfig("work")
+	if err != nil {
+		t.Fatalf("failed to get work role config: %v", err)
+	}
+
+	// Verify args are inherited
+	if len(workRole.Args) != 2 {
+		t.Fatalf("expected 2 work args, got %d: %v", len(workRole.Args), workRole.Args)
+	}
+	if workRole.Args[0] != "--permission-mode" || workRole.Args[1] != "plan" {
+		t.Errorf("expected args inherited from base, got %v", workRole.Args)
 	}
 }

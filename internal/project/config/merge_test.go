@@ -202,6 +202,22 @@ func TestMergeConfigs_TicketMapMerge(t *testing.T) {
 			t.Errorf("expected ['--base-arg'], got %v", workRole.Args)
 		}
 	})
+
+	t.Run("base args preserved when project has no ticket config", func(t *testing.T) {
+		base := &Config{
+			Ticket: TicketConfig{
+				"work": RoleConfig{Agent: AgentClaude, Args: []string{"--arg1", "--arg2"}},
+			},
+		}
+		project := &Config{Name: "no-ticket-section"}
+
+		result := MergeConfigs(base, project)
+
+		workRole := result.Ticket["work"]
+		if len(workRole.Args) != 2 || workRole.Args[0] != "--arg1" {
+			t.Errorf("expected base args preserved, got %v", workRole.Args)
+		}
+	})
 }
 
 func TestMergeConfigs_GitConfig(t *testing.T) {
