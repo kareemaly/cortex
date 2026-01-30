@@ -7,62 +7,6 @@ import (
 	"github.com/kareemaly/cortex/internal/daemon/config"
 )
 
-// defaultArchitectSystemPrompt contains the full self-contained system prompt for the architect agent.
-// This fully replaces the default Claude Code engineer prompt via --system-prompt.
-// Dynamic content (ticket list) is injected via the KICKOFF prompt.
-const defaultArchitectSystemPrompt = `# Role
-
-You are a project architect orchestrating development through tickets and delegation. You do not write code or read source files.
-
-<do_not_act_before_instructions>
-When the user describes work, create a well-scoped ticket and spawn an agent. Only spawn when the user explicitly approves.
-</do_not_act_before_instructions>
-
-<stay_high_level>
-Do not read source files directly. When you need technical context, spawn an explore agent to investigate and return a summary. Focus on requirements and architecture.
-</stay_high_level>
-
-<investigate_before_answering>
-Always read ticket details with ` + "`readTicket`" + ` before making decisions. Never assume ticket state or contents.
-</investigate_before_answering>
-
-## Cortex Workflow
-
-Use Cortex MCP tools: ` + "`listTickets`" + `, ` + "`readTicket`" + `, ` + "`createTicket`" + `, ` + "`updateTicket`" + `, ` + "`deleteTicket`" + `, ` + "`moveTicket`" + `, ` + "`addTicketComment`" + `, ` + "`spawnSession`" + `.
-
-### State Transitions
-
-These happen automatically — do not call ` + "`moveTicket`" + ` for them:
-- ` + "`spawnSession`" + ` → ticket moves to **progress**
-- Agent concludes after approval → ticket moves to **done**
-
-Use ` + "`moveTicket`" + ` only for manual corrections (e.g., returning a ticket to backlog).
-
-### After Spawning
-
-1. Agent works autonomously on the ticket
-2. Agent calls ` + "`requestReview`" + ` → ticket moves to **review**
-3. **User** reviews and approves directly (you do not have an approval tool)
-4. Agent concludes → ticket moves to **done**
-
-## Context Awareness
-
-Your context will compact as it fills. Persist important decisions in ticket comments (type: decision) so state survives compaction.
-
-## Communication
-
-Be direct and concise. Provide fact-based assessments. Do not give time estimates.
-`
-
-// defaultArchitectKickoffPrompt is the template for the architect kickoff prompt.
-// Variables: {{.ProjectName}}, {{.TicketList}}
-const defaultArchitectKickoffPrompt = `# Project: {{.ProjectName}}
-
-# Tickets
-
-{{.TicketList}}
-`
-
 // Options configures the installation.
 type Options struct {
 	// ProjectPath is the path for project setup. If empty, project setup is skipped.
@@ -173,108 +117,10 @@ git_diff_tool: diff
 	return items, nil
 }
 
-// setupClaudeCodeDefaults creates the ~/.cortex/defaults/claude-code/ directory with default config and prompts.
+// setupClaudeCodeDefaults copies embedded default config to ~/.cortex/defaults/claude-code/.
 func setupClaudeCodeDefaults(homeDir string, force bool) ([]SetupItem, error) {
-	basicDir := filepath.Join(homeDir, ".cortex", "defaults", "claude-code")
-
-	var items []SetupItem
-
-	// Create directory structure
-	dirs := []string{
-		basicDir,
-		filepath.Join(basicDir, "prompts"),
-		filepath.Join(basicDir, "prompts", "architect"),
-		filepath.Join(basicDir, "prompts", "ticket"),
-		filepath.Join(basicDir, "prompts", "ticket", "work"),
-	}
-	for _, dir := range dirs {
-		item := ensureDir(dir)
-		items = append(items, item)
-		if item.Error != nil {
-			return items, item.Error
-		}
-	}
-
-	// Create cortex.yaml with full defaults (no extend - this IS the base)
-	configContent := `# Default configuration for Cortex projects
-# Projects can extend this via: extend: ~/.cortex/defaults/claude-code
-
-architect:
-  agent: claude
-  args:
-    - "--allowedTools"
-    - "mcp__cortex__listTickets,mcp__cortex__readTicket"
-ticket:
-  work:
-    agent: claude
-    args:
-      - "--permission-mode"
-      - "plan"
-      - "--allow-dangerously-skip-permissions"
-      - "--allowedTools"
-      - "mcp__cortex__readTicket"
-git:
-  worktrees: false
-`
-	item := ensureConfigFile(filepath.Join(basicDir, "cortex.yaml"), configContent, force)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
-	// Architect prompts
-	item = ensureConfigFile(
-		filepath.Join(basicDir, "prompts", "architect", "SYSTEM.md"),
-		defaultArchitectSystemPrompt,
-		force,
-	)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
-	item = ensureConfigFile(
-		filepath.Join(basicDir, "prompts", "architect", "KICKOFF.md"),
-		defaultArchitectKickoffPrompt,
-		force,
-	)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
-	// Ticket work prompts
-	item = ensureConfigFile(
-		filepath.Join(basicDir, "prompts", "ticket", "work", "SYSTEM.md"),
-		DefaultTicketSystemPrompt,
-		force,
-	)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
-	item = ensureConfigFile(
-		filepath.Join(basicDir, "prompts", "ticket", "work", "KICKOFF.md"),
-		DefaultTicketKickoffPrompt,
-		force,
-	)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
-	item = ensureConfigFile(
-		filepath.Join(basicDir, "prompts", "ticket", "work", "APPROVE.md"),
-		DefaultTicketApprovePrompt,
-		force,
-	)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
-	return items, nil
+	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "claude-code")
+	return copyEmbeddedDefaults("claude-code", targetDir, force)
 }
 
 // setupProject creates the project .cortex/ directory and config.

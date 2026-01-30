@@ -1,0 +1,19 @@
+# Default configuration for Cortex projects
+# Projects can extend this via: extend: ~/.cortex/defaults/claude-code
+
+architect:
+  agent: claude
+  args:
+    - "--allowedTools"
+    - "mcp__cortex__listTickets,mcp__cortex__readTicket"
+ticket:
+  work:
+    agent: claude
+    args:
+      - "--permission-mode"
+      - "plan"
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readTicket"
+git:
+  worktrees: false
