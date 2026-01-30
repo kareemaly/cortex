@@ -107,15 +107,11 @@ type CommentOutput = types.CommentResponse
 
 // MCP-specific output types (structurally different from shared types)
 
-// TicketSummary is a brief ticket representation for list views.
-// MCP version is simpler: no Updated, AgentStatus, AgentTool fields.
+// TicketSummary is a minimal ticket representation for list views.
+// Contains only ID and title - use readTicket for full details.
 type TicketSummary struct {
-	ID               string    `json:"id"`
-	Type             string    `json:"type"`
-	Title            string    `json:"title"`
-	Status           string    `json:"status"`
-	Created          time.Time `json:"created"`
-	HasActiveSession bool      `json:"has_active_session"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 // SessionOutput represents a work session.
@@ -212,14 +208,10 @@ type ConcludeSessionOutput struct {
 // Conversion functions
 
 // ticketSummaryResponseToMCP maps a shared TicketSummary (from the HTTP API)
-// to the MCP-specific TicketSummary (simpler: no Updated, AgentStatus, AgentTool).
+// to the MCP-specific TicketSummary (minimal: only ID and title).
 func ticketSummaryResponseToMCP(s *types.TicketSummary) TicketSummary {
 	return TicketSummary{
-		ID:               s.ID,
-		Type:             s.Type,
-		Title:            s.Title,
-		Status:           s.Status,
-		Created:          s.Created,
-		HasActiveSession: s.HasActiveSession,
+		ID:    s.ID,
+		Title: s.Title,
 	}
 }
