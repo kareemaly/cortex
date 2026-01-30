@@ -29,6 +29,23 @@ func TicketPromptPath(projectRoot, ticketType, stage string) string {
 	return filepath.Join(PromptsDir(projectRoot), "ticket", ticketType, stage+".md")
 }
 
+// BasePromptsDir returns the prompts directory for a cortex config directory.
+// Cortex config directories (like extend targets) have prompts directly under them,
+// without the .cortex/ prefix that project roots have.
+func BasePromptsDir(cortexConfigDir string) string {
+	return filepath.Join(cortexConfigDir, "prompts")
+}
+
+// BaseArchitectPromptPath returns the path to an architect prompt in a cortex config directory.
+func BaseArchitectPromptPath(cortexConfigDir, stage string) string {
+	return filepath.Join(BasePromptsDir(cortexConfigDir), "architect", stage+".md")
+}
+
+// BaseTicketPromptPath returns the path to a ticket prompt in a cortex config directory.
+func BaseTicketPromptPath(cortexConfigDir, ticketType, stage string) string {
+	return filepath.Join(BasePromptsDir(cortexConfigDir), "ticket", ticketType, stage+".md")
+}
+
 // ValidatePromptFile checks that a prompt file exists.
 func ValidatePromptFile(path string) error {
 	_, err := os.Stat(path)

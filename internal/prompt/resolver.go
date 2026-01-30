@@ -52,7 +52,7 @@ func (r *PromptResolver) ResolveArchitectPromptWithPath(stage string) (*Resolved
 
 	// Try base fallback
 	if r.BaseRoot != "" {
-		basePath := ArchitectPromptPath(r.BaseRoot, stage)
+		basePath := BaseArchitectPromptPath(r.BaseRoot, stage)
 		searchPaths = append(searchPaths, basePath)
 		content, err = r.loadIfExists(basePath)
 		if err != nil {
@@ -99,7 +99,7 @@ func (r *PromptResolver) ResolveTicketPromptWithPath(ticketType, stage string) (
 
 	// Try base fallback
 	if r.BaseRoot != "" {
-		basePath := TicketPromptPath(r.BaseRoot, ticketType, stage)
+		basePath := BaseTicketPromptPath(r.BaseRoot, ticketType, stage)
 		searchPaths = append(searchPaths, basePath)
 		content, err = r.loadIfExists(basePath)
 		if err != nil {

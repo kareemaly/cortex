@@ -24,7 +24,7 @@ func TestPromptResolver_ResolveArchitectPrompt(t *testing.T) {
 	t.Run("falls back to base when not in project", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
-		createPromptFile(t, baseRoot, "architect", "SYSTEM.md", "base system prompt")
+		createBasePromptFile(t, baseRoot, "architect", "SYSTEM.md", "base system prompt")
 
 		resolver := NewPromptResolver(projectRoot, baseRoot)
 		content, err := resolver.ResolveArchitectPrompt(StageSystem)
@@ -40,7 +40,7 @@ func TestPromptResolver_ResolveArchitectPrompt(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
 		createPromptFile(t, projectRoot, "architect", "SYSTEM.md", "project override")
-		createPromptFile(t, baseRoot, "architect", "SYSTEM.md", "base system prompt")
+		createBasePromptFile(t, baseRoot, "architect", "SYSTEM.md", "base system prompt")
 
 		resolver := NewPromptResolver(projectRoot, baseRoot)
 		content, err := resolver.ResolveArchitectPrompt(StageSystem)
@@ -56,7 +56,7 @@ func TestPromptResolver_ResolveArchitectPrompt(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
 		createPromptFile(t, projectRoot, "architect", "SYSTEM.md", "project system")
-		createPromptFile(t, baseRoot, "architect", "KICKOFF.md", "base kickoff")
+		createBasePromptFile(t, baseRoot, "architect", "KICKOFF.md", "base kickoff")
 
 		resolver := NewPromptResolver(projectRoot, baseRoot)
 
@@ -125,7 +125,7 @@ func TestPromptResolver_ResolveTicketPrompt(t *testing.T) {
 	t.Run("falls back to base when not in project", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
-		createTicketPromptFile(t, baseRoot, "work", "APPROVE.md", "base approve")
+		createBaseTicketPromptFile(t, baseRoot, "work", "APPROVE.md", "base approve")
 
 		resolver := NewPromptResolver(projectRoot, baseRoot)
 		content, err := resolver.ResolveTicketPrompt("work", StageApprove)
@@ -141,7 +141,7 @@ func TestPromptResolver_ResolveTicketPrompt(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
 		createTicketPromptFile(t, projectRoot, "work", "SYSTEM.md", "project system")
-		createTicketPromptFile(t, baseRoot, "work", "SYSTEM.md", "base system")
+		createBaseTicketPromptFile(t, baseRoot, "work", "SYSTEM.md", "base system")
 
 		resolver := NewPromptResolver(projectRoot, baseRoot)
 		content, err := resolver.ResolveTicketPrompt("work", StageSystem)
@@ -157,7 +157,7 @@ func TestPromptResolver_ResolveTicketPrompt(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
 		createTicketPromptFile(t, projectRoot, "work", "SYSTEM.md", "work system")
-		createTicketPromptFile(t, baseRoot, "investigation", "SYSTEM.md", "investigation system")
+		createBaseTicketPromptFile(t, baseRoot, "investigation", "SYSTEM.md", "investigation system")
 
 		resolver := NewPromptResolver(projectRoot, baseRoot)
 
@@ -179,7 +179,8 @@ func TestPromptResolver_ResolveTicketPrompt(t *testing.T) {
 	})
 }
 
-// createPromptFile creates a prompt file for architect prompts.
+// createPromptFile creates a prompt file for architect prompts in a project root.
+// Project roots use the .cortex/prompts/ structure.
 func createPromptFile(t *testing.T, root, role, filename, content string) {
 	t.Helper()
 	dir := filepath.Join(root, ".cortex", "prompts", role)
@@ -191,10 +192,37 @@ func createPromptFile(t *testing.T, root, role, filename, content string) {
 	}
 }
 
-// createTicketPromptFile creates a prompt file for ticket prompts.
+// createTicketPromptFile creates a prompt file for ticket prompts in a project root.
+// Project roots use the .cortex/prompts/ structure.
 func createTicketPromptFile(t *testing.T, root, ticketType, filename, content string) {
 	t.Helper()
 	dir := filepath.Join(root, ".cortex", "prompts", "ticket", ticketType)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed to create prompt dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, filename), []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write prompt file: %v", err)
+	}
+}
+
+// createBasePromptFile creates a prompt file for architect prompts in a base config directory.
+// Base config directories (like extend targets) use prompts/ directly without .cortex/.
+func createBasePromptFile(t *testing.T, baseRoot, role, filename, content string) {
+	t.Helper()
+	dir := filepath.Join(baseRoot, "prompts", role)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed to create prompt dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, filename), []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write prompt file: %v", err)
+	}
+}
+
+// createBaseTicketPromptFile creates a prompt file for ticket prompts in a base config directory.
+// Base config directories (like extend targets) use prompts/ directly without .cortex/.
+func createBaseTicketPromptFile(t *testing.T, baseRoot, ticketType, filename, content string) {
+	t.Helper()
+	dir := filepath.Join(baseRoot, "prompts", "ticket", ticketType)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("failed to create prompt dir: %v", err)
 	}
@@ -225,14 +253,14 @@ func TestPromptResolver_ResolveArchitectPromptWithPath(t *testing.T) {
 	t.Run("returns correct source path from base fallback", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
-		createPromptFile(t, baseRoot, "architect", "SYSTEM.md", "base system prompt")
+		createBasePromptFile(t, baseRoot, "architect", "SYSTEM.md", "base system prompt")
 
 		resolver := NewPromptResolver(projectRoot, baseRoot)
 		resolved, err := resolver.ResolveArchitectPromptWithPath(StageSystem)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		expectedPath := filepath.Join(baseRoot, ".cortex", "prompts", "architect", "SYSTEM.md")
+		expectedPath := filepath.Join(baseRoot, "prompts", "architect", "SYSTEM.md")
 		if resolved.SourcePath != expectedPath {
 			t.Errorf("expected source path %q, got %q", expectedPath, resolved.SourcePath)
 		}
