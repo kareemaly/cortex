@@ -65,7 +65,11 @@ func TestValidatePromptFile_NotFound(t *testing.T) {
 }
 
 func TestNotFoundError_Message(t *testing.T) {
-	err := &NotFoundError{Path: "/path/to/prompt.md"}
+	err := &NotFoundError{
+		Role:        "architect",
+		Stage:       "SYSTEM",
+		SearchPaths: []string{"/path/to/prompt.md"},
+	}
 	got := err.Error()
 	if got == "" {
 		t.Error("NotFoundError.Error() returned empty string")
@@ -74,6 +78,10 @@ func TestNotFoundError_Message(t *testing.T) {
 	want := "cortex init"
 	if !contains(got, want) {
 		t.Errorf("NotFoundError.Error() = %q, should contain %q", got, want)
+	}
+	// Check it contains the searched path
+	if !contains(got, "/path/to/prompt.md") {
+		t.Errorf("NotFoundError.Error() = %q, should contain searched path", got)
 	}
 }
 

@@ -34,7 +34,7 @@ func ValidatePromptFile(path string) error {
 	_, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &NotFoundError{Path: path}
+			return &NotFoundError{SearchPaths: []string{path}}
 		}
 		return err
 	}
@@ -46,7 +46,7 @@ func LoadPromptFile(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", &NotFoundError{Path: path}
+			return "", &NotFoundError{SearchPaths: []string{path}}
 		}
 		return "", err
 	}

@@ -868,3 +868,46 @@ func (c *Client) parseError(resp *http.Response) error {
 func hasPrefix(id, prefix string) bool {
 	return len(prefix) > 0 && len(id) >= len(prefix) && id[:len(prefix)] == prefix
 }
+
+// ResolvePromptRequest is the request parameters for resolving a prompt.
+type ResolvePromptRequest struct {
+	Role       string // "architect" or "ticket"
+	Stage      string // "SYSTEM", "KICKOFF", "APPROVE"
+	TicketType string // for ticket prompts only
+}
+
+// ResolvePromptResponse is the response from the resolve prompt endpoint.
+type ResolvePromptResponse struct {
+	Content    string `json:"content"`
+	SourcePath string `json:"source_path"`
+}
+
+// ResolvePrompt resolves a prompt file with extension fallback.
+func (c *Client) ResolvePrompt(req ResolvePromptRequest) (*ResolvePromptResponse, error) {
+	url := c.baseURL + "/prompts/resolve?role=" + req.Role + "&stage=" + req.Stage
+	if req.TicketType != "" {
+		url += "&type=" + req.TicketType
+	}
+
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ResolvePromptResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}

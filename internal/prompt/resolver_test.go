@@ -202,3 +202,124 @@ func createTicketPromptFile(t *testing.T, root, ticketType, filename, content st
 		t.Fatalf("failed to write prompt file: %v", err)
 	}
 }
+
+func TestPromptResolver_ResolveArchitectPromptWithPath(t *testing.T) {
+	t.Run("returns correct source path from project", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		createPromptFile(t, projectRoot, "architect", "SYSTEM.md", "project system prompt")
+
+		resolver := NewPromptResolver(projectRoot, "")
+		resolved, err := resolver.ResolveArchitectPromptWithPath(StageSystem)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expectedPath := filepath.Join(projectRoot, ".cortex", "prompts", "architect", "SYSTEM.md")
+		if resolved.SourcePath != expectedPath {
+			t.Errorf("expected source path %q, got %q", expectedPath, resolved.SourcePath)
+		}
+		if resolved.Content != "project system prompt" {
+			t.Errorf("expected content 'project system prompt', got %q", resolved.Content)
+		}
+	})
+
+	t.Run("returns correct source path from base fallback", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		baseRoot := t.TempDir()
+		createPromptFile(t, baseRoot, "architect", "SYSTEM.md", "base system prompt")
+
+		resolver := NewPromptResolver(projectRoot, baseRoot)
+		resolved, err := resolver.ResolveArchitectPromptWithPath(StageSystem)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expectedPath := filepath.Join(baseRoot, ".cortex", "prompts", "architect", "SYSTEM.md")
+		if resolved.SourcePath != expectedPath {
+			t.Errorf("expected source path %q, got %q", expectedPath, resolved.SourcePath)
+		}
+	})
+
+	t.Run("error includes all searched paths", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		baseRoot := t.TempDir()
+
+		resolver := NewPromptResolver(projectRoot, baseRoot)
+		_, err := resolver.ResolveArchitectPromptWithPath(StageSystem)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+
+		notFoundErr, ok := err.(*NotFoundError)
+		if !ok {
+			t.Fatalf("expected *NotFoundError, got %T", err)
+		}
+		if len(notFoundErr.SearchPaths) != 2 {
+			t.Errorf("expected 2 search paths, got %d", len(notFoundErr.SearchPaths))
+		}
+		if notFoundErr.Role != "architect" {
+			t.Errorf("expected role 'architect', got %q", notFoundErr.Role)
+		}
+		if notFoundErr.Stage != StageSystem {
+			t.Errorf("expected stage %q, got %q", StageSystem, notFoundErr.Stage)
+		}
+	})
+
+	t.Run("error includes only project path when no base", func(t *testing.T) {
+		projectRoot := t.TempDir()
+
+		resolver := NewPromptResolver(projectRoot, "")
+		_, err := resolver.ResolveArchitectPromptWithPath(StageSystem)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+
+		notFoundErr, ok := err.(*NotFoundError)
+		if !ok {
+			t.Fatalf("expected *NotFoundError, got %T", err)
+		}
+		if len(notFoundErr.SearchPaths) != 1 {
+			t.Errorf("expected 1 search path, got %d", len(notFoundErr.SearchPaths))
+		}
+	})
+}
+
+func TestPromptResolver_ResolveTicketPromptWithPath(t *testing.T) {
+	t.Run("returns correct source path from project", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		createTicketPromptFile(t, projectRoot, "work", "KICKOFF.md", "project kickoff")
+
+		resolver := NewPromptResolver(projectRoot, "")
+		resolved, err := resolver.ResolveTicketPromptWithPath("work", StageKickoff)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expectedPath := filepath.Join(projectRoot, ".cortex", "prompts", "ticket", "work", "KICKOFF.md")
+		if resolved.SourcePath != expectedPath {
+			t.Errorf("expected source path %q, got %q", expectedPath, resolved.SourcePath)
+		}
+	})
+
+	t.Run("error includes ticket type", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		baseRoot := t.TempDir()
+
+		resolver := NewPromptResolver(projectRoot, baseRoot)
+		_, err := resolver.ResolveTicketPromptWithPath("work", StageKickoff)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+
+		notFoundErr, ok := err.(*NotFoundError)
+		if !ok {
+			t.Fatalf("expected *NotFoundError, got %T", err)
+		}
+		if notFoundErr.Role != "ticket" {
+			t.Errorf("expected role 'ticket', got %q", notFoundErr.Role)
+		}
+		if notFoundErr.TicketType != "work" {
+			t.Errorf("expected ticket type 'work', got %q", notFoundErr.TicketType)
+		}
+		if notFoundErr.Stage != StageKickoff {
+			t.Errorf("expected stage %q, got %q", StageKickoff, notFoundErr.Stage)
+		}
+	})
+}

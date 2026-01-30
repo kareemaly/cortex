@@ -78,6 +78,10 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		r.Route("/agent", func(r chi.Router) {
 			r.Post("/status", agentHandlers.UpdateStatus)
 		})
+
+		// Prompt routes
+		promptHandlers := NewPromptHandlers(deps)
+		r.Get("/prompts/resolve", promptHandlers.Resolve)
 	})
 
 	return r

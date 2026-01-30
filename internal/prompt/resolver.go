@@ -10,6 +10,12 @@ type PromptResolver struct {
 	BaseRoot    string // empty if no extension
 }
 
+// ResolvedPrompt contains the prompt content and its source path.
+type ResolvedPrompt struct {
+	Content    string
+	SourcePath string
+}
+
 // NewPromptResolver creates a resolver for the given project and optional base root.
 func NewPromptResolver(projectRoot, baseRoot string) *PromptResolver {
 	return &PromptResolver{
@@ -21,59 +27,96 @@ func NewPromptResolver(projectRoot, baseRoot string) *PromptResolver {
 // ResolveArchitectPrompt finds and loads an architect prompt file.
 // Checks project first, then falls back to base if configured.
 func (r *PromptResolver) ResolveArchitectPrompt(stage string) (string, error) {
-	// Try project first
-	projectPath := ArchitectPromptPath(r.ProjectRoot, stage)
-	content, err := r.loadIfExists(projectPath)
+	resolved, err := r.ResolveArchitectPromptWithPath(stage)
 	if err != nil {
 		return "", err
 	}
+	return resolved.Content, nil
+}
+
+// ResolveArchitectPromptWithPath finds and loads an architect prompt file,
+// returning both content and source path. Checks project first, then falls back to base.
+func (r *PromptResolver) ResolveArchitectPromptWithPath(stage string) (*ResolvedPrompt, error) {
+	var searchPaths []string
+
+	// Try project first
+	projectPath := ArchitectPromptPath(r.ProjectRoot, stage)
+	searchPaths = append(searchPaths, projectPath)
+	content, err := r.loadIfExists(projectPath)
+	if err != nil {
+		return nil, err
+	}
 	if content != "" {
-		return content, nil
+		return &ResolvedPrompt{Content: content, SourcePath: projectPath}, nil
 	}
 
 	// Try base fallback
 	if r.BaseRoot != "" {
 		basePath := ArchitectPromptPath(r.BaseRoot, stage)
+		searchPaths = append(searchPaths, basePath)
 		content, err = r.loadIfExists(basePath)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if content != "" {
-			return content, nil
+			return &ResolvedPrompt{Content: content, SourcePath: basePath}, nil
 		}
 	}
 
 	// Not found in either location
-	return "", &NotFoundError{Path: projectPath}
+	return nil, &NotFoundError{
+		Role:        "architect",
+		Stage:       stage,
+		SearchPaths: searchPaths,
+	}
 }
 
 // ResolveTicketPrompt finds and loads a ticket prompt file.
 // Checks project first, then falls back to base if configured.
 func (r *PromptResolver) ResolveTicketPrompt(ticketType, stage string) (string, error) {
-	// Try project first
-	projectPath := TicketPromptPath(r.ProjectRoot, ticketType, stage)
-	content, err := r.loadIfExists(projectPath)
+	resolved, err := r.ResolveTicketPromptWithPath(ticketType, stage)
 	if err != nil {
 		return "", err
 	}
+	return resolved.Content, nil
+}
+
+// ResolveTicketPromptWithPath finds and loads a ticket prompt file,
+// returning both content and source path. Checks project first, then falls back to base.
+func (r *PromptResolver) ResolveTicketPromptWithPath(ticketType, stage string) (*ResolvedPrompt, error) {
+	var searchPaths []string
+
+	// Try project first
+	projectPath := TicketPromptPath(r.ProjectRoot, ticketType, stage)
+	searchPaths = append(searchPaths, projectPath)
+	content, err := r.loadIfExists(projectPath)
+	if err != nil {
+		return nil, err
+	}
 	if content != "" {
-		return content, nil
+		return &ResolvedPrompt{Content: content, SourcePath: projectPath}, nil
 	}
 
 	// Try base fallback
 	if r.BaseRoot != "" {
 		basePath := TicketPromptPath(r.BaseRoot, ticketType, stage)
+		searchPaths = append(searchPaths, basePath)
 		content, err = r.loadIfExists(basePath)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if content != "" {
-			return content, nil
+			return &ResolvedPrompt{Content: content, SourcePath: basePath}, nil
 		}
 	}
 
 	// Not found in either location
-	return "", &NotFoundError{Path: projectPath}
+	return nil, &NotFoundError{
+		Role:        "ticket",
+		TicketType:  ticketType,
+		Stage:       stage,
+		SearchPaths: searchPaths,
+	}
 }
 
 // loadIfExists loads a file if it exists, returns empty string if not found.
