@@ -72,6 +72,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		r.Route("/sessions", func(r chi.Router) {
 			r.Delete("/{id}", sessionHandlers.Kill)
 			r.Post("/{id}/approve", sessionHandlers.Approve)
+			r.Post("/{id}/reject", sessionHandlers.Reject)
 		})
 
 		// Agent routes

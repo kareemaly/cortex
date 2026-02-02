@@ -10,6 +10,7 @@ const (
 	StageSystem  = "SYSTEM"
 	StageKickoff = "KICKOFF"
 	StageApprove = "APPROVE"
+	StageReject  = "REJECT"
 )
 
 // PromptsDir returns the path to the prompts directory.

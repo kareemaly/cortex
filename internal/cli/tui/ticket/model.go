@@ -671,10 +671,10 @@ func (m Model) canSpawn() bool {
 // rejectSession returns a command to reject the current session review.
 func (m Model) rejectSession() tea.Cmd {
 	return func() tea.Msg {
-		if m.ticket == nil {
-			return RejectErrorMsg{Err: fmt.Errorf("no ticket")}
+		if m.ticket == nil || m.ticket.Session == nil {
+			return RejectErrorMsg{Err: fmt.Errorf("no session to reject")}
 		}
-		_, err := m.client.AddComment(m.ticket.ID, "comment", "Review rejected from TUI")
+		err := m.client.RejectSession(m.ticket.Session.ID)
 		if err != nil {
 			return RejectErrorMsg{Err: err}
 		}
