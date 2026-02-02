@@ -1281,10 +1281,11 @@ func (m Model) plainTextPreview(content string, width, maxLines int) []string {
 
 // applyBackgroundToBlock applies a background color to all lines of a block.
 func (m Model) applyBackgroundToBlock(lines []string, width int, bgColor lipgloss.TerminalColor) string {
-	style := lipgloss.NewStyle().Background(bgColor).Width(width)
+	// Don't use .Width() on the style - it can interfere with pre-styled content
+	// containing ANSI codes. Instead, we manually pad each line to full width.
+	style := lipgloss.NewStyle().Background(bgColor)
 	var result []string
 	for _, line := range lines {
-		// Pad line to full width before applying background.
 		lineWidth := lipgloss.Width(line)
 		if lineWidth < width {
 			line += strings.Repeat(" ", width-lineWidth)
