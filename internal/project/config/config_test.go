@@ -392,15 +392,13 @@ func TestTicketRoleConfig_NilTicketConfig(t *testing.T) {
 	}
 }
 
-// setupBaseConfig creates a base config directory with cortex.yaml.
+// setupBaseConfig creates a base config directory with cortex.yaml at root.
+// Base configs are config bundles (not full projects), so they have cortex.yaml
+// directly at the root, not inside a .cortex subdirectory.
 func setupBaseConfig(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	cortexDir := filepath.Join(dir, ".cortex")
-	if err := os.Mkdir(cortexDir, 0755); err != nil {
-		t.Fatalf("failed to create .cortex dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(cortexDir, "cortex.yaml"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "cortex.yaml"), []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 	return dir
@@ -536,23 +534,34 @@ extend: /does/not/exist
 }
 
 func TestLoad_CircularExtend(t *testing.T) {
-	// Create two configs that extend each other
-	dir1 := setupTestProject(t)
-	dir2 := setupTestProject(t)
+	// Create two base configs that extend each other
+	base1 := t.TempDir()
+	base2 := t.TempDir()
 
-	// dir1 extends dir2
-	writeConfig(t, dir1, `
-name: project1
-extend: `+dir2+`
+	// base1 extends base2
+	if err := os.WriteFile(filepath.Join(base1, "cortex.yaml"), []byte(`
+name: base1
+extend: `+base2+`
+`), 0644); err != nil {
+		t.Fatalf("failed to write base1 config: %v", err)
+	}
+
+	// base2 extends base1 (circular!)
+	if err := os.WriteFile(filepath.Join(base2, "cortex.yaml"), []byte(`
+name: base2
+extend: `+base1+`
+`), 0644); err != nil {
+		t.Fatalf("failed to write base2 config: %v", err)
+	}
+
+	// Create a project that extends base1
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: project
+extend: `+base1+`
 `)
 
-	// dir2 extends dir1 (circular!)
-	writeConfig(t, dir2, `
-name: project2
-extend: `+dir1+`
-`)
-
-	_, err := Load(dir1)
+	_, err := Load(projectRoot)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

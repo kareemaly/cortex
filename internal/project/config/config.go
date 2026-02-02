@@ -101,12 +101,14 @@ func FindProjectRoot(startPath string) (string, error) {
 // Returns default config if file doesn't exist.
 // If the config has an extend field, it recursively loads and merges the base config.
 func Load(projectRoot string) (*Config, error) {
-	return loadWithVisited(projectRoot, make(map[string]bool))
+	return loadWithVisited(projectRoot, false, make(map[string]bool))
 }
 
 // loadWithVisited loads config with circular reference detection.
-func loadWithVisited(projectRoot string, visited map[string]bool) (*Config, error) {
-	absPath, err := filepath.Abs(projectRoot)
+// isBaseConfig indicates whether we're loading a base config (via extend) or a project config.
+// Base configs have cortex.yaml at root; project configs have .cortex/cortex.yaml.
+func loadWithVisited(configRoot string, isBaseConfig bool, visited map[string]bool) (*Config, error) {
+	absPath, err := filepath.Abs(configRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +119,13 @@ func loadWithVisited(projectRoot string, visited map[string]bool) (*Config, erro
 	}
 	visited[absPath] = true
 
-	configPath := filepath.Join(projectRoot, ".cortex", "cortex.yaml")
+	// Base configs have cortex.yaml at root; project configs have .cortex/cortex.yaml
+	var configPath string
+	if isBaseConfig {
+		configPath = filepath.Join(configRoot, "cortex.yaml")
+	} else {
+		configPath = filepath.Join(configRoot, ".cortex", "cortex.yaml")
+	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -145,13 +153,13 @@ func loadWithVisited(projectRoot string, visited map[string]bool) (*Config, erro
 	}
 
 	// Resolve and validate extend path
-	resolvedExtendPath, err := ValidateExtendPath(rawCfg.Extend, projectRoot)
+	resolvedExtendPath, err := ValidateExtendPath(rawCfg.Extend, configRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	// Recursively load base config
-	baseCfg, err := loadWithVisited(resolvedExtendPath, visited)
+	// Recursively load base config (base configs have cortex.yaml at root)
+	baseCfg, err := loadWithVisited(resolvedExtendPath, true, visited)
 	if err != nil {
 		return nil, err
 	}
