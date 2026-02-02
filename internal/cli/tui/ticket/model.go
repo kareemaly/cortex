@@ -1238,8 +1238,8 @@ func (m Model) renderCommentPreview(content string, width, maxLines int) []strin
 		if len(result) >= maxLines {
 			break
 		}
-		// Skip empty lines at the start.
-		if len(result) == 0 && strings.TrimSpace(line) == "" {
+		// Skip empty lines.
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
 		// Truncate line to width, preserving ANSI codes.
