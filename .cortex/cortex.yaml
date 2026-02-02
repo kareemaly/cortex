@@ -1,15 +1,4 @@
 name: cortex
-agent: claude
-agent_args:
-  architect:
-    - "--allowedTools"
-    - "mcp__cortex__listTickets,mcp__cortex__readTicket"
-  ticket:
-    - "--permission-mode"
-    - "plan"
-    - "--allow-dangerously-skip-permissions"
-    - "--allowedTools"
-    - "mcp__cortex__readTicket"
+extend: ~/.cortex/defaults/claude-code
 git:
-  repos:
-    - path: "."
+  worktrees: true
