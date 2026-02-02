@@ -56,6 +56,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Post("/{id}/reviews", ticketHandlers.RequestReview)
 			r.Post("/{id}/focus", ticketHandlers.Focus)
 			r.Post("/{id}/conclude", ticketHandlers.Conclude)
+			r.Post("/{id}/comments/{comment_id}/execute", ticketHandlers.ExecuteAction)
 		})
 
 		// Architect routes

@@ -42,6 +42,7 @@ const (
 	KeyShiftTab     Key = "shift+tab"
 	KeyLeftBracket  Key = "["
 	KeyRightBracket Key = "]"
+	KeyDiff         Key = "d"
 )
 
 // isKey checks if a key message matches a key constant.
@@ -86,10 +87,14 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, 
 }
 
 // modalHelpText returns help text for the detail modal.
-func modalHelpText(isReview bool) string {
+func modalHelpText(isReview, hasAction bool) string {
 	base := "[Esc/q] close  [j/k] scroll"
 	if isReview {
-		return base + "  [a]pprove  [x] reject"
+		actions := "  [a]pprove  [x] reject"
+		if hasAction {
+			actions += "  [d]iff"
+		}
+		return base + actions
 	}
 	return base
 }

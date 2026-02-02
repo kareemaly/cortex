@@ -2,6 +2,7 @@ package install
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/kareemaly/cortex/internal/daemon/config"
@@ -96,10 +97,15 @@ func setupGlobal(force bool) ([]SetupItem, error) {
 	}
 
 	// Create config file
+	// Detect git_diff_tool: use lazygit if available, otherwise git
+	gitDiffTool := "git"
+	if _, err := exec.LookPath("lazygit"); err == nil {
+		gitDiffTool = "lazygit"
+	}
 	configContent := `port: 4200
 log_level: info
 status_history_limit: 10
-git_diff_tool: diff
+git_diff_tool: ` + gitDiffTool + `
 `
 	item = ensureConfigFile(configPath, configContent, force)
 	items = append(items, item)

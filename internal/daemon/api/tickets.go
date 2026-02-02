@@ -3,13 +3,16 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kareemaly/cortex/internal/core/spawn"
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
@@ -670,6 +673,123 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		Success:  true,
 		TicketID: id,
 		Message:  "Session concluded and ticket moved to done",
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ExecuteAction handles POST /tickets/{id}/comments/{comment_id}/execute - executes a comment action.
+func (h *TicketHandlers) ExecuteAction(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	ticketID := chi.URLParam(r, "id")
+	commentID := chi.URLParam(r, "comment_id")
+
+	// Get ticket
+	t, _, err := store.Get(ticketID)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	// Find comment by ID
+	var comment *ticket.Comment
+	for i := range t.Comments {
+		if t.Comments[i].ID == commentID {
+			comment = &t.Comments[i]
+			break
+		}
+	}
+	if comment == nil {
+		writeError(w, http.StatusNotFound, "comment_not_found", "comment not found")
+		return
+	}
+
+	// Verify comment has an action
+	if comment.Action == nil {
+		writeError(w, http.StatusBadRequest, "no_action", "comment has no action")
+		return
+	}
+
+	// Verify ticket has active session
+	if t.Session == nil || !t.Session.IsActive() {
+		writeError(w, http.StatusConflict, "no_active_session", "ticket has no active session")
+		return
+	}
+
+	// Check tmux is available
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	// Only support git_diff action type
+	if comment.Action.Type != "git_diff" {
+		writeError(w, http.StatusBadRequest, "unsupported_action", fmt.Sprintf("unsupported action type: %s", comment.Action.Type))
+		return
+	}
+
+	// Parse git_diff args
+	argsMap, ok := comment.Action.Args.(map[string]any)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_args", "invalid action args")
+		return
+	}
+	repoPath, _ := argsMap["repo_path"].(string)
+	commit, _ := argsMap["commit"].(string)
+
+	if repoPath == "" {
+		writeError(w, http.StatusBadRequest, "invalid_repo_path", "repo_path is required")
+		return
+	}
+
+	// Validate repo_path exists
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		writeError(w, http.StatusBadRequest, "invalid_repo_path", fmt.Sprintf("repo_path does not exist: %s", repoPath))
+		return
+	}
+
+	// Load global config for git_diff_tool setting
+	cfg, err := daemonconfig.Load()
+	if err != nil {
+		h.deps.Logger.Warn("failed to load daemon config, using default", "error", err)
+		cfg = daemonconfig.DefaultConfig()
+	}
+
+	// Build command based on tool
+	var command string
+	switch cfg.GitDiffTool {
+	case "lazygit":
+		command = "lazygit"
+	default:
+		// Use git diff
+		if commit != "" {
+			command = fmt.Sprintf("git diff %s", commit)
+		} else {
+			command = "git diff"
+		}
+	}
+
+	// Get tmux session name
+	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	tmuxSession := "cortex"
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
+	// Execute popup
+	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, repoPath, command); err != nil {
+		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
+		return
+	}
+
+	resp := ExecuteActionResponse{
+		Success: true,
+		Message: "Action executed",
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

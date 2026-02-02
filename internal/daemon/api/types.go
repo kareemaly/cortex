@@ -92,6 +92,12 @@ type FocusResponse struct {
 	Window  string `json:"window"`
 }
 
+// ExecuteActionResponse is the response for executing a comment action.
+type ExecuteActionResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
 // filterSummaryList converts tickets to summaries with optional query filter.
 // Query is matched case-insensitively against title or body.
 func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string) []TicketSummary {

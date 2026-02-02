@@ -42,6 +42,7 @@ type Model struct {
 	modalViewport   viewport.Model
 	modalCommentIdx int // index into ticket.Comments
 	rejecting       bool
+	executingDiff   bool
 
 	// SSE subscription state
 	eventCh      <-chan sdk.Event
@@ -100,6 +101,14 @@ type RejectErrorMsg struct {
 
 // RefreshMsg triggers a ticket data reload (used by SSE).
 type RefreshMsg struct{}
+
+// DiffExecutedMsg is sent when a diff action is successfully executed.
+type DiffExecutedMsg struct{}
+
+// DiffErrorMsg is sent when executing a diff action fails.
+type DiffErrorMsg struct {
+	Err error
+}
 
 // sseConnectedMsg is sent when the SSE connection is established.
 type sseConnectedMsg struct {
@@ -277,6 +286,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case EventMsg:
 		m.loading = true
 		return m, tea.Batch(m.loadTicket(), m.waitForEvent())
+
+	case DiffExecutedMsg:
+		m.executingDiff = false
+		return m, nil
+
+	case DiffErrorMsg:
+		m.executingDiff = false
+		m.err = msg.Err
+		return m, nil
 	}
 
 	// Handle viewport scroll messages.
@@ -314,8 +332,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseDetailMsg{} }
 	}
 
-	// If loading, killing, approving, spawning, or rejecting, don't process other keys.
-	if m.loading || m.killing || m.approving || m.spawning || m.rejecting {
+	// If loading, killing, approving, spawning, rejecting, or executing diff, don't process other keys.
+	if m.loading || m.killing || m.approving || m.spawning || m.rejecting || m.executingDiff {
 		return m, nil
 	}
 
@@ -576,6 +594,16 @@ func (m Model) handleDetailModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.rejecting = true
 			return m, m.rejectSession()
 		}
+		// 'd' for diff - execute git_diff action if available
+		if isKey(msg, KeyDiff) {
+			comment := m.ticket.Comments[m.modalCommentIdx]
+			if comment.Action != nil && comment.Action.Type == "git_diff" {
+				m.showDetailModal = false
+				m.executingDiff = true
+				return m, m.executeDiffAction(comment.ID)
+			}
+			return m, nil
+		}
 	}
 
 	return m, nil
@@ -651,6 +679,20 @@ func (m Model) rejectSession() tea.Cmd {
 			return RejectErrorMsg{Err: err}
 		}
 		return SessionRejectedMsg{}
+	}
+}
+
+// executeDiffAction returns a command to execute a git_diff action on a comment.
+func (m Model) executeDiffAction(commentID string) tea.Cmd {
+	return func() tea.Msg {
+		if m.ticket == nil {
+			return DiffErrorMsg{Err: fmt.Errorf("no ticket")}
+		}
+		err := m.client.ExecuteCommentAction(m.ticket.ID, commentID)
+		if err != nil {
+			return DiffErrorMsg{Err: err}
+		}
+		return DiffExecutedMsg{}
 	}
 }
 
@@ -734,10 +776,13 @@ func (m Model) renderDetailModal() string {
 	body := m.modalViewport.View()
 
 	isReview := false
+	hasAction := false
 	if m.ticket != nil && m.modalCommentIdx < len(m.ticket.Comments) {
-		isReview = m.ticket.Comments[m.modalCommentIdx].Type == "review_requested"
+		comment := m.ticket.Comments[m.modalCommentIdx]
+		isReview = comment.Type == "review_requested"
+		hasAction = comment.Action != nil && comment.Action.Type == "git_diff"
 	}
-	help := modalHelpStyle.Render(modalHelpText(isReview))
+	help := modalHelpStyle.Render(modalHelpText(isReview, hasAction))
 
 	content := header + "\n" + separator + "\n" + body + "\n" + help
 
@@ -869,6 +914,12 @@ func (m Model) View() string {
 	// Handle rejecting state.
 	if m.rejecting {
 		b.WriteString(loadingStyle.Render("Rejecting session..."))
+		return b.String()
+	}
+
+	// Handle executing diff state.
+	if m.executingDiff {
+		b.WriteString(loadingStyle.Render("Opening diff..."))
 		return b.String()
 	}
 
