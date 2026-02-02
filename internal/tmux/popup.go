@@ -1,5 +1,7 @@
 package tmux
 
+import "fmt"
+
 // DisplayPopup opens a tmux popup window that closes when command exits.
 // The popup is displayed in the current tmux session.
 // Parameters:
@@ -10,6 +12,7 @@ func (m *Manager) DisplayPopup(session, workingDir, command string) error {
 	args := []string{"display-popup", "-E", "-w", "80%", "-h", "80%", "-t", session}
 	if workingDir != "" {
 		args = append(args, "-d", workingDir)
+		command = fmt.Sprintf("cd %q && %s", workingDir, command)
 	}
 	args = append(args, command)
 	_, err := m.run(args...)
