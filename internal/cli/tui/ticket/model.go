@@ -209,8 +209,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.ticket = msg.Ticket
 		if m.ready {
+			// Preserve scroll position across SSE refreshes.
+			savedOffset := m.bodyViewport.YOffset
 			m.bodyViewport.SetContent(m.renderBodyContent())
-			m.bodyViewport.GotoTop()
+			m.bodyViewport.SetYOffset(savedOffset)
 		}
 		// Clamp comment cursor to valid range.
 		if count := len(m.ticket.Comments); count > 0 {
@@ -995,13 +997,15 @@ func (m Model) renderHeader() string {
 }
 
 // rowHeights computes the vertical split between Row 1 and Row 2.
+// When body (Row 1) is focused, comments collapse to ~15%.
+// When comments (Row 2) are focused, they expand to ~70%.
 func (m Model) rowHeights() (row1H, row2H int) {
 	// available = height - 4 (header with padding + row separator + help bar)
 	available := max(m.height-4, 2)
 	if m.focusedRow == 0 {
-		row1H = available * 70 / 100
+		row1H = available * 85 / 100 // Body: 85%, Comments: 15% (collapsed)
 	} else {
-		row1H = available * 30 / 100
+		row1H = available * 30 / 100 // Body: 30%, Comments: 70% (expanded)
 	}
 	row1H = max(row1H, 1)
 	row2H = max(available-row1H, 1)
