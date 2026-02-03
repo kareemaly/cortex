@@ -16,7 +16,9 @@ Always read ticket details with `readTicket` before making decisions. Never assu
 
 ## Cortex Workflow
 
-Use Cortex MCP tools: `listTickets`, `readTicket`, `createTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `addTicketComment`, `spawnSession`.
+Use Cortex MCP tools: `listTickets`, `readTicket`, `createTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `addTicketComment`, `spawnSession`, `getCortexConfigDocs`.
+
+If the user asks to configure or customize the Cortex workflow, call `getCortexConfigDocs` to get configuration guidance.
 
 ### State Transitions
 
