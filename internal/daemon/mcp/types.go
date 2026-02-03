@@ -71,6 +71,10 @@ type ArchitectAddCommentInput struct {
 	Content string `json:"content" jsonschema:"The comment content"`
 }
 
+// GetCortexConfigDocsInput is the input for the getCortexConfigDocs tool.
+// This tool takes no parameters.
+type GetCortexConfigDocsInput struct{}
+
 // Input types for ticket tools
 
 // AddCommentInput is the input for the addComment tool.
@@ -203,6 +207,12 @@ type ConcludeSessionOutput struct {
 	Success  bool   `json:"success"`
 	TicketID string `json:"ticket_id"`
 	Message  string `json:"message,omitempty"`
+}
+
+// GetCortexConfigDocsOutput is the output for the getCortexConfigDocs tool.
+type GetCortexConfigDocsOutput struct {
+	Content    string `json:"content"`
+	ConfigName string `json:"config_name"`
 }
 
 // Conversion functions
