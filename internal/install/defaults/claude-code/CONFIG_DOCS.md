@@ -43,7 +43,18 @@ git:
 
 ## Customizing Prompts
 
-Override default prompts by creating files in `.cortex/prompts/`:
+Use `cortex eject` to copy a default prompt for project-level customization:
+
+```bash
+cortex eject <prompt-path>
+
+# Examples
+cortex eject ticket/work/SYSTEM.md    # Customize ticket workflow
+cortex eject architect/SYSTEM.md      # Customize architect behavior
+cortex eject ticket/work/APPROVE.md   # Customize approval flow
+```
+
+Ejected prompts are placed in `.cortex/prompts/`:
 
 ```
 .cortex/prompts/
@@ -58,7 +69,7 @@ Override default prompts by creating files in `.cortex/prompts/`:
         └── REJECT.md  # Override rejection instructions
 ```
 
-**Resolution order**: Project prompts → Extended base → Defaults. Create files in `.cortex/prompts/` to override defaults.
+**Resolution order**: Project prompts → Extended base.
 
 ## Template Variables
 
@@ -126,5 +137,6 @@ Override `.cortex/prompts/ticket/work/KICKOFF.md`:
 | Command | Description |
 |---------|-------------|
 | `cortex init` | Initialize project with `.cortex/` directory |
+| `cortex eject <path>` | Copy prompt to project for customization |
 | `cortex architect` | Start or attach to architect session |
 | `cortex kanban` | Open kanban board TUI |
