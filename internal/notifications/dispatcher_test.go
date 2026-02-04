@@ -260,6 +260,7 @@ func TestDispatcher_EventClassification_CommentAdded(t *testing.T) {
 	notifiable := d.classifyEvent(event)
 	if notifiable == nil {
 		t.Fatal("expected notifiable event, got nil")
+		return
 	}
 	if notifiable.Type != EventReviewRequested {
 		t.Errorf("expected type %s, got %s", EventReviewRequested, notifiable.Type)
