@@ -2,6 +2,14 @@
 
 Orchestration layer for AI coding agents. File-based ticket management with MCP tools, tmux session management, and a daemon-centric architecture.
 
+## Quick Start
+
+```bash
+cortexd &                 # Start daemon (background)
+cortex init               # Initialize project
+cortex architect          # Start architect session
+```
+
 ## Build & Test
 
 ```bash
@@ -30,6 +38,31 @@ Single `cortexd` daemon serves all projects. **All clients communicate exclusive
 ```
 
 Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
+
+## Critical Implementation Notes
+
+- **HTTP-only communication**: All clients (CLI, TUI, MCP) communicate via HTTP to daemon. No direct filesystem access to ticket store.
+- **Project context**: Always use `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
+- **StoreManager**: Single source of truth for ticket state. Located in `internal/daemon/api/store_manager.go`.
+- **Spawn state detection**: Four states (normal/active/orphaned/ended) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
+
+## Anti-Patterns
+
+| Don't | Do Instead | Why |
+|-------|------------|-----|
+| Access ticket JSON files directly | Use SDK client (`internal/cli/sdk/client.go`) | Daemon holds in-memory state with locks |
+| Spawn tmux sessions directly | Use `SpawnSession()` via SDK/API | Bypasses session tracking and MCP binding |
+| Import `internal/ticket` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
+| Import `internal/core/spawn` in CLI | Call `/tickets/{status}/{id}/spawn` | CLI should not import daemon internals |
+
+## Debugging
+
+| Symptom | Check |
+|---------|-------|
+| Daemon not responding | `cortex daemon status`, verify port 4200, check `~/.cortex/logs/` |
+| Ticket not found | Verify `X-Cortex-Project` header matches project path |
+| Session won't spawn | Check `cortex ticket list` for state, use `mode=resume` for orphaned |
+| MCP tools not working | Verify `CORTEX_PROJECT_PATH` env, check daemon logs |
 
 ## Key Paths
 
@@ -70,6 +103,9 @@ Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (
 | `cortex projects` | List all registered projects with ticket counts |
 | `cortex register [path]` | Register project in global config |
 | `cortex unregister [path]` | Remove project from global config |
+| `cortex daemon status` | Check daemon status |
+| `cortex upgrade` | Self-update to latest version |
+| `cortex eject <path>` | Customize a default prompt |
 
 ## API Endpoints
 
