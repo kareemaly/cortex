@@ -13,4 +13,5 @@ type Dependencies struct {
 	TmuxManager  *tmux.Manager
 	Bus          *events.Bus
 	Logger       *slog.Logger
+	CortexdPath  string // Optional: path to cortexd binary for spawn operations
 }

@@ -61,6 +61,7 @@ func setupArchitectWithDaemon(t *testing.T, windowExists bool) (*Server, *ticket
 		StoreManager: storeManager,
 		TmuxManager:  tmuxMgr,
 		Logger:       logger,
+		CortexdPath:  "/mock/cortexd",
 	}
 	router := api.NewRouter(deps, logger)
 	ts := httptest.NewServer(router)
@@ -589,6 +590,7 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	deps := &api.Dependencies{
 		StoreManager: storeManager,
 		Logger:       logger,
+		CortexdPath:  "/mock/cortexd",
 	}
 	router := api.NewRouter(deps, logger)
 	ts := httptest.NewServer(router)

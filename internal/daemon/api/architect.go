@@ -116,6 +116,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	ticketsDir := filepath.Join(projectPath, ".cortex", "tickets")
 	spawner := spawn.NewSpawner(spawn.Dependencies{
 		TmuxManager: h.deps.TmuxManager,
+		CortexdPath: h.deps.CortexdPath,
 	})
 
 	architectAgent := string(projectCfg.Architect.Agent)
