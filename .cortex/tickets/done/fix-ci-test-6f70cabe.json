@@ -1,0 +1,682 @@
+{
+  "id": "6f70cabe-709a-4409-9ca9-50eec40b757f",
+  "type": "work",
+  "title": "Fix CI test failures - cortexd not in PATH",
+  "body": "## Problem\n\nCI tests fail because spawn-related tests in `internal/daemon/mcp/tools_test.go` require the `cortexd` binary to be in PATH, but it's not built/installed during `make test`.\n\n**Error:**\n```\nspawn: cortexd not found: exec: \"cortexd\": executable file not found in $PATH\n```\n\n**9 failing tests:**\n- TestHandleSpawnSession\n- TestHandleSpawnSessionAutoMovesToProgress\n- TestHandleSpawnSession_StateNormal_ModeNormal\n- TestHandleSpawnSession_StateOrphaned_ModeResume\n- TestHandleSpawnSession_StateOrphaned_ModeFresh\n- TestHandleSpawnSession_StateEnded_ModeNormal\n- TestHandleSpawnSession_StateEnded_ModeFresh\n- TestHandleSpawnSession_DefaultMode\n\n## Requirements\n\nFix the tests so they pass in CI without requiring installed binaries. Options to consider:\n\n1. **Mock the binary lookup** — inject the binary path resolver so tests can provide a mock\n2. **Build before test** — update Makefile to build binaries before running tests\n3. **Skip when unavailable** — skip spawn tests if cortexd not found (less ideal)\n4. **Refactor for testability** — make spawn orchestration accept interfaces that can be mocked\n\nAlso run `go mod tidy` to fix the diagnostic about `github.com/charmbracelet/x/ansi`.\n\n## Verification\n\n- `make test` passes locally\n- CI workflow passes",
+  "dates": {
+    "created": "2026-02-04T12:46:48.922857Z",
+    "updated": "2026-02-04T13:02:33.59299Z",
+    "progress": "2026-02-04T12:46:55.139455Z",
+    "reviewed": "2026-02-04T13:00:18.832705Z",
+    "done": "2026-02-04T13:02:33.59299Z"
+  },
+  "comments": [
+    {
+      "id": "93a35741-cb64-402a-81c8-44a37067b230",
+      "session_id": "15373dca-1f3f-484e-8f92-ba87ce921d02",
+      "type": "review_requested",
+      "content": "## Summary\n\nFixed CI test failures where 9 tests in `internal/daemon/mcp/tools_test.go` failed because spawn operations tried to find `cortexd` in PATH, which is not available in CI.\n\n## Changes Made\n\n1. **internal/daemon/api/deps.go** - Added `CortexdPath string` field to `Dependencies` struct\n\n2. **internal/daemon/api/tickets.go** - Pass `h.deps.CortexdPath` to `spawn.OrchestrateDeps` in the Spawn handler\n\n3. **internal/daemon/api/architect.go** - Pass `h.deps.CortexdPath` to `spawn.Dependencies` when creating the spawner\n\n4. **internal/daemon/mcp/tools_test.go** - Inject mock path `/mock/cortexd` in both test setup functions (`setupArchitectWithDaemon` and `setupTicketSession`)\n\n## Verification\n\n- `make test` - All tests pass\n- `make lint` - No lint issues (0 issues)\n- `go mod tidy` - Completed successfully\n\n## Notes\n\nThe fix doesn't change production behavior since `CortexdPath` defaults to empty string, which triggers the existing `binpath.FindCortexd()` auto-discovery. Tests now inject a mock path to bypass the PATH lookup.",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/88d421fd-e96b-43f0-967b-b06c820a571e"
+        }
+      },
+      "created_at": "2026-02-04T13:00:18.831735Z"
+    },
+    {
+      "id": "e5e619fb-3c7d-4a68-9dac-43578017fba8",
+      "session_id": "15373dca-1f3f-484e-8f92-ba87ce921d02",
+      "type": "done",
+      "content": "## Summary\n\nFixed CI test failures where 9 tests in `internal/daemon/mcp/tools_test.go` failed because spawn operations tried to find `cortexd` in PATH, which is not available in CI environments.\n\n## Root Cause\n\nTests created HTTP test servers with `api.Dependencies` without a `CortexdPath`, causing spawn operations to fall back to `exec.LookPath(\"cortexd\")` which fails in CI.\n\n## Solution\n\nAdded `CortexdPath string` field to `api.Dependencies` and propagated it through spawn operations. Tests now inject a mock path `/mock/cortexd` to bypass the PATH lookup.\n\n## Files Changed\n\n1. `internal/daemon/api/deps.go` - Added `CortexdPath string` field\n2. `internal/daemon/api/tickets.go` - Pass `CortexdPath` to `spawn.OrchestrateDeps`\n3. `internal/daemon/api/architect.go` - Pass `CortexdPath` to `spawn.Dependencies`\n4. `internal/daemon/mcp/tools_test.go` - Inject mock path in both test setup functions\n\n## Verification\n\n- All tests pass (`make test`)\n- No lint issues (`make lint`)\n- Changes merged to main and pushed to origin",
+      "created_at": "2026-02-04T13:02:33.59171Z"
+    }
+  ],
+  "session": {
+    "id": "15373dca-1f3f-484e-8f92-ba87ce921d02",
+    "started_at": "2026-02-04T12:46:55.101147Z",
+    "ended_at": "2026-02-04T13:02:33.592423Z",
+    "agent": "claude",
+    "tmux_window": "fix-ci-test-failures-cortexd-not-in-path",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/88d421fd-e96b-43f0-967b-b06c820a571e",
+    "feature_branch": "ticket/fix-ci-test",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-02-04T13:02:26.893742Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T12:46:55.101147Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:47:51.496724Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:47:51.560799Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:47:51.990441Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:47:52.34244Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:47:53.358507Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:47:55.636994Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:47:55.637436Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:47:55.637767Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:47:56.510818Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:47:56.644856Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:47:56.785508Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:47:58.510182Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:47:58.51114Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:00.016771Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:00.361749Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:48:02.112351Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:48:02.248993Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:03.942654Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:03.94319Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:04.245023Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:04.245546Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:48:07.060166Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:48:07.857934Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:48:07.987915Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:48:08.600858Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:10.544694Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:10.545535Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:11.971187Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:13.19456Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:15.964634Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:18.489282Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:48:21.89936Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:23.862208Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:48:29.251598Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-02-04T12:48:31.957656Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T12:48:32.963093Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T12:48:47.939709Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:59.878255Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:59.878856Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:48:59.879893Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:06.786349Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:06.787138Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:49:12.538292Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:17.467049Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:17.467867Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:28.349382Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:29.944505Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:48.967297Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:48.968352Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:48.969018Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:55.58153Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:49:55.970175Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:02.954426Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:02.956288Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:03.369656Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:11.263376Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:50:13.851935Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:50:21.819574Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:50:21.836794Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:50:29.910242Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:36.260882Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:50:36.871999Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:42.924745Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:50:43.307016Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:46.672045Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:55.331586Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:55.332445Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:51:01.415247Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:51:06.874028Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:51:10.616896Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:51:17.112799Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T12:51:53.646488Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T12:52:00.185654Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:52:05.304275Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T12:52:26.977642Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T12:52:32.410652Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:58:15.016198Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:58:20.211071Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:58:20.211761Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:58:20.212421Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:58:20.618635Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:58:29.879649Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T12:58:36.882233Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:58:42.56622Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T12:58:48.693004Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:58:53.156645Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T12:58:58.727107Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:59:03.462297Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T12:59:09.030351Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T12:59:14.424634Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:59:19.308333Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:59:23.511489Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:59:29.605723Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:59:40.296884Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:59:47.306182Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:59:52.346341Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:59:59.194644Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:00:06.574991Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-02-04T13:00:18.873614Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T13:00:27.669828Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:02:09.360512Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:02:16.47305Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:02:20.361702Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:02:26.893742Z"
+      }
+    ]
+  }
+}

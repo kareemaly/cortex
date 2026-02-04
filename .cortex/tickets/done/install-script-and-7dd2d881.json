@@ -1,0 +1,563 @@
+{
+  "id": "7dd2d881-6b09-426f-b0d4-47659f409dc8",
+  "type": "work",
+  "title": "Install script and GitHub releases workflow",
+  "body": "## Goal\n\nEnable one-command installation of cortex via curl and set up automated GitHub releases.\n\n## Requirements\n\n### Install script (`install.sh`)\n\nCreate a bash script that:\n- Detects OS (darwin/linux) and arch (amd64/arm64)\n- Downloads correct binaries from GitHub releases\n- Verifies SHA256 checksums\n- Installs to `/usr/local/bin/` (with sudo) or `~/.local/bin/` (without)\n- Makes binaries executable\n- Runs `cortex version` to verify installation\n- Provides clear progress and error messages\n\nUsage:\n```bash\n# Latest version\ncurl -sSL https://github.com/kareemaly/cortex/releases/latest/download/install.sh | bash\n\n# Specific version\ncurl -sSL https://github.com/kareemaly/cortex/releases/download/v1.0.0/install.sh | bash\n```\n\n### GitHub Actions release workflow\n\nCreate `.github/workflows/release.yml` that triggers on version tags (`v*`):\n1. Build binaries for all platforms (darwin/linux × amd64/arm64)\n2. Generate SHA256 checksums file\n3. Create GitHub release with:\n   - All binary artifacts\n   - `checksums.txt`\n   - `install.sh`\n   - Release notes from tag or CHANGELOG\n\n### Makefile updates\n\n- Add `make release-build` target for cross-compilation\n- Ensure version info is embedded at build time (ldflags)\n\n## Artifacts per release\n\n```\ncortex-darwin-amd64\ncortex-darwin-arm64\ncortex-linux-amd64\ncortex-linux-arm64\ncortexd-darwin-amd64\ncortexd-darwin-arm64\ncortexd-linux-amd64\ncortexd-linux-arm64\nchecksums.txt\ninstall.sh\n```\n\n## Notes\n\n- Script should be idempotent (safe to re-run)\n- Consider adding `--version` flag to install.sh for specific versions\n- install.sh should be included in the repo (not just releases) for development",
+  "dates": {
+    "created": "2026-02-04T12:47:58.978534Z",
+    "updated": "2026-02-04T13:02:42.593994Z",
+    "progress": "2026-02-04T12:48:44.857907Z",
+    "reviewed": "2026-02-04T13:00:56.316193Z",
+    "done": "2026-02-04T13:02:42.593994Z"
+  },
+  "comments": [
+    {
+      "id": "c3eeed19-5d58-4d32-b567-b4b7169c41a7",
+      "session_id": "a6350e7c-2fcf-486c-bee9-be237007ead5",
+      "type": "review_requested",
+      "content": "## Summary\n\nImplemented install script and fixed GoReleaser configuration for GitHub releases.\n\n### Changes\n\n**`.goreleaser.yaml`** - Fixed bugs and configured for raw binary releases:\n- Fixed module path: `cortex1` → `cortex`\n- Fixed ldflags variable: `.Date` → `.BuildDate` (matches `pkg/version/version.go`)\n- Changed archive format from `tar.gz` to `binary` (raw binaries)\n- Added OS/arch to binary names: `cortex-{{ .Os }}-{{ .Arch }}`\n- Added `release.extra_files` to include `install.sh` in releases\n\n**`install.sh`** - Created new installer script with:\n- OS detection (darwin/linux)\n- Arch detection (amd64/arm64 including aliases x86_64/aarch64)\n- Downloads binaries from GitHub releases\n- SHA256 checksum verification using checksums.txt\n- Installs to `/usr/local/bin` (with sudo) or `~/.local/bin` (without)\n- macOS code signing\n- Version verification via `cortex version`\n- `-v/--version` flag for specific versions\n- `-d/--dir` flag for custom install directory\n- Colored progress output\n\n**`Makefile`** - Added `release-build` target:\n- Cross-compiles for all 4 platform combinations (darwin/linux × amd64/arm64)\n- Outputs to `dist/` directory\n- Generates `checksums.txt` with SHA256 hashes\n- Uses `-s -w` ldflags for smaller binaries\n\n### Testing\n\n1. `./install.sh --help` - Works correctly\n2. `make release-build` - Successfully builds all 8 binaries and generates checksums\n3. `./dist/cortex-darwin-arm64 version` - Built binaries work correctly\n\n### Release Artifacts\n\nAfter this change, each GitHub release will contain:\n```\ncortex-darwin-amd64\ncortex-darwin-arm64\ncortex-linux-amd64\ncortex-linux-arm64\ncortexd-darwin-amd64\ncortexd-darwin-arm64\ncortexd-linux-amd64\ncortexd-linux-arm64\nchecksums.txt\ninstall.sh\n```\n\n### Usage\n\n```bash\n# Latest version\ncurl -fsSL https://raw.githubusercontent.com/kareemaly/cortex/main/install.sh | bash\n\n# Specific version\ncurl -fsSL https://raw.githubusercontent.com/kareemaly/cortex/main/install.sh | bash -s -- -v v1.0.0\n```",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "commit": "66f5ae2",
+          "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/f1d25f03-926a-4371-960f-06e4b0a6593f"
+        }
+      },
+      "created_at": "2026-02-04T13:00:56.315292Z"
+    },
+    {
+      "id": "482098f8-017d-48b9-8a71-fc2ce6b9b51a",
+      "session_id": "a6350e7c-2fcf-486c-bee9-be237007ead5",
+      "type": "done",
+      "content": "## Summary\n\nImplemented install script and fixed GoReleaser configuration to enable one-command installation of cortex.\n\n### Files Changed\n\n**`.goreleaser.yaml`**\n- Fixed module path: `github.com/kareemaly/cortex1` → `github.com/kareemaly/cortex`\n- Fixed ldflags variable: `.Date` → `.BuildDate` (matches `pkg/version/version.go:12`)\n- Changed archive format from `tar.gz` to `binary` (raw binaries, not archives)\n- Added OS/arch to binary names: `cortex-{{ .Os }}-{{ .Arch }}`\n- Added `release.extra_files` to include `install.sh` in GitHub releases\n\n**`install.sh`** (new file)\n- OS detection (darwin/linux)\n- Arch detection (amd64/arm64 including aliases x86_64/aarch64)\n- Downloads binaries from GitHub releases\n- SHA256 checksum verification using checksums.txt\n- Installs to `/usr/local/bin` (with sudo) or `~/.local/bin` (without)\n- macOS code signing\n- Version verification via `cortex version`\n- `-v/--version` flag for specific versions\n- `-d/--dir` flag for custom install directory\n- Colored progress output\n\n**`Makefile`**\n- Added `release-build` target for local cross-compilation\n- Builds all 4 platform combinations (darwin/linux × amd64/arm64)\n- Generates checksums.txt with SHA256 hashes\n\n### Usage\n\n```bash\n# Latest version\ncurl -fsSL https://raw.githubusercontent.com/kareemaly/cortex/main/install.sh | bash\n\n# Specific version\ncurl -fsSL https://raw.githubusercontent.com/kareemaly/cortex/main/install.sh | bash -s -- -v v1.0.0\n```\n\n### Release Artifacts\n\nEach GitHub release will now contain:\n- `cortex-darwin-amd64`, `cortex-darwin-arm64`, `cortex-linux-amd64`, `cortex-linux-arm64`\n- `cortexd-darwin-amd64`, `cortexd-darwin-arm64`, `cortexd-linux-amd64`, `cortexd-linux-arm64`\n- `checksums.txt`\n- `install.sh`",
+      "created_at": "2026-02-04T13:02:42.592796Z"
+    }
+  ],
+  "session": {
+    "id": "a6350e7c-2fcf-486c-bee9-be237007ead5",
+    "started_at": "2026-02-04T12:48:44.81731Z",
+    "ended_at": "2026-02-04T13:02:42.593501Z",
+    "agent": "claude",
+    "tmux_window": "install-script-and-github-releases-workflow",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/f1d25f03-926a-4371-960f-06e4b0a6593f",
+    "feature_branch": "ticket/install-script-and",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-02-04T13:02:34.656039Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T12:48:44.81731Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:04.74977Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:04.756892Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:08.050436Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:08.108758Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:08.313824Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:08.31438Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:08.319296Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:49:08.444863Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:49:08.793489Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:49:08.932464Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:10.762895Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:10.763491Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:11.856856Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:49:12.256887Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:49:12.395292Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:13.56476Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:14.007653Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:14.00817Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:15.94507Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:15.945597Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:15.946095Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:17.181146Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:49:17.532016Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:18.819536Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:18.861159Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:19.46117Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:21.344759Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:22.174661Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:24.410826Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:24.784877Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:26.4564Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:28.727124Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:49:28.766683Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:30.585912Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:30.586496Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T12:49:33.685803Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T12:49:43.143873Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:52.208671Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:52.209328Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:49:52.209887Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:16.622697Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:16.623692Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:16.62466Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:22.679204Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:50:22.727521Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:50:23.08401Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:50:29.02596Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "WebFetch",
+        "work": null,
+        "at": "2026-02-04T12:50:35.70869Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__context7__resolve-library-id",
+        "work": null,
+        "at": "2026-02-04T12:50:41.347632Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__context7__query-docs",
+        "work": null,
+        "at": "2026-02-04T12:50:46.152854Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "WebFetch",
+        "work": null,
+        "at": "2026-02-04T12:50:57.952394Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "WebFetch",
+        "work": null,
+        "at": "2026-02-04T12:51:09.759862Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:51:15.987411Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T12:51:16.50878Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T12:52:28.038846Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:52:33.478697Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T12:52:55.256056Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T12:53:03.123097Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-02-04T12:58:08.746812Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:58:08.808812Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:58:08.815132Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T12:58:08.816087Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:58:16.055854Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T12:58:23.978469Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:58:28.47287Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T12:59:01.591784Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:59:05.696669Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T12:59:11.366121Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T12:59:21.594326Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T12:59:26.839785Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T12:59:33.903911Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:00:01.978971Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:00:13.845331Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:00:19.589268Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T13:00:23.655633Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:00:28.589434Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:00:28.614317Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:00:28.616789Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:00:37.900898Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:00:42.069751Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-02-04T13:00:56.352956Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T13:01:02.533411Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:02:27.501432Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:02:34.656039Z"
+      }
+    ]
+  }
+}

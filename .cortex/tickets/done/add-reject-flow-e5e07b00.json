@@ -1,0 +1,782 @@
+{
+  "id": "e5e07b00-f6a2-4b4c-b132-1d87dd54dee2",
+  "type": "work",
+  "title": "Add Reject Flow with REJECT.md Prompt Template",
+  "body": "## Summary\n\nImplement reject flow mirroring approve flow. When rejecting, send REJECT.md instructions to the agent telling it to cleanly rollback all changes and conclude the session.\n\n## Requirements\n\n### Prompt Template\n- Create `REJECT.md` in `internal/install/defaults/claude-code/prompts/ticket/work/`\n- Instructions should be concise and concrete for any AI agent:\n  - Git stash all uncommitted changes\n  - Rollback/revert any commits made during this session\n  - Remove any environment changes outside git (temp files, env vars, etc.)\n  - Conclude the session cleanly\n- Keep it short and actionable — agent should execute immediately\n\n### API Endpoint\n- `POST /tickets/{id}/sessions/{session_id}/reject`\n- Renders REJECT.md template (similar to approve flow)\n- Sends to agent pane via tmux\n- Focuses tmux window\n- Ticket moves to `done` after agent concludes (via concludeSession)\n\n### TUI Integration\n- `x` key in review comment modal triggers reject\n- No feedback input needed — just confirm action\n- Calls reject endpoint\n- Focuses tmux window\n\n## Flow\n1. User presses `x` on review comment\n2. TUI calls reject endpoint\n3. Daemon renders REJECT.md and sends to agent pane\n4. Agent reads instructions, rolls back changes, calls `concludeSession`\n5. Ticket moves to done\n\n## Acceptance Criteria\n- [ ] REJECT.md template exists with rollback instructions\n- [ ] Reject endpoint sends template to agent pane\n- [ ] Agent receives clear rollback instructions\n- [ ] TUI `x` key triggers reject (no input prompt)\n- [ ] Session concludes after rollback",
+  "dates": {
+    "created": "2026-02-02T14:15:47.270425Z",
+    "updated": "2026-02-02T15:41:44.997667Z",
+    "progress": "2026-02-02T14:32:49.179934Z",
+    "reviewed": "2026-02-02T15:31:56.170393Z",
+    "done": "2026-02-02T15:41:44.997667Z"
+  },
+  "comments": [
+    {
+      "id": "a83fd7bc-1a68-4584-8688-501dab1f28aa",
+      "session_id": "a0858ed2-bfbe-47d4-be86-6ebb0e6dd20e",
+      "type": "review_requested",
+      "content": "## Summary\n\nImplemented the reject flow that mirrors the existing approve flow. When rejecting a session review, the REJECT.md instructions are sent to the agent telling it to cleanly rollback all changes and conclude the session.\n\n## Changes Made\n\n### 1. Created REJECT.md Template\n- **File:** `internal/install/defaults/claude-code/prompts/ticket/work/REJECT.md`\n- Contains rollback instructions for the agent (discard uncommitted changes, revert commits, verify clean state, call concludeSession)\n\n### 2. Added StageReject Constant\n- **File:** `internal/prompt/prompt.go`\n- Added `StageReject = \"REJECT\"` constant\n\n### 3. Added Reject API Handler\n- **File:** `internal/daemon/api/sessions.go`\n- Added `Reject` method that mirrors `Approve`:\n  - Finds session and validates it's active\n  - Loads and renders REJECT.md template\n  - Sends to agent pane via tmux\n  - Focuses tmux window\n\n### 4. Registered Reject Route\n- **File:** `internal/daemon/api/server.go`\n- Added `r.Post(\"/{id}/reject\", sessionHandlers.Reject)`\n\n### 5. Added RejectSession SDK Method\n- **File:** `internal/cli/sdk/client.go`\n- Added `RejectSession(id string) error` method\n\n### 6. Updated TUI rejectSession\n- **File:** `internal/cli/tui/ticket/model.go`\n- Changed from adding a comment to calling `m.client.RejectSession(m.ticket.Session.ID)`\n\n## Verification\n\n- `make build` - Passed\n- `make lint` - 0 issues\n- `make test` - All tests passed",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "repo_path": "/Users/kareemelbahrawy/projects/cortex1"
+        }
+      },
+      "created_at": "2026-02-02T15:31:56.169304Z"
+    },
+    {
+      "id": "8d7511ec-3f11-4aba-a47c-eb29e20577ca",
+      "session_id": "a0858ed2-bfbe-47d4-be86-6ebb0e6dd20e",
+      "type": "done",
+      "content": "## Summary\n\nImplemented the reject flow for session reviews, mirroring the existing approve flow.\n\n## Changes Made\n\n1. **Created REJECT.md template** (`internal/install/defaults/claude-code/prompts/ticket/work/REJECT.md`)\n   - Contains rollback instructions: discard uncommitted changes, revert commits, verify clean state, call concludeSession\n\n2. **Added StageReject constant** (`internal/prompt/prompt.go`)\n   - Added `StageReject = \"REJECT\"` to stage constants\n\n3. **Added Reject API handler** (`internal/daemon/api/sessions.go`)\n   - Finds session and validates it's active\n   - Loads and renders REJECT.md template with fallback\n   - Sends to agent pane via tmux\n   - Focuses tmux window\n\n4. **Registered reject route** (`internal/daemon/api/server.go`)\n   - Added `POST /sessions/{id}/reject` endpoint\n\n5. **Added RejectSession SDK method** (`internal/cli/sdk/client.go`)\n   - New `RejectSession(id string) error` method\n\n6. **Updated TUI rejectSession** (`internal/cli/tui/ticket/model.go`)\n   - Changed from adding a comment to calling SDK's RejectSession\n\n## Verification\n\n- Build: Passed\n- Lint: 0 issues\n- Tests: All passed\n\n## Commit\n\n`06dd273` feat(api): add reject flow for session reviews",
+      "created_at": "2026-02-02T15:41:44.996232Z"
+    }
+  ],
+  "session": {
+    "id": "a0858ed2-bfbe-47d4-be86-6ebb0e6dd20e",
+    "started_at": "2026-02-02T15:24:06.354129Z",
+    "ended_at": "2026-02-02T15:41:44.997038Z",
+    "agent": "claude",
+    "tmux_window": "add-reject-flow-with-rejectmd-prompt-template",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-02-02T15:41:34.300497Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T15:24:06.354129Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-02T15:24:26.17519Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:26.29303Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-02T15:24:26.30611Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-02T15:24:26.436198Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:27.024177Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:28.071476Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:30.10763Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-02T15:24:30.453186Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:24:30.591856Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-02T15:24:30.729125Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:31.659811Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:31.675899Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:32.662845Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:32.663648Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:32.664125Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:34.604957Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:24:34.91024Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:35.074367Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:35.130175Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-02T15:24:35.431662Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-02T15:24:36.378571Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:37.211429Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:37.504602Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:24:37.942844Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:39.698373Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:40.030907Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:40.031889Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:41.84515Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:43.966132Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:44.120721Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:24:44.520023Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:46.700281Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:46.701297Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:24:47.211234Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:49.120549Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:49.174148Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:49.558377Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:51.716613Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:51.836565Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:24:52.242957Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:24:55.213302Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:55.324279Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:55.364422Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:55.405523Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:24:58.045675Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:24:58.108289Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:25:00.534977Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:25:00.535971Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:25:03.038349Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:25:03.10067Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:25:06.805431Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:25:07.122525Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:25:09.810042Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:25:09.875872Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:25:11.462506Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-02T15:25:12.280159Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:25:14.651793Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:25:14.652687Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:25:19.204228Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:25:21.398804Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-02T15:25:44.822813Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:15.492849Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:15.493656Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:15.495037Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:20.353309Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:20.69419Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:20.780526Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:26.892168Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:26.89335Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:26.895145Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:33.925337Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:33.926225Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-02T15:26:34.446446Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:41.144214Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:41.145302Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:41.145952Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:47.943254Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:26:48.314754Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:26:57.551917Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T15:26:57.92893Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:27:02.82355Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-02T15:28:06.46799Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:28:16.430666Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:28:16.431565Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:28:16.432216Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:28:16.433944Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:28:16.435445Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:28:23.778677Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-02T15:28:52.170286Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T15:28:59.085959Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:29:21.612896Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:29:21.613804Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:29:21.614417Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:29:21.615106Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:29:26.632811Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T15:29:26.664551Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T15:29:35.44423Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-02T15:29:41.971117Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T15:29:46.51889Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T15:29:51.192707Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T15:29:56.059775Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T15:30:18.248393Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T15:30:23.536261Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T15:30:29.686064Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T15:30:33.993109Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T15:30:43.338821Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T15:30:48.734553Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T15:30:55.48083Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T15:31:00.653652Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:31:20.723874Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:31:26.179067Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:31:31.202269Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:31:36.329854Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T15:31:44.065046Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-02-02T15:31:56.219965Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T15:32:03.401732Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:41:10.443674Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:41:16.609765Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:41:20.348553Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:41:27.232256Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T15:41:34.300497Z"
+      }
+    ]
+  }
+}

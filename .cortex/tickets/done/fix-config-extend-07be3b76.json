@@ -1,0 +1,332 @@
+{
+  "id": "07be3b76-cdf1-4467-9e78-ca71c6c79c25",
+  "type": "work",
+  "title": "Fix Config Extend Path Resolution for Base Configs",
+  "body": "## Summary\n\nConfig extension fails silently because the loader expects `.cortex/cortex.yaml` inside the extend path, but installed defaults have `cortex.yaml` directly at the root.\n\n## Problem\n\nWhen a project config has:\n```yaml\nextend: ~/.cortex/defaults/claude-code\n```\n\nThe config loader looks for:\n```\n~/.cortex/defaults/claude-code/.cortex/cortex.yaml  ← NOT FOUND\n```\n\nBut the installed defaults structure is:\n```\n~/.cortex/defaults/claude-code/\n├── cortex.yaml          ← FILE IS HERE\n└── prompts/\n```\n\nThis causes extends to silently fail, falling back to empty defaults. Users don't get inherited args (like `--permission-mode plan`).\n\n## Solution\n\nChange the config loader to look for `cortex.yaml` directly in the extend path, not inside a `.cortex` subdirectory. Base configs are not full projects — they're config bundles.\n\n**In `internal/project/config/config.go`:**\n\nCurrent (line ~154):\n```go\nconfigPath := filepath.Join(resolvedExtendPath, \".cortex\", \"cortex.yaml\")\n```\n\nShould be:\n```go\nconfigPath := filepath.Join(resolvedExtendPath, \"cortex.yaml\")\n```\n\n## Acceptance Criteria\n- [ ] Extend paths resolve `cortex.yaml` directly (not `.cortex/cortex.yaml`)\n- [ ] Existing tests updated to reflect new behavior\n- [ ] `cortex config show` displays correctly merged config when extending defaults\n- [ ] Plan mode args are inherited when extending `~/.cortex/defaults/claude-code`",
+  "dates": {
+    "created": "2026-02-02T11:46:17.967739Z",
+    "updated": "2026-02-02T11:55:02.934366Z",
+    "progress": "2026-02-02T11:46:39.609779Z",
+    "reviewed": "2026-02-02T11:54:09.240633Z",
+    "done": "2026-02-02T11:55:02.934366Z"
+  },
+  "comments": [
+    {
+      "id": "89df9970-e4b0-41b5-9642-392b7710fc96",
+      "session_id": "361448ad-edea-4a1f-a54c-4a987aef652d",
+      "type": "review_requested",
+      "content": "## Summary\n\nFixed config extend path resolution so that base configs are loaded correctly. The issue was that the config loader expected `.cortex/cortex.yaml` inside the extend path, but installed defaults have `cortex.yaml` directly at the root.\n\n## Changes\n\n### `internal/project/config/config.go`\n- Modified `loadWithVisited` to accept a new `isBaseConfig` parameter that controls whether to look for `cortex.yaml` at root (base configs) or `.cortex/cortex.yaml` (project configs)\n- When loading base configs via extend, now looks for `cortex.yaml` directly instead of `.cortex/cortex.yaml`\n\n### `internal/project/config/config_test.go`\n- Updated `setupBaseConfig` helper to create `cortex.yaml` at root (not in `.cortex` subdirectory)\n- Updated `TestLoad_CircularExtend` to use proper base config structure for circular reference detection\n\n## Verification\n- All unit tests pass (`make test`)\n- Linting passes (`make lint`)\n- Verified `cortex config show` displays correctly merged config with inherited args (`--permission-mode plan`)\n\n## Acceptance Criteria\n- [x] Extend paths resolve `cortex.yaml` directly (not `.cortex/cortex.yaml`)\n- [x] Existing tests updated to reflect new behavior\n- [x] `cortex config show` displays correctly merged config when extending defaults\n- [x] Plan mode args are inherited when extending `~/.cortex/defaults/claude-code`",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "repo_path": "/Users/kareemelbahrawy/projects/cortex1"
+        }
+      },
+      "created_at": "2026-02-02T11:54:09.239355Z"
+    },
+    {
+      "id": "91ccee1c-5e10-4146-8108-4fd743e71f56",
+      "session_id": "361448ad-edea-4a1f-a54c-4a987aef652d",
+      "type": "done",
+      "content": "## Summary\n\nFixed config extend path resolution for base configs. The config loader was incorrectly looking for `.cortex/cortex.yaml` inside extend paths, but installed defaults have `cortex.yaml` directly at the root.\n\n## Changes Made\n\n### `internal/project/config/config.go`\n- Added `isBaseConfig` parameter to `loadWithVisited` function\n- When `isBaseConfig` is true (loading via extend), looks for `cortex.yaml` at root\n- When `isBaseConfig` is false (loading a project), looks for `.cortex/cortex.yaml`\n- Renamed `projectRoot` parameter to `configRoot` for clarity\n\n### `internal/project/config/config_test.go`\n- Updated `setupBaseConfig` helper to create `cortex.yaml` at root (not in `.cortex` subdirectory)\n- Updated `TestLoad_CircularExtend` to use proper base config structure\n\n## Verification\n- All unit tests pass\n- Linting passes\n- `cortex config show` correctly displays merged config with inherited args (`--permission-mode plan`)\n\n## Commit\n`62bbb88` - fix(config): resolve extend paths to cortex.yaml directly",
+      "created_at": "2026-02-02T11:55:02.933211Z"
+    }
+  ],
+  "session": {
+    "id": "361448ad-edea-4a1f-a54c-4a987aef652d",
+    "started_at": "2026-02-02T11:46:39.571809Z",
+    "ended_at": "2026-02-02T11:55:02.933908Z",
+    "agent": "claude",
+    "tmux_window": "fix-config-extend-path-resolution-for-base-configs",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-02-02T11:54:56.763404Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T11:46:39.571809Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-02-02T11:46:48.223432Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T11:46:48.276474Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T11:46:52.6391Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-02T11:46:58.058514Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-02T11:46:58.179078Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T11:47:02.307138Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T11:47:02.307813Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T11:47:02.308234Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T11:47:22.873485Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T11:47:33.174224Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T11:48:31.926811Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T11:48:38.941882Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T11:48:40.39393Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T11:48:44.769974Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T11:48:49.479453Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T11:50:23.97625Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T11:50:29.520032Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T11:50:36.666406Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T11:52:04.213084Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T11:52:08.59335Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T11:52:26.282594Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T11:52:44.665498Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-02T11:52:48.831397Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:52:58.881587Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:53:02.517777Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T11:53:09.974309Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T11:53:14.396466Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-02T11:53:14.721304Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:53:16.687021Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T11:53:21.785734Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T11:53:21.822073Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-02T11:53:23.027398Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:53:29.803292Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:53:33.44195Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T11:53:38.933975Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:53:43.234312Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:53:47.736463Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:53:52.925676Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-02T11:53:57.693502Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-02-02T11:54:09.29649Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-02T11:54:16.108261Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:54:45.31883Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:54:45.340684Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:54:45.3578Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:54:51.248563Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-02T11:54:56.763404Z"
+      }
+    ]
+  }
+}

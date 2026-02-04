@@ -1,0 +1,321 @@
+{
+  "id": "d46ee61e-83d2-4111-a94a-ff58bd668c91",
+  "type": "work",
+  "title": "Simplify listTickets Response to ID and Title Only",
+  "body": "## Summary\n\nReduce the `listTickets` MCP tool response to return only ticket ID and title. This keeps the list view minimal and reduces context usage for architects.\n\n## Requirements\n\n- `listTickets` should return an array of objects with only:\n  - `id` — ticket ID\n  - `title` — ticket title\n- Remove other fields from list response (body, status, dates, comments, session, etc.)\n- Architects can use `readTicket` to get full details when needed\n\n## Acceptance Criteria\n\n- [ ] `listTickets` returns only `id` and `title` per ticket\n- [ ] Response payload is minimal\n- [ ] `readTicket` still returns full ticket details (unchanged)",
+  "dates": {
+    "created": "2026-01-29T16:05:51.35484Z",
+    "updated": "2026-01-30T08:46:46.032536Z",
+    "progress": "2026-01-30T08:41:11.236948Z",
+    "reviewed": "2026-01-30T08:43:58.045132Z",
+    "done": "2026-01-30T08:46:46.032536Z"
+  },
+  "comments": [
+    {
+      "id": "d6953dab-e119-4fa6-9061-f04a7fdf9255",
+      "session_id": "8b5b5c5a-0390-4f82-ad50-6f4dc9b084a4",
+      "type": "review_requested",
+      "content": "## Summary\n\nSimplified the `listTickets` MCP tool response to return only `id` and `title` per ticket.\n\n## Changes\n\n**File: `internal/daemon/mcp/types.go`**\n\n1. Updated `TicketSummary` struct to only include two fields:\n   - `ID` - ticket ID\n   - `Title` - ticket title\n   - Removed: `Type`, `Status`, `Created`, `HasActiveSession`\n\n2. Updated `ticketSummaryResponseToMCP` conversion function to only map `ID` and `Title` fields.\n\n## Verification\n\n- `make build` - Compiles successfully\n- `make test` - All tests pass\n- `make lint` - No issues (0 issues)\n\n## Commit\n\n`aff91bf` - feat(mcp): simplify listTickets response to id and title only",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "commit": "aff91bf",
+          "repo_path": "/Users/kareemelbahrawy/projects/cortex1"
+        }
+      },
+      "created_at": "2026-01-30T08:43:58.044374Z"
+    },
+    {
+      "id": "cc3e3e02-d4e3-482f-8e49-694cd59afe6c",
+      "session_id": "8b5b5c5a-0390-4f82-ad50-6f4dc9b084a4",
+      "type": "done",
+      "content": "## Summary\n\nSimplified the `listTickets` MCP tool response to return only `id` and `title` per ticket, reducing context usage for architect agents.\n\n## Changes Made\n\n### File: `internal/daemon/mcp/types.go`\n\n1. **Simplified `TicketSummary` struct** (lines 110-113)\n   - Before: 6 fields (`ID`, `Type`, `Title`, `Status`, `Created`, `HasActiveSession`)\n   - After: 2 fields (`ID`, `Title`)\n\n2. **Updated `ticketSummaryResponseToMCP` conversion function** (lines 210-216)\n   - Simplified to only map `ID` and `Title` fields from the shared types\n\n## Rationale\n\n- Architects using `listTickets` primarily need to identify tickets by ID and title\n- Full details (type, status, dates, session info) are available via `readTicket` when needed\n- Minimal response payload reduces context window usage for LLM-based architects\n\n## Verification\n\n- `make build` - Compiles successfully\n- `make test` - All unit tests pass\n- `make lint` - No issues\n\n## Commit\n\n- `aff91bf` - feat(mcp): simplify listTickets response to id and title only\n- Pushed to `origin/main`\n\n## Files Modified\n\n| File | Lines Changed |\n|------|---------------|\n| `internal/daemon/mcp/types.go` | 7 insertions, 15 deletions |",
+      "created_at": "2026-01-30T08:46:46.031543Z"
+    }
+  ],
+  "session": {
+    "id": "8b5b5c5a-0390-4f82-ad50-6f4dc9b084a4",
+    "started_at": "2026-01-30T08:41:11.193913Z",
+    "ended_at": "2026-01-30T08:46:46.032093Z",
+    "agent": "claude",
+    "tmux_window": "simplify-listtickets-response-to-id-and-title-only",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-30T08:46:38.170365Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-30T08:41:11.193913Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-30T08:41:27.621226Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-30T08:41:27.83687Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-30T08:41:28.183473Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:30.417064Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:30.418058Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:30.419094Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:34.067113Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-30T08:41:34.50094Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-30T08:41:37.454983Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-30T08:41:37.695561Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:39.263654Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:41.717308Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:44.385393Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:41:48.265154Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:49.967125Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:41:52.103101Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:54.026281Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:41:55.812147Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:41:57.695657Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:41:59.20617Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-30T08:42:15.036162Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-30T08:42:29.22096Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-30T08:42:35.741687Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-30T08:42:45.651608Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:42:45.691244Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:42:45.695512Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-30T08:42:57.895591Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-30T08:43:04.72011Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-30T08:43:11.587368Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-30T08:43:11.647055Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-30T08:43:15.543781Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-30T08:43:20.429166Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-30T08:43:25.916167Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:43:27.054711Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:43:32.667414Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:43:34.01566Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-30T08:43:38.32179Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:43:42.885694Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:43:44.287387Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:43:51.063439Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-30T08:43:58.066732Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-30T08:44:02.401435Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:46:30.163976Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-30T08:46:38.170365Z"
+      }
+    ]
+  }
+}

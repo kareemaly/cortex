@@ -1,0 +1,32 @@
+{
+  "id": "e3b6195b-7662-46c2-a4c9-09cc2756abeb",
+  "type": "work",
+  "title": "Optimize CLAUDE.md based on best practices analysis",
+  "body": "## Context\n\nAnalysis of CLAUDE.md files across multiple projects revealed patterns for effective AI agent guidance. Current Cortex CLAUDE.md is solid but has gaps.\n\n## Current Strengths\n- Key Paths table ✓\n- MCP Tools section ✓\n- Agent Workflow section ✓\n- Architecture diagram ✓\n\n## Changes Required\n\n### 1. Add \"Critical Implementation Notes\" section\nNon-obvious pitfalls that cause rework:\n- HTTP-only communication (no direct filesystem access from clients)\n- Project context via `X-Cortex-Project` header\n- Spawn orchestration state detection (normal/active/orphaned/ended)\n- StoreManager is single source of truth\n\n### 2. Add \"Don't Use X, Use Y\" section\nAnti-patterns specific to daemon architecture:\n- Don't access ticket store directly → Use SDK client\n- Don't spawn tmux directly → Use spawn orchestrator\n- Don't read project config from clients → Use API endpoints\n\n### 3. Add \"Debugging\" section by symptom\nCommon issues:\n- \"Daemon not responding\" → Check port 4200, `cortex daemon status`\n- \"Ticket not found\" → Verify X-Cortex-Project header\n- \"Session won't spawn\" → Check tmux state, orphaned sessions\n\n### 4. Sync CLI commands with README.md\nEnsure both files cover the same command set (currently minor gaps).\n\n### 5. Add Quick Start commands (5 essential)\nGroup by activity: build, test, lint, run daemon, run CLI.\n\n## Guidance\n- Keep high-level: architecture, paths, patterns\n- Detailed implementation docs → `docs/` or code comments\n- Target 200-300 lines",
+  "dates": {
+    "created": "2026-02-04T14:20:19.326426Z",
+    "updated": "2026-02-04T14:20:46.195747Z",
+    "progress": "2026-02-04T14:20:46.195747Z"
+  },
+  "comments": [],
+  "session": {
+    "id": "db9f2c67-dd79-475c-ae29-25ffa7143dfe",
+    "started_at": "2026-02-04T14:20:46.160015Z",
+    "agent": "claude",
+    "tmux_window": "optimize-claudemd-based-on-best-practices-analysis",
+    "current_status": {
+      "status": "starting",
+      "tool": null,
+      "work": null,
+      "at": "2026-02-04T14:20:46.160015Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T14:20:46.160015Z"
+      }
+    ]
+  }
+}

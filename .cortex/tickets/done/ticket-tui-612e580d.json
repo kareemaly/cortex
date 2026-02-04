@@ -1,0 +1,441 @@
+{
+  "id": "612e580d-e3eb-420b-8f54-2922952b4782",
+  "type": "work",
+  "title": "Ticket TUI: Header/Comment Padding, Comment Highlight, Bracket Shortcuts, and 3-Line Markdown Previews",
+  "body": "## Summary\n\nA set of visual and interaction improvements to the ticket detail TUI (`internal/cli/tui/ticket/`). These changes improve readability, navigation, and comment preview quality.\n\n## Requirements\n\n### 1. Header vertical padding\n- Add top and bottom padding to the header bar (the row containing ticket ID, title, and status badge)\n- Currently uses `Padding(0, 1)` — needs vertical padding added (e.g., `Padding(1, 1)` or similar)\n- File: `styles.go` → `headerStyle`\n\n### 2. Comment row padding and full-row highlight\n- Add top and bottom padding to each comment row in the comment list\n- When a comment is selected (cursor hover), the **entire comment row** must be highlighted — not just the badge/type. Currently `commentSelectedStyle` applies a background but may not visually cover the full row including padding\n- Ensure the highlight covers the full width and height of the padded comment row\n- Files: `styles.go` → `commentSelectedStyle`, `model.go` → `renderCommentLine()`\n\n### 3. Bracket shortcuts for panel switching\n- Add `[` and `]` as additional keybindings to switch focus between body (Row 0) and comments (Row 1)\n- Same behavior as existing `Tab` / `Shift+Tab` toggle\n- Update help text to reflect the new shortcuts\n- Files: `keys.go`, `model.go` → `handleKeyMsg()`\n\n### 4. 3-line markdown-rendered comment previews\n- Each comment in the list should show up to **3 lines** of content (currently shows 1 line of plain text)\n- Render comment content as styled markdown using `glamour` (already used for body and modal)\n- **Truncation strategy**: Render the full markdown first with glamour, then truncate the **rendered output** to 3 lines. This avoids breaking markdown syntax mid-render — we're cutting styled/ANSI text, not raw markdown source\n- Keep the existing badge and time-ago elements in the comment row layout\n- Ensure the 3-line preview respects the available width and doesn't overflow\n\n## Acceptance Criteria\n\n- [ ] Header has visible vertical padding (top and bottom)\n- [ ] Each comment row has vertical padding\n- [ ] Selecting a comment highlights the entire row (background covers full width and height)\n- [ ] `[` and `]` keys toggle panel focus, same as Tab\n- [ ] Help text includes bracket shortcuts\n- [ ] Comment previews show up to 3 lines of glamour-rendered markdown\n- [ ] Markdown truncation does not produce broken/garbled output\n- [ ] No visual overflow or layout breakage at various terminal widths",
+  "dates": {
+    "created": "2026-01-28T10:43:24.445548Z",
+    "updated": "2026-01-28T13:16:23.449824Z",
+    "progress": "2026-01-28T10:43:35.108984Z",
+    "reviewed": "2026-01-28T13:11:57.736808Z",
+    "done": "2026-01-28T13:16:23.449824Z"
+  },
+  "comments": [
+    {
+      "id": "ee99cb29-f3a6-44c3-8d91-12c9dd7c3615",
+      "session_id": "f3758dab-fb4e-4b83-b436-c770fc0fedea",
+      "type": "review_requested",
+      "content": "## Summary\n\nImplemented visual and interaction improvements to the ticket detail TUI:\n\n### 1. Header Vertical Padding\n- Changed `Padding(0, 1)` to `Padding(1, 1)` in `styles.go:39`\n- Updated `rowHeights()` in `model.go:947` to account for taller header (now subtracts 4 instead of 3)\n\n### 2. Bracket Shortcuts\n- Added `KeyLeftBracket` and `KeyRightBracket` constants in `keys.go:43-44`\n- Updated `handleKeyMsg()` in `model.go:332` to handle `[` and `]` for panel toggle\n- Updated help text to show `[Tab/[/]]` instead of `[Tab]`\n\n### 3. Comment Row Rendering with 3-Line Markdown Previews\n- Added `CommentRowLines = 4` and `CommentRowPadding = 1` constants in `styles.go:7-8`\n- Replaced `renderCommentLine()` with `renderCommentRow()` that renders:\n  - Line 1: Badge + repo name (if review) + separator + time-ago\n  - Lines 2-4: Glamour-rendered markdown content (truncated to 3 lines)\n- Added `renderCommentPreview()` function that uses glamour to render markdown and `ansi.Truncate()` to safely truncate ANSI-styled lines\n- Added `applyBackgroundToBlock()` for full-row highlight on selected comments\n- Updated `commentVisibleRange()` to account for multi-line rows (5 lines per comment including padding)\n- Removed unused `dotStyle` and `stripMarkdownPreview()` function\n\n### Files Changed\n- `internal/cli/tui/ticket/styles.go` - Header padding, comment row constants, removed dotStyle\n- `internal/cli/tui/ticket/keys.go` - Bracket key constants, updated help text\n- `internal/cli/tui/ticket/model.go` - New rendering functions, updated key handling\n\n### Verification\n- `make build` - Passes\n- `make lint` - Passes (0 issues)\n- `make test` - All tests pass",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "commit": "7956fdc",
+          "repo_path": "/Users/kareemelbahrawy/projects/cortex1"
+        }
+      },
+      "created_at": "2026-01-28T13:11:57.735228Z"
+    },
+    {
+      "id": "97d6f706-608d-47c9-8e34-ea9fc4c8beee",
+      "session_id": "f3758dab-fb4e-4b83-b436-c770fc0fedea",
+      "type": "done",
+      "content": "## Ticket TUI Improvements - Complete Report\n\n### Summary\nImplemented visual and interaction improvements to the ticket detail TUI as specified in the ticket requirements. All acceptance criteria have been met.\n\n### Changes Made\n\n#### 1. Header Vertical Padding\n- **File:** `internal/cli/tui/ticket/styles.go:39`\n- Changed `Padding(0, 1)` to `Padding(1, 1)` for top and bottom padding\n- **File:** `internal/cli/tui/ticket/model.go:947`\n- Updated `rowHeights()` to subtract 4 instead of 3 to account for the taller header (header now takes 3 lines instead of 1)\n\n#### 2. Bracket Shortcuts for Panel Switching\n- **File:** `internal/cli/tui/ticket/keys.go:43-44`\n- Added `KeyLeftBracket = \"[\"` and `KeyRightBracket = \"]\"` constants\n- **File:** `internal/cli/tui/ticket/model.go:332`\n- Updated key handler to accept `[` and `]` for panel focus toggle (same behavior as Tab/Shift+Tab)\n- **File:** `internal/cli/tui/ticket/keys.go:68-70`\n- Updated help text from `[Tab]` to `[Tab/[/]]` for both body and comments panels\n\n#### 3. Comment Row Padding and Full-Row Highlight with 3-Line Markdown Previews\n- **File:** `internal/cli/tui/ticket/styles.go:7-8`\n- Added constants: `CommentRowLines = 4` (header + 3 preview lines) and `CommentRowPadding = 1` (blank line between rows)\n- **File:** `internal/cli/tui/ticket/model.go`\n  - Replaced `renderCommentLine()` with `renderCommentRow()` - renders 4-line comment rows:\n    - Line 1: Badge + repo name (for reviews) + separator dashes + time-ago\n    - Lines 2-4: Glamour-rendered markdown content\n  - Added `renderCommentPreview()` - renders markdown with glamour and truncates to maxLines using `ansi.Truncate()` for ANSI-safe truncation\n  - Added `plainTextPreview()` - fallback for plain text when glamour fails\n  - Added `applyBackgroundToBlock()` - applies background color to all lines of a selected comment row\n  - Updated `commentVisibleRange()` to calculate visible count based on row height (5 lines per comment including padding)\n  - Updated `renderCommentList()` to call new `renderCommentRow()` and add padding between rows\n- Removed unused `dotStyle` from styles.go\n- Removed unused `stripMarkdownPreview()` function from model.go\n- Added import for `github.com/charmbracelet/x/ansi` for ANSI-safe truncation\n\n### Key Decisions\n\n1. **Truncation strategy**: Render markdown first with glamour, then truncate the rendered ANSI output (not raw markdown). This prevents broken markdown syntax and garbled output.\n\n2. **Row height calculation**: Each comment takes 5 lines total (4 content + 1 padding), simplifying the visible range calculation.\n\n3. **Full-row highlight**: Applied background to each line individually after padding to full width, ensuring consistent highlight across the entire row.\n\n4. **Separator in header**: Used dashes (─) between badge/repo and time-ago for visual separation within comment rows.\n\n### Files Modified\n- `internal/cli/tui/ticket/styles.go` - Header padding, comment row constants, removed dotStyle\n- `internal/cli/tui/ticket/keys.go` - Bracket key constants, updated help text\n- `internal/cli/tui/ticket/model.go` - New rendering functions, updated key handling, updated height calculations\n\n### Verification\n- `make build` - Passes\n- `make lint` - 0 issues\n- `make test` - All tests pass\n\n### Commit\n- `7956fdc` - feat: improve ticket TUI with header padding, bracket shortcuts, and 3-line comment previews",
+      "created_at": "2026-01-28T13:16:23.44477Z"
+    }
+  ],
+  "session": {
+    "id": "f3758dab-fb4e-4b83-b436-c770fc0fedea",
+    "started_at": "2026-01-28T12:58:50.950239Z",
+    "ended_at": "2026-01-28T13:16:23.447743Z",
+    "agent": "claude",
+    "tmux_window": "ticket-tui-headercomment-padding-comment-highlight",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-01-28T13:16:04.219279Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T12:58:50.950239Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T12:59:08.241947Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T12:59:11.114265Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T12:59:11.114823Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T12:59:11.495417Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T12:59:37.938543Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:00:02.408555Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:00:02.409357Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:00:02.823783Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T13:00:10.333495Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-01-28T13:00:10.490767Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T13:00:16.405055Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:00:17.333156Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:00:22.239537Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T13:00:22.613971Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "WebSearch",
+        "work": null,
+        "at": "2026-01-28T13:00:40.831872Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:00:45.106714Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T13:00:50.567466Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T13:00:54.449327Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-01-28T13:02:05.184128Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:02:12.960999Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:02:12.96178Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:02:12.962303Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:02:18.094878Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:02:18.095719Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T13:02:23.416364Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-01-28T13:02:56.562087Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T13:03:05.057412Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-01-28T13:08:14.292015Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:08:14.376914Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:08:14.381118Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:08:14.768302Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T13:08:24.687828Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:08:30.622679Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:08:37.040218Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T13:08:41.996458Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:08:47.313271Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:08:53.603271Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:08:59.750177Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T13:09:04.118435Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:09:09.02852Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:09:14.441512Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:09:22.615089Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:09:32.719486Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:09:45.474341Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:10:13.856304Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T13:10:19.008024Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:10:24.942331Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-01-28T13:10:29.950862Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:10:34.894646Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:10:46.427491Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:10:51.597653Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-01-28T13:10:57.247705Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-01-28T13:11:03.94043Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:11:08.851411Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:11:13.308451Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:11:18.94476Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-01-28T13:11:26.499254Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:11:31.379384Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:11:31.416115Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:11:36.384627Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:11:43.602709Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-01-28T13:11:57.790284Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-01-28T13:12:04.076143Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-01-28T13:16:04.219279Z"
+      }
+    ]
+  }
+}

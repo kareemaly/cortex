@@ -1,0 +1,911 @@
+{
+  "id": "7f7172bf-18d5-4932-b8ce-f695cfd1c606",
+  "type": "work",
+  "title": "Add `cortex upgrade` command",
+  "body": "## Goal\n\nAllow users to self-update cortex and cortexd binaries from GitHub releases with a single command.\n\n## Requirements\n\n### Core functionality\n\n- Fetch latest release from GitHub API (`https://api.github.com/repos/kareemaly/cortex/releases/latest`)\n- Compare current version with latest\n- Download correct binary for OS/arch (darwin/linux, amd64/arm64)\n- Verify SHA256 checksum using `checksums.txt` from release\n- Backup current binaries before replacing (`~/.cortex/bin/*.backup`)\n- Replace both `cortex` and `cortexd` binaries\n- Handle sudo if installed in system location (`/usr/local/bin/`)\n\n### Daemon restart after upgrade\n\nUse the existing `internal/daemon/autostart` infrastructure:\n1. Check if daemon is running via `autostart.IsDaemonRunning()`\n2. If running: call `autostart.StopDaemon()` before replacing binaries\n3. After successful upgrade: call `autostart.EnsureDaemonRunning()` to restart with new version\n\n### Commands\n\n- `cortex upgrade` — perform the upgrade\n- `cortex upgrade --check` — just check if update available, don't install\n\n### UX\n\n- Show progress: downloading, verifying, backing up, upgrading, restarting daemon\n- Prompt for sudo if needed (detect install location permissions)\n- Clear success/failure messaging\n- If already up to date, say so and exit\n\n### Binary naming convention\n\nBinaries in releases follow this pattern (matches install.sh):\n- `cortex-darwin-amd64`, `cortex-darwin-arm64`\n- `cortex-linux-amd64`, `cortex-linux-arm64`\n- `cortexd-darwin-amd64`, `cortexd-darwin-arm64`\n- `cortexd-linux-amd64`, `cortexd-linux-arm64`\n- `checksums.txt`\n\n## Out of scope\n\n- Config migrations (handle via backward compatibility for now)\n- Windows support\n- Rollback command (backup is passive safety net)",
+  "dates": {
+    "created": "2026-02-04T12:47:43.095615Z",
+    "updated": "2026-02-04T13:22:12.218686Z",
+    "progress": "2026-02-04T13:08:49.119941Z",
+    "reviewed": "2026-02-04T13:21:30.930451Z",
+    "done": "2026-02-04T13:22:12.218686Z"
+  },
+  "comments": [
+    {
+      "id": "a4102e27-198b-4fe4-a4a8-4163b909e98b",
+      "session_id": "a65b1fb8-e0ea-4cdd-996f-59284220cfc7",
+      "type": "review_requested",
+      "content": "## Summary\n\nAdded `cortex upgrade` command for self-updating cortex and cortexd binaries from GitHub releases.\n\n## Files Created\n\n**`internal/upgrade/` package:**\n- `github.go` - GitHub API client for fetching release info\n- `checksum.go` - Download and SHA256 verification\n- `binary.go` - Binary detection, backup, replacement, code signing\n- `upgrade.go` - Main orchestration logic\n\n**`cmd/cortex/commands/upgrade.go`** - CLI command with flags:\n- `--check` / `-c` - Only check if update is available\n- `--version` / `-v` - Upgrade to specific version\n\n## Features\n\n1. Fetches latest (or specific) release from GitHub API\n2. Downloads checksums.txt and verifies SHA256 of binaries\n3. Backs up existing binaries to `~/.cortex/backups/`\n4. Handles sudo for write-protected directories (e.g., /usr/local/bin)\n5. Code signs on macOS\n6. Stops daemon before upgrade, restarts after\n7. Cleans up old backups (keeps last 3)\n8. \"dev\" version always allows upgrade\n\n## Verification\n\n- Build passes: `make build`\n- Lint passes: `make lint` (0 issues)\n- Tests pass: `make test`\n- Upgrade --check fails with 404 (expected - no release exists yet)\n- Help output displays correctly",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "commit": "b6a8a5a",
+          "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/2c7dc98e-8fe2-4df3-ac0b-190ec9f05de7"
+        }
+      },
+      "created_at": "2026-02-04T13:21:30.928858Z"
+    },
+    {
+      "id": "78bebc75-70d6-4403-a200-cc2647e0fa0e",
+      "session_id": "a65b1fb8-e0ea-4cdd-996f-59284220cfc7",
+      "type": "done",
+      "content": "## Completed: `cortex upgrade` Command\n\n### Summary\nImplemented a self-update command that upgrades cortex and cortexd binaries from GitHub releases.\n\n### Files Created (830 lines)\n- `internal/upgrade/github.go` - GitHub API client for fetching release info\n- `internal/upgrade/checksum.go` - Download and SHA256 verification\n- `internal/upgrade/binary.go` - Binary detection, backup, replacement, code signing\n- `internal/upgrade/upgrade.go` - Main orchestration logic\n- `cmd/cortex/commands/upgrade.go` - CLI command\n\n### Features\n- `cortex upgrade` - Upgrade to latest version\n- `cortex upgrade --check` - Check if update available\n- `cortex upgrade -v VERSION` - Upgrade to specific version\n- Downloads and verifies SHA256 checksums\n- Backs up existing binaries to `~/.cortex/backups/`\n- Handles sudo for write-protected directories\n- Code signs on macOS\n- Stops/restarts daemon during upgrade\n- \"dev\" version always allows upgrade\n\n### Verification\n- Build passes\n- Lint passes (0 issues)\n- All tests pass\n- Merged to main and pushed to origin",
+      "created_at": "2026-02-04T13:22:12.217265Z"
+    }
+  ],
+  "session": {
+    "id": "a65b1fb8-e0ea-4cdd-996f-59284220cfc7",
+    "started_at": "2026-02-04T13:08:49.079854Z",
+    "ended_at": "2026-02-04T13:22:12.218098Z",
+    "agent": "claude",
+    "tmux_window": "add-cortex-upgrade-command",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/2c7dc98e-8fe2-4df3-ac0b-190ec9f05de7",
+    "feature_branch": "ticket/add-cortex-upgrade",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-02-04T13:22:05.609648Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T13:08:49.079854Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:11.66119Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T13:09:11.793296Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:11.936132Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:12.07331Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:12.215085Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:12.354724Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:12.495964Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:09:12.578616Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.282718Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.283217Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.283644Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.284425Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.801886Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.802321Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.80273Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.803094Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.804841Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:15.808883Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:16.104205Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:16.104904Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:16.105363Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:16.106649Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:16.109894Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:18.878795Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:18.879405Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:18.879815Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:18.880208Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:19.506572Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T13:09:19.965065Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:20.100636Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:20.277351Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:20.41569Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:21.99112Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:21.991728Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T13:09:23.134139Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:23.718062Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:23.718688Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:23.719491Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:24.521835Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:24.522828Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:25.315696Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:25.316291Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:25.317475Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T13:09:26.74077Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:09:26.860595Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:27.300554Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:09:28.39412Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:28.695638Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:29.498673Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:31.254841Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:31.255429Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:31.255921Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:31.953414Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:09:32.037198Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T13:09:34.646025Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:34.66276Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:34.66354Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:34.664371Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:37.808563Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:09:37.847135Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:38.204116Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:09:40.201686Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:09:41.738432Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T13:09:43.682099Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T13:09:55.329233Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T13:09:56.060931Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:24.428569Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:24.429187Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:10:24.887034Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:30.629997Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:30.630628Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:30.631074Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:10:31.000398Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:35.748366Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:35.74907Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T13:10:36.117351Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:40.394245Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:40.719191Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:10:40.768956Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:45.701009Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:45.701798Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T13:10:46.058504Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:49.74286Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:10:50.147751Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:54.106197Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:10:54.107281Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:11:00.527784Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T13:11:00.929027Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T13:11:58.387094Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:12:04.817227Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:12:04.818102Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:12:04.819226Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T13:12:40.339002Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T13:12:47.718567Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T13:16:24.482453Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:16:29.9144Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:16:29.915217Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:16:29.915727Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:16:29.917093Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:16:34.569647Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:16:38.19028Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:16:42.048725Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T13:16:47.510208Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T13:16:47.638969Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:16:51.256483Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T13:16:59.649709Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T13:17:12.394754Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T13:17:16.997173Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T13:17:30.7107Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T13:17:35.459986Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T13:17:59.516419Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T13:18:03.795861Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T13:18:33.68703Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T13:18:38.604758Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:18:46.198569Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T13:19:02.666898Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T13:19:07.986675Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:19:14.293719Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:19:29.521845Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:19:34.697755Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:19:40.498779Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:19:45.747962Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T13:19:49.185278Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:19:58.864369Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:20:04.069912Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:20:09.098509Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:20:15.016365Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:20:21.103837Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-04T13:20:26.55012Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:20:32.133144Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:20:40.616131Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:20:46.937031Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T13:21:00.352201Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:21:04.72505Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:21:04.742177Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:21:09.012281Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:21:12.748555Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:21:20.424067Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-02-04T13:21:30.96335Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T13:21:37.533377Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:21:58.961578Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T13:22:05.609648Z"
+      }
+    ]
+  }
+}

@@ -1,4 +1,4 @@
 name: cortex
 extend: ~/.cortex/defaults/claude-code
 git:
-  worktrees: true
+  worktrees: false

@@ -1,0 +1,449 @@
+{
+  "id": "2a307f2e-1e9f-40da-be52-c5abc4e9a1d8",
+  "type": "work",
+  "title": "Local Notification Channel Implementation",
+  "body": "# Overview\n\nImplement the local desktop notification channel for macOS and Linux.\n\n## 1. Channel Interface\n\nDefine a generic channel interface that all notification channels implement.\n\n**Location:** `internal/notifications/channel.go`\n\n```go\ntype Notification struct {\n    Title   string\n    Body    string\n    Sound   bool\n    Urgency string  // \"low\", \"normal\", \"critical\" (maps to platform equivalents)\n}\n\ntype Channel interface {\n    Name() string\n    Send(ctx context.Context, n Notification) error\n    Available() bool  // Check if channel can be used (tools installed, etc.)\n}\n```\n\n## 2. Local Channel Implementation\n\n**Location:** `internal/notifications/local.go`\n\n### macOS Support\n1. Try `terminal-notifier` first (better UX, supports sounds)\n   ```bash\n   terminal-notifier -title \"Title\" -message \"Body\" -sound default\n   ```\n2. Fall back to `osascript` if terminal-notifier not installed\n   ```bash\n   osascript -e 'display notification \"Body\" with title \"Title\" sound name \"default\"'\n   ```\n\n### Linux Support\nUse `notify-send` (libnotify):\n```bash\nnotify-send -u normal \"Title\" \"Body\"\n```\n\n### Platform Detection\n- Use `runtime.GOOS` to detect platform\n- Check tool availability with `exec.LookPath()`\n- Log warning if no notification tool available, but don't crash\n\n### Sound Support\n- macOS terminal-notifier: `-sound default`\n- macOS osascript: `sound name \"default\"`\n- Linux: no standard sound support in notify-send (note in docs)\n\n## 3. Graceful Degradation\n\n- If no notification tools available, `Available()` returns false\n- `Send()` should log and return nil (not error) if tools missing — daemon shouldn't crash\n- Log which tool is being used on first notification\n\n## Files to Create\n\n- `internal/notifications/channel.go` — Channel interface, Notification struct\n- `internal/notifications/local.go` — LocalChannel implementation\n- `internal/notifications/local_test.go` — unit tests with mocked exec\n\n## Testing\n\n- Mock `exec.Command` for unit tests\n- Test platform detection logic\n- Test fallback behavior (terminal-notifier missing → osascript)\n- Test graceful degradation when no tools available\n\n## Out of Scope\n\n- ntfy channel (future)\n- Webhook channel (future)\n- Dispatcher logic (Ticket C)\n- Configuration loading (Ticket A)",
+  "dates": {
+    "created": "2026-02-04T07:27:47.012674Z",
+    "updated": "2026-02-04T07:37:38.281017Z",
+    "progress": "2026-02-04T07:27:53.047971Z",
+    "reviewed": "2026-02-04T07:35:56.469989Z",
+    "done": "2026-02-04T07:37:38.281017Z"
+  },
+  "comments": [
+    {
+      "id": "5b13f16d-f3ea-4f08-b58f-05cee8d0010a",
+      "session_id": "a01df7ed-2f02-403c-9da1-b7577968f6d7",
+      "type": "review_requested",
+      "content": "## Summary\n\nImplemented local desktop notification channel with the following files:\n\n### Files Created\n\n1. **`internal/notifications/channel.go`** - Defines the `Channel` interface and `Notification` struct\n   - `Notification` with Title, Body, Sound, and Urgency fields\n   - `Channel` interface with `Name()`, `Send()`, and `Available()` methods\n\n2. **`internal/notifications/local.go`** - `LocalChannel` implementation\n   - `CommandRunner` interface for testability (follows `internal/tmux/tmux.go` pattern)\n   - Platform detection using `runtime.GOOS`\n   - Tool priority: macOS (terminal-notifier → osascript), Linux (notify-send)\n   - Graceful degradation: returns nil (not error) when no tools available\n   - Uses `sync.Once` for tool detection logging\n   - Sound support for terminal-notifier and osascript\n   - Urgency mapping for notify-send\n\n3. **`internal/notifications/local_test.go`** - Comprehensive unit tests (13 tests)\n   - Mock runner for command execution\n   - Tests for all platform tools and edge cases\n   - Graceful degradation test\n   - Interface compliance test\n\n### Verification\n- All 13 tests pass\n- Linter passes with 0 issues",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "commit": "225873d",
+          "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/0f436e74-4085-45f4-9303-1209079c27aa"
+        }
+      },
+      "created_at": "2026-02-04T07:35:56.468688Z"
+    },
+    {
+      "id": "8ce989f4-d543-475a-8698-e34ae52336c9",
+      "session_id": "a01df7ed-2f02-403c-9da1-b7577968f6d7",
+      "type": "done",
+      "content": "## Summary\n\nImplemented the local desktop notification channel for macOS and Linux.\n\n### Files Created\n\n1. **`internal/notifications/channel.go`**\n   - `Notification` struct with Title, Body, Sound, Urgency fields\n   - `Channel` interface defining `Name()`, `Send()`, `Available()` methods\n\n2. **`internal/notifications/local.go`**\n   - `CommandRunner` interface for testability (follows tmux.go pattern)\n   - `LocalChannel` implementation with platform detection via `runtime.GOOS`\n   - macOS: terminal-notifier (primary), osascript (fallback)\n   - Linux: notify-send with urgency mapping\n   - Graceful degradation when no tools available (returns nil, logs warning)\n   - `sync.Once` for one-time tool detection logging\n\n3. **`internal/notifications/local_test.go`**\n   - 13 unit tests with mock CommandRunner\n   - Tests cover all platforms, sound support, urgency mapping, graceful degradation\n\n### Verification\n- All tests pass\n- Linter passes with 0 issues\n- Merged to main and pushed to origin",
+      "created_at": "2026-02-04T07:37:38.279025Z"
+    }
+  ],
+  "session": {
+    "id": "a01df7ed-2f02-403c-9da1-b7577968f6d7",
+    "started_at": "2026-02-04T07:27:53.002481Z",
+    "ended_at": "2026-02-04T07:37:38.280323Z",
+    "agent": "claude",
+    "tmux_window": "local-notification-channel-implementation",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/0f436e74-4085-45f4-9303-1209079c27aa",
+    "feature_branch": "ticket/local-notification",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-02-04T07:37:30.143411Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T07:27:53.002481Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T07:28:47.241517Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:28:48.222252Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:28:51.848391Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T07:28:52.392929Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T07:28:52.524101Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:28:55.16069Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:28:57.323038Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:28:57.324256Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:28:57.324867Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:00.922848Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:00.961718Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:00.981878Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:04.204568Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:04.205876Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:07.710799Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:07.712111Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:07.784987Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:10.420376Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:10.430829Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:12.559324Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:12.560292Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:15.610965Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:15.61215Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:19.50083Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:19.559635Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-04T07:29:19.983265Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:22.143272Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:22.18489Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:25.429574Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:25.437772Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:27.755558Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:27.75677Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:27.757574Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:30.890681Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:29:30.939757Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:29:33.985546Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-04T07:30:10.53057Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:30:21.422556Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:30:21.423651Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T07:30:47.985123Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T07:30:54.886714Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-02-04T07:33:23.070287Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T07:33:23.626169Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-04T07:33:23.757208Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:33:31.82889Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:33:31.830187Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-04T07:33:31.831037Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T07:33:47.500896Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:33:47.617506Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T07:33:54.041548Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T07:34:20.83035Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T07:34:20.885004Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T07:35:01.820716Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-04T07:35:01.877997Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T07:35:10.04553Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:35:11.69942Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:35:22.763274Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-04T07:35:30.455185Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:35:34.426306Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:35:34.443613Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:35:44.216369Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-02-04T07:35:56.501Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-04T07:36:01.158877Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:37:22.909899Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-04T07:37:30.143411Z"
+      }
+    ]
+  }
+}

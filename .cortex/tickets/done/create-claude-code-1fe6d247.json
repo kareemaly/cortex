@@ -1,0 +1,743 @@
+{
+  "id": "1fe6d247-a2bf-43b7-a74f-9a73320fa377",
+  "type": "work",
+  "title": "Create claude-code config docs",
+  "body": "# Overview\n\nCreate an embedded markdown document containing all configuration guidance for claude-code agent type. This will be returned by the `getCortexConfigDocs` MCP tool (future ticket).\n\n## Location\n\n```\ninternal/install/defaults/claude-code/CONFIG_DOCS.md\n```\n\n## Content\n\nThe document should cover:\n\n### 1. Project Config Schema\n- `.cortex/cortex.yaml` fields\n- `name`, `extend`, `architect`, `ticket`, `git` sections\n- Example YAML with comments\n\n### 2. Prompt Structure\n- Table of all prompts and their purposes\n- `architect/SYSTEM.md`, `architect/KICKOFF.md`\n- `ticket/work/SYSTEM.md`, `KICKOFF.md`, `APPROVE.md`, `REJECT.md`\n\n### 3. Customizing Prompts\n- `cortex eject` usage and examples\n- Auto-discovery explanation (`.cortex/prompts/` overrides defaults)\n\n### 4. Template Variables\n- Table of available variables per context\n- `{{.ProjectName}}`, `{{.TicketList}}`, `{{.TicketTitle}}`, `{{.TicketBody}}`\n- Worktree variables: `{{.IsWorktree}}`, `{{.WorktreePath}}`, `{{.WorktreeBranch}}`, `{{.ProjectPath}}`\n\n### 5. Common Customizations\n- Enable git worktrees\n- Restrict agent permissions\n- Add test requirements to workflow\n- Custom approval flow\n- Project-specific context in KICKOFF\n\n### 6. Commands Reference\n- `cortex init`, `cortex eject`, `cortex architect`, `cortex kanban`\n\n## Constraints\n\n- Keep under 150 lines\n- No upgrade/migration info (separate doc)\n- No daemon/global settings\n- No internal architecture details",
+  "dates": {
+    "created": "2026-02-03T08:28:06.918139Z",
+    "updated": "2026-02-03T08:40:44.310522Z",
+    "progress": "2026-02-03T08:28:12.136586Z",
+    "reviewed": "2026-02-03T08:37:34.511385Z",
+    "done": "2026-02-03T08:40:44.310522Z"
+  },
+  "comments": [
+    {
+      "id": "244c1333-44e1-46db-9c63-b9ec92468cf1",
+      "session_id": "2993db9f-d942-4350-86a0-fd33687d22b6",
+      "type": "review_requested",
+      "content": "Created `internal/install/defaults/claude-code/CONFIG_DOCS.md` (130 lines) with all sections from the plan:\n\n1. **Project Config Schema** - YAML example and field descriptions for name, extend, architect, ticket, and git.worktrees\n2. **Prompt Structure** - Table of all prompt files (SYSTEM, KICKOFF, APPROVE, REJECT for architect and ticket)\n3. **Customizing Prompts** - Directory structure for overrides, resolution order (project → extend → defaults)\n4. **Template Variables** - Tables for architect (ProjectName, TicketList) and ticket prompts (ProjectPath, TicketID, TicketTitle, TicketBody, IsWorktree, WorktreePath, WorktreeBranch)\n5. **Common Customizations** - Examples for git worktrees, restricting permissions, adding test requirements, custom kickoff context\n6. **Commands Reference** - Brief table for init, architect, kanban\n\nNote: The plan mentioned `cortex eject` but that command doesn't exist yet. I documented the manual override mechanism (creating files in `.cortex/prompts/`) instead.",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "commit": "e61e20b",
+          "repo_path": "/Users/kareemelbahrawy/.cortex/worktrees/c76ecbf8-3e87-4b9d-bceb-2059cb97c61f"
+        }
+      },
+      "created_at": "2026-02-03T08:37:34.510075Z"
+    },
+    {
+      "id": "0e866876-851e-4fdf-832b-5862f346c875",
+      "session_id": "2993db9f-d942-4350-86a0-fd33687d22b6",
+      "type": "done",
+      "content": "## Summary\n\nCreated `internal/install/defaults/claude-code/CONFIG_DOCS.md` (130 lines) - configuration documentation for the claude-code agent type.\n\n### Document Sections:\n1. **Project Config Schema** - YAML example and field descriptions for name, extend, architect, ticket, and git.worktrees\n2. **Prompt Structure** - Table of all prompt files (SYSTEM, KICKOFF, APPROVE, REJECT)\n3. **Customizing Prompts** - Directory structure for overrides, resolution order (project → extend → defaults)\n4. **Template Variables** - Tables for architect prompts (ProjectName, TicketList) and ticket prompts (ProjectPath, TicketID, TicketTitle, TicketBody, IsWorktree, WorktreePath, WorktreeBranch)\n5. **Common Customizations** - Examples for git worktrees, restricting permissions, test requirements, custom kickoff\n6. **Commands Reference** - init, architect, kanban\n\n### Additional Change:\nUpdated `internal/install/defaults/claude-code/prompts/ticket/work/APPROVE.md` to include conditional worktree merge instructions using template variables.\n\n### Commits:\n- `e61e20b` - docs: add claude-code CONFIG_DOCS.md\n- `8733936` - feat: add worktree merge instructions to APPROVE.md\n\n### Merged and pushed to origin/main.",
+      "created_at": "2026-02-03T08:40:44.308953Z"
+    }
+  ],
+  "session": {
+    "id": "2993db9f-d942-4350-86a0-fd33687d22b6",
+    "started_at": "2026-02-03T08:28:12.090089Z",
+    "ended_at": "2026-02-03T08:40:44.309902Z",
+    "agent": "claude",
+    "tmux_window": "create-claude-code-config-docs",
+    "worktree_path": "/Users/kareemelbahrawy/.cortex/worktrees/c76ecbf8-3e87-4b9d-bceb-2059cb97c61f",
+    "feature_branch": "ticket/create-claude-code",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-02-03T08:40:36.188218Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-03T08:28:12.090089Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:28:50.596219Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:28:50.739681Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:28:51.844589Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:51.919873Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:28:52.315765Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:28:52.499004Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:28:52.607407Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:54.249776Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:54.250702Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:28:54.645868Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:28:54.778721Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:56.597467Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:56.937874Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:56.93849Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:56.938896Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:56.9398Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:56.940108Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:56.94286Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:56.945156Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:28:57.011447Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:28:57.140464Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:58.417753Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:58.418735Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:28:58.419441Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:29:01.247299Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:29:01.380736Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:02.174631Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:04.289353Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:04.290068Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:29:05.905667Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:29:05.931268Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-03T08:29:07.37956Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:09.275075Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:29:09.631756Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:09.693137Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:29:09.746975Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:29:09.783136Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:13.529322Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:13.794307Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:13.794897Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:13.795353Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:29:13.855433Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:17.073661Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:17.074769Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:29:17.1443Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:17.860381Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:29:18.241405Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:19.661545Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:29:20.017049Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:23.271616Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:23.272571Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:23.273636Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:29:27.134559Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:29:27.428264Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:30.337728Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:30.338478Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-03T08:29:33.956528Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:34.002769Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:29:34.046009Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:29:34.053744Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:37.497184Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:37.498121Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:29:37.498716Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-03T08:29:51.308083Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:30:01.12214Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:30:01.676042Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-03T08:30:21.016351Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-03T08:30:26.414621Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "AskUserQuestion",
+        "work": null,
+        "at": "2026-02-03T08:32:16.500405Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-03T08:32:23.414862Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-03T08:32:28.105296Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-03T08:32:31.007453Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-02-03T08:35:09.357059Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:35:09.756954Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:15.934477Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:15.935346Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:15.936454Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:15.938149Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:21.449611Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:21.450405Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:21.451614Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:26.721737Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:35:27.0748Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-03T08:35:32.123327Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:35:32.278986Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:36.257333Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:35:40.282057Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:43.204477Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:35:46.667924Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:35:49.67199Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-03T08:35:55.87887Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-03T08:36:13.351531Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-03T08:36:35.052556Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:36:39.221833Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:36:43.722983Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-03T08:36:50.384353Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-03T08:36:57.342452Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-03T08:37:01.673375Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:37:05.233895Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:37:09.582673Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-03T08:37:15.274654Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:37:20.110918Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:37:20.138471Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:37:26.289892Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-02-03T08:37:34.533311Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-03T08:37:38.741229Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-03T08:39:57.810746Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-03T08:40:05.028283Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:40:09.350679Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:40:14.957934Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:40:22.026865Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:40:26.959904Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:40:30.050215Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-03T08:40:36.188218Z"
+      }
+    ]
+  }
+}
