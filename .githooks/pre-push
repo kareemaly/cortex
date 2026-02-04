@@ -1,0 +1,27 @@
+#!/bin/bash
+# Pre-push hook - runs lint and build before push
+# Bypass: git push --no-verify
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+info() { printf "${GREEN}[pre-push]${NC} %s\n" "$1"; }
+error() { printf "${RED}[pre-push]${NC} %s\n" "$1" >&2; }
+
+info "Running pre-push checks..."
+
+if ! make lint; then
+    error "Lint failed. Fix errors before pushing."
+    error "Bypass (emergency): git push --no-verify"
+    exit 1
+fi
+
+if ! make build; then
+    error "Build failed. Fix errors before pushing."
+    error "Bypass (emergency): git push --no-verify"
+    exit 1
+fi
+
+info "All checks passed!"
