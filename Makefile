@@ -1,4 +1,4 @@
-.PHONY: build lint test test-integration clean install release-build
+.PHONY: build lint test test-integration clean install release-build setup-hooks
 
 VERSION ?= dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -65,3 +65,8 @@ release-build:
 	@ls -la dist/
 	@echo ""
 	@cat dist/checksums.txt
+
+setup-hooks:
+	@echo "Configuring git hooks..."
+	git config core.hooksPath .githooks
+	@echo "Done. Pre-push hook is now active."
