@@ -23,6 +23,8 @@ If no ticket ID is provided, the command will look for the CORTEX_TICKET_ID
 environment variable (set automatically in spawned ticket sessions).`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		ensureDaemon()
+
 		projectPath, err := resolveProjectPath()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

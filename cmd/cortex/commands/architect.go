@@ -37,6 +37,8 @@ func init() {
 }
 
 func runArchitect(cmd *cobra.Command, args []string) {
+	ensureDaemon()
+
 	// Get project path
 	projectPath, err := resolveProjectPath()
 	if err != nil {

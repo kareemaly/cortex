@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kareemaly/cortex/internal/daemon/autostart"
 	"github.com/kareemaly/cortex/internal/install"
 )
 
@@ -77,6 +78,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 		} else {
 			fmt.Printf("  %s %s not found (warning)\n", crossMark(), dep.Name)
 		}
+	}
+
+	// Start daemon
+	fmt.Println("\nDaemon:")
+	if err := autostart.EnsureDaemonRunning(); err != nil {
+		fmt.Printf("  %s Failed to start daemon: %v\n", crossMark(), err)
+		fmt.Println("    Run 'cortex daemon restart' to try again")
+	} else {
+		fmt.Printf("  %s Daemon running\n", checkMark())
 	}
 
 	return nil

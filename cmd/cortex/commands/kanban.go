@@ -16,6 +16,8 @@ var kanbanCmd = &cobra.Command{
 	Use:   "kanban",
 	Short: "Open kanban TUI",
 	Run: func(cmd *cobra.Command, args []string) {
+		ensureDaemon()
+
 		projectPath, err := resolveProjectPath()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

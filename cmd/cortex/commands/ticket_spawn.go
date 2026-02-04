@@ -28,6 +28,8 @@ Flags:
   --fresh     Clear existing session state and start fresh`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		ensureDaemon()
+
 		// Validate mutually exclusive flags
 		if ticketSpawnResumeFlag && ticketSpawnFreshFlag {
 			fmt.Fprintf(os.Stderr, "Error: --resume and --fresh are mutually exclusive\n")

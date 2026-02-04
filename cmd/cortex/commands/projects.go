@@ -17,6 +17,8 @@ var projectsCmd = &cobra.Command{
 	Short: "List registered projects",
 	Long:  `List all projects registered in ~/.cortex/settings.yaml with their ticket counts.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		ensureDaemon()
+
 		client := sdk.DefaultClient("")
 
 		resp, err := client.ListProjects()
