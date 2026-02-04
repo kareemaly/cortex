@@ -1,4 +1,4 @@
-.PHONY: build lint test test-integration clean install
+.PHONY: build lint test test-integration clean install release-build
 
 VERSION ?= dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -41,3 +41,27 @@ install: clean build
 	@~/.local/bin/cortexd version
 	@echo ""
 	@echo "Installation complete."
+
+# Cross-compile for all platforms (used for releases)
+PLATFORMS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
+RELEASE_LDFLAGS := -s -w $(LDFLAGS)
+
+release-build:
+	@rm -rf dist
+	@mkdir -p dist
+	@echo "Building release binaries..."
+	@for platform in $(PLATFORMS); do \
+		os=$${platform%/*}; \
+		arch=$${platform#*/}; \
+		echo "  Building cortex-$$os-$$arch..."; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -ldflags "$(RELEASE_LDFLAGS)" -o dist/cortex-$$os-$$arch ./cmd/cortex; \
+		echo "  Building cortexd-$$os-$$arch..."; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -ldflags "$(RELEASE_LDFLAGS)" -o dist/cortexd-$$os-$$arch ./cmd/cortexd; \
+	done
+	@echo "Generating checksums..."
+	@cd dist && shasum -a 256 cortex-* cortexd-* > checksums.txt
+	@echo ""
+	@echo "Release artifacts:"
+	@ls -la dist/
+	@echo ""
+	@cat dist/checksums.txt
