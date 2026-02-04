@@ -1,5 +1,7 @@
 # Cortex
 
+[![Release](https://img.shields.io/github/v/release/kareemaly/cortex)](https://github.com/kareemaly/cortex/releases/latest)
+
 Orchestration layer for AI coding agents. File-based ticket management with MCP tools and tmux session management.
 
 ## What is Cortex?
@@ -9,8 +11,8 @@ Cortex turns your AI coding assistant into a managed development team. An archit
 ## Quick Start
 
 ```bash
-# Install
-curl -fsSL https://raw.githubusercontent.com/kareemaly/cortex/main/install.sh | bash
+# Install (latest stable)
+curl -fsSL https://github.com/kareemaly/cortex/releases/latest/download/install.sh | bash
 
 # Initialize in your project
 cd your-project && cortex init
