@@ -23,6 +23,8 @@ This is a global command — no project context required.
 Examples:
   cortex dashboard   # Open the dashboard`,
 	Run: func(cmd *cobra.Command, args []string) {
+		ensureDaemon()
+
 		client := sdk.DefaultClient("")
 		logBuf := tuilog.NewBuffer(tuilog.DefaultCapacity)
 		p := tea.NewProgram(

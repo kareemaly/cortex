@@ -20,6 +20,8 @@ var ticketShowCmd = &cobra.Command{
 	Long:  `Show detailed information about a ticket, including its session and comments.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		ensureDaemon()
+
 		projectPath, err := resolveProjectPath()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

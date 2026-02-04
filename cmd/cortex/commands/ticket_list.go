@@ -22,6 +22,8 @@ var ticketListCmd = &cobra.Command{
 	Short: "List tickets",
 	Long:  `List tickets, optionally filtered by status or search query.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		ensureDaemon()
+
 		projectPath, err := resolveProjectPath()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
