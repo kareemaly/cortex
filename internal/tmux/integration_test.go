@@ -5,6 +5,7 @@ package tmux
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,28 @@ func testSessionName(t *testing.T) string {
 	return fmt.Sprintf("cortex-test-%d", time.Now().UnixNano())
 }
 
+// parsePaneWidths parses pane width info from list-panes output.
+// Expected format: "0:100\n1:200" where format is "pane_index:pane_width"
+func parsePaneWidths(panes []string) []int {
+	widths := make([]int, len(panes))
+	for _, pane := range panes {
+		parts := strings.Split(pane, ":")
+		if len(parts) != 2 {
+			continue
+		}
+		idx, err := strconv.Atoi(parts[0])
+		if err != nil || idx < 0 || idx >= len(widths) {
+			continue
+		}
+		width, err := strconv.Atoi(parts[1])
+		if err != nil {
+			continue
+		}
+		widths[idx] = width
+	}
+	return widths
+}
+
 func TestIntegrationNewManager(t *testing.T) {
 	skipIfCI(t)
 	skipIfNoTmux(t)
@@ -37,8 +60,8 @@ func TestIntegrationNewManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager failed: %v", err)
 	}
-	if m.tmuxPath == "" {
-		t.Error("tmuxPath should not be empty")
+	if m == nil {
+		t.Error("manager should not be nil")
 	}
 }
 
@@ -410,15 +433,30 @@ func TestIntegrationSpawnAgentWithCompanion(t *testing.T) {
 		t.Errorf("window index = %d, want %d", window.Index, index)
 	}
 
-	// Verify panes exist by listing them
-	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:%d", session, index))
+	// Verify panes exist and have correct width ratio (30%/70%)
+	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:%d", session, index), "-F", "#{pane_index}:#{pane_width}")
 	if err != nil {
 		t.Fatalf("list-panes failed: %v", err)
 	}
-	// Should have 2 panes (original + split)
-	paneCount := len(strings.Split(strings.TrimSpace(string(output)), "\n"))
-	if paneCount != 2 {
-		t.Errorf("expected 2 panes, got %d", paneCount)
+	panes := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(panes) != 2 {
+		t.Errorf("expected 2 panes, got %d", len(panes))
+	}
+
+	// Verify pane width percentages (allowing some tolerance)
+	widths := parsePaneWidths(panes)
+	if len(widths) == 2 {
+		totalWidth := widths[0] + widths[1]
+		pane0Pct := float64(widths[0]) / float64(totalWidth) * 100
+		pane1Pct := float64(widths[1]) / float64(totalWidth) * 100
+		// Agent pane (0) should be ~30%, companion pane (1) should be ~70%
+		// Allow 5% tolerance for rounding
+		if pane0Pct < 25 || pane0Pct > 35 {
+			t.Errorf("agent pane (0) width = %.1f%%, want ~30%%", pane0Pct)
+		}
+		if pane1Pct < 65 || pane1Pct > 75 {
+			t.Errorf("companion pane (1) width = %.1f%%, want ~70%%", pane1Pct)
+		}
 	}
 }
 
@@ -497,15 +535,30 @@ func TestIntegrationSpawnArchitectWithCompanion(t *testing.T) {
 		t.Errorf("architect window index = %d, want %d", window.Index, ArchitectWindowIndex)
 	}
 
-	// Verify panes exist by listing them
-	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:%d", session, ArchitectWindowIndex))
+	// Verify panes exist and have correct width ratio (30%/70%)
+	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:%d", session, ArchitectWindowIndex), "-F", "#{pane_index}:#{pane_width}")
 	if err != nil {
 		t.Fatalf("list-panes failed: %v", err)
 	}
-	// Should have 2 panes (original + split)
-	paneCount := len(strings.Split(strings.TrimSpace(string(output)), "\n"))
-	if paneCount != 2 {
-		t.Errorf("expected 2 panes, got %d", paneCount)
+	panes := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(panes) != 2 {
+		t.Errorf("expected 2 panes, got %d", len(panes))
+	}
+
+	// Verify pane width percentages (allowing some tolerance)
+	widths := parsePaneWidths(panes)
+	if len(widths) == 2 {
+		totalWidth := widths[0] + widths[1]
+		pane0Pct := float64(widths[0]) / float64(totalWidth) * 100
+		pane1Pct := float64(widths[1]) / float64(totalWidth) * 100
+		// Agent pane (0) should be ~30%, companion pane (1) should be ~70%
+		// Allow 5% tolerance for rounding
+		if pane0Pct < 25 || pane0Pct > 35 {
+			t.Errorf("architect pane (0) width = %.1f%%, want ~30%%", pane0Pct)
+		}
+		if pane1Pct < 65 || pane1Pct > 75 {
+			t.Errorf("kanban pane (1) width = %.1f%%, want ~70%%", pane1Pct)
+		}
 	}
 }
 
@@ -532,14 +585,30 @@ func TestIntegrationSplitWindowHorizontal(t *testing.T) {
 		t.Fatalf("SplitWindowHorizontal failed: %v", err)
 	}
 
-	// Verify we now have 2 panes
-	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:0", session))
+	// Verify we now have 2 panes with correct width ratio (30%/70%)
+	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:0", session), "-F", "#{pane_index}:#{pane_width}")
 	if err != nil {
 		t.Fatalf("list-panes failed: %v", err)
 	}
-	paneCount := len(strings.Split(strings.TrimSpace(string(output)), "\n"))
-	if paneCount != 2 {
-		t.Errorf("expected 2 panes after split, got %d", paneCount)
+	panes := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(panes) != 2 {
+		t.Errorf("expected 2 panes after split, got %d", len(panes))
+	}
+
+	// Verify pane width percentages
+	widths := parsePaneWidths(panes)
+	if len(widths) == 2 {
+		totalWidth := widths[0] + widths[1]
+		pane0Pct := float64(widths[0]) / float64(totalWidth) * 100
+		pane1Pct := float64(widths[1]) / float64(totalWidth) * 100
+		// Original pane (0) should be ~30%, new pane (1) should be ~70%
+		// Allow 5% tolerance for rounding
+		if pane0Pct < 25 || pane0Pct > 35 {
+			t.Errorf("original pane (0) width = %.1f%%, want ~30%%", pane0Pct)
+		}
+		if pane1Pct < 65 || pane1Pct > 75 {
+			t.Errorf("new pane (1) width = %.1f%%, want ~70%%", pane1Pct)
+		}
 	}
 }
 
