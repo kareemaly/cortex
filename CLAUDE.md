@@ -147,7 +147,7 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 
 1. Architect reads backlog → calls `spawnSession` for a ticket
 2. Daemon creates tmux window with ticket-scoped MCP (30% agent pane, 70% companion pane)
-3. Ticket agent works, uses `addTicketComment` to log progress
+3. Ticket agent works, uses `addComment` to log progress
 4. Agent calls `requestReview` when done → ticket moves to review
 5. Architect reviews and approves → triggers lifecycle hooks, moves to done
 
