@@ -117,11 +117,31 @@ Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/s
 
 ## MCP Tools
 
-Defined in `internal/daemon/mcp/`. Two session types:
+Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 
-**Architect** (`tools_architect.go`): `listTickets`, `readTicket`, `createTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `spawnSession`
+**Architect** (`tools_architect.go`):
 
-**Ticket** (`tools_ticket.go`): `readTicket`, `addTicketComment`, `requestReview`, `concludeSession`
+| Tool | Description |
+|------|-------------|
+| `listTickets` | List tickets by status (backlog/progress/review/done), optional search query |
+| `readTicket` | Read full ticket details by ID |
+| `createTicket` | Create ticket with title, body, type |
+| `updateTicket` | Update ticket title and/or body |
+| `deleteTicket` | Delete ticket by ID |
+| `moveTicket` | Move ticket to different status |
+| `addTicketComment` | Add comment to ticket (types: review_requested, done, blocker, comment) |
+| `spawnSession` | Spawn agent session for ticket (modes: normal, resume, fresh) |
+| `getCortexConfigDocs` | Get CONFIG_DOCS.md for customization guidance |
+
+**Ticket Agent** (`tools_ticket.go`):
+
+| Tool | Description |
+|------|-------------|
+| `readTicket` | Read assigned ticket details (no ID required) |
+| `addComment` | Add comment to assigned ticket |
+| `addBlocker` | Report blocker on assigned ticket |
+| `requestReview` | Request human review, moves ticket to review status |
+| `concludeSession` | Complete work, move to done, trigger cleanup |
 
 ## Agent Workflow
 
