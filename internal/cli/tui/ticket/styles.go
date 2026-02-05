@@ -174,6 +174,32 @@ func statusStyle(status string) lipgloss.Style {
 		Padding(0, 1)
 }
 
+// Type badge styles for ticket types (matching kanban).
+var (
+	debugTypeBadgeStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("196")) // red
+
+	researchTypeBadgeStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("39")) // blue
+
+	choreTypeBadgeStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("245")) // gray
+)
+
+// typeBadgeStyle returns the appropriate style for a ticket type badge.
+func typeBadgeStyle(ticketType string) lipgloss.Style {
+	switch ticketType {
+	case "debug":
+		return debugTypeBadgeStyle
+	case "research":
+		return researchTypeBadgeStyle
+	case "chore":
+		return choreTypeBadgeStyle
+	default:
+		return lipgloss.NewStyle()
+	}
+}
+
 // commentTypeStyle returns the appropriate style for a comment type.
 func commentTypeStyle(commentType string) lipgloss.Style {
 	var color lipgloss.Color
