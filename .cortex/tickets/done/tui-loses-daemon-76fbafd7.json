@@ -1,0 +1,514 @@
+{
+  "id": "76fbafd7-f737-4858-ab77-120304c2bd20",
+  "type": "debug",
+  "title": "TUI loses daemon connection when tmux popup opens",
+  "body": "## Bug Description\n\nWhen viewing a ticket in the TUI (`cortex show`) and opening a tmux popup (e.g., pressing \"d\" for lazygit), the TUI in the background loses its daemon connection and shows an error.\n\n## Error Message\n```\nError: failed to connect to daemon: Post \"http://localhost:4200/tickets/{id}/comments/{comment-id}/execute\": context\n\nPress [r] to retry or [q] to quit\n\nIs the daemon running? Start it with: cortexd start\n```\n\n## Steps to Reproduce\n1. Open a ticket in review: `cortex show \u003cticket-id\u003e`\n2. Press \"d\" to open lazygit in a tmux popup\n3. Observe the TUI in the background shows the connection error\n4. Press \"r\" to retry — it works again\n\n## Expected Behavior\nTUI should maintain daemon connection or gracefully handle temporary disconnection without user intervention.\n\n## Likely Cause\nThe error message shows `context` truncated — suggests HTTP request context is being cancelled when:\n- Focus changes to popup\n- TUI loses foreground state\n- Some polling/refresh operation times out\n\n## Areas to Investigate\n- `internal/cli/tui/` — How does the TUI handle background state?\n- `internal/cli/sdk/client.go` — HTTP client timeout/context settings\n- Any polling or refresh loops that might fail when TUI is backgrounded\n\n## Acceptance Criteria\n- TUI handles being backgrounded gracefully\n- No manual retry needed when returning from tmux popup",
+  "dates": {
+    "created": "2026-02-05T10:23:19.745853Z",
+    "updated": "2026-02-05T10:32:41.02841Z",
+    "progress": "2026-02-05T10:25:38.761711Z",
+    "reviewed": "2026-02-05T10:30:55.309134Z",
+    "done": "2026-02-05T10:32:41.02841Z"
+  },
+  "comments": [
+    {
+      "id": "25edea36-0d0c-4e0b-919e-899a3f055e67",
+      "session_id": "dbfb3638-ea73-4bd4-b268-5b8ac2eb33cb",
+      "type": "comment",
+      "content": "## Root Cause Analysis\n\n**The bug**: When viewing a ticket in TUI and pressing \"d\" to open lazygit in a tmux popup, the TUI shows \"failed to connect to daemon: context\" error.\n\n**Root cause identified**: The daemon's HTTP handler blocks on `tmux display-popup` execution.\n\n### Call Flow\n\n1. TUI presses \"d\" → calls `executeDiffAction()` (model.go:576-584)\n2. SDK sends HTTP POST to `/tickets/{id}/comments/{commentID}/execute` with **10-second timeout**\n3. Daemon handler `ExecuteAction` (tickets.go:808-923) calls `h.deps.TmuxManager.DisplayPopup()` (line 913)\n4. `DisplayPopup()` (popup.go:18) calls `m.run(args...)` \n5. `run()` (tmux.go:62-64) calls `m.runner.Run(args...)`\n6. `execRunner.Run()` (tmux.go:22-25) uses `cmd.CombinedOutput()` which **blocks until the popup closes**\n7. After 10 seconds, the TUI's HTTP client times out → \"context deadline exceeded\"\n\n### Why `tmux display-popup -E` blocks\n\nThe `-E` flag tells tmux to wait for the command to exit. Combined with Go's `cmd.CombinedOutput()`, the daemon handler blocks until the user closes lazygit. This causes the HTTP request to timeout.\n\n### Evidence\n\n- `popup.go:18`: `_, err := m.run(args...)`  \n- `tmux.go:23-24`: `cmd := exec.Command(r.tmuxPath, args...)` + `return cmd.CombinedOutput()`\n- `client.go:34-36`: HTTP client with `Timeout: 10 * time.Second`\n\nThe error message \"context\" is truncated from \"context deadline exceeded\".",
+      "created_at": "2026-02-05T10:28:41.077978Z"
+    },
+    {
+      "id": "283dc51b-f164-45f7-afdd-60c55274b5e0",
+      "session_id": "dbfb3638-ea73-4bd4-b268-5b8ac2eb33cb",
+      "type": "review_requested",
+      "content": "## Root Cause\n\nThe daemon's HTTP handler blocked indefinitely when `tmux display-popup -E` was executed because Go's `cmd.CombinedOutput()` waits for the process to exit. With lazygit running in a popup, this could block for minutes, causing the TUI's 10-second HTTP timeout to trigger with \"context deadline exceeded\".\n\n**Call chain:**\n1. TUI calls `ExecuteCommentAction` with 10s timeout\n2. Daemon handler calls `DisplayPopup()` → `m.run()` → `cmd.CombinedOutput()`\n3. `tmux display-popup -E` blocks until user closes lazygit\n4. HTTP timeout → \"context deadline exceeded\"\n\n## Fix Summary\n\nMade `DisplayPopup` non-blocking by adding a `RunBackground` method that uses `cmd.Start()` instead of `cmd.CombinedOutput()`. The daemon now returns immediately after launching the popup.\n\n### Changes:\n\n1. **internal/tmux/tmux.go**:\n   - Added `RunBackground(args ...string) error` to `TmuxRunner` interface\n   - Implemented `RunBackground` in `execRunner` using `cmd.Start()`\n   - Added `runBackground` method to `Manager`\n\n2. **internal/tmux/popup.go**:\n   - Changed `DisplayPopup` to use `runBackground()` instead of `run()`\n\n3. **internal/tmux/mock_runner.go**:\n   - Added `RunBackgroundFunc` field and `RunBackground` method to `MockRunner` for testing\n\n## Verification\n\n- `make test` - All tests pass\n- `make lint` - No issues\n- `make build` - Builds successfully",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "commit": "07dda62",
+          "repo_path": "/Users/kareemelbahrawy/projects/cortex1"
+        }
+      },
+      "created_at": "2026-02-05T10:30:55.307494Z"
+    },
+    {
+      "id": "22ec4543-7a85-46e3-be6a-73c072f1d5ba",
+      "session_id": "dbfb3638-ea73-4bd4-b268-5b8ac2eb33cb",
+      "type": "done",
+      "content": "## Root Cause\n\nThe daemon's HTTP handler blocked indefinitely when `tmux display-popup -E` was executed because Go's `cmd.CombinedOutput()` waits for the child process to exit. When lazygit or other interactive programs ran in a popup, the handler would block until the user closed the popup, causing the TUI's 10-second HTTP timeout to trigger with \"context deadline exceeded\".\n\n**Call chain:**\n1. TUI calls `ExecuteCommentAction` with 10s HTTP timeout\n2. Daemon handler calls `DisplayPopup()` → `m.run()` → `cmd.CombinedOutput()`\n3. `tmux display-popup -E` blocks until user closes lazygit\n4. HTTP timeout → \"context deadline exceeded\" → TUI shows error\n\n## Resolution\n\nMade `DisplayPopup` non-blocking by using `cmd.Start()` instead of `cmd.CombinedOutput()`. The daemon now returns immediately after launching the popup process.\n\n## Files Changed\n\n1. **internal/tmux/tmux.go**\n   - Added `RunBackground(args ...string) error` to `TmuxRunner` interface\n   - Implemented `RunBackground` in `execRunner` using `cmd.Start()`\n   - Added `runBackground` method to `Manager`\n\n2. **internal/tmux/popup.go**\n   - Changed `DisplayPopup` to call `runBackground()` instead of `run()`\n\n3. **internal/tmux/mock_runner.go**\n   - Added `RunBackgroundFunc` field and `RunBackground` method to `MockRunner`\n\n## Verification\n\n- `make test` - All tests pass\n- `make lint` - 0 issues\n- `make build` - Builds successfully\n\n## Commit\n\n07dda62 fix: make DisplayPopup non-blocking to prevent HTTP timeout",
+      "created_at": "2026-02-05T10:32:41.027171Z"
+    }
+  ],
+  "session": {
+    "id": "dbfb3638-ea73-4bd4-b268-5b8ac2eb33cb",
+    "started_at": "2026-02-05T10:25:38.699105Z",
+    "ended_at": "2026-02-05T10:32:41.027866Z",
+    "agent": "claude",
+    "tmux_window": "tui-loses-daemon-connection-when-tmux-popup-opens",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-02-05T10:32:33.641617Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-05T10:25:38.699105Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-02-05T10:25:56.241927Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:25:59.360371Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T10:25:59.3774Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T10:25:59.542081Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:00.765362Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:00.787996Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:03.51398Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:03.514839Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:03.619412Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:03.620296Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:03.955466Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:04.093225Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T10:26:06.537976Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:07.706795Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:09.07785Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:10.480431Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T10:26:10.96343Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:12.214734Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:12.257323Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:12.706435Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T10:26:14.180492Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:15.401589Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:15.849161Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:15.850072Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:17.91913Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:18.62373Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:26:18.625262Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T10:26:21.276187Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T10:26:23.963654Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T10:26:26.597053Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:28.645879Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T10:26:31.385762Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:33.753547Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:26:35.650133Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-05T10:26:43.391063Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-05T10:26:58.028335Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T10:27:16.436057Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T10:27:16.589515Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:27:20.326166Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:27:20.376692Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:27:39.586731Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T10:28:01.403933Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:28:04.155635Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:28:11.040083Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:28:15.161423Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__addComment",
+        "work": null,
+        "at": "2026-02-05T10:28:41.124673Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-05T10:28:57.128948Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-05T10:29:03.613398Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T10:29:15.294693Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:29:19.117163Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:29:19.118089Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:29:19.118686Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T10:29:25.187915Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T10:29:29.399033Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T10:29:33.96657Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T10:29:38.918159Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T10:29:43.784859Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T10:29:48.096266Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T10:29:53.110646Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T10:29:57.552306Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T10:30:03.226601Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T10:30:07.84339Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:30:14.739953Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:30:18.6969Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:30:23.955209Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:30:28.779179Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T10:30:33.312503Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:30:38.084739Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:30:38.10655Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:30:38.107179Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:30:45.170879Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-02-05T10:30:55.344415Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-05T10:31:02.642474Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:32:29.856353Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T10:32:33.641617Z"
+      }
+    ]
+  }
+}

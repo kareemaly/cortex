@@ -1,0 +1,717 @@
+{
+  "id": "0a1ff160-926f-4ec5-b658-344ceedd0b97",
+  "type": "work",
+  "title": "Add `cortex defaults upgrade` command",
+  "body": "## Summary\n\nAdd a new CLI command to upgrade `~/.cortex/defaults/` with the latest embedded defaults from the binary.\n\n## Context\n\n- Embedded defaults ship in the binary at `internal/install/defaults/claude-code/`\n- On first `cortex init`, these are copied to `~/.cortex/defaults/claude-code/`\n- When binaries upgrade with new/improved defaults, users have stale copies\n- Need a way to refresh defaults without losing project-level customizations (those live in `.cortex/prompts/`)\n\n## Requirements\n\n1. New command: `cortex defaults upgrade`\n2. Replaces `~/.cortex/defaults/` contents with current embedded defaults\n3. Reuse existing `copyEmbeddedDefaults(..., force=true)` from `internal/install/embed.go`\n4. Output should list what files were updated\n5. Add `--dry-run` flag to preview changes without applying\n\n## Implementation Notes\n\n- Add new command file: `cmd/cortex/commands/defaults.go` (or `defaults_upgrade.go`)\n- Follow existing command patterns (see `eject.go`, `upgrade.go`)\n- The `copyEmbeddedDefaults` function already supports `force` parameter\n- Consider adding a `defaults` subcommand group for future extensibility (`defaults list`, `defaults diff`)\n\n## Out of Scope\n\n- Project-level defaults (handled by `eject`)\n- Merging user edits with new defaults (full replacement is intended)",
+  "dates": {
+    "created": "2026-02-05T09:09:50.261067Z",
+    "updated": "2026-02-05T09:31:31.813137Z",
+    "progress": "2026-02-05T09:09:53.487796Z",
+    "reviewed": "2026-02-05T09:16:52.01418Z",
+    "done": "2026-02-05T09:31:31.813137Z"
+  },
+  "comments": [
+    {
+      "id": "8d652fa4-d114-4b10-9f64-c9c5a6285c46",
+      "session_id": "bd68b3e8-dc7c-4152-be61-5556dc49b0c5",
+      "type": "review_requested",
+      "content": "## Changes\n\n### New CLI Command: `cortex defaults upgrade`\n\nRefreshes `~/.cortex/defaults/` with the latest embedded defaults from the binary.\n\n**Usage:**\n- `cortex defaults upgrade` - Updates all default files (force overwrites)\n- `cortex defaults upgrade --dry-run` - Preview changes without applying them\n\n### Files Modified\n\n1. **`internal/install/embed.go`**\n   - Exported `copyEmbeddedDefaults` → `CopyEmbeddedDefaults`\n   - Added `CompareStatus` type with `CompareUnchanged`, `CompareWillUpdate`, `CompareWillCreate`\n   - Added `CompareItem` struct for comparison results\n   - Added `CompareEmbeddedDefaults()` function for dry-run comparison\n\n2. **`internal/install/install.go`**\n   - Updated call to use exported `CopyEmbeddedDefaults`\n\n3. **`internal/install/embed_test.go`**\n   - Updated test function calls to use exported `CopyEmbeddedDefaults`\n\n4. **`cmd/cortex/commands/defaults.go`** (NEW)\n   - Parent command group following `ticket.go` pattern\n\n5. **`cmd/cortex/commands/defaults_upgrade.go`** (NEW)\n   - Upgrade subcommand with `--dry-run` flag\n   - Formatted output with checkmarks, bullets, and summary\n\n### Verification\n\n- `make build` - ✓ Compiles\n- `make lint` - ✓ No issues\n- `make test` - ✓ All tests pass\n- `cortex defaults upgrade --dry-run` - ✓ Shows preview correctly\n- `cortex defaults upgrade` - ✓ Updates files correctly",
+      "action": {
+        "type": "git_diff",
+        "args": {
+          "commit": "13a7c90",
+          "repo_path": "/Users/kareemelbahrawy/projects/cortex1"
+        }
+      },
+      "created_at": "2026-02-05T09:16:52.012484Z"
+    },
+    {
+      "id": "4e9b2e6d-aa4d-4076-a9be-ad8eb3934cd0",
+      "session_id": "bd68b3e8-dc7c-4152-be61-5556dc49b0c5",
+      "type": "done",
+      "content": "## Summary\n\nAdded `cortex defaults upgrade` command to refresh `~/.cortex/defaults/` with the latest embedded defaults from the binary.\n\n## Changes\n\n### New Files\n- `cmd/cortex/commands/defaults.go` - Parent command group\n- `cmd/cortex/commands/defaults_upgrade.go` - Upgrade subcommand with `--dry-run` flag\n\n### Modified Files\n- `internal/install/embed.go` - Exported `CopyEmbeddedDefaults`, added `CompareEmbeddedDefaults` for dry-run comparison\n- `internal/install/install.go` - Updated call to use exported function\n- `internal/install/embed_test.go` - Updated test function calls\n- `CLAUDE.md` - Added command to CLI Commands table\n\n## Usage\n- `cortex defaults upgrade` - Updates all default files (force overwrites)\n- `cortex defaults upgrade --dry-run` - Preview changes without applying\n\n## Commits\n- `13a7c90` feat: add cortex defaults upgrade command\n- `91fa453` docs: add cortex defaults upgrade to CLI commands table",
+      "created_at": "2026-02-05T09:31:31.811785Z"
+    }
+  ],
+  "session": {
+    "id": "bd68b3e8-dc7c-4152-be61-5556dc49b0c5",
+    "started_at": "2026-02-05T09:09:53.444754Z",
+    "ended_at": "2026-02-05T09:31:31.812551Z",
+    "agent": "claude",
+    "tmux_window": "add-cortex-defaults-upgrade-command",
+    "current_status": {
+      "status": "in_progress",
+      "tool": "Bash",
+      "work": null,
+      "at": "2026-02-05T09:31:22.832951Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-05T09:09:53.444754Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-02-05T09:10:09.354528Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:11.463414Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T09:10:11.47008Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T09:10:11.841644Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T09:10:11.976291Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:13.427784Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:13.428399Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:13.428805Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:14.019846Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:14.020311Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:14.020646Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:15.846482Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:15.847196Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:15.84763Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:16.404423Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:16.404983Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:17.730495Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:17.731007Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T09:10:19.076178Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:19.62166Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:19.622153Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:10:19.913079Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T09:10:22.12106Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:10:22.312794Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:23.621763Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:23.745172Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:10:25.825623Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:27.364951Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:10:28.607824Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:10:30.008254Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:10:31.42834Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:32.76442Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:34.00623Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:10:36.212206Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:10:37.327715Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-05T09:10:38.470332Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:10:39.307177Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-05T09:10:57.302558Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:02.867503Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:02.868085Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:02.868438Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:08.029067Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:08.029705Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:08.030158Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:11.941549Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T09:11:16.654193Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T09:11:16.790887Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:20.57166Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:20.572314Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:24.302168Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:24.302864Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:45.879464Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:45.880172Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T09:11:46.231663Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:50.238423Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:50.239183Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:50.239778Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:50.241573Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T09:11:54.388455Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Glob",
+        "work": null,
+        "at": "2026-02-05T09:11:54.518526Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:57.784639Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:11:57.785512Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:12:01.906906Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:12:01.907654Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:12:06.30387Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T09:12:06.644521Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:12:10.453286Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T09:12:14.890112Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Task",
+        "work": null,
+        "at": "2026-02-05T09:13:07.764599Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-05T09:13:28.284408Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-05T09:13:31.978996Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:14:14.98909Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:14:14.989686Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:14:14.990566Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:14:14.993266Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:14:23.08991Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T09:14:23.128481Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T09:14:41.82175Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T09:14:46.057327Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T09:14:51.549404Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:14:54.923268Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T09:14:58.709113Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T09:15:02.904206Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-05T09:15:07.500683Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T09:15:11.828015Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-05T09:15:27.11559Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T09:15:31.627387Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T09:15:36.563271Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Write",
+        "work": null,
+        "at": "2026-02-05T09:15:48.549274Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:15:53.317186Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:15:57.990998Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:01.880608Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:06.003459Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:11.182537Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:15.229224Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:21.114274Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T09:16:26.87171Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-02-05T09:16:30.253801Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:34.887719Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:34.933888Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:34.934644Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:38.679367Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:16:42.40191Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__requestReview",
+        "work": null,
+        "at": "2026-02-05T09:16:52.06193Z"
+      },
+      {
+        "status": "idle",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-05T09:17:00.359225Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Grep",
+        "work": null,
+        "at": "2026-02-05T09:30:57.876022Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T09:31:06.027104Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Edit",
+        "work": null,
+        "at": "2026-02-05T09:31:10.371245Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:31:14.748919Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Bash",
+        "work": null,
+        "at": "2026-02-05T09:31:22.832951Z"
+      }
+    ]
+  }
+}

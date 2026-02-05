@@ -1,0 +1,62 @@
+{
+  "id": "6c1e6249-5774-43f0-b7c1-ac65a3d60bc7",
+  "type": "chore",
+  "title": "Update README to document Copilot agent type",
+  "body": "The README is outdated and needs to include documentation for the GitHub Copilot CLI agent type that was added in v0.2.0.\n\n**Context:**\n- Copilot was added as an agent type in commit 327a7c9\n- CLAUDE.md already documents it (see commit 44fa9cc)\n- Project config supports `agent_type: copilot`\n\n**Tasks:**\n- Review current README structure\n- Add Copilot to any agent type listings/documentation\n- Ensure installation and configuration sections reflect Copilot support\n- Keep documentation style consistent with existing content",
+  "dates": {
+    "created": "2026-02-05T10:36:46.849132Z",
+    "updated": "2026-02-05T10:37:26.286673Z",
+    "progress": "2026-02-05T10:37:02.706889Z"
+  },
+  "comments": [],
+  "session": {
+    "id": "ec0c7ced-f3c6-4a02-a333-13bc1f70dd75",
+    "started_at": "2026-02-05T10:37:02.669169Z",
+    "agent": "claude",
+    "tmux_window": "update-readme-to-document-copilot-agent-type",
+    "current_status": {
+      "status": "waiting_permission",
+      "tool": null,
+      "work": null,
+      "at": "2026-02-05T10:37:26.286673Z"
+    },
+    "status_history": [
+      {
+        "status": "starting",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-05T10:37:02.669169Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "mcp__cortex__readTicket",
+        "work": null,
+        "at": "2026-02-05T10:37:11.186832Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:37:11.22819Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "Read",
+        "work": null,
+        "at": "2026-02-05T10:37:15.946435Z"
+      },
+      {
+        "status": "in_progress",
+        "tool": "TodoWrite",
+        "work": null,
+        "at": "2026-02-05T10:37:21.305093Z"
+      },
+      {
+        "status": "waiting_permission",
+        "tool": null,
+        "work": null,
+        "at": "2026-02-05T10:37:26.286673Z"
+      }
+    ]
+  }
+}
