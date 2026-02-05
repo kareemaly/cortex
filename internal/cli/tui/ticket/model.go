@@ -940,12 +940,24 @@ func (m Model) renderHeader() string {
 		return headerStyle.Render("Loading...")
 	}
 
-	// ID + Title + Status badge.
+	// ID + [Type] + Title + Status badge.
 	id := ticketIDStyle.Render(m.ticket.ID[:8])
+
+	// Build type badge for non-work types (consistent with kanban).
+	typeBadge := ""
+	if m.ticket.Type != "" && m.ticket.Type != "work" {
+		typeBadge = typeBadgeStyle(m.ticket.Type).Render("[" + m.ticket.Type + "]")
+	}
+
 	title := titleStyle.Render(m.ticket.Title)
 	status := statusStyle(m.ticket.Status).Render(m.ticket.Status)
 
-	left := id + "  " + title
+	// Build left side: id + type badge (if any) + title.
+	left := id
+	if typeBadge != "" {
+		left += " " + typeBadge
+	}
+	left += " " + title
 	right := status
 
 	padding := max(m.width-lipgloss.Width(left)-lipgloss.Width(right)-2, 1)

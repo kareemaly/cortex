@@ -79,6 +79,7 @@ func printTicketPlainText(client *sdk.Client, ticketID string) {
 	fmt.Printf("Ticket: %s\n", t.ID)
 	fmt.Printf("  Title:  %s\n", t.Title)
 	fmt.Printf("  Status: %s\n", t.Status)
+	fmt.Printf("  Type:   %s\n", t.Type)
 	fmt.Printf("  Created: %s\n", t.Dates.Created.Format("Jan 02 15:04:05"))
 	fmt.Printf("  Updated: %s\n", t.Dates.Updated.Format("Jan 02 15:04:05"))
 	fmt.Println()
