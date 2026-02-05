@@ -4,6 +4,7 @@ package tmux
 type MockRunner struct {
 	RunFunc            func(args ...string) ([]byte, error)
 	RunInteractiveFunc func(args ...string) error
+	RunBackgroundFunc  func(args ...string) error
 	Calls              [][]string
 	windowExists       bool
 }
@@ -22,6 +23,15 @@ func (m *MockRunner) RunInteractive(args ...string) error {
 	m.Calls = append(m.Calls, args)
 	if m.RunInteractiveFunc != nil {
 		return m.RunInteractiveFunc(args...)
+	}
+	return nil
+}
+
+// RunBackground executes a tmux command without waiting for it to finish.
+func (m *MockRunner) RunBackground(args ...string) error {
+	m.Calls = append(m.Calls, args)
+	if m.RunBackgroundFunc != nil {
+		return m.RunBackgroundFunc(args...)
 	}
 	return nil
 }

@@ -15,6 +15,5 @@ func (m *Manager) DisplayPopup(session, workingDir, command string) error {
 		command = fmt.Sprintf("cd %q && %s", workingDir, command)
 	}
 	args = append(args, command)
-	_, err := m.run(args...)
-	return err
+	return m.runBackground(args...)
 }

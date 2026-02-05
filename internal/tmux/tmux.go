@@ -12,6 +12,7 @@ const ArchitectWindowIndex = 0
 type TmuxRunner interface {
 	Run(args ...string) ([]byte, error)
 	RunInteractive(args ...string) error
+	RunBackground(args ...string) error
 }
 
 // execRunner is the default implementation using exec.Command.
@@ -30,6 +31,11 @@ func (r *execRunner) RunInteractive(args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func (r *execRunner) RunBackground(args ...string) error {
+	cmd := exec.Command(r.tmuxPath, args...)
+	return cmd.Start()
 }
 
 // Manager handles tmux session and window operations.
@@ -67,4 +73,10 @@ func (m *Manager) run(args ...string) ([]byte, error) {
 func (m *Manager) runSilent(args ...string) error {
 	_, err := m.run(args...)
 	return err
+}
+
+// runBackground executes a tmux command without waiting for it to finish.
+// Returns an error if the command fails to start.
+func (m *Manager) runBackground(args ...string) error {
+	return m.runner.RunBackground(args...)
 }
