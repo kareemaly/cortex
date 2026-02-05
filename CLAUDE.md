@@ -106,6 +106,7 @@ Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (
 | `cortex daemon status` | Check daemon status |
 | `cortex upgrade` | Self-update to latest version |
 | `cortex eject <path>` | Customize a default prompt |
+| `cortex defaults upgrade` | Refresh `~/.cortex/defaults/` with latest embedded defaults |
 
 ## API Endpoints
 
