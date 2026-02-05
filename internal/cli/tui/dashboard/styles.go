@@ -87,4 +87,8 @@ var (
 	// Warn badge style for log badge.
 	warnBadgeStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214"))
+
+	// Orphaned session icon style (warning color).
+	orphanedIconStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("214")) // yellow/orange
 )

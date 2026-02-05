@@ -33,6 +33,7 @@ type Model struct {
 	approving       bool
 	spawning        bool
 	showOrphanModal bool
+	showDeleteModal bool
 	embedded        bool // if true, send CloseDetailMsg instead of tea.Quit
 	pendingG        bool // tracking 'g' key for 'gg' sequence
 	mdRenderer      *glamour.TermRenderer
@@ -86,6 +87,14 @@ type SpawnErrorMsg struct {
 
 // OrphanedSessionMsg is sent when spawn encounters an orphaned session.
 type OrphanedSessionMsg struct{}
+
+// SessionDeletedMsg is sent when an orphaned session is successfully deleted.
+type SessionDeletedMsg struct{}
+
+// SessionDeleteErrorMsg is sent when deleting a session fails.
+type SessionDeleteErrorMsg struct {
+	Err error
+}
 
 // CloseDetailMsg is sent when user wants to close the detail view.
 type CloseDetailMsg struct{}
@@ -257,6 +266,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showOrphanModal = true
 		return m, nil
 
+	case SessionDeletedMsg:
+		m.showDeleteModal = false
+		m.loading = true
+		return m, m.loadTicket()
+
+	case SessionDeleteErrorMsg:
+		m.showDeleteModal = false
+		m.err = msg.Err
+		return m, nil
+
 	case RefreshMsg:
 		m.loading = true
 		return m, m.loadTicket()
@@ -291,6 +310,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Modals take priority when visible.
 	if m.showDetailModal {
 		return m.handleDetailModalKey(msg)
+	}
+	if m.showDeleteModal {
+		return m.handleDeleteModalKey(msg)
 	}
 	if m.showKillModal {
 		return m.handleKillModalKey(msg)
@@ -711,11 +733,43 @@ func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.spawning = true
 		return m, m.spawnSessionWithMode("fresh")
 	}
+	if isKey(msg, KeyDeleteOrphan) { // 'D' for delete
+		m.showOrphanModal = false
+		m.showDeleteModal = true
+		return m, nil
+	}
 	if isKey(msg, KeyCancel, KeyEscape) {
 		m.showOrphanModal = false
 		return m, nil
 	}
 	return m, nil
+}
+
+// handleDeleteModalKey handles keyboard input when the delete confirmation modal is shown.
+func (m Model) handleDeleteModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if isKey(msg, KeyYes) { // 'y' for yes - delete the session
+		return m, m.deleteOrphanedSession()
+	}
+	if isKey(msg, KeyNo, KeyEscape) { // 'n' or Esc for no - go back to orphan modal
+		m.showDeleteModal = false
+		m.showOrphanModal = true
+		return m, nil
+	}
+	return m, nil
+}
+
+// deleteOrphanedSession returns a command to delete an orphaned session.
+func (m Model) deleteOrphanedSession() tea.Cmd {
+	return func() tea.Msg {
+		if m.ticket == nil || m.ticket.Session == nil {
+			return SessionDeleteErrorMsg{Err: fmt.Errorf("no session to delete")}
+		}
+		// Kill the session using its ID
+		if err := m.client.KillSession(m.ticket.Session.ID); err != nil {
+			return SessionDeleteErrorMsg{Err: err}
+		}
+		return SessionDeletedMsg{}
+	}
 }
 
 // openDetailModal opens the detail modal for the currently selected comment.
@@ -821,7 +875,20 @@ func (m Model) renderOrphanModal() string {
 	b.WriteString(warningStyle.Render("Orphaned session detected"))
 	b.WriteString("\n\n")
 	b.WriteString("The tmux window for this session was closed.\n\n")
-	b.WriteString("[r]esume  [f]resh  [c]ancel")
+	b.WriteString("[r]esume  [f]resh  [D]elete  [c]ancel")
+
+	return b.String()
+}
+
+// renderDeleteModal renders the delete confirmation modal.
+func (m Model) renderDeleteModal() string {
+	var b strings.Builder
+
+	b.WriteString("\n")
+	b.WriteString(warningStyle.Render("Delete orphaned session?"))
+	b.WriteString("\n\n")
+	b.WriteString("This will end the session record. You can spawn a new one later.\n\n")
+	b.WriteString("[y]es  [n]o")
 
 	return b.String()
 }
@@ -890,6 +957,12 @@ func (m Model) View() string {
 	// Orphan session modal.
 	if m.showOrphanModal {
 		b.WriteString(m.renderOrphanModal())
+		return b.String()
+	}
+
+	// Delete confirmation modal.
+	if m.showDeleteModal {
+		b.WriteString(m.renderDeleteModal())
 		return b.String()
 	}
 

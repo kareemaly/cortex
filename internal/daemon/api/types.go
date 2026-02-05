@@ -108,7 +108,8 @@ type ExecuteActionResponse struct {
 // filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
 // Query is matched case-insensitively against title or body.
 // If dueBefore is non-nil, only tickets with due date before the specified time are included.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time) []TicketSummary {
+// If tmuxSession and checker are provided, detects orphaned sessions.
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker) []TicketSummary {
 	var summaries []TicketSummary
 	for _, t := range tickets {
 		// Apply query filter if specified
@@ -123,7 +124,7 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 				continue
 			}
 		}
-		summary := types.ToTicketSummary(t, status, true)
+		summary := types.ToTicketSummary(t, status, true, tmuxSession, checker)
 		summaries = append(summaries, summary)
 	}
 	if summaries == nil {

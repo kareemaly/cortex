@@ -632,15 +632,23 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 
 	icon := agentStatusIcon(*ticket)
 	styledIcon := activeIconStyle.Render(icon)
+	if ticket.IsOrphaned {
+		styledIcon = orphanedIconStyle.Render(icon)
+	}
 	name := ticket.Title
 	if len(name) > 24 {
 		name = name[:21] + "..."
 	}
 
 	badge := ticket.Status
+	if ticket.IsOrphaned {
+		badge = "orphaned"
+	}
 	badgeStyled := progressBadgeStyle.Render(badge)
-	if ticket.Status == "review" {
+	if ticket.Status == "review" && !ticket.IsOrphaned {
 		badgeStyled = reviewBadgeStyle.Render(badge)
+	} else if ticket.IsOrphaned {
+		badgeStyled = orphanedIconStyle.Render(badge)
 	}
 
 	dur := formatDuration(time.Since(ticket.Updated))
@@ -732,6 +740,11 @@ func (m *Model) ensureCursorVisible(viewHeight int) {
 
 // agentStatusIcon returns an icon for a ticket's agent status.
 func agentStatusIcon(t sdk.TicketSummary) string {
+	// Orphaned sessions get a distinct icon.
+	if t.IsOrphaned {
+		return "◌"
+	}
+
 	if t.AgentStatus == nil {
 		return "●"
 	}

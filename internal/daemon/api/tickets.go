@@ -60,11 +60,18 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		dueBefore = &parsed
 	}
 
+	// Load project config to get tmux session name for orphan detection.
+	tmuxSession := ""
+	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
 	resp := ListAllTicketsResponse{
-		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore),
-		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore),
-		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query, dueBefore),
-		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore),
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager),
+		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query, dueBefore, tmuxSession, h.deps.TmuxManager),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager),
 	}
 
 	// Sort by Created descending (most recent first)
@@ -114,8 +121,15 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 		dueBefore = &parsed
 	}
 
+	// Load project config to get tmux session name for orphan detection.
+	tmuxSession := ""
+	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
 	resp := ListTicketsResponse{
-		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore),
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager),
 	}
 
 	// Sort by Created descending (most recent first)

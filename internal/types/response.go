@@ -78,6 +78,7 @@ type TicketSummary struct {
 	HasActiveSession bool       `json:"has_active_session"`
 	AgentStatus      *string    `json:"agent_status,omitempty"`
 	AgentTool        *string    `json:"agent_tool,omitempty"`
+	IsOrphaned       bool       `json:"is_orphaned,omitempty"`
 }
 
 // ListTicketsResponse is a list of tickets with a single status.
