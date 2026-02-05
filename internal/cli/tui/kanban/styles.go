@@ -113,6 +113,9 @@ var (
 	choreTypeBadgeStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")) // gray
 
+	workTypeBadgeStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("35")) // cyan/teal
+
 	// Due date styles
 	dueSoonStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")) // yellow/orange
@@ -146,6 +149,8 @@ func typeBadgeStyle(ticketType string) lipgloss.Style {
 		return researchTypeBadgeStyle
 	case "chore":
 		return choreTypeBadgeStyle
+	case "work":
+		return workTypeBadgeStyle
 	default:
 		return lipgloss.NewStyle()
 	}

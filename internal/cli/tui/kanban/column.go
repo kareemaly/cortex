@@ -175,9 +175,9 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 		for i := c.scrollOffset; i < endIdx; i++ {
 			t := c.tickets[i]
 
-			// Build type badge for non-work types
+			// Build type badge
 			typeBadge := ""
-			if t.Type != "" && t.Type != "work" {
+			if t.Type != "" {
 				typeBadge = typeBadgeStyle(t.Type).Render("[" + t.Type + "] ")
 			}
 
