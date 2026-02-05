@@ -40,10 +40,12 @@ func (s CompareStatus) String() string {
 
 // CompareItem represents the comparison result for a single file.
 type CompareItem struct {
-	Path   string
-	Status CompareStatus
-	IsDir  bool
-	Error  error
+	Path            string
+	Status          CompareStatus
+	IsDir           bool
+	Error           error
+	EmbeddedContent []byte // Content from embedded FS (for diff generation)
+	DiskContent     []byte // Content from disk (for diff generation)
 }
 
 // CopyEmbeddedDefaults copies embedded default config to target directory.
@@ -114,6 +116,7 @@ func compareEmbeddedDir(embedFS embed.FS, srcDir, dstDir string) ([]CompareItem,
 		if err != nil {
 			if os.IsNotExist(err) {
 				item.Status = CompareWillCreate
+				item.EmbeddedContent = embeddedContent
 			} else {
 				item.Error = err
 			}
@@ -123,6 +126,8 @@ func compareEmbeddedDir(embedFS embed.FS, srcDir, dstDir string) ([]CompareItem,
 				item.Status = CompareUnchanged
 			} else {
 				item.Status = CompareWillUpdate
+				item.EmbeddedContent = embeddedContent
+				item.DiskContent = diskContent
 			}
 		}
 
