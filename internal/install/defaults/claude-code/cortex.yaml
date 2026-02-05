@@ -15,5 +15,26 @@ ticket:
       - "--allow-dangerously-skip-permissions"
       - "--allowedTools"
       - "mcp__cortex__readTicket"
+  debug:
+    agent: claude
+    args:
+      - "--permission-mode"
+      - "plan"
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readTicket,mcp__cortex__addComment"
+  research:
+    agent: claude
+    args:
+      - "--permission-mode"
+      - "plan"
+      - "--allowedTools"
+      - "mcp__cortex__readTicket,mcp__cortex__addComment"
+  chore:
+    agent: claude
+    args:
+      - "--dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readTicket"
 git:
   worktrees: false

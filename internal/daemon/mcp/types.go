@@ -37,7 +37,7 @@ type ReadTicketInput struct {
 type CreateTicketInput struct {
 	Title string `json:"title" jsonschema:"The ticket title (required)"`
 	Body  string `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Type  string `json:"type,omitempty" jsonschema:"The ticket type (e.g. 'work'). Defaults to 'work' if not specified."`
+	Type  string `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration), 'chore' (quick maintenance). Defaults to 'work' if not specified."`
 }
 
 // UpdateTicketInput is the input for the updateTicket tool.

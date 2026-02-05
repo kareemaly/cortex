@@ -79,9 +79,15 @@ architect:
   agent: claude
   args: ["--allowedTools", "mcp__cortex__*"]
 ticket:
-  work:
+  work:     # Default implementation workflow
     agent: claude
     args: ["--permission-mode", "plan"]
+  debug:    # Root cause analysis workflow
+    agent: claude
+  research: # Read-only exploration workflow
+    agent: claude
+  chore:    # Quick maintenance workflow
+    agent: claude
 git:
   worktrees: false  # Enable git worktrees for ticket isolation
 ```

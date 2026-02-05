@@ -112,6 +112,25 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	projectPath := GetProjectPath(r.Context())
+
+	// Validate ticket type against project config
+	if req.Type != "" {
+		projectCfg, err := projectconfig.Load(projectPath)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
+			return
+		}
+		if _, err := projectCfg.TicketRoleConfig(req.Type); err != nil {
+			validTypes := make([]string, 0, len(projectCfg.Ticket))
+			for t := range projectCfg.Ticket {
+				validTypes = append(validTypes, t)
+			}
+			writeError(w, http.StatusBadRequest, "invalid_type",
+				fmt.Sprintf("invalid ticket type %q, valid types: %s", req.Type, strings.Join(validTypes, ", ")))
+			return
+		}
+	}
+
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())

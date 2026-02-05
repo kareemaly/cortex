@@ -102,6 +102,16 @@ var (
 	// Warn badge style for log badge.
 	warnBadgeStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214"))
+
+	// Type badge styles for ticket types.
+	debugTypeBadgeStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("196")) // red
+
+	researchTypeBadgeStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("39")) // blue
+
+	choreTypeBadgeStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("245")) // gray
 )
 
 // columnHeaderStyle returns the appropriate header style for a status.
@@ -117,5 +127,19 @@ func columnHeaderStyle(status string) lipgloss.Style {
 		return doneHeaderStyle
 	default:
 		return backlogHeaderStyle
+	}
+}
+
+// typeBadgeStyle returns the appropriate style for a ticket type badge.
+func typeBadgeStyle(ticketType string) lipgloss.Style {
+	switch ticketType {
+	case "debug":
+		return debugTypeBadgeStyle
+	case "research":
+		return researchTypeBadgeStyle
+	case "chore":
+		return choreTypeBadgeStyle
+	default:
+		return lipgloss.NewStyle()
 	}
 }

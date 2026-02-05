@@ -174,8 +174,22 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 		for i := c.scrollOffset; i < endIdx; i++ {
 			t := c.tickets[i]
 
-			// Word wrap title
-			wrappedTitle := wrapText(t.Title, titleWidth)
+			// Build type badge for non-work types
+			typeBadge := ""
+			if t.Type != "" && t.Type != "work" {
+				typeBadge = typeBadgeStyle(t.Type).Render("[" + t.Type + "] ")
+			}
+
+			// Word wrap title (account for badge width in first line)
+			badgeWidth := len(typeBadge)
+			if badgeWidth > 0 {
+				// Badge uses ANSI escape codes, so calculate actual visible width
+				badgeWidth = len("[" + t.Type + "] ")
+			}
+			wrappedTitle := wrapText(t.Title, titleWidth-badgeWidth)
+			if typeBadge != "" && len(wrappedTitle) > 0 {
+				wrappedTitle[0] = typeBadge + wrappedTitle[0]
+			}
 
 			// Format creation date
 			dateStr := t.Created.Format("Jan 2")
