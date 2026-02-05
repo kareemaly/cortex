@@ -1,12 +1,7 @@
-# Ticket: {{.TicketTitle}}
+# Research: {{.TicketTitle}}
 
 {{.TicketBody}}
-{{if .IsWorktree}}
 
-## Worktree Information
+## Your Task
 
-- **Path**: {{.WorktreePath}}
-- **Branch**: {{.WorktreeBranch}}
-
-All changes should be made in this worktree. The branch will be merged on approval.
-{{end}}
+Explore and document. Ask questions, brainstorm ideas, analyze trade-offs. Add comments with your findings as you go. Do NOT modify any files.

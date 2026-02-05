@@ -1,12 +1,14 @@
-# Ticket: {{.TicketTitle}}
+# Debug: {{.TicketTitle}}
 
 {{.TicketBody}}
+
+## Your Task
+
+Investigate this issue systematically. Document your findings as comments before implementing any fix. Focus on understanding WHY, not just fixing symptoms.
 {{if .IsWorktree}}
 
-## Worktree Information
+## Worktree
 
 - **Path**: {{.WorktreePath}}
 - **Branch**: {{.WorktreeBranch}}
-
-All changes should be made in this worktree. The branch will be merged on approval.
 {{end}}

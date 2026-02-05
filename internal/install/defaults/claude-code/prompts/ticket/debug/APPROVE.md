@@ -1,20 +1,18 @@
 ## Approved
 
-Fix approved. Commit with root cause in message. Conclude with cause and resolution summary.
-
 {{if .IsWorktree}}
-You are working in a git worktree on branch `{{.WorktreeBranch}}`.
+Working in worktree on branch `{{.WorktreeBranch}}`.
 
-1. Commit all changes in the worktree
-2. Switch to main project and merge:
+1. Run tests to verify the fix
+2. Commit with root cause explanation in message
+3. Merge to main:
    ```bash
    cd {{.ProjectPath}}
    git merge {{.WorktreeBranch}}
-   git push origin main
    ```
-3. Call `concludeSession` with root cause and resolution summary
+4. Call `concludeSession` with root cause and resolution summary
 {{else}}
-1. Commit your changes with root cause in the commit message
-2. Push to origin
+1. Run tests to verify the fix
+2. Commit with root cause explanation in message
 3. Call `concludeSession` with root cause and resolution summary
 {{end}}

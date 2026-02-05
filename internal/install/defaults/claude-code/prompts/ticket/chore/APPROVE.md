@@ -1,20 +1,18 @@
 ## Approved
 
-Approved. Commit and conclude.
-
 {{if .IsWorktree}}
-You are working in a git worktree on branch `{{.WorktreeBranch}}`.
+Working in worktree on branch `{{.WorktreeBranch}}`.
 
-1. Commit all changes in the worktree
-2. Switch to main project and merge:
+1. Run tests if applicable
+2. Commit all changes
+3. Merge to main:
    ```bash
    cd {{.ProjectPath}}
    git merge {{.WorktreeBranch}}
-   git push origin main
    ```
-3. Call `concludeSession` with a brief summary
+4. Call `concludeSession` with brief summary
 {{else}}
-1. Commit your changes
-2. Push to origin
-3. Call `concludeSession` with a brief summary
+1. Run tests if applicable
+2. Commit changes
+3. Call `concludeSession` with brief summary
 {{end}}
