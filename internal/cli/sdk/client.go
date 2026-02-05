@@ -381,26 +381,6 @@ func (c *Client) ApproveSession(id string) error {
 	return nil
 }
 
-// RejectSession sends a reject prompt to an active session.
-func (c *Client) RejectSession(id string) error {
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/sessions/"+id+"/reject", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.doRequest(req)
-	if err != nil {
-		return fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return c.parseError(resp)
-	}
-
-	return nil
-}
-
 // FindTicketByID searches for a ticket by ID across all statuses.
 func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
 	all, err := c.ListAllTickets("")

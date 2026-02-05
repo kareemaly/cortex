@@ -41,7 +41,6 @@ type Model struct {
 	showDetailModal bool
 	modalViewport   viewport.Model
 	modalCommentIdx int // index into ticket.Comments
-	rejecting       bool
 	executingDiff   bool
 
 	// SSE subscription state
@@ -90,14 +89,6 @@ type OrphanedSessionMsg struct{}
 
 // CloseDetailMsg is sent when user wants to close the detail view.
 type CloseDetailMsg struct{}
-
-// SessionRejectedMsg is sent when a session is successfully rejected.
-type SessionRejectedMsg struct{}
-
-// RejectErrorMsg is sent when rejecting a session fails.
-type RejectErrorMsg struct {
-	Err error
-}
 
 // RefreshMsg triggers a ticket data reload (used by SSE).
 type RefreshMsg struct{}
@@ -266,16 +257,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showOrphanModal = true
 		return m, nil
 
-	case SessionRejectedMsg:
-		m.rejecting = false
-		m.loading = true
-		return m, m.loadTicket()
-
-	case RejectErrorMsg:
-		m.rejecting = false
-		m.err = msg.Err
-		return m, nil
-
 	case RefreshMsg:
 		m.loading = true
 		return m, m.loadTicket()
@@ -334,8 +315,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseDetailMsg{} }
 	}
 
-	// If loading, killing, approving, spawning, rejecting, or executing diff, don't process other keys.
-	if m.loading || m.killing || m.approving || m.spawning || m.rejecting || m.executingDiff {
+	// If loading, killing, approving, spawning, or executing diff, don't process other keys.
+	if m.loading || m.killing || m.approving || m.spawning || m.executingDiff {
 		return m, nil
 	}
 
@@ -591,11 +572,6 @@ func (m Model) handleDetailModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if isKey(msg, KeyKillSession) { // 'x' for reject
-			m.showDetailModal = false
-			m.rejecting = true
-			return m, m.rejectSession()
-		}
 		// 'd' for diff - execute git_diff action if available
 		if isKey(msg, KeyDiff) {
 			comment := m.ticket.Comments[m.modalCommentIdx]
@@ -668,20 +644,6 @@ func (m Model) canSpawn() bool {
 		return false
 	}
 	return !m.hasActiveSession()
-}
-
-// rejectSession returns a command to reject the current session review.
-func (m Model) rejectSession() tea.Cmd {
-	return func() tea.Msg {
-		if m.ticket == nil || m.ticket.Session == nil {
-			return RejectErrorMsg{Err: fmt.Errorf("no session to reject")}
-		}
-		err := m.client.RejectSession(m.ticket.Session.ID)
-		if err != nil {
-			return RejectErrorMsg{Err: err}
-		}
-		return SessionRejectedMsg{}
-	}
 }
 
 // executeDiffAction returns a command to execute a git_diff action on a comment.
@@ -910,12 +872,6 @@ func (m Model) View() string {
 	// Handle spawning state.
 	if m.spawning {
 		b.WriteString(loadingStyle.Render("Spawning session..."))
-		return b.String()
-	}
-
-	// Handle rejecting state.
-	if m.rejecting {
-		b.WriteString(loadingStyle.Render("Rejecting session..."))
 		return b.String()
 	}
 

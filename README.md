@@ -117,7 +117,7 @@ See [CONFIG_DOCS.md](internal/install/defaults/claude-code/CONFIG_DOCS.md) for f
 2. **Daemon starts** - `cortexd` launches automatically, serves all projects on port 4200
 3. **Architect session** - AI agent with MCP tools for ticket management
 4. **Worker sessions** - Each ticket gets a dedicated tmux window with scoped MCP tools
-5. **Review cycle** - Workers request review, architect approves or rejects
+5. **Review cycle** - Workers request review, architect approves
 
 The daemon handles:
 - Ticket storage (JSON files in `.cortex/tickets/`)

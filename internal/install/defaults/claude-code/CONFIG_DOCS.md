@@ -65,8 +65,7 @@ Ejected prompts are placed in `.cortex/prompts/`:
     └── work/
         ├── SYSTEM.md  # Override ticket system prompt
         ├── KICKOFF.md # Override ticket kickoff
-        ├── APPROVE.md # Override approval instructions
-        └── REJECT.md  # Override rejection instructions
+        └── APPROVE.md # Override approval instructions
 ```
 
 **Resolution order**: Project prompts → Extended base.

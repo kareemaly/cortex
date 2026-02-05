@@ -90,7 +90,7 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, 
 func modalHelpText(isReview, hasAction bool) string {
 	base := "[Esc/q] close  [j/k] scroll"
 	if isReview {
-		actions := "  [a]pprove  [x] reject"
+		actions := "  [a]pprove"
 		if hasAction {
 			actions += "  [d]iff"
 		}
