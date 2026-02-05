@@ -42,6 +42,20 @@ func DefaultClient(projectPath string) *Client {
 	return NewClient(defaultBaseURL, projectPath)
 }
 
+// WithProject returns a new Client targeting a different project.
+// The new client shares the underlying HTTP client for efficiency.
+// If projectPath is empty, returns the same client unchanged.
+func (c *Client) WithProject(projectPath string) *Client {
+	if projectPath == "" {
+		return c
+	}
+	return &Client{
+		baseURL:     c.baseURL,
+		httpClient:  c.httpClient,
+		projectPath: projectPath,
+	}
+}
+
 // doRequest executes an HTTP request with the project header.
 func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 	if c.projectPath != "" {

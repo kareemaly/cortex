@@ -24,29 +24,33 @@ type Session struct {
 
 // ListTicketsInput is the input for the listTickets tool.
 type ListTicketsInput struct {
-	Status    string `json:"status" jsonschema:"Ticket status to filter by (required). Must be one of: backlog, progress, review, done"`
-	Query     string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
-	DueBefore string `json:"due_before,omitempty" jsonschema:"Optional RFC3339 timestamp to filter tickets with due date before this time."`
+	Status      string `json:"status" jsonschema:"Ticket status to filter by (required). Must be one of: backlog, progress, review, done"`
+	Query       string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
+	DueBefore   string `json:"due_before,omitempty" jsonschema:"Optional RFC3339 timestamp to filter tickets with due date before this time."`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // ReadTicketInput is the input for the readTicket tool.
 type ReadTicketInput struct {
-	ID string `json:"id" jsonschema:"The ticket ID to read"`
+	ID          string `json:"id" jsonschema:"The ticket ID to read"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // CreateTicketInput is the input for the createTicket tool.
 type CreateTicketInput struct {
-	Title   string `json:"title" jsonschema:"The ticket title (required)"`
-	Body    string `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Type    string `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration), 'chore' (quick maintenance). Defaults to 'work' if not specified."`
-	DueDate string `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
+	Title       string `json:"title" jsonschema:"The ticket title (required)"`
+	Body        string `json:"body,omitempty" jsonschema:"The ticket body/description"`
+	Type        string `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration), 'chore' (quick maintenance). Defaults to 'work' if not specified."`
+	DueDate     string `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // UpdateTicketInput is the input for the updateTicket tool.
 type UpdateTicketInput struct {
-	ID    string  `json:"id" jsonschema:"The ticket ID to update"`
-	Title *string `json:"title,omitempty" jsonschema:"New title (optional)"`
-	Body  *string `json:"body,omitempty" jsonschema:"New body (optional)"`
+	ID          string  `json:"id" jsonschema:"The ticket ID to update"`
+	Title       *string `json:"title,omitempty" jsonschema:"New title (optional)"`
+	Body        *string `json:"body,omitempty" jsonschema:"New body (optional)"`
+	ProjectPath string  `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // DeleteTicketInput is the input for the deleteTicket tool.
@@ -56,37 +60,58 @@ type DeleteTicketInput struct {
 
 // MoveTicketInput is the input for the moveTicket tool.
 type MoveTicketInput struct {
-	ID     string `json:"id" jsonschema:"The ticket ID to move"`
-	Status string `json:"status" jsonschema:"Target status (backlog/progress/review/done)"`
+	ID          string `json:"id" jsonschema:"The ticket ID to move"`
+	Status      string `json:"status" jsonschema:"Target status (backlog/progress/review/done)"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // SpawnSessionInput is the input for the spawnSession tool.
 type SpawnSessionInput struct {
-	TicketID string `json:"ticket_id" jsonschema:"The ticket ID to spawn a session for"`
-	Mode     string `json:"mode,omitempty" jsonschema:"Spawn mode: 'normal' (default), 'resume', or 'fresh'"`
+	TicketID    string `json:"ticket_id" jsonschema:"The ticket ID to spawn a session for"`
+	Mode        string `json:"mode,omitempty" jsonschema:"Spawn mode: 'normal' (default), 'resume', or 'fresh'"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // ArchitectAddCommentInput is the input for the architect's addTicketComment tool.
 type ArchitectAddCommentInput struct {
-	ID      string `json:"id" jsonschema:"The ticket ID to add a comment to"`
-	Type    string `json:"type" jsonschema:"Comment type (review_requested/done/blocker/comment)"`
-	Content string `json:"content" jsonschema:"The comment content"`
+	ID          string `json:"id" jsonschema:"The ticket ID to add a comment to"`
+	Type        string `json:"type" jsonschema:"Comment type (review_requested/done/blocker/comment)"`
+	Content     string `json:"content" jsonschema:"The comment content"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // UpdateDueDateInput is the input for the updateDueDate tool.
 type UpdateDueDateInput struct {
-	ID      string `json:"id" jsonschema:"The ticket ID (required)"`
-	DueDate string `json:"due_date" jsonschema:"The due date in RFC3339 format (required, e.g., '2024-12-31T23:59:59Z')"`
+	ID          string `json:"id" jsonschema:"The ticket ID (required)"`
+	DueDate     string `json:"due_date" jsonschema:"The due date in RFC3339 format (required, e.g., '2024-12-31T23:59:59Z')"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // ClearDueDateInput is the input for the clearDueDate tool.
 type ClearDueDateInput struct {
-	ID string `json:"id" jsonschema:"The ticket ID (required)"`
+	ID          string `json:"id" jsonschema:"The ticket ID (required)"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // GetCortexConfigDocsInput is the input for the getCortexConfigDocs tool.
 // This tool takes no parameters.
 type GetCortexConfigDocsInput struct{}
+
+// ListProjectsInput is the input for the listProjects tool.
+// This tool takes no parameters.
+type ListProjectsInput struct{}
+
+// ProjectSummary represents a project in the listProjects output.
+type ProjectSummary struct {
+	Path   string `json:"path"`
+	Title  string `json:"title"`
+	Exists bool   `json:"exists"`
+}
+
+// ListProjectsOutput is the output for the listProjects tool.
+type ListProjectsOutput struct {
+	Projects []ProjectSummary `json:"projects"`
+}
 
 // Input types for ticket tools
 

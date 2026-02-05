@@ -124,17 +124,20 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 
 | Tool | Description |
 |------|-------------|
+| `listProjects` | List all registered projects (for cross-project operations) |
 | `listTickets` | List tickets by status (backlog/progress/review/done), optional search query and due_before filter |
 | `readTicket` | Read full ticket details by ID |
 | `createTicket` | Create ticket with title, body, type, and optional due_date |
 | `updateTicket` | Update ticket title and/or body |
-| `deleteTicket` | Delete ticket by ID |
+| `deleteTicket` | Delete ticket by ID (current project only) |
 | `moveTicket` | Move ticket to different status |
 | `updateDueDate` | Set or update ticket due date |
 | `clearDueDate` | Remove due date from ticket |
 | `addTicketComment` | Add comment to ticket (types: review_requested, done, blocker, comment) |
 | `spawnSession` | Spawn agent session for ticket (modes: normal, resume, fresh) |
 | `getCortexConfigDocs` | Get CONFIG_DOCS.md for customization guidance |
+
+**Cross-project support**: Most architect tools accept an optional `project_path` parameter to operate on a different registered project. Use `listProjects` to discover available projects. Exception: `deleteTicket` is restricted to the current project for safety.
 
 **Ticket Agent** (`tools_ticket.go`):
 

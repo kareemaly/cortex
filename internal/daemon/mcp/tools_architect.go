@@ -10,18 +10,61 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/daemon/api"
 	"github.com/kareemaly/cortex/internal/install"
 	"github.com/kareemaly/cortex/internal/types"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// validateProjectPath validates that a project path is registered and exists.
+// Returns nil if projectPath is empty (uses default project).
+// Returns a ToolError if the project is not registered or doesn't exist.
+func (s *Server) validateProjectPath(projectPath string) *ToolError {
+	if projectPath == "" {
+		return nil // Use default project
+	}
+
+	// List all registered projects
+	resp, err := s.sdkClient.ListProjects()
+	if err != nil {
+		return NewInternalError("failed to list projects: " + err.Error())
+	}
+
+	// Check if project is registered
+	for _, p := range resp.Projects {
+		if p.Path == projectPath {
+			if !p.Exists {
+				return NewValidationError("project_path", fmt.Sprintf("project directory does not exist: %s", projectPath))
+			}
+			return nil // Valid
+		}
+	}
+
+	return NewValidationError("project_path", fmt.Sprintf("project not registered: %s (use 'cortex register %s' to register it)", projectPath, projectPath))
+}
+
+// getClientForProject returns an SDK client for the specified project.
+// If projectPath is empty, returns the server's default client.
+func (s *Server) getClientForProject(projectPath string) *sdk.Client {
+	if projectPath == "" {
+		return s.sdkClient
+	}
+	return s.sdkClient.WithProject(projectPath)
+}
+
 // registerArchitectTools registers all tools available to architect sessions.
 func (s *Server) registerArchitectTools() {
+	// List projects (cross-project)
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "listProjects",
+		Description: "List all registered projects with their paths and titles. Use this to discover available projects for cross-project operations.",
+	}, s.handleListProjects)
+
 	// List tickets
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "listTickets",
-		Description: "List tickets by status. Status parameter is required and must be one of: backlog, progress, review, done",
+		Description: "List tickets by status. Status parameter is required and must be one of: backlog, progress, review, done. Optionally specify project_path to list tickets from a different project.",
 	}, s.handleListTickets)
 
 	// Read ticket
@@ -85,12 +128,46 @@ func (s *Server) registerArchitectTools() {
 	}, s.handleClearDueDate)
 }
 
+// handleListProjects lists all registered projects.
+func (s *Server) handleListProjects(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input ListProjectsInput,
+) (*mcp.CallToolResult, ListProjectsOutput, error) {
+	resp, err := s.sdkClient.ListProjects()
+	if err != nil {
+		return nil, ListProjectsOutput{}, wrapSDKError(err)
+	}
+
+	// Map SDK response to MCP output
+	projects := make([]ProjectSummary, len(resp.Projects))
+	for i, p := range resp.Projects {
+		projects[i] = ProjectSummary{
+			Path:   p.Path,
+			Title:  p.Title,
+			Exists: p.Exists,
+		}
+	}
+
+	return nil, ListProjectsOutput{
+		Projects: projects,
+	}, nil
+}
+
 // handleListTickets lists tickets by status.
 func (s *Server) handleListTickets(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input ListTicketsInput,
 ) (*mcp.CallToolResult, ListTicketsOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, ListTicketsOutput{}, err
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
 	// Validate status is provided and valid
 	if input.Status == "" {
 		return nil, ListTicketsOutput{}, NewValidationError("status", "is required")
@@ -109,7 +186,7 @@ func (s *Server) handleListTickets(
 		dueBefore = &parsed
 	}
 
-	resp, err := s.sdkClient.ListTicketsByStatus(input.Status, input.Query, dueBefore)
+	resp, err := client.ListTicketsByStatus(input.Status, input.Query, dueBefore)
 	if err != nil {
 		return nil, ListTicketsOutput{}, wrapSDKError(err)
 	}
@@ -132,11 +209,19 @@ func (s *Server) handleReadTicket(
 	req *mcp.CallToolRequest,
 	input ReadTicketInput,
 ) (*mcp.CallToolResult, ReadTicketOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, ReadTicketOutput{}, err
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
 	if input.ID == "" {
 		return nil, ReadTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.GetTicketByID(input.ID)
+	resp, err := client.GetTicketByID(input.ID)
 	if err != nil {
 		return nil, ReadTicketOutput{}, wrapSDKError(err)
 	}
@@ -152,6 +237,14 @@ func (s *Server) handleCreateTicket(
 	req *mcp.CallToolRequest,
 	input CreateTicketInput,
 ) (*mcp.CallToolResult, CreateTicketOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, CreateTicketOutput{}, err
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
 	// Parse dueDate if provided
 	var dueDate *time.Time
 	if input.DueDate != "" {
@@ -162,7 +255,7 @@ func (s *Server) handleCreateTicket(
 		dueDate = &parsed
 	}
 
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Type, dueDate)
+	resp, err := client.CreateTicket(input.Title, input.Body, input.Type, dueDate)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
@@ -178,11 +271,19 @@ func (s *Server) handleUpdateTicket(
 	req *mcp.CallToolRequest,
 	input UpdateTicketInput,
 ) (*mcp.CallToolResult, UpdateTicketOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, UpdateTicketOutput{}, err
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
 	if input.ID == "" {
 		return nil, UpdateTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.UpdateTicket(input.ID, input.Title, input.Body)
+	resp, err := client.UpdateTicket(input.ID, input.Title, input.Body)
 	if err != nil {
 		return nil, UpdateTicketOutput{}, wrapSDKError(err)
 	}
@@ -219,6 +320,14 @@ func (s *Server) handleMoveTicket(
 	req *mcp.CallToolRequest,
 	input MoveTicketInput,
 ) (*mcp.CallToolResult, MoveTicketOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, MoveTicketOutput{}, err
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
 	if input.ID == "" {
 		return nil, MoveTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
@@ -231,7 +340,7 @@ func (s *Server) handleMoveTicket(
 		return nil, MoveTicketOutput{}, NewValidationError("status", "must be backlog, progress, review, or done")
 	}
 
-	_, err := s.sdkClient.MoveTicket(input.ID, input.Status)
+	_, err := client.MoveTicket(input.ID, input.Status)
 	if err != nil {
 		return nil, MoveTicketOutput{}, wrapSDKError(err)
 	}
@@ -249,11 +358,19 @@ func (s *Server) handleArchitectAddComment(
 	req *mcp.CallToolRequest,
 	input ArchitectAddCommentInput,
 ) (*mcp.CallToolResult, AddCommentOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, AddCommentOutput{}, err
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
 	if input.ID == "" {
 		return nil, AddCommentOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.AddComment(input.ID, input.Type, input.Content)
+	resp, err := client.AddComment(input.ID, input.Type, input.Content)
 	if err != nil {
 		return nil, AddCommentOutput{}, wrapSDKError(err)
 	}
@@ -271,6 +388,20 @@ func (s *Server) handleSpawnSession(
 	req *mcp.CallToolRequest,
 	input SpawnSessionInput,
 ) (*mcp.CallToolResult, SpawnSessionOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, SpawnSessionOutput{}, err
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
+	// Determine which project path to use for the HTTP header
+	projectPath := input.ProjectPath
+	if projectPath == "" {
+		projectPath = s.config.ProjectPath
+	}
+
 	if input.TicketID == "" {
 		return nil, SpawnSessionOutput{}, NewValidationError("ticket_id", "cannot be empty")
 	}
@@ -281,7 +412,7 @@ func (s *Server) handleSpawnSession(
 	}
 
 	// Look up ticket status via daemon API (needed to build the spawn URL)
-	ticketResp, err := s.sdkClient.GetTicketByID(input.TicketID)
+	ticketResp, err := client.GetTicketByID(input.TicketID)
 	if err != nil {
 		return nil, SpawnSessionOutput{}, wrapSDKError(err)
 	}
@@ -296,7 +427,7 @@ func (s *Server) handleSpawnSession(
 	if err != nil {
 		return nil, SpawnSessionOutput{}, NewInternalError("failed to create request: " + err.Error())
 	}
-	httpReq.Header.Set("X-Cortex-Project", s.config.ProjectPath)
+	httpReq.Header.Set("X-Cortex-Project", projectPath)
 
 	// Execute request
 	resp, err := http.DefaultClient.Do(httpReq)
@@ -427,6 +558,14 @@ func (s *Server) handleUpdateDueDate(
 	req *mcp.CallToolRequest,
 	input UpdateDueDateInput,
 ) (*mcp.CallToolResult, UpdateDueDateOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, UpdateDueDateOutput{}, err
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
 	if input.ID == "" {
 		return nil, UpdateDueDateOutput{}, NewValidationError("id", "cannot be empty")
 	}
@@ -440,7 +579,7 @@ func (s *Server) handleUpdateDueDate(
 		return nil, UpdateDueDateOutput{}, NewValidationError("due_date", "must be in RFC3339 format")
 	}
 
-	resp, err := s.sdkClient.SetDueDate(input.ID, dueDate)
+	resp, err := client.SetDueDate(input.ID, dueDate)
 	if err != nil {
 		return nil, UpdateDueDateOutput{}, wrapSDKError(err)
 	}
@@ -456,11 +595,19 @@ func (s *Server) handleClearDueDate(
 	req *mcp.CallToolRequest,
 	input ClearDueDateInput,
 ) (*mcp.CallToolResult, ClearDueDateOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, ClearDueDateOutput{}, err
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
 	if input.ID == "" {
 		return nil, ClearDueDateOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.ClearDueDate(input.ID)
+	resp, err := client.ClearDueDate(input.ID)
 	if err != nil {
 		return nil, ClearDueDateOutput{}, wrapSDKError(err)
 	}
