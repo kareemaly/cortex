@@ -29,26 +29,56 @@ func init() {
 	defaultsUpgradeCmd.Flags().BoolVarP(&defaultsUpgradeDryRun, "dry-run", "n", false, "Preview changes without applying them")
 }
 
+// defaultConfigs lists all config directories to upgrade.
+var defaultConfigs = []string{"claude-code", "copilot"}
+
 func runDefaultsUpgradeCmd(cmd *cobra.Command, args []string) error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	targetDir := fmt.Sprintf("%s/.cortex/defaults/claude-code", homeDir)
-
 	if defaultsUpgradeDryRun {
-		return runDefaultsUpgradeDryRun(targetDir)
+		return runDefaultsUpgradeDryRunAll(homeDir)
 	}
 
-	return runDefaultsUpgradeApply(targetDir)
+	return runDefaultsUpgradeApplyAll(homeDir)
 }
 
-func runDefaultsUpgradeDryRun(targetDir string) error {
+func runDefaultsUpgradeDryRunAll(homeDir string) error {
 	fmt.Println("Dry run - no changes will be made")
 	fmt.Println()
 
-	items, err := install.CompareEmbeddedDefaults("claude-code", targetDir)
+	for _, configName := range defaultConfigs {
+		targetDir := fmt.Sprintf("%s/.cortex/defaults/%s", homeDir, configName)
+		fmt.Printf("=== %s ===\n\n", configName)
+		if err := runDefaultsUpgradeDryRun(configName, targetDir); err != nil {
+			return err
+		}
+		fmt.Println()
+	}
+
+	return nil
+}
+
+func runDefaultsUpgradeApplyAll(homeDir string) error {
+	fmt.Println("Upgrading defaults...")
+	fmt.Println()
+
+	for _, configName := range defaultConfigs {
+		targetDir := fmt.Sprintf("%s/.cortex/defaults/%s", homeDir, configName)
+		fmt.Printf("=== %s ===\n\n", configName)
+		if err := runDefaultsUpgradeApply(configName, targetDir); err != nil {
+			return err
+		}
+		fmt.Println()
+	}
+
+	return nil
+}
+
+func runDefaultsUpgradeDryRun(configName, targetDir string) error {
+	items, err := install.CompareEmbeddedDefaults(configName, targetDir)
 	if err != nil {
 		return fmt.Errorf("failed to compare defaults: %w", err)
 	}
@@ -86,11 +116,8 @@ func runDefaultsUpgradeDryRun(targetDir string) error {
 	return nil
 }
 
-func runDefaultsUpgradeApply(targetDir string) error {
-	fmt.Println("Upgrading defaults...")
-	fmt.Println()
-
-	items, err := install.CopyEmbeddedDefaults("claude-code", targetDir, true)
+func runDefaultsUpgradeApply(configName, targetDir string) error {
+	items, err := install.CopyEmbeddedDefaults(configName, targetDir, true)
 	if err != nil {
 		return fmt.Errorf("failed to upgrade defaults: %w", err)
 	}

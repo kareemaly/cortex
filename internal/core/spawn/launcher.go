@@ -9,6 +9,7 @@ import (
 
 // LauncherParams contains all parameters needed to generate a launcher script.
 type LauncherParams struct {
+	AgentType            string            // agent type: "claude", "opencode", or "copilot"
 	PromptFilePath       string            // path to prompt temp file (empty if none)
 	SystemPromptFilePath string            // path to system prompt temp file (empty if none)
 	ReplaceSystemPrompt  bool              // if true, use --system-prompt (full replace); otherwise --append-system-prompt
@@ -80,7 +81,24 @@ func buildLauncherScript(params LauncherParams, cleanupFiles []string) string {
 		sb.WriteString(fmt.Sprintf("export %s=%s\n", k, shellQuote(v)))
 	}
 
-	// Build claude command
+	// Build agent command based on type
+	var command string
+	switch params.AgentType {
+	case "copilot":
+		command = buildCopilotCommand(params)
+	default:
+		// Default to claude (works for both "claude" and "opencode")
+		command = buildClaudeCommand(params)
+	}
+
+	sb.WriteString(command)
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// buildClaudeCommand builds the claude CLI command string.
+func buildClaudeCommand(params LauncherParams) string {
 	var parts []string
 	parts = append(parts, "claude")
 
@@ -123,10 +141,50 @@ func buildLauncherScript(params LauncherParams, cleanupFiles []string) string {
 		parts = append(parts, shellQuote(arg))
 	}
 
-	sb.WriteString(strings.Join(parts, " "))
-	sb.WriteString("\n")
+	return strings.Join(parts, " ")
+}
 
-	return sb.String()
+// buildCopilotCommand builds the copilot CLI command string.
+// Copilot uses different flags than Claude:
+//   - Command: `gh copilot agent` instead of `claude`
+//   - MCP: `--additional-mcp-config` instead of `--mcp-config`
+//   - No `--system-prompt` or `--settings` flags (Copilot doesn't support these)
+//   - `--yolo` for automation mode (required)
+//   - `--no-custom-instructions` to ignore AGENTS.md files
+func buildCopilotCommand(params LauncherParams) string {
+	var parts []string
+	parts = append(parts, "gh", "copilot", "agent")
+
+	// Required: enable automation mode
+	parts = append(parts, "--yolo")
+
+	// Ignore AGENTS.md files (Cortex manages its own prompts)
+	parts = append(parts, "--no-custom-instructions")
+
+	// Add prompt via $(cat file)
+	if params.PromptFilePath != "" {
+		parts = append(parts, fmt.Sprintf("\"$(cat %s)\"", shellQuote(params.PromptFilePath)))
+	}
+
+	// Add MCP config (Copilot uses --additional-mcp-config)
+	if params.MCPConfigPath != "" {
+		parts = append(parts, "--additional-mcp-config", shellQuote(params.MCPConfigPath))
+	}
+
+	// Add resume flag (same format as Claude)
+	if params.ResumeID != "" {
+		parts = append(parts, "--resume", params.ResumeID)
+	}
+
+	// Note: Copilot doesn't support --session-id, --system-prompt, or --settings
+	// SystemPromptFilePath and SettingsPath are ignored for Copilot
+
+	// Add extra agent args
+	for _, arg := range params.AgentArgs {
+		parts = append(parts, shellQuote(arg))
+	}
+
+	return strings.Join(parts, " ")
 }
 
 // shellQuote wraps a string in single quotes for safe shell inclusion.

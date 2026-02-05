@@ -114,11 +114,18 @@ git_diff_tool: ` + gitDiffTool + `
 	}
 
 	// Create defaults/claude-code directory with full config and prompts
-	basicItems, err := setupClaudeCodeDefaults(homeDir, force)
+	claudeItems, err := setupClaudeCodeDefaults(homeDir, force)
 	if err != nil {
-		return append(items, basicItems...), err
+		return append(items, claudeItems...), err
 	}
-	items = append(items, basicItems...)
+	items = append(items, claudeItems...)
+
+	// Create defaults/copilot directory with full config and prompts
+	copilotItems, err := setupCopilotDefaults(homeDir, force)
+	if err != nil {
+		return append(items, copilotItems...), err
+	}
+	items = append(items, copilotItems...)
 
 	return items, nil
 }
@@ -127,6 +134,12 @@ git_diff_tool: ` + gitDiffTool + `
 func setupClaudeCodeDefaults(homeDir string, force bool) ([]SetupItem, error) {
 	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "claude-code")
 	return CopyEmbeddedDefaults("claude-code", targetDir, force)
+}
+
+// setupCopilotDefaults copies embedded default config to ~/.cortex/defaults/copilot/.
+func setupCopilotDefaults(homeDir string, force bool) ([]SetupItem, error) {
+	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "copilot")
+	return CopyEmbeddedDefaults("copilot", targetDir, force)
 }
 
 // setupProject creates the project .cortex/ directory and config.

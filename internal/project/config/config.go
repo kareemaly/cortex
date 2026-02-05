@@ -14,6 +14,7 @@ type AgentType string
 const (
 	AgentClaude   AgentType = "claude"
 	AgentOpenCode AgentType = "opencode"
+	AgentCopilot  AgentType = "copilot"
 )
 
 // RoleConfig holds configuration for a specific role (architect or ticket type).
@@ -194,19 +195,19 @@ func LoadFromPath(path string) (*Config, string, error) {
 // Validate checks that the config is valid.
 func (c *Config) Validate() error {
 	// Validate architect agent type
-	if c.Architect.Agent != "" && c.Architect.Agent != AgentClaude && c.Architect.Agent != AgentOpenCode {
+	if c.Architect.Agent != "" && c.Architect.Agent != AgentClaude && c.Architect.Agent != AgentOpenCode && c.Architect.Agent != AgentCopilot {
 		return &ValidationError{
 			Field:   "architect.agent",
-			Message: "must be 'claude' or 'opencode'",
+			Message: "must be 'claude', 'opencode', or 'copilot'",
 		}
 	}
 
 	// Validate each ticket type's agent
 	for typeName, role := range c.Ticket {
-		if role.Agent != "" && role.Agent != AgentClaude && role.Agent != AgentOpenCode {
+		if role.Agent != "" && role.Agent != AgentClaude && role.Agent != AgentOpenCode && role.Agent != AgentCopilot {
 			return &ValidationError{
 				Field:   fmt.Sprintf("ticket.%s.agent", typeName),
-				Message: "must be 'claude' or 'opencode'",
+				Message: "must be 'claude', 'opencode', or 'copilot'",
 			}
 		}
 	}

@@ -205,6 +205,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 			}
 			result, err = spawner.Resume(ctx, ResumeRequest{
 				AgentType:   AgentTypeTicketAgent,
+				Agent:       agent,
 				TmuxSession: tmuxSession,
 				ProjectPath: req.ProjectPath,
 				TicketsDir:  ticketsDir,

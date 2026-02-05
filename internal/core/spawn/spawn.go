@@ -100,6 +100,7 @@ type SpawnRequest struct {
 // ResumeRequest contains parameters for resuming an orphaned session.
 type ResumeRequest struct {
 	AgentType   AgentType
+	Agent       string // agent identifier (e.g., "claude", "copilot")
 	TmuxSession string
 	ProjectPath string
 	TicketsDir  string
@@ -211,17 +212,20 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		return nil, err
 	}
 
-	// Generate and write settings config (hooks)
-	settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
-		CortexdPath: cortexdPath,
-		TicketID:    req.TicketID,
-		ProjectPath: req.ProjectPath,
-	})
+	// Generate and write settings config (hooks) - skip for Copilot (doesn't support --settings)
+	var settingsPath string
+	if req.Agent != "copilot" {
+		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
+			CortexdPath: cortexdPath,
+			TicketID:    req.TicketID,
+			ProjectPath: req.ProjectPath,
+		})
 
-	settingsPath, err := WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
-	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath}, worktreePath, featureBranch, req.ProjectPath)
-		return nil, err
+		settingsPath, err = WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
+		if err != nil {
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath}, worktreePath, featureBranch, req.ProjectPath)
+			return nil, err
+		}
 	}
 
 	// Load and build prompt
@@ -254,6 +258,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	// Build launcher params based on agent type
 	tempFiles := nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath)
 	launcherParams := LauncherParams{
+		AgentType:            req.Agent,
 		PromptFilePath:       promptFilePath,
 		SystemPromptFilePath: systemPromptFilePath,
 		MCPConfigPath:        mcpConfigPath,
@@ -330,24 +335,28 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		return nil, err
 	}
 
-	// Generate and write settings config (hooks)
-	settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
-		CortexdPath: cortexdPath,
-		TicketID:    req.TicketID,
-		ProjectPath: req.ProjectPath,
-	})
+	// Generate and write settings config (hooks) - skip for Copilot (doesn't support --settings)
+	var settingsPath string
+	if req.Agent != "copilot" {
+		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
+			CortexdPath: cortexdPath,
+			TicketID:    req.TicketID,
+			ProjectPath: req.ProjectPath,
+		})
 
-	settingsPath, err := WriteSettingsConfig(settingsConfig, req.TicketID, s.deps.SettingsConfigDir)
-	if err != nil {
-		if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
-			s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
+		settingsPath, err = WriteSettingsConfig(settingsConfig, req.TicketID, s.deps.SettingsConfigDir)
+		if err != nil {
+			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
+				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 
 	// Build launcher script for resume (no prompt files needed)
 	tempFiles := nonEmptyStrings(mcpConfigPath, settingsPath)
 	launcherParams := LauncherParams{
+		AgentType:     req.Agent,
 		MCPConfigPath: mcpConfigPath,
 		SettingsPath:  settingsPath,
 		ResumeID:      req.SessionID,
@@ -524,9 +533,14 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 	resolver := prompt.NewPromptResolver(req.ProjectPath, req.BaseConfigPath)
 
 	// Load system prompt (MCP tool instructions and workflow)
-	systemPromptContent, err := resolver.ResolveTicketPrompt(ticketType, prompt.StageSystem)
-	if err != nil {
-		return nil, err
+	// Skip for Copilot - it doesn't support --system-prompt CLI flag
+	var systemPromptContent string
+	if req.Agent != "copilot" {
+		var err error
+		systemPromptContent, err = resolver.ResolveTicketPrompt(ticketType, prompt.StageSystem)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Load kickoff template
@@ -571,9 +585,15 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	// Create prompt resolver with fallback support
 	resolver := prompt.NewPromptResolver(req.ProjectPath, req.BaseConfigPath)
 
-	systemPromptContent, err := resolver.ResolveArchitectPrompt(prompt.StageSystem)
-	if err != nil {
-		return nil, err
+	// Load system prompt (MCP tool instructions and workflow)
+	// Skip for Copilot - it doesn't support --system-prompt CLI flag
+	var systemPromptContent string
+	if req.Agent != "copilot" {
+		var err error
+		systemPromptContent, err = resolver.ResolveArchitectPrompt(prompt.StageSystem)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Query daemon API to get tickets by status

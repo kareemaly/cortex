@@ -522,10 +522,16 @@ func (s *Server) handleGetCortexConfigDocs(
 	input GetCortexConfigDocsInput,
 ) (*mcp.CallToolResult, GetCortexConfigDocsOutput, error) {
 	// Determine config name from agent type
-	// Config agent type "claude" maps to "claude-code" directory
+	// "claude" -> "claude-code" directory
+	// "copilot" -> "copilot" directory (no "-code" suffix)
 	configName := "claude-code" // default
 	if s.projectConfig != nil && s.projectConfig.Architect.Agent != "" {
-		configName = string(s.projectConfig.Architect.Agent) + "-code"
+		agent := string(s.projectConfig.Architect.Agent)
+		if agent == "copilot" {
+			configName = "copilot"
+		} else {
+			configName = agent + "-code"
+		}
 	}
 
 	// Try reading from resolved extend path first (allows user customization)
