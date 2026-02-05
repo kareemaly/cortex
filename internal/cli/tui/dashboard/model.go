@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -35,6 +36,26 @@ type projectData struct {
 	architect *sdk.ArchitectStateResponse
 	loading   bool
 	err       error
+}
+
+// isActive returns true if the project has an active architect or ticket session.
+func (pd projectData) isActive() bool {
+	if pd.architect != nil && pd.architect.State == "active" {
+		return true
+	}
+	if pd.tickets != nil {
+		for _, t := range pd.tickets.Progress {
+			if t.HasActiveSession {
+				return true
+			}
+		}
+		for _, t := range pd.tickets.Review {
+			if t.HasActiveSession {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Model is the main Bubbletea model for the dashboard.
@@ -657,6 +678,18 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 
 // rebuildRows flattens the project tree into rows.
 func (m *Model) rebuildRows() {
+	// Sort projects: active first, preserving relative order within groups.
+	slices.SortStableFunc(m.projects, func(a, b projectData) int {
+		aActive, bActive := a.isActive(), b.isActive()
+		if aActive && !bActive {
+			return -1
+		}
+		if !aActive && bActive {
+			return 1
+		}
+		return 0
+	})
+
 	var rows []row
 	for i, pd := range m.projects {
 		rows = append(rows, row{kind: rowProject, projectIndex: i})
