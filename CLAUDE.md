@@ -81,10 +81,11 @@ Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (
 | Worktree manager | `internal/worktree/` |
 | TUI components | `internal/cli/tui/` |
 | Install/init logic | `internal/install/` |
+| Agent defaults | `internal/install/defaults/` (`claude-code`, `copilot`) |
 
 ## Configuration
 
-**Project** (`.cortex/cortex.yaml`): Agent type, agent args, git worktrees, lifecycle hooks. See `internal/project/config/config.go` for schema.
+**Project** (`.cortex/cortex.yaml`): Agent type (`claude`, `opencode`, `copilot`), agent args, git worktrees, lifecycle hooks. See `internal/project/config/config.go` for schema.
 
 **Global** (`~/.cortex/settings.yaml`): Daemon port, log level, project registry. See `internal/daemon/config/config.go` for schema.
 
