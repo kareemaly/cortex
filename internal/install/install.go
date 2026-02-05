@@ -126,7 +126,7 @@ git_diff_tool: ` + gitDiffTool + `
 // setupClaudeCodeDefaults copies embedded default config to ~/.cortex/defaults/claude-code/.
 func setupClaudeCodeDefaults(homeDir string, force bool) ([]SetupItem, error) {
 	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "claude-code")
-	return copyEmbeddedDefaults("claude-code", targetDir, force)
+	return CopyEmbeddedDefaults("claude-code", targetDir, force)
 }
 
 // setupProject creates the project .cortex/ directory and config.

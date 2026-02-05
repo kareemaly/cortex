@@ -11,9 +11,9 @@ func TestCopyEmbeddedDefaults(t *testing.T) {
 	targetDir := filepath.Join(tmpDir, "claude-code")
 
 	// Copy embedded defaults
-	items, err := copyEmbeddedDefaults("claude-code", targetDir, false)
+	items, err := CopyEmbeddedDefaults("claude-code", targetDir, false)
 	if err != nil {
-		t.Fatalf("copyEmbeddedDefaults failed: %v", err)
+		t.Fatalf("CopyEmbeddedDefaults failed: %v", err)
 	}
 
 	// Verify we got items
@@ -62,9 +62,9 @@ func TestCopyEmbeddedDefaultsNoOverwrite(t *testing.T) {
 	targetDir := filepath.Join(tmpDir, "claude-code")
 
 	// First copy
-	_, err := copyEmbeddedDefaults("claude-code", targetDir, false)
+	_, err := CopyEmbeddedDefaults("claude-code", targetDir, false)
 	if err != nil {
-		t.Fatalf("first copyEmbeddedDefaults failed: %v", err)
+		t.Fatalf("first CopyEmbeddedDefaults failed: %v", err)
 	}
 
 	// Modify a file to simulate user customization
@@ -75,9 +75,9 @@ func TestCopyEmbeddedDefaultsNoOverwrite(t *testing.T) {
 	}
 
 	// Second copy without force - should NOT overwrite
-	items, err := copyEmbeddedDefaults("claude-code", targetDir, false)
+	items, err := CopyEmbeddedDefaults("claude-code", targetDir, false)
 	if err != nil {
-		t.Fatalf("second copyEmbeddedDefaults failed: %v", err)
+		t.Fatalf("second CopyEmbeddedDefaults failed: %v", err)
 	}
 
 	// Check that the file was NOT overwritten
@@ -102,9 +102,9 @@ func TestCopyEmbeddedDefaultsForce(t *testing.T) {
 	targetDir := filepath.Join(tmpDir, "claude-code")
 
 	// First copy
-	_, err := copyEmbeddedDefaults("claude-code", targetDir, false)
+	_, err := CopyEmbeddedDefaults("claude-code", targetDir, false)
 	if err != nil {
-		t.Fatalf("first copyEmbeddedDefaults failed: %v", err)
+		t.Fatalf("first CopyEmbeddedDefaults failed: %v", err)
 	}
 
 	// Modify a file to simulate user customization
@@ -115,9 +115,9 @@ func TestCopyEmbeddedDefaultsForce(t *testing.T) {
 	}
 
 	// Second copy WITH force - SHOULD overwrite
-	_, err = copyEmbeddedDefaults("claude-code", targetDir, true)
+	_, err = CopyEmbeddedDefaults("claude-code", targetDir, true)
 	if err != nil {
-		t.Fatalf("second copyEmbeddedDefaults with force failed: %v", err)
+		t.Fatalf("second CopyEmbeddedDefaults with force failed: %v", err)
 	}
 
 	// Check that the file WAS overwritten
