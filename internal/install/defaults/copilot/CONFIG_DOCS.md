@@ -95,7 +95,7 @@ Ejected prompts are placed in `.cortex/prompts/`:
 |----------|-------------|
 | `{{.ProjectName}}` | Project name from config |
 | `{{.TicketList}}` | Formatted ticket list by status |
-| `{{.CurrentDate}}` | Current date |
+| `{{.CurrentDate}}` | Current date, time, and timezone |
 
 ### Ticket Prompts
 

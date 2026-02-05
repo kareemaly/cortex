@@ -1,6 +1,6 @@
 # Project: {{.ProjectName}}
 
-**Current date**: {{.CurrentDate}}
+**Session started**: {{.CurrentDate}}
 
 ## Role
 
