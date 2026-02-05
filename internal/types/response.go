@@ -16,6 +16,7 @@ type DatesResponse struct {
 	Progress *time.Time `json:"progress,omitempty"`
 	Reviewed *time.Time `json:"reviewed,omitempty"`
 	Done     *time.Time `json:"done,omitempty"`
+	DueDate  *time.Time `json:"due_date,omitempty"`
 }
 
 // CommentResponse is a comment in a ticket response.
@@ -67,15 +68,16 @@ type TicketResponse struct {
 
 // TicketSummary is a brief view of a ticket for lists.
 type TicketSummary struct {
-	ID               string    `json:"id"`
-	Type             string    `json:"type"`
-	Title            string    `json:"title"`
-	Status           string    `json:"status"`
-	Created          time.Time `json:"created"`
-	Updated          time.Time `json:"updated"`
-	HasActiveSession bool      `json:"has_active_session"`
-	AgentStatus      *string   `json:"agent_status,omitempty"`
-	AgentTool        *string   `json:"agent_tool,omitempty"`
+	ID               string     `json:"id"`
+	Type             string     `json:"type"`
+	Title            string     `json:"title"`
+	Status           string     `json:"status"`
+	Created          time.Time  `json:"created"`
+	Updated          time.Time  `json:"updated"`
+	DueDate          *time.Time `json:"due_date,omitempty"`
+	HasActiveSession bool       `json:"has_active_session"`
+	AgentStatus      *string    `json:"agent_status,omitempty"`
+	AgentTool        *string    `json:"agent_tool,omitempty"`
 }
 
 // ListTicketsResponse is a list of tickets with a single status.

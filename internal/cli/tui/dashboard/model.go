@@ -787,7 +787,7 @@ func (m Model) loadProjectDetail(projectPath string) tea.Cmd {
 	return func() tea.Msg {
 		client := sdk.DefaultClient(projectPath)
 
-		tickets, err := client.ListAllTickets("")
+		tickets, err := client.ListAllTickets("", nil)
 		if err != nil {
 			return ProjectDetailLoadedMsg{ProjectPath: projectPath, Err: err}
 		}

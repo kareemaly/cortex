@@ -1028,6 +1028,20 @@ func (m Model) renderAttributes(width, height int) string {
 		b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Done.Format("Jan 02, 15:04")))
 	}
 
+	if m.ticket.Dates.DueDate != nil {
+		b.WriteString("\n")
+		b.WriteString(attributeLabelStyle.Render("Due      "))
+		// Color-code based on urgency
+		now := time.Now()
+		dueDateStyle := attributeValueStyle
+		if m.ticket.Dates.DueDate.Before(now) {
+			dueDateStyle = overdueStyle
+		} else if m.ticket.Dates.DueDate.Before(now.Add(24 * time.Hour)) {
+			dueDateStyle = dueSoonStyle
+		}
+		b.WriteString(dueDateStyle.Render(m.ticket.Dates.DueDate.Format("Jan 02, 15:04")))
+	}
+
 	// SESSION section.
 	if m.ticket.Session != nil {
 		session := m.ticket.Session

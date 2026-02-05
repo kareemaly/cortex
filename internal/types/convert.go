@@ -10,6 +10,7 @@ func ToDatesResponse(d ticket.Dates) DatesResponse {
 		Progress: d.Progress,
 		Reviewed: d.Reviewed,
 		Done:     d.Done,
+		DueDate:  d.DueDate,
 	}
 }
 
@@ -100,6 +101,7 @@ func ToTicketSummary(t *ticket.Ticket, status ticket.Status, includeAgentStatus 
 		Status:           string(status),
 		Created:          t.Dates.Created,
 		Updated:          t.Dates.Updated,
+		DueDate:          t.Dates.DueDate,
 		HasActiveSession: t.HasActiveSession(),
 	}
 

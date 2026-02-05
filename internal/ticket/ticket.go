@@ -76,6 +76,7 @@ type Dates struct {
 	Progress *time.Time `json:"progress,omitempty"`
 	Reviewed *time.Time `json:"reviewed,omitempty"`
 	Done     *time.Time `json:"done,omitempty"`
+	DueDate  *time.Time `json:"due_date,omitempty"`
 }
 
 // Session represents a work session on a ticket.

@@ -24,8 +24,9 @@ type Session struct {
 
 // ListTicketsInput is the input for the listTickets tool.
 type ListTicketsInput struct {
-	Status string `json:"status" jsonschema:"Ticket status to filter by (required). Must be one of: backlog, progress, review, done"`
-	Query  string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
+	Status    string `json:"status" jsonschema:"Ticket status to filter by (required). Must be one of: backlog, progress, review, done"`
+	Query     string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
+	DueBefore string `json:"due_before,omitempty" jsonschema:"Optional RFC3339 timestamp to filter tickets with due date before this time."`
 }
 
 // ReadTicketInput is the input for the readTicket tool.
@@ -35,9 +36,10 @@ type ReadTicketInput struct {
 
 // CreateTicketInput is the input for the createTicket tool.
 type CreateTicketInput struct {
-	Title string `json:"title" jsonschema:"The ticket title (required)"`
-	Body  string `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Type  string `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration), 'chore' (quick maintenance). Defaults to 'work' if not specified."`
+	Title   string `json:"title" jsonschema:"The ticket title (required)"`
+	Body    string `json:"body,omitempty" jsonschema:"The ticket body/description"`
+	Type    string `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration), 'chore' (quick maintenance). Defaults to 'work' if not specified."`
+	DueDate string `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
 }
 
 // UpdateTicketInput is the input for the updateTicket tool.
@@ -69,6 +71,17 @@ type ArchitectAddCommentInput struct {
 	ID      string `json:"id" jsonschema:"The ticket ID to add a comment to"`
 	Type    string `json:"type" jsonschema:"Comment type (review_requested/done/blocker/comment)"`
 	Content string `json:"content" jsonschema:"The comment content"`
+}
+
+// UpdateDueDateInput is the input for the updateDueDate tool.
+type UpdateDueDateInput struct {
+	ID      string `json:"id" jsonschema:"The ticket ID (required)"`
+	DueDate string `json:"due_date" jsonschema:"The due date in RFC3339 format (required, e.g., '2024-12-31T23:59:59Z')"`
+}
+
+// ClearDueDateInput is the input for the clearDueDate tool.
+type ClearDueDateInput struct {
+	ID string `json:"id" jsonschema:"The ticket ID (required)"`
 }
 
 // GetCortexConfigDocsInput is the input for the getCortexConfigDocs tool.
@@ -213,6 +226,16 @@ type ConcludeSessionOutput struct {
 type GetCortexConfigDocsOutput struct {
 	Content    string `json:"content"`
 	ConfigName string `json:"config_name"`
+}
+
+// UpdateDueDateOutput is the output for the updateDueDate tool.
+type UpdateDueDateOutput struct {
+	Ticket TicketOutput `json:"ticket"`
+}
+
+// ClearDueDateOutput is the output for the clearDueDate tool.
+type ClearDueDateOutput struct {
+	Ticket TicketOutput `json:"ticket"`
 }
 
 // Conversion functions

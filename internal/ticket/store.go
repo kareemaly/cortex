@@ -56,7 +56,7 @@ func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, e
 }
 
 // Create creates a new ticket in the backlog.
-func (s *Store) Create(title, body, ticketType string) (*Ticket, error) {
+func (s *Store) Create(title, body, ticketType string, dueDate *time.Time) (*Ticket, error) {
 	if title == "" {
 		return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
 	}
@@ -74,6 +74,7 @@ func (s *Store) Create(title, body, ticketType string) (*Ticket, error) {
 		Dates: Dates{
 			Created: now,
 			Updated: now,
+			DueDate: dueDate,
 		},
 		Comments: []Comment{},
 		Session:  nil,
@@ -134,6 +135,33 @@ func (s *Store) Update(id string, title, body *string) (*Ticket, error) {
 
 	s.emit(events.TicketUpdated, ticket.ID, nil)
 	return ticket, nil
+}
+
+// SetDueDate sets or clears the due date for a ticket.
+func (s *Store) SetDueDate(id string, dueDate *time.Time) (*Ticket, error) {
+	mu := s.ticketMu(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	ticket, status, err := s.Get(id)
+	if err != nil {
+		return nil, err
+	}
+
+	ticket.Dates.DueDate = dueDate
+	ticket.Dates.Updated = time.Now().UTC()
+
+	if err := s.save(ticket, status); err != nil {
+		return nil, fmt.Errorf("save ticket: %w", err)
+	}
+
+	s.emit(events.TicketUpdated, ticket.ID, nil)
+	return ticket, nil
+}
+
+// ClearDueDate removes the due date from a ticket.
+func (s *Store) ClearDueDate(id string) (*Ticket, error) {
+	return s.SetDueDate(id, nil)
 }
 
 // Delete removes a ticket.

@@ -2,6 +2,7 @@ package api
 
 import (
 	"strings"
+	"time"
 
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
@@ -25,9 +26,10 @@ type (
 
 // CreateTicketRequest is the request body for creating a ticket.
 type CreateTicketRequest struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
-	Type  string `json:"type,omitempty"`
+	Title   string  `json:"title"`
+	Body    string  `json:"body"`
+	Type    string  `json:"type,omitempty"`
+	DueDate *string `json:"due_date,omitempty"`
 }
 
 // UpdateTicketRequest is the request body for updating a ticket.
@@ -39,6 +41,11 @@ type UpdateTicketRequest struct {
 // MoveTicketRequest is the request body for moving a ticket.
 type MoveTicketRequest struct {
 	To string `json:"to"`
+}
+
+// SetDueDateRequest is the request body for setting a ticket's due date.
+type SetDueDateRequest struct {
+	DueDate string `json:"due_date"`
 }
 
 // SpawnResponse is the response for the spawn endpoint.
@@ -98,9 +105,10 @@ type ExecuteActionResponse struct {
 	Message string `json:"message"`
 }
 
-// filterSummaryList converts tickets to summaries with optional query filter.
+// filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
 // Query is matched case-insensitively against title or body.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string) []TicketSummary {
+// If dueBefore is non-nil, only tickets with due date before the specified time are included.
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time) []TicketSummary {
 	var summaries []TicketSummary
 	for _, t := range tickets {
 		// Apply query filter if specified
@@ -108,6 +116,12 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 			!strings.Contains(strings.ToLower(t.Title), query) &&
 			!strings.Contains(strings.ToLower(t.Body), query) {
 			continue
+		}
+		// Apply dueBefore filter if specified
+		if dueBefore != nil {
+			if t.Dates.DueDate == nil || !t.Dates.DueDate.Before(*dueBefore) {
+				continue
+			}
 		}
 		summary := types.ToTicketSummary(t, status, true)
 		summaries = append(summaries, summary)

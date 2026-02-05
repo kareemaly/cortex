@@ -47,7 +47,7 @@ func init() {
 }
 
 func ticketListAll(client *sdk.Client, query string) {
-	resp, err := client.ListAllTickets(query)
+	resp, err := client.ListAllTickets(query, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -95,7 +95,7 @@ func ticketListAll(client *sdk.Client, query string) {
 }
 
 func ticketListByStatus(client *sdk.Client, status, query string) {
-	resp, err := client.ListTicketsByStatus(status, query)
+	resp, err := client.ListTicketsByStatus(status, query, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

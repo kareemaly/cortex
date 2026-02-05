@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kareemaly/cortex/internal/core/spawn"
@@ -48,11 +49,22 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	// Apply query filter if specified
 	query := strings.ToLower(r.URL.Query().Get("query"))
 
+	// Parse due_before filter if specified (RFC3339 format)
+	var dueBefore *time.Time
+	if dueBeforeStr := r.URL.Query().Get("due_before"); dueBeforeStr != "" {
+		parsed, err := time.Parse(time.RFC3339, dueBeforeStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_due_before", "due_before must be in RFC3339 format")
+			return
+		}
+		dueBefore = &parsed
+	}
+
 	resp := ListAllTicketsResponse{
-		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query),
-		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query),
-		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query),
-		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query),
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore),
+		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query, dueBefore),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore),
 	}
 
 	// Sort by Created descending (most recent first)
@@ -91,8 +103,19 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	// Apply query filter if specified
 	query := strings.ToLower(r.URL.Query().Get("query"))
 
+	// Parse due_before filter if specified (RFC3339 format)
+	var dueBefore *time.Time
+	if dueBeforeStr := r.URL.Query().Get("due_before"); dueBeforeStr != "" {
+		parsed, err := time.Parse(time.RFC3339, dueBeforeStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_due_before", "due_before must be in RFC3339 format")
+			return
+		}
+		dueBefore = &parsed
+	}
+
 	resp := ListTicketsResponse{
-		Tickets: filterSummaryList(tickets, ticket.Status(status), query),
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore),
 	}
 
 	// Sort by Created descending (most recent first)
@@ -131,13 +154,24 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse due date if provided (RFC3339 format)
+	var dueDate *time.Time
+	if req.DueDate != nil && *req.DueDate != "" {
+		parsed, err := time.Parse(time.RFC3339, *req.DueDate)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_due_date", "due_date must be in RFC3339 format")
+			return
+		}
+		dueDate = &parsed
+	}
+
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
 		return
 	}
 
-	t, err := store.Create(req.Title, req.Body, req.Type)
+	t, err := store.Create(req.Title, req.Body, req.Type, dueDate)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -311,6 +345,80 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := types.ToTicketResponse(t, newStatus)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// SetDueDate handles PATCH /tickets/{id}/due-date - sets the due date for a ticket.
+func (h *TicketHandlers) SetDueDate(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+
+	var req SetDueDateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
+		return
+	}
+
+	if req.DueDate == "" {
+		writeError(w, http.StatusBadRequest, "validation_error", "due_date is required")
+		return
+	}
+
+	// Parse due date (RFC3339 format)
+	dueDate, err := time.Parse(time.RFC3339, req.DueDate)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_due_date", "due_date must be in RFC3339 format")
+		return
+	}
+
+	t, err := store.SetDueDate(id, &dueDate)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	// Get status for response
+	_, status, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	resp := types.ToTicketResponse(t, status)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ClearDueDate handles DELETE /tickets/{id}/due-date - removes the due date from a ticket.
+func (h *TicketHandlers) ClearDueDate(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+
+	t, err := store.ClearDueDate(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	// Get status for response
+	_, status, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	resp := types.ToTicketResponse(t, status)
 	writeJSON(w, http.StatusOK, resp)
 }
 

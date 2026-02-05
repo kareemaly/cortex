@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/kareemaly/cortex/internal/daemon/api"
 	"github.com/kareemaly/cortex/internal/install"
@@ -70,6 +71,18 @@ func (s *Server) registerArchitectTools() {
 		Name:        "getCortexConfigDocs",
 		Description: "Get CONFIG_DOCS.md with configuration documentation for this project's agent type",
 	}, s.handleGetCortexConfigDocs)
+
+	// Update due date
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "updateDueDate",
+		Description: "Set or update the due date for a ticket",
+	}, s.handleUpdateDueDate)
+
+	// Clear due date
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "clearDueDate",
+		Description: "Remove the due date from a ticket",
+	}, s.handleClearDueDate)
 }
 
 // handleListTickets lists tickets by status.
@@ -86,7 +99,17 @@ func (s *Server) handleListTickets(
 		return nil, ListTicketsOutput{}, NewValidationError("status", "must be one of: backlog, progress, review, done")
 	}
 
-	resp, err := s.sdkClient.ListTicketsByStatus(input.Status, input.Query)
+	// Parse dueBefore if provided
+	var dueBefore *time.Time
+	if input.DueBefore != "" {
+		parsed, err := time.Parse(time.RFC3339, input.DueBefore)
+		if err != nil {
+			return nil, ListTicketsOutput{}, NewValidationError("due_before", "must be in RFC3339 format")
+		}
+		dueBefore = &parsed
+	}
+
+	resp, err := s.sdkClient.ListTicketsByStatus(input.Status, input.Query, dueBefore)
 	if err != nil {
 		return nil, ListTicketsOutput{}, wrapSDKError(err)
 	}
@@ -129,7 +152,17 @@ func (s *Server) handleCreateTicket(
 	req *mcp.CallToolRequest,
 	input CreateTicketInput,
 ) (*mcp.CallToolResult, CreateTicketOutput, error) {
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Type)
+	// Parse dueDate if provided
+	var dueDate *time.Time
+	if input.DueDate != "" {
+		parsed, err := time.Parse(time.RFC3339, input.DueDate)
+		if err != nil {
+			return nil, CreateTicketOutput{}, NewValidationError("due_date", "must be in RFC3339 format")
+		}
+		dueDate = &parsed
+	}
+
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Type, dueDate)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
@@ -385,5 +418,54 @@ func (s *Server) handleGetCortexConfigDocs(
 	return nil, GetCortexConfigDocsOutput{
 		Content:    content,
 		ConfigName: configName,
+	}, nil
+}
+
+// handleUpdateDueDate sets or updates the due date for a ticket.
+func (s *Server) handleUpdateDueDate(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input UpdateDueDateInput,
+) (*mcp.CallToolResult, UpdateDueDateOutput, error) {
+	if input.ID == "" {
+		return nil, UpdateDueDateOutput{}, NewValidationError("id", "cannot be empty")
+	}
+	if input.DueDate == "" {
+		return nil, UpdateDueDateOutput{}, NewValidationError("due_date", "cannot be empty")
+	}
+
+	// Parse due date
+	dueDate, err := time.Parse(time.RFC3339, input.DueDate)
+	if err != nil {
+		return nil, UpdateDueDateOutput{}, NewValidationError("due_date", "must be in RFC3339 format")
+	}
+
+	resp, err := s.sdkClient.SetDueDate(input.ID, dueDate)
+	if err != nil {
+		return nil, UpdateDueDateOutput{}, wrapSDKError(err)
+	}
+
+	return nil, UpdateDueDateOutput{
+		Ticket: ticketResponseToOutput(resp),
+	}, nil
+}
+
+// handleClearDueDate removes the due date from a ticket.
+func (s *Server) handleClearDueDate(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input ClearDueDateInput,
+) (*mcp.CallToolResult, ClearDueDateOutput, error) {
+	if input.ID == "" {
+		return nil, ClearDueDateOutput{}, NewValidationError("id", "cannot be empty")
+	}
+
+	resp, err := s.sdkClient.ClearDueDate(input.ID)
+	if err != nil {
+		return nil, ClearDueDateOutput{}, wrapSDKError(err)
+	}
+
+	return nil, ClearDueDateOutput{
+		Ticket: ticketResponseToOutput(resp),
 	}, nil
 }

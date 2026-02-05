@@ -102,8 +102,8 @@ func TestHandleListTickets(t *testing.T) {
 	defer cleanup()
 
 	// Create some tickets
-	_, _ = store.Create("Ticket 1", "body 1", "")
-	_, _ = store.Create("Ticket 2", "body 2", "")
+	_, _ = store.Create("Ticket 1", "body 1", "", nil)
+	_, _ = store.Create("Ticket 2", "body 2", "", nil)
 
 	// List backlog tickets (status is required)
 	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
@@ -126,8 +126,8 @@ func TestHandleListTicketsWithStatus(t *testing.T) {
 	defer cleanup()
 
 	// Create tickets in different statuses
-	t1, _ := store.Create("Backlog Ticket", "", "")
-	t2, _ := store.Create("Progress Ticket", "", "")
+	t1, _ := store.Create("Backlog Ticket", "", "", nil)
+	t2, _ := store.Create("Progress Ticket", "", "", nil)
 	_ = store.Move(t2.ID, ticket.StatusProgress)
 
 	// List only backlog
@@ -151,8 +151,8 @@ func TestHandleListTicketsWithQuery(t *testing.T) {
 	defer cleanup()
 
 	// Create tickets
-	_, _ = store.Create("Fix login bug", "Authentication issue", "")
-	_, _ = store.Create("Add feature", "New feature", "")
+	_, _ = store.Create("Fix login bug", "Authentication issue", "", nil)
+	_, _ = store.Create("Add feature", "New feature", "", nil)
 
 	// Search for "login" in backlog (status is required)
 	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
@@ -173,8 +173,8 @@ func TestHandleListTicketsWithStatusAndQuery(t *testing.T) {
 	defer cleanup()
 
 	// Create tickets
-	t1, _ := store.Create("Fix login bug", "Authentication issue", "")
-	t2, _ := store.Create("Fix login feature", "Another login issue", "")
+	t1, _ := store.Create("Fix login bug", "Authentication issue", "", nil)
+	t2, _ := store.Create("Fix login feature", "Another login issue", "", nil)
 	_ = store.Move(t2.ID, ticket.StatusProgress)
 
 	// Search for "login" in backlog only
@@ -199,8 +199,8 @@ func TestHandleListTicketsEmptyQuery(t *testing.T) {
 	defer cleanup()
 
 	// Create tickets
-	_, _ = store.Create("Ticket 1", "body 1", "")
-	_, _ = store.Create("Ticket 2", "body 2", "")
+	_, _ = store.Create("Ticket 1", "body 1", "", nil)
+	_, _ = store.Create("Ticket 2", "body 2", "", nil)
 
 	// Empty query should return all tickets in the specified status (status is required)
 	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
@@ -260,7 +260,7 @@ func TestHandleReadTicket(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 
 	_, output, err := server.handleReadTicket(context.Background(), nil, ReadTicketInput{
 		ID: created.ID,
@@ -337,7 +337,7 @@ func TestHandleUpdateTicket(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Original", "body", "")
+	created, _ := store.Create("Original", "body", "", nil)
 	newTitle := "Updated"
 
 	_, output, err := server.handleUpdateTicket(context.Background(), nil, UpdateTicketInput{
@@ -357,7 +357,7 @@ func TestHandleDeleteTicket(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("To Delete", "", "")
+	created, _ := store.Create("To Delete", "", "", nil)
 
 	_, output, err := server.handleDeleteTicket(context.Background(), nil, DeleteTicketInput{
 		ID: created.ID,
@@ -381,7 +381,7 @@ func TestHandleMoveTicket(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test", "", "")
+	created, _ := store.Create("Test", "", "", nil)
 
 	_, output, err := server.handleMoveTicket(context.Background(), nil, MoveTicketInput{
 		ID:     created.ID,
@@ -403,7 +403,7 @@ func TestHandleMoveTicketInvalidStatus(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test", "", "")
+	created, _ := store.Create("Test", "", "", nil)
 
 	_, _, err := server.handleMoveTicket(context.Background(), nil, MoveTicketInput{
 		ID:     created.ID,
@@ -420,7 +420,7 @@ func TestHandleSpawnSession(t *testing.T) {
 	defer cleanup()
 
 	// Create a ticket first
-	created, err := store.Create("Test Spawn Session", "Test body", "")
+	created, err := store.Create("Test Spawn Session", "Test body", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -482,7 +482,7 @@ func TestHandleSpawnSessionActiveSession(t *testing.T) {
 	defer cleanup()
 
 	// Create a ticket with an active session
-	created, err := store.Create("Test Active Session", "Test body", "")
+	created, err := store.Create("Test Active Session", "Test body", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestHandleSpawnSessionAutoMovesToProgress(t *testing.T) {
 	defer cleanup()
 
 	// Create a ticket in backlog
-	created, err := store.Create("Test Auto Move", "Test body", "")
+	created, err := store.Create("Test Auto Move", "Test body", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -571,7 +571,7 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	}
 
 	// Create a ticket
-	tk, err := store.Create("Test Ticket", "body", "")
+	tk, err := store.Create("Test Ticket", "body", "", nil)
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create ticket: %v", err)
@@ -689,7 +689,7 @@ func TestHandleSpawnSession_StateNormal_ModeNormal(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -708,7 +708,7 @@ func TestHandleSpawnSession_StateNormal_ModeResume(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -734,7 +734,7 @@ func TestHandleSpawnSession_StateNormal_ModeFresh(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -765,7 +765,7 @@ func TestHandleSpawnSession_StateActive_AllModes(t *testing.T) {
 			defer cleanup()
 
 			// Create ticket with active session (window exists because mock defaults to true)
-			created, _ := store.Create("Test Ticket", "body", "")
+			created, _ := store.Create("Test Ticket", "body", "", nil)
 			_, _ = store.SetSession(created.ID, "claude", "window", nil, nil)
 
 			_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -794,7 +794,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeNormal(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, false)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 	_, _ = store.SetSession(created.ID, "claude", "window", nil, nil)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -821,7 +821,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeResume(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, false)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 	_, _ = store.SetSession(created.ID, "claude", "window", nil, nil)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -841,7 +841,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeFresh(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, false)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 	_, _ = store.SetSession(created.ID, "claude", "window", nil, nil)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -861,7 +861,7 @@ func TestHandleSpawnSession_StateEnded_ModeNormal(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 	_, _ = store.SetSession(created.ID, "claude", "window", nil, nil)
 	_ = store.EndSession(created.ID)
 
@@ -882,7 +882,7 @@ func TestHandleSpawnSession_StateEnded_ModeResume(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 	_, _ = store.SetSession(created.ID, "claude", "window", nil, nil)
 	_ = store.EndSession(created.ID)
 
@@ -910,7 +910,7 @@ func TestHandleSpawnSession_StateEnded_ModeFresh(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 	_, _ = store.SetSession(created.ID, "claude", "window", nil, nil)
 	_ = store.EndSession(created.ID)
 
@@ -931,7 +931,7 @@ func TestHandleSpawnSession_InvalidMode(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 
 	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -954,7 +954,7 @@ func TestHandleSpawnSession_DefaultMode(t *testing.T) {
 	server, store, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "")
+	created, _ := store.Create("Test Ticket", "body", "", nil)
 
 	// Empty mode should default to "normal" and succeed
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{

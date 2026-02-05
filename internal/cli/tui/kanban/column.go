@@ -3,6 +3,7 @@ package kanban
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
@@ -180,6 +181,17 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 				typeBadge = typeBadgeStyle(t.Type).Render("[" + t.Type + "] ")
 			}
 
+			// Build due date indicator
+			dueDateIndicator := ""
+			if t.DueDate != nil {
+				now := time.Now()
+				if t.DueDate.Before(now) {
+					dueDateIndicator = overdueStyle.Render(" [OVERDUE]")
+				} else if t.DueDate.Before(now.Add(24 * time.Hour)) {
+					dueDateIndicator = dueSoonStyle.Render(" [DUE SOON]")
+				}
+			}
+
 			// Word wrap title (account for badge width in first line)
 			badgeWidth := len(typeBadge)
 			if badgeWidth > 0 {
@@ -189,6 +201,10 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 			wrappedTitle := wrapText(t.Title, titleWidth-badgeWidth)
 			if typeBadge != "" && len(wrappedTitle) > 0 {
 				wrappedTitle[0] = typeBadge + wrappedTitle[0]
+			}
+			// Append due date indicator to first line
+			if dueDateIndicator != "" && len(wrappedTitle) > 0 {
+				wrappedTitle[0] = wrappedTitle[0] + dueDateIndicator
 			}
 
 			// Format creation date

@@ -578,7 +578,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 
 	// Query daemon API to get tickets by status
 	client := sdk.DefaultClient(req.ProjectPath)
-	tickets, err := client.ListAllTickets("")
+	tickets, err := client.ListAllTickets("", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tickets: %w", err)
 	}
@@ -615,6 +615,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 		vars := prompt.ArchitectKickoffVars{
 			ProjectName: req.ProjectName,
 			TicketList:  ticketList,
+			CurrentDate: time.Now().Format("2006-01-02"),
 		}
 		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
 		if renderErr == nil {

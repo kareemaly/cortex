@@ -32,6 +32,15 @@ var (
 	focusColor   = lipgloss.Color("62")  // purple (matches header)
 )
 
+// Due date styles.
+var (
+	dueSoonStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")) // yellow/orange
+
+	overdueStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")) // red
+)
+
 // Styles for the ticket detail view.
 var (
 	// Header style for the title bar.

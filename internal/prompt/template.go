@@ -20,6 +20,7 @@ type TicketVars struct {
 type ArchitectKickoffVars struct {
 	ProjectName string
 	TicketList  string
+	CurrentDate string
 }
 
 // RenderTemplate renders a template string with the given variables.

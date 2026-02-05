@@ -112,6 +112,13 @@ var (
 
 	choreTypeBadgeStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")) // gray
+
+	// Due date styles
+	dueSoonStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")) // yellow/orange
+
+	overdueStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")) // red
 )
 
 // columnHeaderStyle returns the appropriate header style for a status.
