@@ -43,6 +43,7 @@ const (
 	KeyLeftBracket  Key = "["
 	KeyRightBracket Key = "]"
 	KeyDiff         Key = "d"
+	KeyDeleteOrphan Key = "D"
 )
 
 // isKey checks if a key message matches a key constant.

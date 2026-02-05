@@ -233,7 +233,11 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 				// Metadata line: agent status + date
 				meta := ""
 				if t.HasActiveSession {
-					meta += activeSessionStyle.Render(agentStatusLabel(t)) + " · "
+					if t.IsOrphaned {
+						meta += orphanedStyle.Render(agentStatusLabel(t)) + " · "
+					} else {
+						meta += activeSessionStyle.Render(agentStatusLabel(t)) + " · "
+					}
 				}
 				meta += dateStr
 				b.WriteString(ticketDateStyle.Width(width - 2).Render(meta))
@@ -262,6 +266,11 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 
 // agentStatusIcon returns the icon character for the agent's current status.
 func agentStatusIcon(t sdk.TicketSummary) string {
+	// Orphaned sessions get a distinct icon.
+	if t.IsOrphaned {
+		return "◌"
+	}
+
 	if t.AgentStatus == nil {
 		return "●"
 	}
@@ -284,6 +293,9 @@ func agentStatusIcon(t sdk.TicketSummary) string {
 // agentStatusLabel returns the icon + truncated tool name (unstyled) for the metadata line.
 func agentStatusLabel(t sdk.TicketSummary) string {
 	icon := agentStatusIcon(t)
+	if t.IsOrphaned {
+		return icon + " orphaned"
+	}
 	if t.AgentTool != nil && *t.AgentTool != "" {
 		tool := *t.AgentTool
 		if len(tool) > 8 {

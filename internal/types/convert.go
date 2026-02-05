@@ -2,6 +2,11 @@ package types
 
 import "github.com/kareemaly/cortex/internal/ticket"
 
+// TmuxChecker allows checking if a tmux window exists.
+type TmuxChecker interface {
+	WindowExists(session, windowName string) (bool, error)
+}
+
 // ToDatesResponse converts ticket.Dates to DatesResponse.
 func ToDatesResponse(d ticket.Dates) DatesResponse {
 	return DatesResponse{
@@ -93,7 +98,8 @@ func ToTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 
 // ToTicketSummary converts a ticket.Ticket and status to TicketSummary.
 // If includeAgentStatus is true, populates AgentStatus and AgentTool from active session.
-func ToTicketSummary(t *ticket.Ticket, status ticket.Status, includeAgentStatus bool) TicketSummary {
+// If tmuxSession and checker are provided, detects orphaned sessions (active session but no tmux window).
+func ToTicketSummary(t *ticket.Ticket, status ticket.Status, includeAgentStatus bool, tmuxSession string, checker TmuxChecker) TicketSummary {
 	summary := TicketSummary{
 		ID:               t.ID,
 		Type:             t.Type,
@@ -109,6 +115,14 @@ func ToTicketSummary(t *ticket.Ticket, status ticket.Status, includeAgentStatus 
 		statusStr := string(t.Session.CurrentStatus.Status)
 		summary.AgentStatus = &statusStr
 		summary.AgentTool = t.Session.CurrentStatus.Tool
+	}
+
+	// Detect orphaned sessions: active session but tmux window no longer exists.
+	if t.HasActiveSession() && tmuxSession != "" && checker != nil && t.Session.TmuxWindow != "" {
+		exists, err := checker.WindowExists(tmuxSession, t.Session.TmuxWindow)
+		if err == nil && !exists {
+			summary.IsOrphaned = true
+		}
 	}
 
 	return summary

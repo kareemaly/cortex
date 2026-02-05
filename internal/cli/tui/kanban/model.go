@@ -30,6 +30,9 @@ type Model struct {
 	showOrphanModal bool
 	orphanedTicket  *sdk.TicketSummary
 
+	// Delete confirmation modal state
+	showDeleteModal bool
+
 	// Vim navigation state
 	pendingG bool // tracking 'g' key for 'gg' sequence
 
@@ -85,6 +88,16 @@ type FocusSuccessMsg struct {
 
 // FocusErrorMsg is sent when focusing a window fails.
 type FocusErrorMsg struct {
+	Err error
+}
+
+// SessionDeletedMsg is sent when an orphaned session is successfully deleted.
+type SessionDeletedMsg struct {
+	Ticket *sdk.TicketSummary
+}
+
+// SessionDeleteErrorMsg is sent when deleting a session fails.
+type SessionDeleteErrorMsg struct {
 	Err error
 }
 
@@ -219,6 +232,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logBuf.Errorf("focus", "focus failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
+	case SessionDeletedMsg:
+		m.showDeleteModal = false
+		m.orphanedTicket = nil
+		m.statusMsg = fmt.Sprintf("Session deleted for: %s", msg.Ticket.Title)
+		m.statusIsError = false
+		m.logBuf.Infof("delete", "session deleted for: %s", msg.Ticket.Title)
+		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
+
+	case SessionDeleteErrorMsg:
+		m.showDeleteModal = false
+		m.statusMsg = fmt.Sprintf("Delete error: %s", msg.Err)
+		m.statusIsError = true
+		m.logBuf.Errorf("delete", "delete failed: %s", msg.Err)
+		return m, m.clearStatusAfterDelay()
+
 	case ClearStatusMsg:
 		m.statusMsg = ""
 		m.statusIsError = false
@@ -263,6 +291,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Modal state takes priority.
+	if m.showDeleteModal {
+		return m.handleDeleteModalKey(msg)
+	}
 	if m.showOrphanModal {
 		return m.handleOrphanModalKey(msg)
 	}
@@ -416,6 +447,11 @@ func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusIsError = false
 		return m, m.spawnSessionWithMode(m.orphanedTicket, "fresh")
 
+	case isKey(msg, KeyDeleteOrphan): // 'D' for delete
+		m.showOrphanModal = false
+		m.showDeleteModal = true
+		return m, nil
+
 	case isKey(msg, KeyCancel, KeyEscape): // 'c' or Esc for cancel
 		m.showOrphanModal = false
 		m.orphanedTicket = nil
@@ -424,6 +460,41 @@ func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.clearStatusAfterDelay()
 	}
 	return m, nil
+}
+
+// handleDeleteModalKey handles keyboard input when the delete confirmation modal is shown.
+func (m Model) handleDeleteModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case isKey(msg, KeyYes): // 'y' for yes - delete the session
+		m.statusMsg = "Deleting session..."
+		m.statusIsError = false
+		return m, m.deleteOrphanedSession(m.orphanedTicket)
+
+	case isKey(msg, KeyNo, KeyEscape): // 'n' or Esc for no - go back to orphan modal
+		m.showDeleteModal = false
+		m.showOrphanModal = true
+		return m, nil
+	}
+	return m, nil
+}
+
+// deleteOrphanedSession returns a command to delete an orphaned session.
+func (m Model) deleteOrphanedSession(ticket *sdk.TicketSummary) tea.Cmd {
+	return func() tea.Msg {
+		// Get the full ticket to get the session ID
+		fullTicket, err := m.client.FindTicketByID(ticket.ID)
+		if err != nil {
+			return SessionDeleteErrorMsg{Err: err}
+		}
+		if fullTicket.Session == nil {
+			return SessionDeleteErrorMsg{Err: fmt.Errorf("no session to delete")}
+		}
+		// Kill the session using its ID
+		if err := m.client.KillSession(fullTicket.Session.ID); err != nil {
+			return SessionDeleteErrorMsg{Err: err}
+		}
+		return SessionDeletedMsg{Ticket: ticket}
+	}
 }
 
 // View renders the kanban board.
@@ -486,7 +557,9 @@ func (m Model) View() string {
 	b.WriteString("\n")
 
 	// Status bar / Modal.
-	if m.showOrphanModal {
+	if m.showDeleteModal {
+		b.WriteString(m.renderDeleteModal())
+	} else if m.showOrphanModal {
 		b.WriteString(m.renderOrphanModal())
 	} else {
 		if m.statusMsg != "" {
@@ -625,6 +698,17 @@ func (m Model) renderOrphanModal() string {
 		title = title[:27] + "..."
 	}
 	prompt := fmt.Sprintf("Orphaned session found for \"%s\"", title)
-	options := "[r]esume  [f]resh  [c]ancel"
+	options := "[r]esume  [f]resh  [D]elete  [c]ancel"
+	return statusBarStyle.Render(prompt) + "\n" + helpBarStyle.Render(options)
+}
+
+// renderDeleteModal renders the delete confirmation modal prompt.
+func (m Model) renderDeleteModal() string {
+	title := m.orphanedTicket.Title
+	if len(title) > 30 {
+		title = title[:27] + "..."
+	}
+	prompt := fmt.Sprintf("Delete orphaned session for \"%s\"?", title)
+	options := "[y]es  [n]o"
 	return statusBarStyle.Render(prompt) + "\n" + helpBarStyle.Render(options)
 }

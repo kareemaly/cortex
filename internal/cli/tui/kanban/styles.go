@@ -122,6 +122,10 @@ var (
 
 	overdueStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196")) // red
+
+	// Orphaned session style (warning color).
+	orphanedStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")) // yellow/orange
 )
 
 // columnHeaderStyle returns the appropriate header style for a status.
