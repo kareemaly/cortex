@@ -27,7 +27,9 @@ The architect will guide you through creating and managing tickets.
 
 - **tmux** - session management
 - **git** - version control
-- **Claude CLI** - [claude.ai/code](https://claude.ai/code)
+- **AI agent** (one of):
+  - [Claude CLI](https://claude.ai/code) - recommended
+  - [GitHub Copilot CLI](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line)
 
 ## Core Workflow
 
@@ -76,14 +78,14 @@ The architect will guide you through creating and managing tickets.
 name: my-project
 extend: ~/.cortex/defaults/claude-code
 architect:
-  agent: claude
+  agent: claude  # Options: claude, copilot
   args: ["--allowedTools", "mcp__cortex__*"]
 ticket:
   work:     # Default implementation workflow
     agent: claude
     args: ["--permission-mode", "plan"]
   debug:    # Root cause analysis workflow
-    agent: claude
+    agent: copilot  # Mix agents per workflow
   research: # Read-only exploration workflow
     agent: claude
   chore:    # Quick maintenance workflow
