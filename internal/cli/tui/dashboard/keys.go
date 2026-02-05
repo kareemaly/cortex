@@ -23,6 +23,10 @@ const (
 	KeyG       Key = "g"
 	KeyShiftG  Key = "G"
 	KeyExclaim Key = "!"
+	KeyUnlink  Key = "u"
+	KeyYes     Key = "y"
+	KeyNo      Key = "n"
+	KeyEscape  Key = "esc"
 )
 
 // isKey checks if a key message matches any of the given key constants.
@@ -37,5 +41,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the dashboard.
 func helpText() string {
-	return "[enter/f] focus  [s]pawn architect  [r]efresh  [j/k/gg/G] navigate  [!] logs  [q]uit"
+	return "[enter/f] focus  [s]pawn architect  [u]nlink  [r]efresh  [j/k/gg/G] navigate  [!] logs  [q]uit"
 }

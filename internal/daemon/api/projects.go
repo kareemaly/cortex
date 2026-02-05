@@ -31,6 +31,36 @@ type ProjectsListResponse struct {
 	Projects []ProjectResponse `json:"projects"`
 }
 
+// UnlinkProjectHandler returns a handler for DELETE /projects.
+// It removes a project from the global registry without deleting any files.
+func UnlinkProjectHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		projectPath := r.URL.Query().Get("path")
+		if projectPath == "" {
+			http.Error(w, `{"error": "missing path parameter"}`, http.StatusBadRequest)
+			return
+		}
+
+		cfg, err := config.Load()
+		if err != nil {
+			http.Error(w, `{"error": "failed to load config"}`, http.StatusInternalServerError)
+			return
+		}
+
+		if !cfg.UnregisterProject(projectPath) {
+			http.Error(w, `{"error": "project not found"}`, http.StatusNotFound)
+			return
+		}
+
+		if err := cfg.Save(); err != nil {
+			http.Error(w, `{"error": "failed to save config"}`, http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // ProjectsHandler returns a handler for GET /projects.
 func ProjectsHandler(storeManager *StoreManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

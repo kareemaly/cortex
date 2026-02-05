@@ -80,6 +80,10 @@ type Model struct {
 	// Vim navigation state.
 	pendingG bool
 
+	// Unlink confirmation state.
+	showUnlinkConfirm bool
+	unlinkProjectPath string
+
 	// Log viewer state.
 	logBuf        *tuilog.Buffer
 	logViewer     tuilog.Viewer
@@ -132,6 +136,12 @@ type FocusSuccessMsg struct {
 // FocusErrorMsg is sent when focusing fails.
 type FocusErrorMsg struct {
 	Err error
+}
+
+// UnlinkProjectMsg is sent when project unlink completes.
+type UnlinkProjectMsg struct {
+	ProjectPath string
+	Err         error
 }
 
 // ClearStatusMsg clears the status bar.
@@ -273,6 +283,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logBuf.Errorf("focus", "focus failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
+	case UnlinkProjectMsg:
+		if msg.Err != nil {
+			m.statusMsg = fmt.Sprintf("Unlink error: %s", msg.Err)
+			m.statusIsError = true
+			m.logBuf.Errorf("unlink", "unlink failed: %s: %s", filepath.Base(msg.ProjectPath), msg.Err)
+		} else {
+			m.statusMsg = "Project unlinked"
+			m.statusIsError = false
+			m.logBuf.Infof("unlink", "project unlinked: %s", filepath.Base(msg.ProjectPath))
+			// Cancel any SSE subscription for this project.
+			if cancel, ok := m.sseContexts[msg.ProjectPath]; ok {
+				cancel()
+				delete(m.sseContexts, msg.ProjectPath)
+				delete(m.sseChannels, msg.ProjectPath)
+			}
+			// Reload projects.
+			m.loading = true
+			return m, tea.Batch(m.loadProjects(), m.clearStatusAfterDelay())
+		}
+		return m, m.clearStatusAfterDelay()
+
 	case ClearStatusMsg:
 		m.statusMsg = ""
 		m.statusIsError = false
@@ -287,6 +318,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg processes keyboard input.
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle unlink confirmation mode first.
+	if m.showUnlinkConfirm {
+		switch {
+		case isKey(msg, KeyYes):
+			m.showUnlinkConfirm = false
+			path := m.unlinkProjectPath
+			m.unlinkProjectPath = ""
+			m.statusMsg = "Unlinking project..."
+			m.statusIsError = false
+			return m, m.unlinkProject(path)
+		case isKey(msg, KeyNo, KeyEscape):
+			m.showUnlinkConfirm = false
+			m.unlinkProjectPath = ""
+			m.statusMsg = "Unlink cancelled"
+			m.statusIsError = false
+			return m, m.clearStatusAfterDelay()
+		}
+		return m, nil
+	}
+
 	// Quit.
 	if isKey(msg, KeyQuit, KeyCtrlC) {
 		for _, cancel := range m.sseContexts {
@@ -384,6 +435,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleSpawnArchitect()
 	}
 
+	// Unlink project.
+	if isKey(msg, KeyUnlink) {
+		return m.handleUnlinkProject()
+	}
+
 	// Refresh.
 	if isKey(msg, KeyRefresh) {
 		m.loading = true
@@ -454,6 +510,26 @@ func (m Model) handleSpawnArchitect() (tea.Model, tea.Cmd) {
 	m.statusMsg = "Spawning architect..."
 	m.statusIsError = false
 	return m, m.spawnArchitect(pd.project.Path)
+}
+
+// handleUnlinkProject initiates unlink confirmation for the selected project.
+func (m Model) handleUnlinkProject() (tea.Model, tea.Cmd) {
+	if m.cursor < 0 || m.cursor >= len(m.rows) {
+		return m, nil
+	}
+	r := m.rows[m.cursor]
+
+	// Only allow unlinking project rows, not session rows.
+	if r.kind != rowProject {
+		m.statusMsg = "Select a project to unlink"
+		m.statusIsError = false
+		return m, m.clearStatusAfterDelay()
+	}
+
+	pd := m.projects[r.projectIndex]
+	m.showUnlinkConfirm = true
+	m.unlinkProjectPath = pd.project.Path
+	return m, nil
 }
 
 // --- View ---
@@ -545,6 +621,16 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
+
+	// Unlink confirmation dialog.
+	if m.showUnlinkConfirm {
+		title := filepath.Base(m.unlinkProjectPath)
+		confirmMsg := fmt.Sprintf("Unlink project '%s'? [y]es [n]o", title)
+		b.WriteString(warnBadgeStyle.Render(confirmMsg))
+		b.WriteString("\n")
+		b.WriteString(mutedStyleRender.Render(m.unlinkProjectPath))
+		return b.String()
+	}
 
 	// Status bar.
 	if m.statusMsg != "" {
@@ -895,6 +981,14 @@ func (m Model) focusTicket(projectPath, ticketID string) tea.Cmd {
 			return FocusErrorMsg{Err: err}
 		}
 		return FocusSuccessMsg{Name: ticketID[:8]}
+	}
+}
+
+// unlinkProject removes a project from the global registry.
+func (m Model) unlinkProject(projectPath string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.globalClient.UnlinkProject(projectPath)
+		return UnlinkProjectMsg{ProjectPath: projectPath, Err: err}
 	}
 }
 

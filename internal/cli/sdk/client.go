@@ -492,6 +492,27 @@ func (c *Client) ListProjects() (*ListProjectsResponse, error) {
 	return &result, nil
 }
 
+// UnlinkProject removes a project from the global registry.
+// This does not delete any files, only removes the project from tracking.
+func (c *Client) UnlinkProject(projectPath string) error {
+	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/projects?path="+projectPath, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req) // No project header needed
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusNoContent {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
 // AddCommentResponse is the response from the add comment endpoint.
 type AddCommentResponse struct {
 	Success bool            `json:"success"`
