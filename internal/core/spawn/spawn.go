@@ -635,7 +635,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 		vars := prompt.ArchitectKickoffVars{
 			ProjectName: req.ProjectName,
 			TicketList:  ticketList,
-			CurrentDate: time.Now().Format("2006-01-02"),
+			CurrentDate: time.Now().Format("2006-01-02 15:04 MST"),
 		}
 		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
 		if renderErr == nil {
