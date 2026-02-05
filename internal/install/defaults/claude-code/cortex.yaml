@@ -4,6 +4,7 @@
 architect:
   agent: claude
   args:
+    - "--allow-dangerously-skip-permissions"
     - "--allowedTools"
     - "mcp__cortex__listTickets,mcp__cortex__readTicket"
 ticket:
