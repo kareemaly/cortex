@@ -1,6 +1,7 @@
 package types
 
 import (
+	"strings"
 	"time"
 
 	"github.com/kareemaly/cortex/internal/docs"
@@ -170,4 +171,58 @@ func ToDocSummary(d *docs.Doc) DocSummary {
 		Created:  d.Created.Format(time.RFC3339),
 		Updated:  d.Updated.Format(time.RFC3339),
 	}
+}
+
+// ToDocSummaryWithQuery converts a docs.Doc to DocSummary with a body snippet
+// extracted around the first occurrence of query.
+func ToDocSummaryWithQuery(d *docs.Doc, query string) DocSummary {
+	s := ToDocSummary(d)
+	s.Snippet = ExtractSnippet(d.Body, query, 150)
+	return s
+}
+
+// ExtractSnippet returns a window of maxLen characters from body centered on
+// the first case-insensitive occurrence of query. Adds "..." prefix/suffix
+// when truncated. Returns empty string if query is empty or not found.
+func ExtractSnippet(body, query string, maxLen int) string {
+	if query == "" || body == "" {
+		return ""
+	}
+
+	lowerBody := strings.ToLower(body)
+	lowerQuery := strings.ToLower(query)
+
+	idx := strings.Index(lowerBody, lowerQuery)
+	if idx < 0 {
+		return ""
+	}
+
+	if len(body) <= maxLen {
+		return body
+	}
+
+	// Center the window around the match.
+	half := (maxLen - len(query)) / 2
+	start := idx - half
+	end := start + maxLen
+
+	if start < 0 {
+		start = 0
+		end = maxLen
+	}
+	if end > len(body) {
+		end = len(body)
+		start = max(end-maxLen, 0)
+	}
+
+	snippet := body[start:end]
+
+	if start > 0 {
+		snippet = "..." + snippet
+	}
+	if end < len(body) {
+		snippet = snippet + "..."
+	}
+
+	return snippet
 }

@@ -39,7 +39,11 @@ func (h *DocHandlers) List(w http.ResponseWriter, r *http.Request) {
 
 	summaries := make([]DocSummary, len(docList))
 	for i, d := range docList {
-		summaries[i] = types.ToDocSummary(d)
+		if query != "" {
+			summaries[i] = types.ToDocSummaryWithQuery(d, query)
+		} else {
+			summaries[i] = types.ToDocSummary(d)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, ListDocsResponse{Docs: summaries})

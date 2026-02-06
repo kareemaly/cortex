@@ -113,6 +113,7 @@ type DocSummary struct {
 	Title    string   `json:"title"`
 	Category string   `json:"category"`
 	Tags     []string `json:"tags"`
+	Snippet  string   `json:"snippet,omitempty"`
 	Created  string   `json:"created"`
 	Updated  string   `json:"updated"`
 }

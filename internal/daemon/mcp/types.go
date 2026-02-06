@@ -334,6 +334,7 @@ type DocSummaryOutput struct {
 	Title    string   `json:"title"`
 	Category string   `json:"category"`
 	Tags     []string `json:"tags"`
+	Snippet  string   `json:"snippet,omitempty"`
 	Created  string   `json:"created"`
 	Updated  string   `json:"updated"`
 }
@@ -405,6 +406,7 @@ func docSummaryToOutput(s *types.DocSummary) DocSummaryOutput {
 		Title:    s.Title,
 		Category: s.Category,
 		Tags:     tags,
+		Snippet:  s.Snippet,
 		Created:  s.Created,
 		Updated:  s.Updated,
 	}
