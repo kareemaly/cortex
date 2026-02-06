@@ -56,14 +56,15 @@ type SessionResponse struct {
 
 // TicketResponse is the full ticket response with status.
 type TicketResponse struct {
-	ID       string            `json:"id"`
-	Type     string            `json:"type"`
-	Title    string            `json:"title"`
-	Body     string            `json:"body"`
-	Status   string            `json:"status"`
-	Dates    DatesResponse     `json:"dates"`
-	Comments []CommentResponse `json:"comments"`
-	Session  *SessionResponse  `json:"session,omitempty"`
+	ID         string            `json:"id"`
+	Type       string            `json:"type"`
+	Title      string            `json:"title"`
+	Body       string            `json:"body"`
+	References []string          `json:"references,omitempty"`
+	Status     string            `json:"status"`
+	Dates      DatesResponse     `json:"dates"`
+	Comments   []CommentResponse `json:"comments"`
+	Session    *SessionResponse  `json:"session,omitempty"`
 }
 
 // TicketSummary is a brief view of a ticket for lists.
@@ -92,6 +93,33 @@ type ListAllTicketsResponse struct {
 	Progress []TicketSummary `json:"progress"`
 	Review   []TicketSummary `json:"review"`
 	Done     []TicketSummary `json:"done"`
+}
+
+// DocResponse is the full doc response.
+type DocResponse struct {
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	Category   string   `json:"category"`
+	Tags       []string `json:"tags"`
+	References []string `json:"references"`
+	Body       string   `json:"body"`
+	Created    string   `json:"created"`
+	Updated    string   `json:"updated"`
+}
+
+// DocSummary is a brief view of a doc for lists.
+type DocSummary struct {
+	ID       string   `json:"id"`
+	Title    string   `json:"title"`
+	Category string   `json:"category"`
+	Tags     []string `json:"tags"`
+	Created  string   `json:"created"`
+	Updated  string   `json:"updated"`
+}
+
+// ListDocsResponse is a list of docs.
+type ListDocsResponse struct {
+	Docs []DocSummary `json:"docs"`
 }
 
 // ArchitectSessionResponse is the session details in an architect response.

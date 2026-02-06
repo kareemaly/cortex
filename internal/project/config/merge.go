@@ -33,6 +33,9 @@ func MergeConfigs(base, project *Config) *Config {
 	// Git: project wins if set
 	result.Git = mergeGitConfig(base.Git, project.Git)
 
+	// Docs: project wins if set
+	result.Docs = mergeDocsConfig(base.Docs, project.Docs)
+
 	return result
 }
 
@@ -82,6 +85,14 @@ func mergeTicketConfig(base, project TicketConfig) TicketConfig {
 	}
 
 	return result
+}
+
+// mergeDocsConfig merges two DocsConfigs, with project taking precedence.
+func mergeDocsConfig(base, project DocsConfig) DocsConfig {
+	if project.Path != "" {
+		return project
+	}
+	return base
 }
 
 // mergeGitConfig merges two GitConfigs, with project taking precedence.

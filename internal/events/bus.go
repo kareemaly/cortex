@@ -15,6 +15,9 @@ const (
 	SessionStatus   EventType = "session_status"
 	CommentAdded    EventType = "comment_added"
 	ReviewRequested EventType = "review_requested"
+	DocCreated      EventType = "doc_created"
+	DocUpdated      EventType = "doc_updated"
+	DocDeleted      EventType = "doc_deleted"
 )
 
 // Event represents a change in the system.

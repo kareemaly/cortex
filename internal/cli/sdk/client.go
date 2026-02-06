@@ -78,6 +78,9 @@ type (
 	ArchitectSessionResponse = types.ArchitectSessionResponse
 	ArchitectStateResponse   = types.ArchitectStateResponse
 	ArchitectSpawnResponse   = types.ArchitectSpawnResponse
+	DocResponse              = types.DocResponse
+	DocSummary               = types.DocSummary
+	ListDocsResponse         = types.ListDocsResponse
 )
 
 // HealthResponse is the response from the health endpoint.
@@ -251,13 +254,16 @@ func (c *Client) GetTicket(status, id string) (*TicketResponse, error) {
 }
 
 // CreateTicket creates a new ticket.
-func (c *Client) CreateTicket(title, body, ticketType string, dueDate *time.Time) (*TicketResponse, error) {
+func (c *Client) CreateTicket(title, body, ticketType string, dueDate *time.Time, references []string) (*TicketResponse, error) {
 	reqBody := map[string]any{"title": title, "body": body}
 	if ticketType != "" {
 		reqBody["type"] = ticketType
 	}
 	if dueDate != nil {
 		reqBody["due_date"] = dueDate.Format(time.RFC3339)
+	}
+	if references != nil {
+		reqBody["references"] = references
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
@@ -533,20 +539,23 @@ type ConcludeSessionResponse struct {
 	Message  string `json:"message"`
 }
 
-// UpdateTicket updates a ticket's title and/or body by ID (status-agnostic).
-func (c *Client) UpdateTicket(id string, title, body *string) (*TicketResponse, error) {
+// UpdateTicket updates a ticket's title, body, and/or references by ID (status-agnostic).
+func (c *Client) UpdateTicket(id string, title, body *string, references *[]string) (*TicketResponse, error) {
 	// Discover current status
 	current, err := c.GetTicketByID(id)
 	if err != nil {
 		return nil, err
 	}
 
-	reqBody := map[string]*string{}
+	reqBody := map[string]any{}
 	if title != nil {
-		reqBody["title"] = title
+		reqBody["title"] = *title
 	}
 	if body != nil {
-		reqBody["body"] = body
+		reqBody["body"] = *body
+	}
+	if references != nil {
+		reqBody["references"] = *references
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
@@ -1041,4 +1050,207 @@ func (c *Client) ResolvePrompt(req ResolvePromptRequest) (*ResolvePromptResponse
 	}
 
 	return &result, nil
+}
+
+// CreateDoc creates a new doc.
+func (c *Client) CreateDoc(title, category, body string, tags, references []string) (*DocResponse, error) {
+	reqBody := map[string]any{
+		"title":    title,
+		"category": category,
+		"body":     body,
+	}
+	if tags != nil {
+		reqBody["tags"] = tags
+	}
+	if references != nil {
+		reqBody["references"] = references
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/docs", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusCreated {
+		return nil, c.parseError(resp)
+	}
+
+	var docResult DocResponse
+	if err := json.NewDecoder(resp.Body).Decode(&docResult); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &docResult, nil
+}
+
+// GetDoc returns a doc by ID.
+func (c *Client) GetDoc(id string) (*DocResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/docs/"+id, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var docResult DocResponse
+	if err := json.NewDecoder(resp.Body).Decode(&docResult); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &docResult, nil
+}
+
+// UpdateDoc updates a doc's fields.
+func (c *Client) UpdateDoc(id string, title, body *string, tags, references *[]string) (*DocResponse, error) {
+	reqBody := map[string]any{}
+	if title != nil {
+		reqBody["title"] = *title
+	}
+	if body != nil {
+		reqBody["body"] = *body
+	}
+	if tags != nil {
+		reqBody["tags"] = *tags
+	}
+	if references != nil {
+		reqBody["references"] = *references
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPut, c.baseURL+"/docs/"+id, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var docResult DocResponse
+	if err := json.NewDecoder(resp.Body).Decode(&docResult); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &docResult, nil
+}
+
+// DeleteDoc deletes a doc by ID.
+func (c *Client) DeleteDoc(id string) error {
+	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/docs/"+id, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusNoContent {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
+// MoveDoc moves a doc to a different category.
+func (c *Client) MoveDoc(id, category string) (*DocResponse, error) {
+	reqBody := map[string]string{"category": category}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/docs/"+id+"/move", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var docResult DocResponse
+	if err := json.NewDecoder(resp.Body).Decode(&docResult); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &docResult, nil
+}
+
+// ListDocs lists docs with optional filters.
+func (c *Client) ListDocs(category, tag, query string) (*ListDocsResponse, error) {
+	url := c.baseURL + "/docs"
+	var params []string
+	if category != "" {
+		params = append(params, "category="+category)
+	}
+	if tag != "" {
+		params = append(params, "tag="+tag)
+	}
+	if query != "" {
+		params = append(params, "query="+query)
+	}
+	if len(params) > 0 {
+		url += "?" + strings.Join(params, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var listResult ListDocsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&listResult); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &listResult, nil
 }

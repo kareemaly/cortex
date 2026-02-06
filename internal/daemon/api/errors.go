@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/kareemaly/cortex/internal/docs"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -32,6 +33,19 @@ func handleTicketError(w http.ResponseWriter, err error, logger *slog.Logger) {
 		writeError(w, http.StatusBadRequest, "validation_error", e.Error())
 	default:
 		logger.Error("internal ticket store error", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
+	}
+}
+
+// handleDocError converts docs store errors to HTTP responses.
+func handleDocError(w http.ResponseWriter, err error, logger *slog.Logger) {
+	switch e := err.(type) {
+	case *docs.NotFoundError:
+		writeError(w, http.StatusNotFound, "not_found", e.Error())
+	case *docs.ValidationError:
+		writeError(w, http.StatusBadRequest, "validation_error", e.Error())
+	default:
+		logger.Error("internal docs store error", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
 	}
 }

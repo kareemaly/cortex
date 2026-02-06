@@ -22,20 +22,25 @@ type (
 	ArchitectSessionResponse = types.ArchitectSessionResponse
 	ArchitectStateResponse   = types.ArchitectStateResponse
 	ArchitectSpawnResponse   = types.ArchitectSpawnResponse
+	DocResponse              = types.DocResponse
+	DocSummary               = types.DocSummary
+	ListDocsResponse         = types.ListDocsResponse
 )
 
 // CreateTicketRequest is the request body for creating a ticket.
 type CreateTicketRequest struct {
-	Title   string  `json:"title"`
-	Body    string  `json:"body"`
-	Type    string  `json:"type,omitempty"`
-	DueDate *string `json:"due_date,omitempty"`
+	Title      string   `json:"title"`
+	Body       string   `json:"body"`
+	Type       string   `json:"type,omitempty"`
+	DueDate    *string  `json:"due_date,omitempty"`
+	References []string `json:"references,omitempty"`
 }
 
 // UpdateTicketRequest is the request body for updating a ticket.
 type UpdateTicketRequest struct {
-	Title *string `json:"title,omitempty"`
-	Body  *string `json:"body,omitempty"`
+	Title      *string   `json:"title,omitempty"`
+	Body       *string   `json:"body,omitempty"`
+	References *[]string `json:"references,omitempty"`
 }
 
 // MoveTicketRequest is the request body for moving a ticket.
@@ -103,6 +108,28 @@ type FocusResponse struct {
 type ExecuteActionResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
+}
+
+// CreateDocRequest is the request body for creating a doc.
+type CreateDocRequest struct {
+	Title      string   `json:"title"`
+	Category   string   `json:"category"`
+	Body       string   `json:"body,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
+	References []string `json:"references,omitempty"`
+}
+
+// UpdateDocRequest is the request body for updating a doc.
+type UpdateDocRequest struct {
+	Title      *string   `json:"title,omitempty"`
+	Body       *string   `json:"body,omitempty"`
+	Tags       *[]string `json:"tags,omitempty"`
+	References *[]string `json:"references,omitempty"`
+}
+
+// MoveDocRequest is the request body for moving a doc.
+type MoveDocRequest struct {
+	Category string `json:"category"`
 }
 
 // filterSummaryList converts tickets to summaries with optional query and dueBefore filters.

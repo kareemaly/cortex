@@ -38,19 +38,21 @@ type ReadTicketInput struct {
 
 // CreateTicketInput is the input for the createTicket tool.
 type CreateTicketInput struct {
-	Title       string `json:"title" jsonschema:"The ticket title (required)"`
-	Body        string `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Type        string `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration), 'chore' (quick maintenance). Defaults to 'work' if not specified."`
-	DueDate     string `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	Title       string   `json:"title" jsonschema:"The ticket title (required)"`
+	Body        string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
+	Type        string   `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration), 'chore' (quick maintenance). Defaults to 'work' if not specified."`
+	DueDate     string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
+	References  []string `json:"references,omitempty" jsonschema:"Cross-references (e.g., 'doc:abc123', 'ticket:xyz789')"`
+	ProjectPath string   `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // UpdateTicketInput is the input for the updateTicket tool.
 type UpdateTicketInput struct {
-	ID          string  `json:"id" jsonschema:"The ticket ID to update"`
-	Title       *string `json:"title,omitempty" jsonschema:"New title (optional)"`
-	Body        *string `json:"body,omitempty" jsonschema:"New body (optional)"`
-	ProjectPath string  `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	ID          string    `json:"id" jsonschema:"The ticket ID to update"`
+	Title       *string   `json:"title,omitempty" jsonschema:"New title (optional)"`
+	Body        *string   `json:"body,omitempty" jsonschema:"New body (optional)"`
+	References  *[]string `json:"references,omitempty" jsonschema:"New references (optional, full replacement)"`
+	ProjectPath string    `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
 // DeleteTicketInput is the input for the deleteTicket tool.
@@ -171,14 +173,15 @@ type SessionOutput struct {
 // TicketOutput is the full ticket representation.
 // Uses MCP-specific SessionOutput.
 type TicketOutput struct {
-	ID       string          `json:"id"`
-	Type     string          `json:"type"`
-	Title    string          `json:"title"`
-	Body     string          `json:"body"`
-	Status   string          `json:"status"`
-	Dates    DatesOutput     `json:"dates"`
-	Comments []CommentOutput `json:"comments"`
-	Session  *SessionOutput  `json:"session,omitempty"`
+	ID         string          `json:"id"`
+	Type       string          `json:"type"`
+	Title      string          `json:"title"`
+	Body       string          `json:"body"`
+	References []string        `json:"references,omitempty"`
+	Status     string          `json:"status"`
+	Dates      DatesOutput     `json:"dates"`
+	Comments   []CommentOutput `json:"comments"`
+	Session    *SessionOutput  `json:"session,omitempty"`
 }
 
 // Tool output wrappers
@@ -263,7 +266,149 @@ type ClearDueDateOutput struct {
 	Ticket TicketOutput `json:"ticket"`
 }
 
+// Doc input types
+
+// CreateDocInput is the input for the createDoc tool.
+type CreateDocInput struct {
+	Title       string   `json:"title" jsonschema:"The document title (required)"`
+	Category    string   `json:"category" jsonschema:"Subdirectory/category name (required, e.g., 'specs', 'decisions', 'findings')"`
+	Body        string   `json:"body,omitempty" jsonschema:"Markdown body content"`
+	Tags        []string `json:"tags,omitempty" jsonschema:"Free-form tags for categorization"`
+	References  []string `json:"references,omitempty" jsonschema:"Cross-references (e.g., 'ticket:abc123', 'doc:xyz789')"`
+	ProjectPath string   `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project."`
+}
+
+// ReadDocInput is the input for the readDoc tool.
+type ReadDocInput struct {
+	ID          string `json:"id" jsonschema:"The document ID to read"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project."`
+}
+
+// UpdateDocInput is the input for the updateDoc tool.
+type UpdateDocInput struct {
+	ID          string    `json:"id" jsonschema:"The document ID to update"`
+	Title       *string   `json:"title,omitempty" jsonschema:"New title (optional, re-slugs filename)"`
+	Body        *string   `json:"body,omitempty" jsonschema:"New body (optional, full replacement)"`
+	Tags        *[]string `json:"tags,omitempty" jsonschema:"New tags (optional, full replacement)"`
+	References  *[]string `json:"references,omitempty" jsonschema:"New references (optional, full replacement)"`
+	ProjectPath string    `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project."`
+}
+
+// DeleteDocInput is the input for the deleteDoc tool.
+type DeleteDocInput struct {
+	ID string `json:"id" jsonschema:"The document ID to delete"`
+}
+
+// MoveDocInput is the input for the moveDoc tool.
+type MoveDocInput struct {
+	ID          string `json:"id" jsonschema:"The document ID to move"`
+	Category    string `json:"category" jsonschema:"Target category/subdirectory"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project."`
+}
+
+// ListDocsInput is the input for the listDocs tool.
+type ListDocsInput struct {
+	Category    string `json:"category,omitempty" jsonschema:"Filter by category/subdirectory"`
+	Tag         string `json:"tag,omitempty" jsonschema:"Filter by tag"`
+	Query       string `json:"query,omitempty" jsonschema:"Search title and body content (case-insensitive)"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project."`
+}
+
+// Doc output types
+
+// DocOutput is the full document representation for MCP.
+type DocOutput struct {
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	Category   string   `json:"category"`
+	Tags       []string `json:"tags"`
+	References []string `json:"references"`
+	Body       string   `json:"body"`
+	Created    string   `json:"created"`
+	Updated    string   `json:"updated"`
+}
+
+// DocSummaryOutput is a brief view of a doc for list views.
+type DocSummaryOutput struct {
+	ID       string   `json:"id"`
+	Title    string   `json:"title"`
+	Category string   `json:"category"`
+	Tags     []string `json:"tags"`
+	Created  string   `json:"created"`
+	Updated  string   `json:"updated"`
+}
+
+// CreateDocOutput is the output for the createDoc tool.
+type CreateDocOutput struct {
+	Doc DocOutput `json:"doc"`
+}
+
+// ReadDocOutput is the output for the readDoc tool.
+type ReadDocOutput struct {
+	Doc DocOutput `json:"doc"`
+}
+
+// UpdateDocOutput is the output for the updateDoc tool.
+type UpdateDocOutput struct {
+	Doc DocOutput `json:"doc"`
+}
+
+// DeleteDocOutput is the output for the deleteDoc tool.
+type DeleteDocOutput struct {
+	Success bool   `json:"success"`
+	ID      string `json:"id"`
+}
+
+// MoveDocOutput is the output for the moveDoc tool.
+type MoveDocOutput struct {
+	Doc DocOutput `json:"doc"`
+}
+
+// ListDocsOutput is the output for the listDocs tool.
+type ListDocsOutput struct {
+	Docs  []DocSummaryOutput `json:"docs"`
+	Total int                `json:"total"`
+}
+
 // Conversion functions
+
+// docResponseToOutput converts an SDK DocResponse to an MCP DocOutput.
+func docResponseToOutput(r *types.DocResponse) DocOutput {
+	tags := r.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	refs := r.References
+	if refs == nil {
+		refs = []string{}
+	}
+	return DocOutput{
+		ID:         r.ID,
+		Title:      r.Title,
+		Category:   r.Category,
+		Tags:       tags,
+		References: refs,
+		Body:       r.Body,
+		Created:    r.Created,
+		Updated:    r.Updated,
+	}
+}
+
+// docSummaryToOutput converts an SDK DocSummary to an MCP DocSummaryOutput.
+func docSummaryToOutput(s *types.DocSummary) DocSummaryOutput {
+	tags := s.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	return DocSummaryOutput{
+		ID:       s.ID,
+		Title:    s.Title,
+		Category: s.Category,
+		Tags:     tags,
+		Created:  s.Created,
+		Updated:  s.Updated,
+	}
+}
 
 // ticketSummaryResponseToMCP maps a shared TicketSummary (from the HTTP API)
 // to the MCP-specific TicketSummary (minimal: only ID and title).

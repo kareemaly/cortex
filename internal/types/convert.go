@@ -1,6 +1,11 @@
 package types
 
-import "github.com/kareemaly/cortex/internal/ticket"
+import (
+	"time"
+
+	"github.com/kareemaly/cortex/internal/docs"
+	"github.com/kareemaly/cortex/internal/ticket"
+)
 
 // TmuxChecker allows checking if a tmux window exists.
 type TmuxChecker interface {
@@ -85,14 +90,15 @@ func ToTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 	}
 
 	return TicketResponse{
-		ID:       t.ID,
-		Type:     t.Type,
-		Title:    t.Title,
-		Body:     t.Body,
-		Status:   string(status),
-		Dates:    ToDatesResponse(t.Dates),
-		Comments: comments,
-		Session:  session,
+		ID:         t.ID,
+		Type:       t.Type,
+		Title:      t.Title,
+		Body:       t.Body,
+		References: t.References,
+		Status:     string(status),
+		Dates:      ToDatesResponse(t.Dates),
+		Comments:   comments,
+		Session:    session,
 	}
 }
 
@@ -126,4 +132,42 @@ func ToTicketSummary(t *ticket.Ticket, status ticket.Status, includeAgentStatus 
 	}
 
 	return summary
+}
+
+// ToDocResponse converts a docs.Doc to DocResponse.
+func ToDocResponse(d *docs.Doc) DocResponse {
+	tags := d.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	refs := d.References
+	if refs == nil {
+		refs = []string{}
+	}
+	return DocResponse{
+		ID:         d.ID,
+		Title:      d.Title,
+		Category:   d.Category,
+		Tags:       tags,
+		References: refs,
+		Body:       d.Body,
+		Created:    d.Created.Format(time.RFC3339),
+		Updated:    d.Updated.Format(time.RFC3339),
+	}
+}
+
+// ToDocSummary converts a docs.Doc to DocSummary.
+func ToDocSummary(d *docs.Doc) DocSummary {
+	tags := d.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	return DocSummary{
+		ID:       d.ID,
+		Title:    d.Title,
+		Category: d.Category,
+		Tags:     tags,
+		Created:  d.Created.Format(time.RFC3339),
+		Updated:  d.Updated.Format(time.RFC3339),
+	}
 }

@@ -126,6 +126,37 @@ func (s *Server) registerArchitectTools() {
 		Name:        "clearDueDate",
 		Description: "Remove the due date from a ticket",
 	}, s.handleClearDueDate)
+
+	// Doc tools
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "createDoc",
+		Description: "Create a new documentation file with markdown content and YAML frontmatter",
+	}, s.handleCreateDoc)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "readDoc",
+		Description: "Read a documentation file by ID",
+	}, s.handleReadDoc)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "updateDoc",
+		Description: "Update a documentation file's title, body, tags, or references",
+	}, s.handleUpdateDoc)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "deleteDoc",
+		Description: "Delete a documentation file by ID (current project only)",
+	}, s.handleDeleteDoc)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "moveDoc",
+		Description: "Move a documentation file to a different category/subdirectory",
+	}, s.handleMoveDoc)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "listDocs",
+		Description: "List documentation files with optional category, tag, and search filters",
+	}, s.handleListDocs)
 }
 
 // handleListProjects lists all registered projects.
@@ -255,7 +286,7 @@ func (s *Server) handleCreateTicket(
 		dueDate = &parsed
 	}
 
-	resp, err := client.CreateTicket(input.Title, input.Body, input.Type, dueDate)
+	resp, err := client.CreateTicket(input.Title, input.Body, input.Type, dueDate, input.References)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
@@ -283,7 +314,7 @@ func (s *Server) handleUpdateTicket(
 		return nil, UpdateTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := client.UpdateTicket(input.ID, input.Title, input.Body)
+	resp, err := client.UpdateTicket(input.ID, input.Title, input.Body, input.References)
 	if err != nil {
 		return nil, UpdateTicketOutput{}, wrapSDKError(err)
 	}

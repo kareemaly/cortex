@@ -62,6 +62,17 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Delete("/{id}/due-date", ticketHandlers.ClearDueDate)
 		})
 
+		// Doc routes
+		docHandlers := NewDocHandlers(deps)
+		r.Route("/docs", func(r chi.Router) {
+			r.Get("/", docHandlers.List)
+			r.Post("/", docHandlers.Create)
+			r.Get("/{id}", docHandlers.Get)
+			r.Put("/{id}", docHandlers.Update)
+			r.Delete("/{id}", docHandlers.Delete)
+			r.Post("/{id}/move", docHandlers.Move)
+		})
+
 		// Architect routes
 		architectHandlers := NewArchitectHandlers(deps)
 		r.Route("/architect", func(r chi.Router) {

@@ -185,7 +185,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := store.Create(req.Title, req.Body, req.Type, dueDate)
+	t, err := store.Create(req.Title, req.Body, req.Type, dueDate, req.References)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -261,7 +261,7 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := store.Update(id, req.Title, req.Body)
+	t, err := store.Update(id, req.Title, req.Body, req.References)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return

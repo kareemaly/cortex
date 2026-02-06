@@ -106,12 +106,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Create docs store manager
+	docsStoreManager := api.NewDocsStoreManager(logger, bus)
+
 	// Build dependencies
 	deps := &api.Dependencies{
-		StoreManager: storeManager,
-		TmuxManager:  tmuxManager,
-		Bus:          bus,
-		Logger:       logger,
+		StoreManager:     storeManager,
+		DocsStoreManager: docsStoreManager,
+		TmuxManager:      tmuxManager,
+		Bus:              bus,
+		Logger:           logger,
 	}
 
 	// Create and run server

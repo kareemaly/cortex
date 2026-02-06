@@ -60,13 +60,14 @@ const DefaultTicketType = "work"
 
 // Ticket represents a work item with sessions and metadata.
 type Ticket struct {
-	ID       string    `json:"id"`
-	Type     string    `json:"type"`
-	Title    string    `json:"title"`
-	Body     string    `json:"body"`
-	Dates    Dates     `json:"dates"`
-	Comments []Comment `json:"comments"`
-	Session  *Session  `json:"session,omitempty"`
+	ID         string    `json:"id"`
+	Type       string    `json:"type"`
+	Title      string    `json:"title"`
+	Body       string    `json:"body"`
+	References []string  `json:"references,omitempty"`
+	Dates      Dates     `json:"dates"`
+	Comments   []Comment `json:"comments"`
+	Session    *Session  `json:"session,omitempty"`
 }
 
 // Dates holds the timestamp metadata for a ticket.

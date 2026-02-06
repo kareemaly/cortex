@@ -26,6 +26,11 @@ type RoleConfig struct {
 // TicketConfig maps ticket type names to their role configurations.
 type TicketConfig map[string]RoleConfig
 
+// DocsConfig holds configuration for the documentation system.
+type DocsConfig struct {
+	Path string `yaml:"path,omitempty"`
+}
+
 // Config holds the project configuration.
 type Config struct {
 	Extend    string       `yaml:"extend,omitempty"`
@@ -33,10 +38,24 @@ type Config struct {
 	Architect RoleConfig   `yaml:"architect"`
 	Ticket    TicketConfig `yaml:"ticket"`
 	Git       GitConfig    `yaml:"git"`
+	Docs      DocsConfig   `yaml:"docs,omitempty"`
 
 	// resolvedExtendPath is the absolute path of the resolved extend directory.
 	// Set during Load() if Extend is specified.
 	resolvedExtendPath string
+}
+
+// DocsPath returns the resolved docs directory path for the given project root.
+// If Docs.Path is set, resolves it relative to the project root (or absolute).
+// Otherwise defaults to {projectRoot}/.cortex/docs/.
+func (c *Config) DocsPath(projectRoot string) string {
+	if c.Docs.Path != "" {
+		if filepath.IsAbs(c.Docs.Path) {
+			return c.Docs.Path
+		}
+		return filepath.Join(projectRoot, c.Docs.Path)
+	}
+	return filepath.Join(projectRoot, ".cortex", "docs")
 }
 
 // ResolvedExtendPath returns the resolved absolute path of the extend directory,

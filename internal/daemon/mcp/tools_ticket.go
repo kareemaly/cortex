@@ -159,14 +159,15 @@ func ticketResponseToOutput(r *types.TicketResponse) TicketOutput {
 	}
 
 	return TicketOutput{
-		ID:       r.ID,
-		Type:     r.Type,
-		Title:    r.Title,
-		Body:     r.Body,
-		Status:   r.Status,
-		Dates:    r.Dates,
-		Comments: r.Comments,
-		Session:  session,
+		ID:         r.ID,
+		Type:       r.Type,
+		Title:      r.Title,
+		Body:       r.Body,
+		References: r.References,
+		Status:     r.Status,
+		Dates:      r.Dates,
+		Comments:   r.Comments,
+		Session:    session,
 	}
 }
 

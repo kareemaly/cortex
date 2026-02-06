@@ -9,9 +9,10 @@ import (
 
 // Dependencies holds all dependencies required by API handlers.
 type Dependencies struct {
-	StoreManager *StoreManager
-	TmuxManager  *tmux.Manager
-	Bus          *events.Bus
-	Logger       *slog.Logger
-	CortexdPath  string // Optional: path to cortexd binary for spawn operations
+	StoreManager     *StoreManager
+	DocsStoreManager *DocsStoreManager
+	TmuxManager      *tmux.Manager
+	Bus              *events.Bus
+	Logger           *slog.Logger
+	CortexdPath      string // Optional: path to cortexd binary for spawn operations
 }
