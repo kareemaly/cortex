@@ -355,7 +355,11 @@ func wrapText(text string, width int) []string {
 
 // ticketHeight returns the number of lines a single ticket occupies (title lines + metadata line).
 func ticketHeight(t sdk.TicketSummary, titleWidth int) int {
-	return len(wrapText(t.Title, titleWidth)) + 1
+	bw := 0
+	if t.Type != "" {
+		bw = len("[" + t.Type + "] ")
+	}
+	return len(wrapText(t.Title, titleWidth-bw)) + 1
 }
 
 // totalTicketHeight returns the total lines needed to render all tickets with gaps.
