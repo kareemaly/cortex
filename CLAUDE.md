@@ -44,6 +44,7 @@ Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (
 - **HTTP-only communication**: All clients (CLI, TUI, MCP) communicate via HTTP to daemon. No direct filesystem access to ticket store.
 - **Project context**: Always use `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
 - **StoreManager**: Single source of truth for ticket state. Located in `internal/daemon/api/store_manager.go`.
+- **DocsStoreManager**: Manages doc stores per project. Located in `internal/daemon/api/docs_store_manager.go`.
 - **Spawn state detection**: Four states (normal/active/orphaned/ended) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 
 ## Anti-Patterns
@@ -73,6 +74,7 @@ Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (
 | HTTP API handlers | `internal/daemon/api/` |
 | MCP tools | `internal/daemon/mcp/` |
 | Ticket store | `internal/ticket/` |
+| Docs store | `internal/docs/` |
 | SDK client | `internal/cli/sdk/client.go` |
 | Spawn orchestration | `internal/core/spawn/` |
 | Project config | `internal/project/config/` |
@@ -85,7 +87,7 @@ Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (
 
 ## Configuration
 
-**Project** (`.cortex/cortex.yaml`): Agent type (`claude`, `opencode`, `copilot`), agent args, git worktrees, lifecycle hooks. See `internal/project/config/config.go` for schema.
+**Project** (`.cortex/cortex.yaml`): Agent type (`claude`, `opencode`, `copilot`), agent args, git worktrees, lifecycle hooks, docs path. See `internal/project/config/config.go` for schema.
 
 **Global** (`~/.cortex/settings.yaml`): Daemon port, log level, project registry. See `internal/daemon/config/config.go` for schema.
 
@@ -115,7 +117,7 @@ Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/s
 
 **Global** (no project header): `GET /health`, `GET /projects`
 
-**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn, session kill/approve, SSE events.
+**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn, session kill/approve, SSE events, docs CRUD.
 
 ## MCP Tools
 
@@ -137,6 +139,12 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 | `addTicketComment` | Add comment to ticket (types: review_requested, done, blocker, comment) |
 | `spawnSession` | Spawn agent session for ticket (modes: normal, resume, fresh) |
 | `getCortexConfigDocs` | Get CONFIG_DOCS.md for customization guidance |
+| `createDoc` | Create a markdown doc with frontmatter in a category subdirectory |
+| `readDoc` | Read a doc by ID |
+| `updateDoc` | Update doc title, body, tags, or references |
+| `deleteDoc` | Delete a doc by ID (current project only) |
+| `moveDoc` | Move a doc to a different category |
+| `listDocs` | List docs with optional category, tag, and search filters |
 
 **Cross-project support**: Most architect tools accept an optional `project_path` parameter to operate on a different registered project. Use `listProjects` to discover available projects. Exception: `deleteTicket` is restricted to the current project for safety.
 

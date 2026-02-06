@@ -129,6 +129,7 @@ See [CONFIG_DOCS.md](internal/install/defaults/claude-code/CONFIG_DOCS.md) for f
 
 The daemon handles:
 - Ticket storage (JSON files in `.cortex/tickets/`)
+- Documentation storage (Markdown with YAML frontmatter in `.cortex/docs/`)
 - Tmux session orchestration
 - MCP server for AI agents
 - SSE events for real-time updates
