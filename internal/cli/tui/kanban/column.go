@@ -5,17 +5,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
 // Column represents a kanban column with tickets.
 type Column struct {
-	title        string
-	status       string
-	tickets      []sdk.TicketSummary
-	cursor       int
-	scrollOffset int // first visible ticket index
+	title   string
+	status  string
+	tickets []sdk.TicketSummary
+	cursor  int
+	vp      viewport.Model
 }
 
 // NewColumn creates a new column with the given title and status.
@@ -61,7 +62,6 @@ func (c *Column) MoveDown() {
 // JumpToFirst moves cursor to first ticket.
 func (c *Column) JumpToFirst() {
 	c.cursor = 0
-	c.scrollOffset = 0
 }
 
 // JumpToLast moves cursor to last ticket.
@@ -69,35 +69,17 @@ func (c *Column) JumpToLast() {
 	if len(c.tickets) > 0 {
 		c.cursor = len(c.tickets) - 1
 	}
-	// scrollOffset adjusted in EnsureCursorVisible
 }
 
 // ScrollUp scrolls up by n tickets (for ctrl+u).
 func (c *Column) ScrollUp(n int) {
 	c.cursor = max(c.cursor-n, 0)
-	// scrollOffset adjusted in EnsureCursorVisible
 }
 
 // ScrollDown scrolls down by n tickets (for ctrl+d).
 func (c *Column) ScrollDown(n int) {
 	if len(c.tickets) > 0 {
 		c.cursor = min(c.cursor+n, len(c.tickets)-1)
-	}
-	// scrollOffset adjusted in EnsureCursorVisible
-}
-
-// EnsureCursorVisible adjusts scrollOffset to keep cursor in view.
-func (c *Column) EnsureCursorVisible(visibleCount int) {
-	if visibleCount <= 0 {
-		return
-	}
-	// Cursor above visible area
-	if c.cursor < c.scrollOffset {
-		c.scrollOffset = c.cursor
-	}
-	// Cursor below visible area
-	if c.cursor >= c.scrollOffset+visibleCount {
-		c.scrollOffset = c.cursor - visibleCount + 1
 	}
 }
 
@@ -111,15 +93,111 @@ func (c *Column) SetTickets(tickets []sdk.TicketSummary) {
 			c.cursor = 0
 		}
 	}
-	// Reset scroll offset if it's now invalid
-	if c.scrollOffset >= len(tickets) {
-		c.scrollOffset = max(len(tickets)-1, 0)
-	}
 }
 
 // Len returns the number of tickets in the column.
 func (c *Column) Len() int {
 	return len(c.tickets)
+}
+
+// renderAllTickets renders all tickets into a single string for the viewport.
+func (c *Column) renderAllTickets(width int, isActive bool) string {
+	if len(c.tickets) == 0 {
+		emptyText := lipgloss.NewStyle().
+			Foreground(mutedColor).
+			Italic(true).
+			Render("(empty)")
+		return emptyText
+	}
+
+	titleWidth := max(width-4, 10)
+	var b strings.Builder
+
+	for i, t := range c.tickets {
+		// Build type badge
+		typeBadge := ""
+		if t.Type != "" {
+			typeBadge = typeBadgeStyle(t.Type).Render("[" + t.Type + "] ")
+		}
+
+		// Build due date indicator
+		dueDateIndicator := ""
+		if t.DueDate != nil {
+			now := time.Now()
+			if t.DueDate.Before(now) {
+				dueDateIndicator = overdueStyle.Render(" [OVERDUE]")
+			} else if t.DueDate.Before(now.Add(24 * time.Hour)) {
+				dueDateIndicator = dueSoonStyle.Render(" [DUE SOON]")
+			}
+		}
+
+		// Word wrap title (account for badge width in first line)
+		badgeWidth := len(typeBadge)
+		if badgeWidth > 0 {
+			// Badge uses ANSI escape codes, so calculate actual visible width
+			badgeWidth = len("[" + t.Type + "] ")
+		}
+		wrappedTitle := wrapText(t.Title, titleWidth-badgeWidth)
+		if typeBadge != "" && len(wrappedTitle) > 0 {
+			wrappedTitle[0] = typeBadge + wrappedTitle[0]
+		}
+		// Append due date indicator to first line
+		if dueDateIndicator != "" && len(wrappedTitle) > 0 {
+			wrappedTitle[0] = wrappedTitle[0] + dueDateIndicator
+		}
+
+		// Format creation date
+		dateStr := t.Created.Format("Jan 2")
+
+		// Build lines based on selection state
+		if i == c.cursor && isActive {
+			// Selected: show with highlight
+			for _, line := range wrappedTitle {
+				b.WriteString(selectedTicketStyle.Width(width - 2).Render(line))
+				b.WriteString("\n")
+			}
+			// Metadata line: agent status + date
+			meta := ""
+			if t.HasActiveSession {
+				meta += agentStatusLabel(t) + " · "
+			}
+			meta += dateStr
+			b.WriteString(selectedTicketStyle.Width(width - 2).Render(meta))
+		} else {
+			// Normal ticket
+			for _, line := range wrappedTitle {
+				b.WriteString(ticketStyle.Width(width - 2).Render(line))
+				b.WriteString("\n")
+			}
+			// Metadata line: agent status + date
+			meta := ""
+			if t.HasActiveSession {
+				if t.IsOrphaned {
+					meta += orphanedStyle.Render(agentStatusLabel(t)) + " · "
+				} else {
+					meta += activeSessionStyle.Render(agentStatusLabel(t)) + " · "
+				}
+			}
+			meta += dateStr
+			b.WriteString(ticketDateStyle.Width(width - 2).Render(meta))
+		}
+
+		if i < len(c.tickets)-1 {
+			b.WriteString("\n\n")
+		}
+	}
+
+	return b.String()
+}
+
+// cursorYOffset calculates the line number where the cursor's ticket starts in rendered content.
+func (c *Column) cursorYOffset(titleWidth int) int {
+	y := 0
+	for i := 0; i < c.cursor; i++ {
+		y += ticketHeight(c.tickets[i], titleWidth)
+		y++ // gap line between tickets
+	}
+	return y
 }
 
 // View renders the column.
@@ -129,25 +207,46 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	// Header takes ~2 lines (text + border)
 	headerLines := 2
 
-	// Calculate available lines and title width for dynamic height
+	// Calculate title width for height calculations
 	titleWidth := max(width-4, 10)
 
+	totalHeight := totalTicketHeight(c.tickets, titleWidth)
 	availableLines := maxHeight - headerLines
-	needsScrolling := totalTicketHeight(c.tickets, titleWidth) > availableLines
+	needsScrolling := totalHeight > availableLines
 
-	// If scrolling needed, reserve 1 line per visible indicator
+	// Reserve indicator lines when scrolling is needed
 	indicatorLines := 0
 	if needsScrolling {
-		indicatorLines = 2 // worst-case: top + bottom
+		indicatorLines = 2 // top + bottom indicators
 	}
 
-	visibleCount := countVisibleTickets(c.tickets, c.scrollOffset, availableLines-indicatorLines, titleWidth)
+	vpHeight := max(availableLines-indicatorLines, 1)
 
-	// Two-pass: ensure cursor visible, then recompute if scrollOffset changed
-	prevOffset := c.scrollOffset
-	c.EnsureCursorVisible(visibleCount)
-	if c.scrollOffset != prevOffset {
-		visibleCount = countVisibleTickets(c.tickets, c.scrollOffset, availableLines-indicatorLines, titleWidth)
+	// Set viewport dimensions
+	c.vp.Width = width
+	c.vp.Height = vpHeight
+
+	// Render all tickets and set as viewport content
+	content := c.renderAllTickets(width, isActive)
+
+	// Preserve scroll position across re-renders
+	savedYOffset := c.vp.YOffset
+	c.vp.SetContent(content)
+	c.vp.SetYOffset(savedYOffset)
+
+	// Ensure cursor is visible within the viewport
+	if len(c.tickets) > 0 {
+		cursorY := c.cursorYOffset(titleWidth)
+		cursorH := ticketHeight(c.tickets[c.cursor], titleWidth)
+
+		// Cursor above viewport — scroll up
+		if cursorY < c.vp.YOffset {
+			c.vp.SetYOffset(cursorY)
+		}
+		// Cursor below viewport — scroll down
+		if cursorY+cursorH > c.vp.YOffset+vpHeight {
+			c.vp.SetYOffset(cursorY + cursorH - vpHeight)
+		}
 	}
 
 	// Render header with count.
@@ -156,112 +255,29 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Top scroll indicator (only when arrow is shown)
-	if needsScrolling && c.scrollOffset > 0 {
+	// Top scroll indicator
+	if needsScrolling && c.vp.YOffset > 0 {
 		b.WriteString(mutedStyle.Render("▲"))
 		b.WriteString("\n")
 	}
 
-	// Render only visible tickets.
-	if len(c.tickets) == 0 {
-		emptyText := lipgloss.NewStyle().
-			Foreground(mutedColor).
-			Italic(true).
-			Render("(empty)")
-		b.WriteString(emptyText)
-		b.WriteString("\n")
-	} else {
-		endIdx := min(c.scrollOffset+visibleCount, len(c.tickets))
-		for i := c.scrollOffset; i < endIdx; i++ {
-			t := c.tickets[i]
+	// Viewport content (clipped)
+	b.WriteString(c.vp.View())
 
-			// Build type badge
-			typeBadge := ""
-			if t.Type != "" {
-				typeBadge = typeBadgeStyle(t.Type).Render("[" + t.Type + "] ")
-			}
-
-			// Build due date indicator
-			dueDateIndicator := ""
-			if t.DueDate != nil {
-				now := time.Now()
-				if t.DueDate.Before(now) {
-					dueDateIndicator = overdueStyle.Render(" [OVERDUE]")
-				} else if t.DueDate.Before(now.Add(24 * time.Hour)) {
-					dueDateIndicator = dueSoonStyle.Render(" [DUE SOON]")
-				}
-			}
-
-			// Word wrap title (account for badge width in first line)
-			badgeWidth := len(typeBadge)
-			if badgeWidth > 0 {
-				// Badge uses ANSI escape codes, so calculate actual visible width
-				badgeWidth = len("[" + t.Type + "] ")
-			}
-			wrappedTitle := wrapText(t.Title, titleWidth-badgeWidth)
-			if typeBadge != "" && len(wrappedTitle) > 0 {
-				wrappedTitle[0] = typeBadge + wrappedTitle[0]
-			}
-			// Append due date indicator to first line
-			if dueDateIndicator != "" && len(wrappedTitle) > 0 {
-				wrappedTitle[0] = wrappedTitle[0] + dueDateIndicator
-			}
-
-			// Format creation date
-			dateStr := t.Created.Format("Jan 2")
-
-			// Build lines based on selection state
-			if i == c.cursor && isActive {
-				// Selected: show with highlight
-				for _, line := range wrappedTitle {
-					b.WriteString(selectedTicketStyle.Width(width - 2).Render(line))
-					b.WriteString("\n")
-				}
-				// Metadata line: agent status + date
-				meta := ""
-				if t.HasActiveSession {
-					meta += agentStatusLabel(t) + " · "
-				}
-				meta += dateStr
-				b.WriteString(selectedTicketStyle.Width(width - 2).Render(meta))
-			} else {
-				// Normal ticket
-				for _, line := range wrappedTitle {
-					b.WriteString(ticketStyle.Width(width - 2).Render(line))
-					b.WriteString("\n")
-				}
-				// Metadata line: agent status + date
-				meta := ""
-				if t.HasActiveSession {
-					if t.IsOrphaned {
-						meta += orphanedStyle.Render(agentStatusLabel(t)) + " · "
-					} else {
-						meta += activeSessionStyle.Render(agentStatusLabel(t)) + " · "
-					}
-				}
-				meta += dateStr
-				b.WriteString(ticketDateStyle.Width(width - 2).Render(meta))
-			}
-
-			if i < endIdx-1 {
-				b.WriteString("\n\n")
-			}
-		}
-	}
-
-	// Bottom scroll indicator (only when arrow is shown)
-	if needsScrolling && c.scrollOffset+visibleCount < len(c.tickets) {
+	// Bottom scroll indicator
+	if needsScrolling && c.vp.YOffset+vpHeight < c.vp.TotalLineCount() {
 		b.WriteString("\n")
 		b.WriteString(mutedStyle.Render("▼"))
 	}
 
-	content := b.String()
+	result := b.String()
 
-	// Apply column style.
+	// Apply column style with Height for uniform column heights.
+	// Safe because viewport already clips content; Height() only adds padding.
 	if isActive {
-		return activeColumnStyle.Width(width).Height(maxHeight).Render(content)
+		return activeColumnStyle.Width(width).Height(maxHeight).Render(result)
 	}
-	return columnStyle.Width(width).Height(maxHeight).Render(content)
+	return columnStyle.Width(width).Height(maxHeight).Render(result)
 }
 
 // agentStatusIcon returns the icon character for the agent's current status.
@@ -352,21 +368,4 @@ func totalTicketHeight(tickets []sdk.TicketSummary, titleWidth int) int {
 		}
 	}
 	return total
-}
-
-// countVisibleTickets returns how many tickets fit starting from startIdx within availableLines.
-func countVisibleTickets(tickets []sdk.TicketSummary, startIdx, availableLines, titleWidth int) int {
-	used, count := 0, 0
-	for i := startIdx; i < len(tickets); i++ {
-		h := ticketHeight(tickets[i], titleWidth)
-		if count > 0 {
-			h++ // gap line
-		}
-		if used+h > availableLines {
-			break
-		}
-		used += h
-		count++
-	}
-	return max(count, 1)
 }
