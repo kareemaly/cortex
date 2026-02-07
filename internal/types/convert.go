@@ -35,6 +35,7 @@ func ToCommentResponse(c *ticket.Comment) CommentResponse {
 // ToSessionResponse converts a session.Session to SessionResponse.
 func ToSessionResponse(s *session.Session) SessionResponse {
 	return SessionResponse{
+		Type:          string(s.Type),
 		TicketID:      s.TicketID,
 		Agent:         s.Agent,
 		TmuxWindow:    s.TmuxWindow,

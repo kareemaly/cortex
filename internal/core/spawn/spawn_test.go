@@ -60,6 +60,7 @@ func (m *mockSessionStore) Create(ticketID, agent, tmuxWindow string, worktreePa
 	m.lastCreateAgent = agent
 	shortID := storage.ShortID(ticketID)
 	sess := &session.Session{
+		Type:          session.SessionTypeTicket,
 		TicketID:      ticketID,
 		Agent:         agent,
 		TmuxWindow:    tmuxWindow,
@@ -96,7 +97,7 @@ func (m *mockSessionStore) CreateArchitect(agent, tmuxWindow string) (*session.S
 	}
 	m.lastCreateAgent = agent
 	sess := &session.Session{
-		TicketID:   session.ArchitectSessionKey,
+		Type:       session.SessionTypeArchitect,
 		Agent:      agent,
 		TmuxWindow: tmuxWindow,
 		StartedAt:  time.Now(),

@@ -57,7 +57,7 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 	for shortID, sess := range sessions {
 		sessionType := "ticket"
 		title := ""
-		if shortID == session.ArchitectSessionKey {
+		if sess.Type == session.SessionTypeArchitect {
 			sessionType = "architect"
 			title = "Architect"
 		} else if ticketStore != nil {

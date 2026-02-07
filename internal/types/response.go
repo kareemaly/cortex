@@ -27,7 +27,8 @@ type CommentActionResponse struct {
 
 // SessionResponse is a standalone session representation.
 type SessionResponse struct {
-	TicketID      string    `json:"ticket_id"`
+	Type          string    `json:"type"`
+	TicketID      string    `json:"ticket_id,omitempty"`
 	Agent         string    `json:"agent"`
 	TmuxWindow    string    `json:"tmux_window"`
 	WorktreePath  *string   `json:"worktree_path,omitempty"`

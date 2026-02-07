@@ -35,6 +35,7 @@ func (s *Store) Create(ticketID, agent, tmuxWindow string, worktreePath, feature
 
 	key := storage.ShortID(ticketID)
 	session := &Session{
+		Type:          SessionTypeTicket,
 		TicketID:      ticketID,
 		Agent:         agent,
 		TmuxWindow:    tmuxWindow,
@@ -65,7 +66,7 @@ func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
 	}
 
 	sess := &Session{
-		TicketID:   ArchitectSessionKey,
+		Type:       SessionTypeArchitect,
 		Agent:      agent,
 		TmuxWindow: tmuxWindow,
 		StartedAt:  time.Now().UTC(),
@@ -183,6 +184,18 @@ func (s *Store) load() (map[string]*Session, error) {
 
 	if sessions == nil {
 		sessions = make(map[string]*Session)
+	}
+
+	// Migrate old sessions missing the Type field.
+	for _, sess := range sessions {
+		if sess.Type == "" {
+			if sess.TicketID == ArchitectSessionKey {
+				sess.Type = SessionTypeArchitect
+				sess.TicketID = ""
+			} else {
+				sess.Type = SessionTypeTicket
+			}
+		}
 	}
 
 	return sessions, nil

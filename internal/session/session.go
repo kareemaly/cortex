@@ -13,6 +13,14 @@ const (
 	AgentStatusError             AgentStatus = "error"
 )
 
+// SessionType distinguishes architect sessions from ticket agent sessions.
+type SessionType string
+
+const (
+	SessionTypeArchitect SessionType = "architect"
+	SessionTypeTicket    SessionType = "ticket"
+)
+
 // ArchitectSessionKey is the session store key for the architect session.
 // This is used as-is (not shortened via storage.ShortID) because the
 // architect is a singleton per project.
@@ -21,7 +29,8 @@ const ArchitectSessionKey = "architect"
 // Session represents an active work session for a ticket.
 // Sessions are ephemeral — deleted when ended.
 type Session struct {
-	TicketID      string      `json:"ticket_id"`
+	Type          SessionType `json:"type"`
+	TicketID      string      `json:"ticket_id,omitempty"`
 	Agent         string      `json:"agent"`
 	TmuxWindow    string      `json:"tmux_window"`
 	WorktreePath  *string     `json:"worktree_path,omitempty"`

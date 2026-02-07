@@ -229,6 +229,101 @@ func TestEmptyFile(t *testing.T) {
 	}
 }
 
+func TestCreateSetsTicketType(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	_, sess, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window", nil, nil)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	if sess.Type != SessionTypeTicket {
+		t.Errorf("Type = %q, want %q", sess.Type, SessionTypeTicket)
+	}
+	if sess.TicketID != "a1b2c3d4-e5f6-7890-abcd-ef0123456789" {
+		t.Errorf("TicketID = %q, want full ticket ID", sess.TicketID)
+	}
+}
+
+func TestCreateArchitectSetsType(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	sess, err := store.CreateArchitect("claude", "architect-window")
+	if err != nil {
+		t.Fatalf("CreateArchitect failed: %v", err)
+	}
+
+	if sess.Type != SessionTypeArchitect {
+		t.Errorf("Type = %q, want %q", sess.Type, SessionTypeArchitect)
+	}
+	if sess.TicketID != "" {
+		t.Errorf("TicketID = %q, want empty for architect session", sess.TicketID)
+	}
+}
+
+func TestBackwardCompatMigration(t *testing.T) {
+	dir, err := os.MkdirTemp("", "session-migration-test")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	path := filepath.Join(dir, "sessions.json")
+
+	// Write old-format JSON: architect has ticket_id="architect", no type field
+	oldJSON := `{
+  "architect": {
+    "ticket_id": "architect",
+    "agent": "claude",
+    "tmux_window": "arch-window",
+    "started_at": "2025-01-01T00:00:00Z",
+    "status": "in_progress"
+  },
+  "a1b2c3d4": {
+    "ticket_id": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+    "agent": "claude",
+    "tmux_window": "ticket-window",
+    "started_at": "2025-01-01T00:00:00Z",
+    "status": "starting"
+  }
+}`
+	if err := os.WriteFile(path, []byte(oldJSON), 0644); err != nil {
+		t.Fatalf("write old JSON: %v", err)
+	}
+
+	store := NewStore(path)
+	sessions, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+
+	// Verify architect session was migrated
+	archSess, ok := sessions[ArchitectSessionKey]
+	if !ok {
+		t.Fatal("architect session not found")
+	}
+	if archSess.Type != SessionTypeArchitect {
+		t.Errorf("architect Type = %q, want %q", archSess.Type, SessionTypeArchitect)
+	}
+	if archSess.TicketID != "" {
+		t.Errorf("architect TicketID = %q, want empty after migration", archSess.TicketID)
+	}
+
+	// Verify ticket session was migrated
+	ticketSess, ok := sessions["a1b2c3d4"]
+	if !ok {
+		t.Fatal("ticket session not found")
+	}
+	if ticketSess.Type != SessionTypeTicket {
+		t.Errorf("ticket Type = %q, want %q", ticketSess.Type, SessionTypeTicket)
+	}
+	if ticketSess.TicketID != "a1b2c3d4-e5f6-7890-abcd-ef0123456789" {
+		t.Errorf("ticket TicketID = %q, want original value preserved", ticketSess.TicketID)
+	}
+}
+
 func TestConcurrentAccess(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
