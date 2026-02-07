@@ -43,6 +43,7 @@ type Model struct {
 	modalViewport   viewport.Model
 	modalCommentIdx int // index into ticket.Comments
 	executingDiff   bool
+	sessions        []sdk.SessionListItem // cached sessions for this project
 
 	// SSE subscription state
 	eventCh      <-chan sdk.Event
@@ -53,7 +54,8 @@ type Model struct {
 
 // TicketLoadedMsg is sent when a ticket is successfully fetched.
 type TicketLoadedMsg struct {
-	Ticket *sdk.TicketResponse
+	Ticket   *sdk.TicketResponse
+	Sessions []sdk.SessionListItem
 }
 
 // TicketErrorMsg is sent when fetching a ticket fails.
@@ -208,6 +210,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = nil
 		m.ticket = msg.Ticket
+		m.sessions = msg.Sessions
 		if m.ready {
 			// Preserve scroll position across SSE refreshes.
 			savedOffset := m.bodyViewport.YOffset
@@ -1116,6 +1119,41 @@ func (m Model) renderAttributes(width, height int) string {
 		b.WriteString(dueDateStyle.Render(m.ticket.Due.Format("Jan 02, 15:04")))
 	}
 
+	if len(m.ticket.Tags) > 0 {
+		b.WriteString("\n")
+		b.WriteString(attributeLabelStyle.Render("Tags     "))
+		b.WriteString(attributeValueStyle.Render(strings.Join(m.ticket.Tags, ", ")))
+	}
+
+	// SESSION section
+	b.WriteString("\n\n")
+	b.WriteString(attributeHeaderStyle.Render("SESSION"))
+	b.WriteString("\n")
+	if m.sessions != nil {
+		found := false
+		for _, s := range m.sessions {
+			if s.TicketID == m.ticket.ID {
+				found = true
+				b.WriteString(attributeLabelStyle.Render("Agent    "))
+				b.WriteString(attributeValueStyle.Render(s.Agent))
+				b.WriteString("\n")
+				b.WriteString(attributeLabelStyle.Render("Status   "))
+				b.WriteString(attributeValueStyle.Render(s.Status))
+				if s.Tool != nil && *s.Tool != "" {
+					b.WriteString("\n")
+					b.WriteString(attributeLabelStyle.Render("Tool     "))
+					b.WriteString(attributeValueStyle.Render(*s.Tool))
+				}
+				break
+			}
+		}
+		if !found {
+			b.WriteString(attributeLabelStyle.Render("No active session"))
+		}
+	} else {
+		b.WriteString(attributeLabelStyle.Render("No active session"))
+	}
+
 	return lipgloss.NewStyle().
 		Width(width).
 		Height(height).
@@ -1170,9 +1208,13 @@ func (m Model) renderCommentRow(comment sdk.CommentResponse, width int, selected
 	badge := commentBadge(comment.Type)
 	timeAgo := formatTimeAgo(comment.Created)
 
-	// Build header line: [badge]  repo-prefix (if review)  ────  time-ago
+	// Build header line: [badge]  author  repo-prefix (if review)  ────  time-ago
 	var headerParts []string
 	headerParts = append(headerParts, badge)
+
+	if comment.Author != "" {
+		headerParts = append(headerParts, attributeValueStyle.Render(comment.Author))
+	}
 
 	// For review requests, show repo name.
 	if comment.Type == "review_requested" {
@@ -1441,14 +1483,19 @@ func (m Model) renderMarkdown(content string) string {
 	return strings.TrimSpace(rendered)
 }
 
-// loadTicket returns a command to load the ticket.
+// loadTicket returns a command to load the ticket and sessions.
 func (m Model) loadTicket() tea.Cmd {
 	return func() tea.Msg {
 		ticket, err := m.client.FindTicketByID(m.ticketID)
 		if err != nil {
 			return TicketErrorMsg{Err: err}
 		}
-		return TicketLoadedMsg{Ticket: ticket}
+		// Fetch sessions (non-fatal if it fails)
+		var sessions []sdk.SessionListItem
+		if resp, err := m.client.ListSessions(); err == nil {
+			sessions = resp.Sessions
+		}
+		return TicketLoadedMsg{Ticket: ticket, Sessions: sessions}
 	}
 }
 

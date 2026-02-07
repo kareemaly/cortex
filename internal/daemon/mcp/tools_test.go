@@ -564,8 +564,15 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 		t.Fatalf("create temp dir: %v", err)
 	}
 
+	// Create .cortex/ directory (project marker)
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".cortex"), 0755); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create .cortex dir: %v", err)
+	}
+
 	// Create a store and ticket via the daemon API infrastructure
-	store, err := ticket.NewStore(filepath.Join(tmpDir, ".cortex", "tickets"), nil, "")
+	// Tickets path defaults to {root}/tickets/ (not .cortex/tickets/)
+	store, err := ticket.NewStore(filepath.Join(tmpDir, "tickets"), nil, "")
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create store: %v", err)

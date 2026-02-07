@@ -82,9 +82,13 @@ func defaultTestConfig() config.NotificationsConfig {
 func setupTestStore(t *testing.T) (string, *ticket.Store, *session.Store, *events.Bus) {
 	t.Helper()
 
-	// Create temp project directory
+	// Create temp project directory with .cortex/ marker
 	projectDir := t.TempDir()
-	ticketsDir := filepath.Join(projectDir, ".cortex", "tickets")
+	if err := os.MkdirAll(filepath.Join(projectDir, ".cortex"), 0755); err != nil {
+		t.Fatalf("failed to create .cortex dir: %v", err)
+	}
+	// Tickets path defaults to {root}/tickets/ (not .cortex/tickets/)
+	ticketsDir := filepath.Join(projectDir, "tickets")
 
 	bus := events.NewBus()
 	store, err := ticket.NewStore(ticketsDir, bus, projectDir)
