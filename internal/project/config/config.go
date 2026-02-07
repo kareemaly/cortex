@@ -53,7 +53,7 @@ type Config struct {
 
 // DocsPath returns the resolved docs directory path for the given project root.
 // If Docs.Path is set, resolves it relative to the project root (or absolute).
-// Otherwise defaults to {projectRoot}/.cortex/docs/.
+// Otherwise defaults to {projectRoot}/docs.
 func (c *Config) DocsPath(projectRoot string) string {
 	if c.Docs.Path != "" {
 		if filepath.IsAbs(c.Docs.Path) {
@@ -61,12 +61,12 @@ func (c *Config) DocsPath(projectRoot string) string {
 		}
 		return filepath.Join(projectRoot, c.Docs.Path)
 	}
-	return filepath.Join(projectRoot, ".cortex", "docs")
+	return filepath.Join(projectRoot, "docs")
 }
 
 // TicketsPath returns the resolved tickets directory path for the given project root.
 // If Tickets.Path is set, resolves it relative to the project root (or absolute).
-// Otherwise defaults to {projectRoot}/.cortex/tickets/.
+// Otherwise defaults to {projectRoot}/tickets.
 func (c *Config) TicketsPath(projectRoot string) string {
 	if c.Tickets.Path != "" {
 		if filepath.IsAbs(c.Tickets.Path) {
@@ -74,7 +74,7 @@ func (c *Config) TicketsPath(projectRoot string) string {
 		}
 		return filepath.Join(projectRoot, c.Tickets.Path)
 	}
-	return filepath.Join(projectRoot, ".cortex", "tickets")
+	return filepath.Join(projectRoot, "tickets")
 }
 
 // ResolvedExtendPath returns the resolved absolute path of the extend directory,
