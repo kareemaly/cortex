@@ -84,6 +84,10 @@ type Model struct {
 	showUnlinkConfirm bool
 	unlinkProjectPath string
 
+	// Architect mode selection state (for orphaned sessions).
+	showArchitectModeModal   bool
+	architectModeProjectPath string
+
 	// Log viewer state.
 	logBuf        *tuilog.Buffer
 	logViewer     tuilog.Viewer
@@ -338,6 +342,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Handle architect mode selection modal.
+	if m.showArchitectModeModal {
+		return m.handleArchitectModeKey(msg)
+	}
+
 	// Quit.
 	if isKey(msg, KeyQuit, KeyCtrlC) {
 		for _, cancel := range m.sseContexts {
@@ -483,9 +492,9 @@ func (m Model) handleFocusCurrentRow() (tea.Model, tea.Cmd) {
 			return m, m.spawnArchitect(pd.project.Path)
 		}
 		if pd.architect != nil && pd.architect.State == "orphaned" {
-			m.statusMsg = "Architect is orphaned. Press [s] to respawn."
-			m.statusIsError = false
-			return m, m.clearStatusAfterDelay()
+			m.showArchitectModeModal = true
+			m.architectModeProjectPath = pd.project.Path
+			return m, nil
 		}
 		m.statusMsg = "No active architect. Press [s] to spawn."
 		m.statusIsError = false
@@ -512,6 +521,13 @@ func (m Model) handleSpawnArchitect() (tea.Model, tea.Cmd) {
 		return m, m.clearStatusAfterDelay()
 	}
 
+	// If architect is orphaned, show mode selection modal.
+	if pd.architect != nil && pd.architect.State == "orphaned" {
+		m.showArchitectModeModal = true
+		m.architectModeProjectPath = pd.project.Path
+		return m, nil
+	}
+
 	m.statusMsg = "Spawning architect..."
 	m.statusIsError = false
 	return m, m.spawnArchitect(pd.project.Path)
@@ -534,6 +550,33 @@ func (m Model) handleUnlinkProject() (tea.Model, tea.Cmd) {
 	pd := m.projects[r.projectIndex]
 	m.showUnlinkConfirm = true
 	m.unlinkProjectPath = pd.project.Path
+	return m, nil
+}
+
+// handleArchitectModeKey handles key input for the orphaned architect mode selection modal.
+func (m Model) handleArchitectModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case isKey(msg, KeyRefresh): // 'r' for resume
+		m.showArchitectModeModal = false
+		path := m.architectModeProjectPath
+		m.architectModeProjectPath = ""
+		m.statusMsg = "Resuming architect..."
+		m.statusIsError = false
+		return m, m.spawnArchitectWithMode(path, "resume")
+	case isKey(msg, KeyFocus): // 'f' for fresh
+		m.showArchitectModeModal = false
+		path := m.architectModeProjectPath
+		m.architectModeProjectPath = ""
+		m.statusMsg = "Starting fresh architect..."
+		m.statusIsError = false
+		return m, m.spawnArchitectWithMode(path, "fresh")
+	case isKey(msg, KeyEscape):
+		m.showArchitectModeModal = false
+		m.architectModeProjectPath = ""
+		m.statusMsg = "Spawn cancelled"
+		m.statusIsError = false
+		return m, m.clearStatusAfterDelay()
+	}
 	return m, nil
 }
 
@@ -634,6 +677,17 @@ func (m Model) View() string {
 		b.WriteString(warnBadgeStyle.Render(confirmMsg))
 		b.WriteString("\n")
 		b.WriteString(mutedStyleRender.Render(m.unlinkProjectPath))
+		return b.String()
+	}
+
+	// Architect mode selection dialog.
+	if m.showArchitectModeModal {
+		title := filepath.Base(m.architectModeProjectPath)
+		prompt := fmt.Sprintf("Orphaned architect for '%s'", title)
+		options := "[r]esume  [f]resh  [esc] cancel"
+		b.WriteString(warnBadgeStyle.Render(prompt))
+		b.WriteString("\n")
+		b.WriteString(helpBarStyle.Render(options))
 		return b.String()
 	}
 
@@ -1015,6 +1069,15 @@ func (m Model) spawnArchitect(projectPath string) tea.Cmd {
 	return func() tea.Msg {
 		client := sdk.DefaultClient(projectPath)
 		_, err := client.SpawnArchitect("")
+		return SpawnArchitectMsg{ProjectPath: projectPath, Err: err}
+	}
+}
+
+// spawnArchitectWithMode spawns an architect with an explicit mode (resume/fresh).
+func (m Model) spawnArchitectWithMode(projectPath, mode string) tea.Cmd {
+	return func() tea.Msg {
+		client := sdk.DefaultClient(projectPath)
+		_, err := client.SpawnArchitect(mode)
 		return SpawnArchitectMsg{ProjectPath: projectPath, Err: err}
 	}
 }
