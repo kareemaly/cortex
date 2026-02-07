@@ -103,7 +103,7 @@ func (s *Server) registerArchitectTools() {
 		Description: "Add a comment to a ticket (types: review_requested, done, blocker, comment)",
 	}, s.handleArchitectAddComment)
 
-	// Spawn session (stub)
+	// Spawn session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "spawnSession",
 		Description: "Spawn a new agent session for a ticket",
