@@ -83,14 +83,15 @@ type ListAllTicketsResponse struct {
 
 // DocResponse is the full doc response.
 type DocResponse struct {
-	ID         string   `json:"id"`
-	Title      string   `json:"title"`
-	Category   string   `json:"category"`
-	Tags       []string `json:"tags"`
-	References []string `json:"references"`
-	Body       string   `json:"body"`
-	Created    string   `json:"created"`
-	Updated    string   `json:"updated"`
+	ID         string            `json:"id"`
+	Title      string            `json:"title"`
+	Category   string            `json:"category"`
+	Tags       []string          `json:"tags"`
+	References []string          `json:"references"`
+	Body       string            `json:"body"`
+	Created    string            `json:"created"`
+	Updated    string            `json:"updated"`
+	Comments   []CommentResponse `json:"comments,omitempty"`
 }
 
 // DocSummary is a brief view of a doc for lists.

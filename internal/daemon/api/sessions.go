@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
@@ -19,6 +20,62 @@ type SessionHandlers struct {
 // NewSessionHandlers creates a new SessionHandlers.
 func NewSessionHandlers(deps *Dependencies) *SessionHandlers {
 	return &SessionHandlers{deps: deps}
+}
+
+// List handles GET /sessions - lists all active sessions.
+func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+
+	if h.deps.SessionManager == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"sessions": []any{}})
+		return
+	}
+
+	sessStore := h.deps.SessionManager.GetStore(projectPath)
+	sessions, err := sessStore.List()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "session_error", err.Error())
+		return
+	}
+
+	// Resolve ticket titles
+	ticketStore, _ := h.deps.StoreManager.GetStore(projectPath)
+
+	type sessionListItem struct {
+		SessionID   string    `json:"session_id"`
+		TicketID    string    `json:"ticket_id"`
+		TicketTitle string    `json:"ticket_title"`
+		Agent       string    `json:"agent"`
+		TmuxWindow  string    `json:"tmux_window"`
+		StartedAt   time.Time `json:"started_at"`
+		Status      string    `json:"status"`
+		Tool        *string   `json:"tool,omitempty"`
+	}
+
+	items := make([]sessionListItem, 0, len(sessions))
+	for shortID, sess := range sessions {
+		title := ""
+		if ticketStore != nil {
+			if t, _, err := ticketStore.Get(sess.TicketID); err == nil {
+				title = t.Title
+			}
+		}
+		items = append(items, sessionListItem{
+			SessionID:   shortID,
+			TicketID:    sess.TicketID,
+			TicketTitle: title,
+			Agent:       sess.Agent,
+			TmuxWindow:  sess.TmuxWindow,
+			StartedAt:   sess.StartedAt,
+			Status:      string(sess.Status),
+			Tool:        sess.Tool,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sessions": items,
+		"total":    len(items),
+	})
 }
 
 // Kill handles DELETE /sessions/{id} - kills a session.

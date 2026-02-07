@@ -111,6 +111,10 @@ func ToDocResponse(d *docs.Doc) DocResponse {
 	if refs == nil {
 		refs = []string{}
 	}
+	var comments []CommentResponse
+	for _, c := range d.Comments {
+		comments = append(comments, ToCommentResponse(&c))
+	}
 	return DocResponse{
 		ID:         d.ID,
 		Title:      d.Title,
@@ -120,6 +124,7 @@ func ToDocResponse(d *docs.Doc) DocResponse {
 		Body:       d.Body,
 		Created:    d.Created.Format(time.RFC3339),
 		Updated:    d.Updated.Format(time.RFC3339),
+		Comments:   comments,
 	}
 }
 

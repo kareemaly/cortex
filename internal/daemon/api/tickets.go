@@ -61,6 +61,9 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		dueBefore = &parsed
 	}
 
+	// Read tag filter
+	tag := r.URL.Query().Get("tag")
+
 	// Load project config to get tmux session name for orphan detection.
 	tmuxSession := ""
 	projectCfg, cfgErr := projectconfig.Load(projectPath)
@@ -69,10 +72,10 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := ListAllTicketsResponse{
-		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
 	}
 
 	// Sort by Created descending (most recent first)
@@ -122,6 +125,9 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 		dueBefore = &parsed
 	}
 
+	// Read tag filter
+	tag := r.URL.Query().Get("tag")
+
 	// Load project config to get tmux session name for orphan detection.
 	tmuxSession := ""
 	projectCfg, cfgErr := projectconfig.Load(projectPath)
@@ -130,7 +136,7 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := ListTicketsResponse{
-		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
 	}
 
 	// Sort by Created descending (most recent first)
@@ -186,7 +192,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := store.Create(req.Title, req.Body, req.Type, dueDate, req.References)
+	t, err := store.Create(req.Title, req.Body, req.Type, dueDate, req.References, req.Tags)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -262,7 +268,7 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := store.Update(id, req.Title, req.Body, req.References)
+	t, err := store.Update(id, req.Title, req.Body, req.References, req.Tags)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -587,12 +593,15 @@ func (h *TicketHandlers) AddComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up session for author
-	author := "unknown"
-	if h.deps.SessionManager != nil {
-		sessStore := h.deps.SessionManager.GetStore(projectPath)
-		if sess, err := sessStore.GetByTicketID(id); err == nil && sess != nil {
-			author = sess.Agent
+	// Determine author: prefer explicit author from request, fall back to session lookup
+	author := req.Author
+	if author == "" {
+		author = "unknown"
+		if h.deps.SessionManager != nil {
+			sessStore := h.deps.SessionManager.GetStore(projectPath)
+			if sess, err := sessStore.GetByTicketID(id); err == nil && sess != nil {
+				author = sess.Agent
+			}
 		}
 	}
 
@@ -644,7 +653,7 @@ func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up session for author
+	// Determine author from session lookup
 	author := "unknown"
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)

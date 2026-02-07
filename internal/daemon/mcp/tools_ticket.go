@@ -70,7 +70,7 @@ func (s *Server) handleAddComment(
 		return nil, AddCommentOutput{}, NewValidationError("content", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.AddComment(s.session.TicketID, "comment", input.Content)
+	resp, err := s.sdkClient.AddComment(s.session.TicketID, "comment", input.Content, "")
 	if err != nil {
 		return nil, AddCommentOutput{}, wrapSDKError(err)
 	}
@@ -91,7 +91,7 @@ func (s *Server) handleAddBlocker(
 		return nil, AddCommentOutput{}, NewValidationError("content", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.AddComment(s.session.TicketID, "blocker", input.Content)
+	resp, err := s.sdkClient.AddComment(s.session.TicketID, "blocker", input.Content, "")
 	if err != nil {
 		return nil, AddCommentOutput{}, wrapSDKError(err)
 	}

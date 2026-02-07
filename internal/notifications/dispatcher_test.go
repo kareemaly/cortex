@@ -173,7 +173,7 @@ func TestDispatcher_EventClassification_SessionStatus(t *testing.T) {
 	defer d.Shutdown()
 
 	// Create a ticket and start a session
-	tkt, err := store.Create("Test Ticket", "body", "", nil, nil)
+	tkt, err := store.Create("Test Ticket", "body", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestDispatcher_EventClassification_CommentAdded(t *testing.T) {
 	defer d.Shutdown()
 
 	// Create a ticket
-	tkt, err := store.Create("Test Ticket", "body", "", nil, nil)
+	tkt, err := store.Create("Test Ticket", "body", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestDispatcher_EventClassification_CommentAdded_NonReview(t *testing.T) {
 	defer d.Shutdown()
 
 	// Create a ticket
-	tkt, err := store.Create("Test Ticket", "body", "", nil, nil)
+	tkt, err := store.Create("Test Ticket", "body", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -427,7 +427,7 @@ func TestDispatcher_NotifyOnFirstOnly(t *testing.T) {
 	d.Subscribe(projectDir)
 
 	// Create first ticket and trigger notification
-	tkt1, _ := store.Create("Ticket 1", "body", "", nil, nil)
+	tkt1, _ := store.Create("Ticket 1", "body", "", nil, nil, nil)
 	_, _, _ = sessStore.Create(tkt1.ID, "claude", "window1", nil, nil)
 
 	// Clear any previous notifications
@@ -448,7 +448,7 @@ func TestDispatcher_NotifyOnFirstOnly(t *testing.T) {
 	ch.clear()
 
 	// Create second ticket - should NOT trigger notification (not first)
-	tkt2, _ := store.Create("Ticket 2", "body", "", nil, nil)
+	tkt2, _ := store.Create("Ticket 2", "body", "", nil, nil, nil)
 	_, _, _ = sessStore.Create(tkt2.ID, "claude", "window2", nil, nil)
 	_ = sessStore.UpdateStatus(storage.ShortID(tkt2.ID), session.AgentStatusIdle, nil)
 	bus.Emit(events.Event{Type: events.SessionStatus, ProjectPath: projectDir, TicketID: tkt2.ID})
@@ -488,7 +488,7 @@ func TestDispatcher_BatchWindow(t *testing.T) {
 
 	// Create multiple tickets quickly
 	for i := 0; i < 3; i++ {
-		tkt, _ := store.Create("Ticket", "body", "", nil, nil)
+		tkt, _ := store.Create("Ticket", "body", "", nil, nil, nil)
 		_, _, _ = sessStore.Create(tkt.ID, "claude", "window", nil, nil)
 		_ = sessStore.UpdateStatus(storage.ShortID(tkt.ID), session.AgentStatusIdle, nil)
 		bus.Emit(events.Event{Type: events.SessionStatus, ProjectPath: projectDir, TicketID: tkt.ID})

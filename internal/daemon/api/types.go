@@ -33,6 +33,7 @@ type CreateTicketRequest struct {
 	Type       string   `json:"type,omitempty"`
 	DueDate    *string  `json:"due_date,omitempty"`
 	References []string `json:"references,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
 }
 
 // UpdateTicketRequest is the request body for updating a ticket.
@@ -40,6 +41,7 @@ type UpdateTicketRequest struct {
 	Title      *string   `json:"title,omitempty"`
 	Body       *string   `json:"body,omitempty"`
 	References *[]string `json:"references,omitempty"`
+	Tags       *[]string `json:"tags,omitempty"`
 }
 
 // MoveTicketRequest is the request body for moving a ticket.
@@ -62,7 +64,15 @@ type SpawnResponse struct {
 type AddCommentRequest struct {
 	Type    string                       `json:"type"`
 	Content string                       `json:"content"`
+	Author  string                       `json:"author,omitempty"`
 	Action  *types.CommentActionResponse `json:"action,omitempty"`
+}
+
+// AddDocCommentRequest is the request body for adding a comment to a doc.
+type AddDocCommentRequest struct {
+	Type    string `json:"type"`
+	Content string `json:"content"`
+	Author  string `json:"author,omitempty"`
 }
 
 // AddCommentResponse is the response for adding a comment.
@@ -131,9 +141,9 @@ type MoveDocRequest struct {
 	Category string `json:"category"`
 }
 
-// filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
+// filterSummaryList converts tickets to summaries with optional query, dueBefore, and tag filters.
 // Looks up session from session manager for each ticket.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string) []TicketSummary {
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tag string, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string) []TicketSummary {
 	var summaries []TicketSummary
 
 	// Get the session store for this project
@@ -152,6 +162,20 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 		// Apply dueBefore filter if specified
 		if dueBefore != nil {
 			if t.Due == nil || !t.Due.Before(*dueBefore) {
+				continue
+			}
+		}
+		// Apply tag filter if specified (case-insensitive)
+		if tag != "" {
+			found := false
+			lowerTag := strings.ToLower(tag)
+			for _, tt := range t.Tags {
+				if strings.ToLower(tt) == lowerTag {
+					found = true
+					break
+				}
+			}
+			if !found {
 				continue
 			}
 		}

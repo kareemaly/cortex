@@ -55,7 +55,7 @@ func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, e
 }
 
 // Create creates a new ticket in the backlog.
-func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, references []string) (*Ticket, error) {
+func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, references, tags []string) (*Ticket, error) {
 	if title == "" {
 		return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
 	}
@@ -70,6 +70,7 @@ func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, refer
 			ID:         uuid.New().String(),
 			Title:      title,
 			Type:       ticketType,
+			Tags:       tags,
 			References: references,
 			Due:        dueDate,
 			Created:    now,
@@ -118,8 +119,8 @@ func (s *Store) Get(id string) (*Ticket, Status, error) {
 	return nil, "", &NotFoundError{Resource: "ticket", ID: id}
 }
 
-// Update modifies a ticket's title, body, and/or references.
-func (s *Store) Update(id string, title, body *string, references *[]string) (*Ticket, error) {
+// Update modifies a ticket's title, body, references, and/or tags.
+func (s *Store) Update(id string, title, body *string, references, tags *[]string) (*Ticket, error) {
 	mu := s.ticketMu(id)
 	mu.Lock()
 	defer mu.Unlock()
@@ -149,6 +150,9 @@ func (s *Store) Update(id string, title, body *string, references *[]string) (*T
 	}
 	if references != nil {
 		ticket.References = *references
+	}
+	if tags != nil {
+		ticket.Tags = *tags
 	}
 
 	ticket.Updated = time.Now().UTC()

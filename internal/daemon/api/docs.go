@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/types"
 )
 
@@ -118,6 +119,57 @@ func (h *DocHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := types.ToDocResponse(d)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// AddComment handles POST /docs/{id}/comments - adds a comment to a doc.
+func (h *DocHandlers) AddComment(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.DocsStoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	_, err = store.Get(id)
+	if err != nil {
+		handleDocError(w, err, h.deps.Logger)
+		return
+	}
+
+	var req AddDocCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
+		return
+	}
+
+	// Validate comment type
+	commentType := storage.CommentType(req.Type)
+	switch commentType {
+	case storage.CommentReviewRequested, storage.CommentDone, storage.CommentBlocker,
+		storage.CommentGeneral:
+		// Valid type
+	default:
+		writeError(w, http.StatusBadRequest, "validation_error", "invalid comment type: must be review_requested, done, blocker, or comment")
+		return
+	}
+
+	author := req.Author
+	if author == "" {
+		author = "unknown"
+	}
+
+	comment, err := store.AddComment(id, author, commentType, req.Content, nil)
+	if err != nil {
+		handleDocError(w, err, h.deps.Logger)
+		return
+	}
+
+	resp := AddCommentResponse{
+		Success: true,
+		Comment: types.ToCommentResponse(comment),
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 

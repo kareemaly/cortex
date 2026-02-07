@@ -608,7 +608,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 
 	// Query daemon API to get tickets by status
 	client := sdk.DefaultClient(req.ProjectPath)
-	tickets, err := client.ListAllTickets("", nil)
+	tickets, err := client.ListAllTickets("", nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tickets: %w", err)
 	}
