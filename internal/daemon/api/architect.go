@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
@@ -276,6 +277,20 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		// End the session
 		if endErr := sessStore.EndArchitect(); endErr != nil {
 			h.deps.Logger.Warn("failed to end architect session", "error", endErr)
+		}
+	}
+
+	// Persist session summary as a doc (best-effort)
+	if h.deps.DocsStoreManager != nil {
+		docStore, err := h.deps.DocsStoreManager.GetStore(projectPath)
+		if err != nil {
+			h.deps.Logger.Warn("failed to get docs store for session summary", "error", err)
+		} else {
+			title := "Architect Session — " + time.Now().UTC().Format("2006-01-02T15:04Z")
+			tags := []string{"architect", "session-summary"}
+			if _, err := docStore.Create(title, "sessions", req.Content, tags, nil); err != nil {
+				h.deps.Logger.Warn("failed to persist architect session summary", "error", err)
+			}
 		}
 	}
 
