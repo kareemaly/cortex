@@ -85,7 +85,7 @@ func (m *mockSessionStore) GetByTicketID(ticketID string) (*session.Session, err
 	shortID := storage.ShortID(ticketID)
 	sess, ok := m.sessions[shortID]
 	if !ok {
-		return nil, nil
+		return nil, &storage.NotFoundError{Resource: "session", ID: shortID}
 	}
 	return sess, nil
 }
@@ -343,13 +343,12 @@ func TestResume_Success(t *testing.T) {
 		MCPConfigDir: tmpDir,
 	})
 
-	// Execute
+	// Execute - no SessionID means bare --resume (resume most recent)
 	result, err := spawner.Resume(context.Background(), ResumeRequest{
 		AgentType:   AgentTypeTicketAgent,
 		TmuxSession: "test-session",
 		ProjectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
-		SessionID:   "session-abc",
 		WindowName:  "test-ticket",
 		TicketID:    "ticket-1",
 	})
@@ -376,32 +375,19 @@ func TestResume_Success(t *testing.T) {
 		t.Errorf("expected command to contain 'cortex-launcher', got: %s", tmuxMgr.lastCommand)
 	}
 
-	// Verify launcher script contains --resume flag
+	// Verify launcher script contains bare --resume flag (not --resume <id>)
 	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
 	data, err := os.ReadFile(launcherPath)
 	if err != nil {
 		t.Fatalf("failed to read launcher script: %v", err)
 	}
 	script := string(data)
-	if !containsSubstr(script, "--resume session-abc") {
+	if !containsSubstr(script, "--resume") {
 		t.Error("expected launcher to contain --resume flag")
 	}
-}
-
-func TestResume_NoSessionID(t *testing.T) {
-	spawner := NewSpawner(Dependencies{})
-
-	_, err := spawner.Resume(context.Background(), ResumeRequest{
-		TmuxSession: "test-session",
-		WindowName:  "test-window",
-		TicketID:    "ticket-1",
-	})
-
-	if err == nil {
-		t.Fatal("expected error for missing session ID")
-	}
-	if !IsConfigError(err) {
-		t.Errorf("expected ConfigError, got: %T", err)
+	// Should NOT have --resume followed by a specific ID
+	if containsSubstr(script, "--resume ") {
+		t.Error("expected bare --resume (no specific ID)")
 	}
 }
 
@@ -720,6 +706,38 @@ func TestWriteLauncherScript_Resume(t *testing.T) {
 	}
 }
 
+func TestWriteLauncherScript_BareResume(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	params := LauncherParams{
+		MCPConfigPath: "/tmp/cortex-mcp-test.json",
+		SettingsPath:  "/tmp/cortex-settings-test.json",
+		Resume:        true, // bare --resume, no ResumeID
+		CleanupFiles:  []string{"/tmp/cortex-mcp-test.json", "/tmp/cortex-settings-test.json"},
+	}
+
+	path, err := WriteLauncherScript(params, "bare-resume-test", tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+
+	// Should have bare --resume flag
+	if !containsSubstr(script, "--resume") {
+		t.Error("expected --resume flag")
+	}
+
+	// Should NOT have --resume followed by a space+ID
+	if containsSubstr(script, "--resume ") {
+		t.Error("expected bare --resume without a specific ID")
+	}
+}
+
 func TestWriteLauncherScript_Architect(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -1005,5 +1023,446 @@ func TestSpawn_TmuxSessionValidation(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+// --- Orchestrate tests ---
+
+// mockOrchestrateStore implements OrchestrateStore (Get + Move) for testing.
+type mockOrchestrateStore struct {
+	tickets   map[string]*ticket.Ticket
+	statuses  map[string]ticket.Status
+	getErr    error
+	moveErr   error
+	moveCalls []struct {
+		ID     string
+		Status ticket.Status
+	}
+}
+
+func newMockOrchestrateStore() *mockOrchestrateStore {
+	return &mockOrchestrateStore{
+		tickets:  make(map[string]*ticket.Ticket),
+		statuses: make(map[string]ticket.Status),
+	}
+}
+
+func (m *mockOrchestrateStore) Get(id string) (*ticket.Ticket, ticket.Status, error) {
+	if m.getErr != nil {
+		return nil, "", m.getErr
+	}
+	t, ok := m.tickets[id]
+	if !ok {
+		return nil, "", errors.New("ticket not found")
+	}
+	status := m.statuses[id]
+	if status == "" {
+		status = ticket.StatusBacklog
+	}
+	return t, status, nil
+}
+
+func (m *mockOrchestrateStore) Move(id string, to ticket.Status) error {
+	if m.moveErr != nil {
+		return m.moveErr
+	}
+	m.moveCalls = append(m.moveCalls, struct {
+		ID     string
+		Status ticket.Status
+	}{id, to})
+	m.statuses[id] = to
+	return nil
+}
+
+// orchestrateTestSetup creates common test fixtures for Orchestrate tests.
+func orchestrateTestSetup(t *testing.T) (string, *mockOrchestrateStore, *mockSessionStore, *mockTmuxManager) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	store := newMockOrchestrateStore()
+	sessStore := newMockSessionStore()
+	tmuxMgr := newMockTmuxManager()
+
+	// Add a test ticket
+	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
+	store.tickets["ticket-1"] = testTicket
+
+	// Create prompt files needed for spawn
+	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+
+	return tmpDir, store, sessStore, tmuxMgr
+}
+
+func TestOrchestrate_Normal_Normal(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+
+	result, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "normal",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Outcome != OutcomeSpawned {
+		t.Errorf("expected OutcomeSpawned, got: %s", result.Outcome)
+	}
+	if result.SpawnResult == nil || !result.SpawnResult.Success {
+		t.Error("expected successful spawn result")
+	}
+	if result.TmuxSession != "test-session" {
+		t.Errorf("expected tmux session 'test-session', got: %s", result.TmuxSession)
+	}
+}
+
+func TestOrchestrate_Normal_Active(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+	tmuxMgr.windowExists = true
+
+	// Create an active session
+	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
+		TicketID:   "ticket-1",
+		TmuxWindow: "test-ticket",
+		StartedAt:  time.Now(),
+	}
+
+	result, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "normal",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Outcome != OutcomeAlreadyActive {
+		t.Errorf("expected OutcomeAlreadyActive, got: %s", result.Outcome)
+	}
+	if result.SpawnResult != nil {
+		t.Error("expected nil SpawnResult for already active")
+	}
+}
+
+func TestOrchestrate_Normal_Orphaned(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+	tmuxMgr.windowExists = false
+
+	// Create an orphaned session (session exists, tmux window gone)
+	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
+		TicketID:   "ticket-1",
+		TmuxWindow: "test-ticket",
+		StartedAt:  time.Now(),
+	}
+
+	_, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "normal",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err == nil {
+		t.Fatal("expected StateError for orphaned + normal mode")
+	}
+	if !IsStateError(err) {
+		t.Errorf("expected StateError, got: %T", err)
+	}
+}
+
+func TestOrchestrate_Resume_Normal(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+
+	_, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "resume",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err == nil {
+		t.Fatal("expected StateError for resume + normal state")
+	}
+	if !IsStateError(err) {
+		t.Errorf("expected StateError, got: %T", err)
+	}
+}
+
+func TestOrchestrate_Resume_Active(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+	tmuxMgr.windowExists = true
+
+	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
+		TicketID:   "ticket-1",
+		TmuxWindow: "test-ticket",
+		StartedAt:  time.Now(),
+	}
+
+	_, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "resume",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err == nil {
+		t.Fatal("expected StateError for resume + active state")
+	}
+	if !IsStateError(err) {
+		t.Errorf("expected StateError, got: %T", err)
+	}
+}
+
+func TestOrchestrate_Resume_Orphaned(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+	tmuxMgr.windowExists = false
+
+	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
+		TicketID:   "ticket-1",
+		TmuxWindow: "test-ticket",
+		StartedAt:  time.Now(),
+	}
+
+	result, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "resume",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Outcome != OutcomeResumed {
+		t.Errorf("expected OutcomeResumed, got: %s", result.Outcome)
+	}
+	if result.SpawnResult == nil || !result.SpawnResult.Success {
+		t.Error("expected successful spawn result")
+	}
+}
+
+func TestOrchestrate_Fresh_Normal(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+
+	_, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "fresh",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err == nil {
+		t.Fatal("expected StateError for fresh + normal state")
+	}
+	if !IsStateError(err) {
+		t.Errorf("expected StateError, got: %T", err)
+	}
+}
+
+func TestOrchestrate_Fresh_Active(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+	tmuxMgr.windowExists = true
+
+	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
+		TicketID:   "ticket-1",
+		TmuxWindow: "test-ticket",
+		StartedAt:  time.Now(),
+	}
+
+	_, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "fresh",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err == nil {
+		t.Fatal("expected StateError for fresh + active state")
+	}
+	if !IsStateError(err) {
+		t.Errorf("expected StateError, got: %T", err)
+	}
+}
+
+func TestOrchestrate_Fresh_Orphaned(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+	tmuxMgr.windowExists = false
+
+	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
+		TicketID:   "ticket-1",
+		TmuxWindow: "test-ticket",
+		StartedAt:  time.Now(),
+	}
+
+	result, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "fresh",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Outcome != OutcomeSpawned {
+		t.Errorf("expected OutcomeSpawned, got: %s", result.Outcome)
+	}
+	if result.SpawnResult == nil || !result.SpawnResult.Success {
+		t.Error("expected successful spawn result")
+	}
+}
+
+func TestOrchestrate_BacklogMovesToProgress(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+	// Ticket starts in backlog (default)
+
+	result, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "normal",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Outcome != OutcomeSpawned {
+		t.Errorf("expected OutcomeSpawned, got: %s", result.Outcome)
+	}
+
+	// Verify ticket was moved to progress
+	if len(store.moveCalls) != 1 {
+		t.Fatalf("expected 1 Move call, got: %d", len(store.moveCalls))
+	}
+	if store.moveCalls[0].ID != "ticket-1" {
+		t.Errorf("expected Move for ticket-1, got: %s", store.moveCalls[0].ID)
+	}
+	if store.moveCalls[0].Status != ticket.StatusProgress {
+		t.Errorf("expected move to progress, got: %s", store.moveCalls[0].Status)
+	}
+}
+
+func TestOrchestrate_ProgressDoesNotMove(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+	// Ticket already in progress
+	store.statuses["ticket-1"] = ticket.StatusProgress
+
+	_, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "normal",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should NOT have moved
+	if len(store.moveCalls) != 0 {
+		t.Errorf("expected 0 Move calls for already-in-progress ticket, got: %d", len(store.moveCalls))
+	}
+}
+
+func TestOrchestrate_DefaultModeIsNormal(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+
+	// Empty mode should default to "normal" and spawn successfully
+	result, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Outcome != OutcomeSpawned {
+		t.Errorf("expected OutcomeSpawned, got: %s", result.Outcome)
+	}
+}
+
+func TestOrchestrate_InvalidMode(t *testing.T) {
+	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
+
+	_, err := Orchestrate(context.Background(), OrchestrateRequest{
+		TicketID:    "ticket-1",
+		Mode:        "invalid",
+		ProjectPath: tmpDir,
+		TmuxSession: "test-session",
+	}, OrchestrateDeps{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+	})
+
+	if err == nil {
+		t.Fatal("expected ConfigError for invalid mode")
+	}
+	if !IsConfigError(err) {
+		t.Errorf("expected ConfigError, got: %T", err)
 	}
 }

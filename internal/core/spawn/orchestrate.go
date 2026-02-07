@@ -218,7 +218,6 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				TmuxSession: tmuxSession,
 				ProjectPath: req.ProjectPath,
 				TicketsDir:  ticketsDir,
-				SessionID:   "resume", // sessions are ephemeral, use a placeholder for resume
 				WindowName:  stateInfo.Session.TmuxWindow,
 				TicketID:    req.TicketID,
 				AgentArgs:   ticketRoleCfg.Args,

@@ -317,9 +317,6 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 // Resume resumes an orphaned ticket agent session.
 // Note: This is only used for ticket agents - architect sessions do not support resume.
 func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, error) {
-	if req.SessionID == "" {
-		return nil, &ConfigError{Field: "SessionID", Message: "cannot be empty for resume"}
-	}
 	if req.TicketID == "" {
 		return nil, &ConfigError{Field: "TicketID", Message: "cannot be empty for resume (only ticket agents support resume)"}
 	}
@@ -368,6 +365,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		AgentType:     req.Agent,
 		MCPConfigPath: mcpConfigPath,
 		SettingsPath:  settingsPath,
+		Resume:        req.SessionID == "",
 		ResumeID:      req.SessionID,
 		AgentArgs:     req.AgentArgs,
 		EnvVars: map[string]string{

@@ -15,7 +15,8 @@ type LauncherParams struct {
 	ReplaceSystemPrompt  bool              // if true, use --system-prompt (full replace); otherwise --append-system-prompt
 	MCPConfigPath        string            // path to MCP config file
 	SettingsPath         string            // path to settings config file
-	ResumeID             string            // claude session ID to resume
+	Resume               bool              // if true, emit bare --resume (resume most recent conversation)
+	ResumeID             string            // claude session ID to resume (specific conversation)
 	SessionID            string            // session ID for --session-id flag
 	AgentArgs            []string          // extra CLI args appended to the agent command
 	EnvVars              map[string]string // env vars to export (e.g., CORTEX_TICKET_ID)
@@ -129,6 +130,8 @@ func buildClaudeCommand(params LauncherParams) string {
 	// Add resume flag
 	if params.ResumeID != "" {
 		parts = append(parts, "--resume", params.ResumeID)
+	} else if params.Resume {
+		parts = append(parts, "--resume")
 	}
 
 	// Add session ID flag
@@ -174,6 +177,8 @@ func buildCopilotCommand(params LauncherParams) string {
 	// Add resume flag (same format as Claude)
 	if params.ResumeID != "" {
 		parts = append(parts, "--resume", params.ResumeID)
+	} else if params.Resume {
+		parts = append(parts, "--resume")
 	}
 
 	// Note: Copilot doesn't support --session-id, --system-prompt, or --settings
