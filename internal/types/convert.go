@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kareemaly/cortex/internal/docs"
+	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -13,26 +14,14 @@ type TmuxChecker interface {
 	WindowExists(session, windowName string) (bool, error)
 }
 
-// ToDatesResponse converts ticket.Dates to DatesResponse.
-func ToDatesResponse(d ticket.Dates) DatesResponse {
-	return DatesResponse{
-		Created:  d.Created,
-		Updated:  d.Updated,
-		Progress: d.Progress,
-		Reviewed: d.Reviewed,
-		Done:     d.Done,
-		DueDate:  d.DueDate,
-	}
-}
-
 // ToCommentResponse converts a ticket.Comment to CommentResponse.
 func ToCommentResponse(c *ticket.Comment) CommentResponse {
 	resp := CommentResponse{
-		ID:        c.ID,
-		SessionID: c.SessionID,
-		Type:      string(c.Type),
-		Content:   c.Content,
-		CreatedAt: c.CreatedAt,
+		ID:      c.ID,
+		Author:  c.Author,
+		Type:    string(c.Type),
+		Content: c.Content,
+		Created: c.Created,
 	}
 	if c.Action != nil {
 		resp.Action = &CommentActionResponse{
@@ -43,48 +32,22 @@ func ToCommentResponse(c *ticket.Comment) CommentResponse {
 	return resp
 }
 
-// ToStatusEntryResponse converts a ticket.StatusEntry to StatusEntryResponse.
-func ToStatusEntryResponse(s ticket.StatusEntry) StatusEntryResponse {
-	return StatusEntryResponse{
-		Status: string(s.Status),
-		Tool:   s.Tool,
-		Work:   s.Work,
-		At:     s.At,
-	}
-}
-
-// ToSessionResponse converts a ticket.Session to SessionResponse.
-func ToSessionResponse(s ticket.Session) SessionResponse {
-	history := make([]StatusEntryResponse, len(s.StatusHistory))
-	for i, h := range s.StatusHistory {
-		history[i] = ToStatusEntryResponse(h)
-	}
-
-	var currentStatus *StatusEntryResponse
-	if s.CurrentStatus != nil {
-		cs := ToStatusEntryResponse(*s.CurrentStatus)
-		currentStatus = &cs
-	}
-
+// ToSessionResponse converts a session.Session to SessionResponse.
+func ToSessionResponse(s *session.Session) SessionResponse {
 	return SessionResponse{
-		ID:            s.ID,
-		StartedAt:     s.StartedAt,
-		EndedAt:       s.EndedAt,
+		TicketID:      s.TicketID,
 		Agent:         s.Agent,
 		TmuxWindow:    s.TmuxWindow,
-		CurrentStatus: currentStatus,
-		StatusHistory: history,
+		WorktreePath:  s.WorktreePath,
+		FeatureBranch: s.FeatureBranch,
+		StartedAt:     s.StartedAt,
+		Status:        string(s.Status),
+		Tool:          s.Tool,
 	}
 }
 
 // ToTicketResponse converts a ticket.Ticket and status to TicketResponse.
 func ToTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
-	var session *SessionResponse
-	if t.Session != nil {
-		s := ToSessionResponse(*t.Session)
-		session = &s
-	}
-
 	comments := make([]CommentResponse, len(t.Comments))
 	for i, c := range t.Comments {
 		comments[i] = ToCommentResponse(&c)
@@ -95,38 +58,41 @@ func ToTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 		Type:       t.Type,
 		Title:      t.Title,
 		Body:       t.Body,
+		Tags:       t.Tags,
 		References: t.References,
 		Status:     string(status),
-		Dates:      ToDatesResponse(t.Dates),
+		Created:    t.Created,
+		Updated:    t.Updated,
+		Due:        t.Due,
 		Comments:   comments,
-		Session:    session,
 	}
 }
 
 // ToTicketSummary converts a ticket.Ticket and status to TicketSummary.
-// If includeAgentStatus is true, populates AgentStatus and AgentTool from active session.
-// If tmuxSession and checker are provided, detects orphaned sessions (active session but no tmux window).
-func ToTicketSummary(t *ticket.Ticket, status ticket.Status, includeAgentStatus bool, tmuxSession string, checker TmuxChecker) TicketSummary {
+// If sess is non-nil, populates session-related fields (HasActiveSession, AgentStatus, AgentTool).
+// If tmuxSession and checker are provided, detects orphaned sessions.
+func ToTicketSummary(t *ticket.Ticket, status ticket.Status, sess *session.Session, tmuxSession string, checker TmuxChecker) TicketSummary {
 	summary := TicketSummary{
 		ID:               t.ID,
 		Type:             t.Type,
 		Title:            t.Title,
+		Tags:             t.Tags,
 		Status:           string(status),
-		Created:          t.Dates.Created,
-		Updated:          t.Dates.Updated,
-		DueDate:          t.Dates.DueDate,
-		HasActiveSession: t.HasActiveSession(),
+		Created:          t.Created,
+		Updated:          t.Updated,
+		Due:              t.Due,
+		HasActiveSession: sess != nil,
 	}
 
-	if includeAgentStatus && t.HasActiveSession() && t.Session.CurrentStatus != nil {
-		statusStr := string(t.Session.CurrentStatus.Status)
+	if sess != nil {
+		statusStr := string(sess.Status)
 		summary.AgentStatus = &statusStr
-		summary.AgentTool = t.Session.CurrentStatus.Tool
+		summary.AgentTool = sess.Tool
 	}
 
 	// Detect orphaned sessions: active session but tmux window no longer exists.
-	if t.HasActiveSession() && tmuxSession != "" && checker != nil && t.Session.TmuxWindow != "" {
-		exists, err := checker.WindowExists(tmuxSession, t.Session.TmuxWindow)
+	if sess != nil && tmuxSession != "" && checker != nil && sess.TmuxWindow != "" {
+		exists, err := checker.WindowExists(tmuxSession, sess.TmuxWindow)
 		if err == nil && !exists {
 			summary.IsOrphaned = true
 		}
@@ -145,6 +111,10 @@ func ToDocResponse(d *docs.Doc) DocResponse {
 	if refs == nil {
 		refs = []string{}
 	}
+	var comments []CommentResponse
+	for _, c := range d.Comments {
+		comments = append(comments, ToCommentResponse(&c))
+	}
 	return DocResponse{
 		ID:         d.ID,
 		Title:      d.Title,
@@ -154,6 +124,7 @@ func ToDocResponse(d *docs.Doc) DocResponse {
 		Body:       d.Body,
 		Created:    d.Created.Format(time.RFC3339),
 		Updated:    d.Updated.Format(time.RFC3339),
+		Comments:   comments,
 	}
 }
 

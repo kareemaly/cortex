@@ -1,7 +1,6 @@
 package ticket
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,9 +10,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kareemaly/cortex/internal/events"
+	"github.com/kareemaly/cortex/internal/storage"
 )
 
-// Store manages ticket storage with JSON files organized by status.
+// Store manages ticket storage with directory-per-entity organized by status.
 type Store struct {
 	ticketsDir  string
 	locks       sync.Map // maps ticket ID → *sync.Mutex
@@ -44,7 +44,6 @@ func (s *Store) emit(eventType events.EventType, ticketID string, payload any) {
 func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, error) {
 	s := &Store{ticketsDir: ticketsDir, bus: bus, projectPath: projectPath}
 
-	// Create status directories
 	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
 		dir := filepath.Join(ticketsDir, string(status))
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -56,7 +55,7 @@ func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, e
 }
 
 // Create creates a new ticket in the backlog.
-func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, references []string) (*Ticket, error) {
+func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, references, tags []string) (*Ticket, error) {
 	if title == "" {
 		return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
 	}
@@ -67,25 +66,25 @@ func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, refer
 
 	now := time.Now().UTC()
 	ticket := &Ticket{
-		ID:         uuid.New().String(),
-		Type:       ticketType,
-		Title:      title,
-		Body:       body,
-		References: references,
-		Dates: Dates{
-			Created: now,
-			Updated: now,
-			DueDate: dueDate,
+		TicketMeta: TicketMeta{
+			ID:         uuid.New().String(),
+			Title:      title,
+			Type:       ticketType,
+			Tags:       tags,
+			References: references,
+			Due:        dueDate,
+			Created:    now,
+			Updated:    now,
 		},
+		Body:     body,
 		Comments: []Comment{},
-		Session:  nil,
 	}
 
 	mu := s.ticketMu(ticket.ID)
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err := s.save(ticket, StatusBacklog); err != nil {
+	if err := s.saveTicket(ticket, StatusBacklog); err != nil {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
@@ -96,31 +95,53 @@ func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, refer
 // Get retrieves a ticket by ID, searching all status directories.
 func (s *Store) Get(id string) (*Ticket, Status, error) {
 	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
-		ticket, err := s.getFromStatus(id, status)
-		if err == nil {
-			return ticket, status, nil
-		}
-		if !IsNotFound(err) {
+		entityDir, err := s.findEntityDir(id, status)
+		if err != nil {
+			if storage.IsNotFound(err) {
+				continue
+			}
 			return nil, "", err
 		}
+
+		ticket, err := s.loadIndex(entityDir)
+		if err != nil {
+			return nil, "", err
+		}
+
+		comments, err := storage.ListComments(entityDir)
+		if err != nil {
+			return nil, "", fmt.Errorf("load comments: %w", err)
+		}
+		ticket.Comments = comments
+
+		return ticket, status, nil
 	}
 	return nil, "", &NotFoundError{Resource: "ticket", ID: id}
 }
 
-// Update modifies a ticket's title, body, and/or references.
-func (s *Store) Update(id string, title, body *string, references *[]string) (*Ticket, error) {
+// Update modifies a ticket's title, body, references, and/or tags.
+func (s *Store) Update(id string, title, body *string, references, tags *[]string) (*Ticket, error) {
 	mu := s.ticketMu(id)
 	mu.Lock()
 	defer mu.Unlock()
 
-	ticket, status, err := s.Get(id)
+	entityDir, status, err := s.findEntityDirAllStatuses(id)
 	if err != nil {
 		return nil, err
 	}
 
+	ticket, err := s.loadIndex(entityDir)
+	if err != nil {
+		return nil, err
+	}
+
+	titleChanged := false
 	if title != nil {
 		if *title == "" {
 			return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
+		}
+		if ticket.Title != *title {
+			titleChanged = true
 		}
 		ticket.Title = *title
 	}
@@ -130,10 +151,23 @@ func (s *Store) Update(id string, title, body *string, references *[]string) (*T
 	if references != nil {
 		ticket.References = *references
 	}
+	if tags != nil {
+		ticket.Tags = *tags
+	}
 
-	ticket.Dates.Updated = time.Now().UTC()
+	ticket.Updated = time.Now().UTC()
 
-	if err := s.save(ticket, status); err != nil {
+	if titleChanged {
+		// Title change means slug changes → rename directory
+		newDirName := storage.DirName(ticket.Title, ticket.ID, "ticket")
+		newDir := filepath.Join(s.ticketsDir, string(status), newDirName)
+		if err := os.Rename(entityDir, newDir); err != nil {
+			return nil, fmt.Errorf("rename entity dir: %w", err)
+		}
+		entityDir = newDir
+	}
+
+	if err := s.writeIndex(entityDir, ticket); err != nil {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
@@ -147,15 +181,20 @@ func (s *Store) SetDueDate(id string, dueDate *time.Time) (*Ticket, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	ticket, status, err := s.Get(id)
+	entityDir, _, err := s.findEntityDirAllStatuses(id)
 	if err != nil {
 		return nil, err
 	}
 
-	ticket.Dates.DueDate = dueDate
-	ticket.Dates.Updated = time.Now().UTC()
+	ticket, err := s.loadIndex(entityDir)
+	if err != nil {
+		return nil, err
+	}
 
-	if err := s.save(ticket, status); err != nil {
+	ticket.Due = dueDate
+	ticket.Updated = time.Now().UTC()
+
+	if err := s.writeIndex(entityDir, ticket); err != nil {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
@@ -168,31 +207,27 @@ func (s *Store) ClearDueDate(id string) (*Ticket, error) {
 	return s.SetDueDate(id, nil)
 }
 
-// Delete removes a ticket.
+// Delete removes a ticket (entire entity directory).
 func (s *Store) Delete(id string) error {
 	mu := s.ticketMu(id)
 	mu.Lock()
 	defer mu.Unlock()
 
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
-		path, err := s.findTicketPath(id, status)
-		if err != nil {
-			if IsNotFound(err) {
-				continue
-			}
-			return err
-		}
-		if err := os.Remove(path); err != nil {
-			return fmt.Errorf("remove ticket file: %w", err)
-		}
-		s.locks.Delete(id)
-		s.emit(events.TicketDeleted, id, nil)
-		return nil
+	entityDir, _, err := s.findEntityDirAllStatuses(id)
+	if err != nil {
+		return err
 	}
-	return &NotFoundError{Resource: "ticket", ID: id}
+
+	if err := os.RemoveAll(entityDir); err != nil {
+		return fmt.Errorf("remove entity directory: %w", err)
+	}
+
+	s.locks.Delete(id)
+	s.emit(events.TicketDeleted, id, nil)
+	return nil
 }
 
-// List returns all tickets with the given status.
+// List returns all tickets with the given status (without loading comments).
 func (s *Store) List(status Status) ([]*Ticket, error) {
 	dir := filepath.Join(s.ticketsDir, string(status))
 	entries, err := os.ReadDir(dir)
@@ -205,11 +240,12 @@ func (s *Store) List(status Status) ([]*Ticket, error) {
 
 	var tickets []*Ticket
 	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".json") || strings.HasPrefix(name, ".tmp-") {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		ticket, err := s.loadFile(filepath.Join(dir, entry.Name()))
+
+		entityDir := filepath.Join(dir, entry.Name())
+		ticket, err := s.loadIndex(entityDir)
 		if err != nil {
 			return nil, err
 		}
@@ -219,7 +255,7 @@ func (s *Store) List(status Status) ([]*Ticket, error) {
 	return tickets, nil
 }
 
-// ListAll returns all tickets grouped by status.
+// ListAll returns all tickets grouped by status (without loading comments).
 func (s *Store) ListAll() (map[Status][]*Ticket, error) {
 	result := make(map[Status][]*Ticket)
 
@@ -240,7 +276,7 @@ func (s *Store) Move(id string, to Status) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	ticket, from, err := s.Get(id)
+	entityDir, from, err := s.findEntityDirAllStatuses(id)
 	if err != nil {
 		return err
 	}
@@ -249,32 +285,25 @@ func (s *Store) Move(id string, to Status) error {
 		return nil
 	}
 
-	// Remove from old location
-	oldPath, err := s.findTicketPath(id, from)
+	ticket, err := s.loadIndex(entityDir)
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(oldPath); err != nil {
-		return fmt.Errorf("remove old ticket file: %w", err)
+
+	ticket.Updated = time.Now().UTC()
+
+	// Ensure target status dir exists
+	toDir := filepath.Join(s.ticketsDir, string(to))
+
+	// Move entity directory to new status
+	dirName := filepath.Base(entityDir)
+	newDir := filepath.Join(toDir, dirName)
+	if err := os.Rename(entityDir, newDir); err != nil {
+		return fmt.Errorf("move entity dir: %w", err)
 	}
 
-	// Set date fields based on target status
-	now := time.Now().UTC()
-	switch to {
-	case StatusProgress:
-		if ticket.Dates.Progress == nil {
-			ticket.Dates.Progress = &now
-		}
-	case StatusReview:
-		ticket.Dates.Reviewed = &now
-	case StatusDone:
-		ticket.Dates.Done = &now
-	}
-
-	ticket.Dates.Updated = now
-
-	// Save to new location
-	if err := s.save(ticket, to); err != nil {
+	// Update index.md with new timestamp
+	if err := s.writeIndex(newDir, ticket); err != nil {
 		return fmt.Errorf("save ticket: %w", err)
 	}
 
@@ -282,225 +311,89 @@ func (s *Store) Move(id string, to Status) error {
 	return nil
 }
 
-// SetSession sets the session for a ticket (replaces any existing session).
-func (s *Store) SetSession(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (*Session, error) {
-	mu := s.ticketMu(ticketID)
-	mu.Lock()
-	defer mu.Unlock()
-
-	ticket, status, err := s.Get(ticketID)
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now().UTC()
-	session := &Session{
-		ID:            uuid.New().String(),
-		StartedAt:     now,
-		EndedAt:       nil,
-		Agent:         agent,
-		TmuxWindow:    tmuxWindow,
-		WorktreePath:  worktreePath,
-		FeatureBranch: featureBranch,
-		CurrentStatus: &StatusEntry{
-			Status: AgentStatusStarting,
-			At:     now,
-		},
-		StatusHistory: []StatusEntry{
-			{Status: AgentStatusStarting, At: now},
-		},
-	}
-
-	ticket.Session = session
-	ticket.Dates.Updated = now
-
-	if err := s.save(ticket, status); err != nil {
-		return nil, fmt.Errorf("save ticket: %w", err)
-	}
-
-	s.emit(events.SessionStarted, ticketID, nil)
-	return session, nil
-}
-
-// EndSession marks the ticket's session as ended.
-func (s *Store) EndSession(ticketID string) error {
-	mu := s.ticketMu(ticketID)
-	mu.Lock()
-	defer mu.Unlock()
-
-	ticket, status, err := s.Get(ticketID)
-	if err != nil {
-		return err
-	}
-
-	if ticket.Session == nil {
-		return &NotFoundError{Resource: "session", ID: ticketID}
-	}
-
-	now := time.Now().UTC()
-	ticket.Session.EndedAt = &now
-	ticket.Dates.Updated = now
-
-	if err := s.save(ticket, status); err != nil {
-		return fmt.Errorf("save ticket: %w", err)
-	}
-
-	s.emit(events.SessionEnded, ticketID, nil)
-	return nil
-}
-
-// UpdateSessionStatus updates the current status of the ticket's session.
-func (s *Store) UpdateSessionStatus(ticketID string, agentStatus AgentStatus, tool, work *string) error {
-	mu := s.ticketMu(ticketID)
-	mu.Lock()
-	defer mu.Unlock()
-
-	ticket, status, err := s.Get(ticketID)
-	if err != nil {
-		return err
-	}
-
-	if ticket.Session == nil {
-		return &NotFoundError{Resource: "session", ID: ticketID}
-	}
-
-	now := time.Now().UTC()
-	entry := StatusEntry{
-		Status: agentStatus,
-		Tool:   tool,
-		Work:   work,
-		At:     now,
-	}
-	ticket.Session.CurrentStatus = &entry
-	ticket.Session.StatusHistory = append(ticket.Session.StatusHistory, entry)
-	ticket.Dates.Updated = now
-
-	if err := s.save(ticket, status); err != nil {
-		return fmt.Errorf("save ticket: %w", err)
-	}
-
-	s.emit(events.SessionStatus, ticketID, nil)
-	return nil
-}
-
 // AddComment adds a comment to a ticket.
-func (s *Store) AddComment(ticketID, sessionID string, commentType CommentType, content string, action *CommentAction) (*Comment, error) {
-	if content == "" {
-		return nil, &ValidationError{Field: "content", Message: "cannot be empty"}
-	}
-
+func (s *Store) AddComment(ticketID, author string, commentType CommentType, content string, action *storage.CommentAction) (*Comment, error) {
 	mu := s.ticketMu(ticketID)
 	mu.Lock()
 	defer mu.Unlock()
 
-	ticket, status, err := s.Get(ticketID)
+	entityDir, _, err := s.findEntityDirAllStatuses(ticketID)
 	if err != nil {
 		return nil, err
 	}
 
-	now := time.Now().UTC()
-	comment := Comment{
-		ID:        uuid.New().String(),
-		SessionID: sessionID,
-		Type:      commentType,
-		Content:   content,
-		Action:    action,
-		CreatedAt: now,
+	comment, err := storage.CreateComment(entityDir, author, commentType, content, action)
+	if err != nil {
+		return nil, err
 	}
 
-	ticket.Comments = append(ticket.Comments, comment)
-	ticket.Dates.Updated = now
-
-	if err := s.save(ticket, status); err != nil {
+	// Update the ticket's updated timestamp
+	ticket, err := s.loadIndex(entityDir)
+	if err != nil {
+		return nil, err
+	}
+	ticket.Updated = time.Now().UTC()
+	if err := s.writeIndex(entityDir, ticket); err != nil {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
 	s.emit(events.CommentAdded, ticketID, nil)
-	return &comment, nil
+	return comment, nil
 }
 
-// filename generates the filename for a ticket: {slug}-{id}.json
-func (s *Store) filename(ticket *Ticket) string {
-	slug := GenerateSlug(ticket.Title)
-	// Use first 8 chars of UUID for readability
-	shortID := ticket.ID
-	if len(shortID) > 8 {
-		shortID = shortID[:8]
-	}
-	return fmt.Sprintf("%s-%s.json", slug, shortID)
-}
-
-// save writes a ticket to the appropriate status directory using atomic write.
-// It writes to a temp file first, then renames to the target path to prevent
-// partial writes from corrupting data.
-func (s *Store) save(ticket *Ticket, status Status) error {
-	dir := filepath.Join(s.ticketsDir, string(status))
-	target := filepath.Join(dir, s.filename(ticket))
-
-	data, err := json.MarshalIndent(ticket, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal ticket: %w", err)
-	}
-
-	// Write to a temp file in the same directory (same filesystem for atomic rename)
-	tmp, err := os.CreateTemp(dir, ".tmp-*.json")
-	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
-	}
-	tmpPath := tmp.Name()
-
-	// Clean up temp file on error
-	defer func() {
-		if tmpPath != "" {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temp file: %w", err)
-	}
-
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp file: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, target); err != nil {
-		return fmt.Errorf("rename temp file: %w", err)
-	}
-
-	// Rename succeeded — prevent deferred cleanup from removing the target
-	tmpPath = ""
-
-	return nil
-}
-
-// loadFile reads and unmarshals a ticket from a file.
-func (s *Store) loadFile(path string) (*Ticket, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read file: %w", err)
-	}
-
-	var ticket Ticket
-	if err := json.Unmarshal(data, &ticket); err != nil {
-		return nil, fmt.Errorf("unmarshal ticket: %w", err)
-	}
-
-	return &ticket, nil
-}
-
-// getFromStatus retrieves a ticket from a specific status directory.
-func (s *Store) getFromStatus(id string, status Status) (*Ticket, error) {
-	path, err := s.findTicketPath(id, status)
+// ListComments returns all comments for a ticket sorted by created time.
+func (s *Store) ListComments(ticketID string) ([]Comment, error) {
+	entityDir, _, err := s.findEntityDirAllStatuses(ticketID)
 	if err != nil {
 		return nil, err
 	}
-	return s.loadFile(path)
+	return storage.ListComments(entityDir)
 }
 
-// findTicketPath finds the file path for a ticket in a status directory.
-func (s *Store) findTicketPath(id string, status Status) (string, error) {
+// saveTicket creates the entity directory and writes index.md.
+func (s *Store) saveTicket(ticket *Ticket, status Status) error {
+	dirName := storage.DirName(ticket.Title, ticket.ID, "ticket")
+	entityDir := filepath.Join(s.ticketsDir, string(status), dirName)
+
+	if err := os.MkdirAll(entityDir, 0755); err != nil {
+		return fmt.Errorf("create entity dir: %w", err)
+	}
+
+	return s.writeIndex(entityDir, ticket)
+}
+
+// writeIndex writes the index.md file in the given entity directory.
+func (s *Store) writeIndex(entityDir string, ticket *Ticket) error {
+	data, err := storage.SerializeFrontmatter(&ticket.TicketMeta, ticket.Body)
+	if err != nil {
+		return fmt.Errorf("serialize ticket: %w", err)
+	}
+
+	target := filepath.Join(entityDir, "index.md")
+	return storage.AtomicWriteFile(target, data)
+}
+
+// loadIndex reads and parses index.md from the given entity directory.
+func (s *Store) loadIndex(entityDir string) (*Ticket, error) {
+	data, err := os.ReadFile(filepath.Join(entityDir, "index.md"))
+	if err != nil {
+		return nil, fmt.Errorf("read index.md: %w", err)
+	}
+
+	meta, body, err := storage.ParseFrontmatter[TicketMeta](data)
+	if err != nil {
+		return nil, fmt.Errorf("parse index.md: %w", err)
+	}
+
+	return &Ticket{
+		TicketMeta: *meta,
+		Body:       body,
+		Comments:   []Comment{},
+	}, nil
+}
+
+// findEntityDir finds the entity directory for a ticket in a specific status directory.
+func (s *Store) findEntityDir(id string, status Status) (string, error) {
 	dir := filepath.Join(s.ticketsDir, string(status))
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -510,21 +403,31 @@ func (s *Store) findTicketPath(id string, status Status) (string, error) {
 		return "", fmt.Errorf("read directory: %w", err)
 	}
 
-	// Look for file ending with -{id}.json or -{shortID}.json
-	shortID := id
-	if len(shortID) > 8 {
-		shortID = shortID[:8]
-	}
+	shortID := storage.ShortID(id)
 
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if !entry.IsDir() {
 			continue
 		}
 		name := entry.Name()
-		if strings.HasSuffix(name, "-"+shortID+".json") || strings.HasSuffix(name, "-"+id+".json") {
+		if strings.HasSuffix(name, "-"+shortID) || strings.HasSuffix(name, "-"+id) {
 			return filepath.Join(dir, name), nil
 		}
 	}
 
 	return "", &NotFoundError{Resource: "ticket", ID: id}
+}
+
+// findEntityDirAllStatuses searches all status directories for a ticket's entity directory.
+func (s *Store) findEntityDirAllStatuses(id string) (string, Status, error) {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
+		entityDir, err := s.findEntityDir(id, status)
+		if err == nil {
+			return entityDir, status, nil
+		}
+		if !storage.IsNotFound(err) {
+			return "", "", err
+		}
+	}
+	return "", "", &NotFoundError{Resource: "ticket", ID: id}
 }

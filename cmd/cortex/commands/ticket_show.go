@@ -80,8 +80,8 @@ func printTicketPlainText(client *sdk.Client, ticketID string) {
 	fmt.Printf("  Title:  %s\n", t.Title)
 	fmt.Printf("  Status: %s\n", t.Status)
 	fmt.Printf("  Type:   %s\n", t.Type)
-	fmt.Printf("  Created: %s\n", t.Dates.Created.Format("Jan 02 15:04:05"))
-	fmt.Printf("  Updated: %s\n", t.Dates.Updated.Format("Jan 02 15:04:05"))
+	fmt.Printf("  Created: %s\n", t.Created.Format("Jan 02 15:04:05"))
+	fmt.Printf("  Updated: %s\n", t.Updated.Format("Jan 02 15:04:05"))
 	fmt.Println()
 
 	// Print body.
@@ -89,34 +89,6 @@ func printTicketPlainText(client *sdk.Client, ticketID string) {
 		fmt.Println("Body:")
 		fmt.Println(t.Body)
 		fmt.Println()
-	}
-
-	// Print session info if present.
-	if t.Session != nil {
-		session := t.Session
-		fmt.Printf("Session: %s\n", session.ID)
-		fmt.Printf("  Agent:       %s\n", session.Agent)
-		fmt.Printf("  Started:     %s\n", session.StartedAt.Format("Jan 02 15:04:05"))
-		if session.EndedAt != nil {
-			fmt.Printf("  Ended:       %s\n", session.EndedAt.Format("Jan 02 15:04:05"))
-		} else {
-			fmt.Printf("  Ended:       (active)\n")
-		}
-		fmt.Printf("  Tmux Window: %s\n", session.TmuxWindow)
-		fmt.Println()
-
-		// Print current status.
-		if session.CurrentStatus != nil {
-			fmt.Println("Current Status:")
-			fmt.Printf("  Status: %s\n", session.CurrentStatus.Status)
-			if session.CurrentStatus.Tool != nil {
-				fmt.Printf("  Tool:   %s\n", *session.CurrentStatus.Tool)
-			}
-			if session.CurrentStatus.Work != nil {
-				fmt.Printf("  Work:   %s\n", *session.CurrentStatus.Work)
-			}
-			fmt.Println()
-		}
 	}
 
 	// Print comments.

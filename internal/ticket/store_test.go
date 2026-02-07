@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/kareemaly/cortex/internal/storage"
 )
 
 func setupTestStore(t *testing.T) (*Store, func()) {
@@ -32,7 +34,6 @@ func TestNewStore(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	// Verify directories were created
 	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
 		dir := filepath.Join(store.ticketsDir, string(status))
 		info, err := os.Stat(dir)
@@ -49,7 +50,7 @@ func TestStoreCreate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, err := store.Create("Test Ticket", "Test body", "", nil, nil)
+	ticket, err := store.Create("Test Ticket", "Test body", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -63,11 +64,14 @@ func TestStoreCreate(t *testing.T) {
 	if ticket.Body != "Test body" {
 		t.Errorf("body = %q, want %q", ticket.Body, "Test body")
 	}
-	if ticket.Dates.Created.IsZero() {
+	if ticket.Type != DefaultTicketType {
+		t.Errorf("type = %q, want %q", ticket.Type, DefaultTicketType)
+	}
+	if ticket.Created.IsZero() {
 		t.Error("created date should be set")
 	}
-	if ticket.Dates.Done != nil {
-		t.Error("done date should be nil")
+	if ticket.Due != nil {
+		t.Error("due date should be nil")
 	}
 }
 
@@ -75,7 +79,7 @@ func TestStoreCreateEmptyTitle(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, err := store.Create("", "body", "", nil, nil)
+	_, err := store.Create("", "body", "", nil, nil, nil)
 	if err == nil {
 		t.Error("expected error for empty title")
 	}
@@ -84,11 +88,26 @@ func TestStoreCreateEmptyTitle(t *testing.T) {
 	}
 }
 
+func TestStoreCreateWithReferences(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	refs := []string{"doc:abc123"}
+	ticket, err := store.Create("Test", "body", "", nil, refs, nil)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	if len(ticket.References) != 1 || ticket.References[0] != "doc:abc123" {
+		t.Errorf("references = %v, want [doc:abc123]", ticket.References)
+	}
+}
+
 func TestStoreGet(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	created, err := store.Create("Test Ticket", "body", "", nil, nil)
+	created, err := store.Create("Test Ticket", "body", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -103,6 +122,50 @@ func TestStoreGet(t *testing.T) {
 	}
 	if retrieved.ID != created.ID {
 		t.Errorf("ID = %q, want %q", retrieved.ID, created.ID)
+	}
+	if retrieved.Title != "Test Ticket" {
+		t.Errorf("title = %q, want %q", retrieved.Title, "Test Ticket")
+	}
+	if retrieved.Body != "body" {
+		t.Errorf("body = %q, want %q", retrieved.Body, "body")
+	}
+}
+
+func TestStoreGetLoadsComments(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "comment 1", nil)
+	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "comment 2", nil)
+
+	retrieved, _, err := store.Get(ticket.ID)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	if len(retrieved.Comments) != 2 {
+		t.Errorf("comments count = %d, want 2", len(retrieved.Comments))
+	}
+}
+
+func TestStoreListDoesNotLoadComments(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "comment", nil)
+
+	tickets, err := store.List(StatusBacklog)
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+
+	if len(tickets) != 1 {
+		t.Fatalf("len(tickets) = %d, want 1", len(tickets))
+	}
+	if len(tickets[0].Comments) != 0 {
+		t.Errorf("List should not load comments, got %d", len(tickets[0].Comments))
 	}
 }
 
@@ -123,11 +186,11 @@ func TestStoreUpdate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil)
+	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, nil)
 
 	newTitle := "Updated Title"
 	newBody := "Updated body"
-	updated, err := store.Update(ticket.ID, &newTitle, &newBody, nil)
+	updated, err := store.Update(ticket.ID, &newTitle, &newBody, nil, nil)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -144,10 +207,10 @@ func TestStoreUpdatePartial(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil)
+	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, nil)
 
 	newTitle := "Updated Title"
-	updated, err := store.Update(ticket.ID, &newTitle, nil, nil)
+	updated, err := store.Update(ticket.ID, &newTitle, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -160,11 +223,51 @@ func TestStoreUpdatePartial(t *testing.T) {
 	}
 }
 
+func TestStoreUpdateTitleRename(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Old Title", "body", "", nil, nil, nil)
+	shortID := storage.ShortID(ticket.ID)
+
+	// Verify old directory exists
+	oldDir := filepath.Join(store.ticketsDir, "backlog", "old-title-"+shortID)
+	if _, err := os.Stat(oldDir); err != nil {
+		t.Fatalf("old dir should exist: %v", err)
+	}
+
+	newTitle := "New Title"
+	_, err := store.Update(ticket.ID, &newTitle, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// Old dir should be gone
+	if _, err := os.Stat(oldDir); !os.IsNotExist(err) {
+		t.Error("old dir should be removed after title change")
+	}
+
+	// New dir should exist
+	newDir := filepath.Join(store.ticketsDir, "backlog", "new-title-"+shortID)
+	if _, err := os.Stat(newDir); err != nil {
+		t.Errorf("new dir should exist: %v", err)
+	}
+
+	// Should still be retrievable
+	retrieved, _, err := store.Get(ticket.ID)
+	if err != nil {
+		t.Fatalf("Get after rename failed: %v", err)
+	}
+	if retrieved.Title != "New Title" {
+		t.Errorf("title = %q, want %q", retrieved.Title, "New Title")
+	}
+}
+
 func TestStoreDelete(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
 
 	if err := store.Delete(ticket.ID); err != nil {
 		t.Fatalf("Delete failed: %v", err)
@@ -180,8 +283,8 @@ func TestStoreList(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, _ = store.Create("Ticket 1", "", "", nil, nil)
-	_, _ = store.Create("Ticket 2", "", "", nil, nil)
+	_, _ = store.Create("Ticket 1", "", "", nil, nil, nil)
+	_, _ = store.Create("Ticket 2", "", "", nil, nil, nil)
 
 	tickets, err := store.List(StatusBacklog)
 	if err != nil {
@@ -197,8 +300,8 @@ func TestStoreListAll(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	t1, _ := store.Create("Backlog Ticket", "", "", nil, nil)
-	t2, _ := store.Create("Progress Ticket", "", "", nil, nil)
+	t1, _ := store.Create("Backlog Ticket", "", "", nil, nil, nil)
+	t2, _ := store.Create("Progress Ticket", "", "", nil, nil, nil)
 	_ = store.Move(t2.ID, StatusProgress)
 
 	all, err := store.ListAll()
@@ -221,7 +324,7 @@ func TestStoreMove(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
 
 	if err := store.Move(ticket.ID, StatusProgress); err != nil {
 		t.Fatalf("Move failed: %v", err)
@@ -237,122 +340,22 @@ func TestStoreMove(t *testing.T) {
 	}
 }
 
-func TestStoreMoveToDoneSetsDoneDate(t *testing.T) {
+func TestStoreMoveSameStatus(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
 
-	if err := store.Move(ticket.ID, StatusDone); err != nil {
-		t.Fatalf("Move failed: %v", err)
+	if err := store.Move(ticket.ID, StatusBacklog); err != nil {
+		t.Fatalf("Move to same status failed: %v", err)
 	}
 
-	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Dates.Done == nil {
-		t.Error("done date should be set when moving to done")
-	}
-}
-
-func TestStoreMoveToProgressSetsProgressDate(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
-
-	if err := store.Move(ticket.ID, StatusProgress); err != nil {
-		t.Fatalf("Move failed: %v", err)
-	}
-
-	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Dates.Progress == nil {
-		t.Error("progress date should be set when moving to progress")
-	}
-}
-
-func TestStoreMoveToReviewSetsReviewedDate(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
-	_ = store.Move(ticket.ID, StatusProgress)
-
-	if err := store.Move(ticket.ID, StatusReview); err != nil {
-		t.Fatalf("Move failed: %v", err)
-	}
-
-	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Dates.Reviewed == nil {
-		t.Error("reviewed date should be set when moving to review")
-	}
-}
-
-func TestStoreSetSession(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
-
-	session, err := store.SetSession(ticket.ID, "claude", "test-window", nil, nil)
+	_, status, err := store.Get(ticket.ID)
 	if err != nil {
-		t.Fatalf("SetSession failed: %v", err)
+		t.Fatalf("Get failed: %v", err)
 	}
-
-	if session.ID == "" {
-		t.Error("session ID should not be empty")
-	}
-	if session.Agent != "claude" {
-		t.Errorf("agent = %q, want %q", session.Agent, "claude")
-	}
-	if !session.IsActive() {
-		t.Error("new session should be active")
-	}
-
-	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Session == nil {
-		t.Error("session should not be nil")
-	}
-	if retrieved.Session.ID != session.ID {
-		t.Errorf("session ID = %q, want %q", retrieved.Session.ID, session.ID)
-	}
-}
-
-func TestStoreEndSession(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
-	_, _ = store.SetSession(ticket.ID, "claude", "window", nil, nil)
-
-	if err := store.EndSession(ticket.ID); err != nil {
-		t.Fatalf("EndSession failed: %v", err)
-	}
-
-	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Session.IsActive() {
-		t.Error("session should not be active after ending")
-	}
-}
-
-func TestStoreUpdateSessionStatus(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
-	_, _ = store.SetSession(ticket.ID, "claude", "window", nil, nil)
-
-	tool := "Edit"
-	work := "Writing code"
-	err := store.UpdateSessionStatus(ticket.ID, AgentStatusInProgress, &tool, &work)
-	if err != nil {
-		t.Fatalf("UpdateSessionStatus failed: %v", err)
-	}
-
-	retrieved, _, _ := store.Get(ticket.ID)
-	if retrieved.Session.CurrentStatus.Status != AgentStatusInProgress {
-		t.Error("status should be updated")
-	}
-	if len(retrieved.Session.StatusHistory) != 2 {
-		t.Errorf("history count = %d, want 2", len(retrieved.Session.StatusHistory))
+	if status != StatusBacklog {
+		t.Errorf("status = %q, want %q", status, StatusBacklog)
 	}
 }
 
@@ -360,10 +363,9 @@ func TestStoreAddComment(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
-	session, _ := store.SetSession(ticket.ID, "claude", "window", nil, nil)
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
 
-	comment, err := store.AddComment(ticket.ID, session.ID, CommentGeneral, "Test comment", nil)
+	comment, err := store.AddComment(ticket.ID, "claude", CommentGeneral, "Test comment", nil)
 	if err != nil {
 		t.Fatalf("AddComment failed: %v", err)
 	}
@@ -377,8 +379,8 @@ func TestStoreAddComment(t *testing.T) {
 	if comment.Content != "Test comment" {
 		t.Errorf("content = %q, want %q", comment.Content, "Test comment")
 	}
-	if comment.SessionID != session.ID {
-		t.Errorf("session_id = %q, want %q", comment.SessionID, session.ID)
+	if comment.Author != "claude" {
+		t.Errorf("author = %q, want %q", comment.Author, "claude")
 	}
 
 	retrieved, _, _ := store.Get(ticket.ID)
@@ -391,14 +393,13 @@ func TestStoreAddCommentWithAction(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
-	session, _ := store.SetSession(ticket.ID, "claude", "window", nil, nil)
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
 
-	action := &CommentAction{
+	action := &storage.CommentAction{
 		Type: "git_diff",
-		Args: GitDiffArgs{RepoPath: "/path/to/repo", Commit: "abc123"},
+		Args: storage.GitDiffArgs{RepoPath: "/path/to/repo", Commit: "abc123"},
 	}
-	comment, err := store.AddComment(ticket.ID, session.ID, CommentReviewRequested, "Review changes", action)
+	comment, err := store.AddComment(ticket.ID, "claude", CommentReviewRequested, "Review changes", action)
 	if err != nil {
 		t.Fatalf("AddComment failed: %v", err)
 	}
@@ -411,16 +412,41 @@ func TestStoreAddCommentWithAction(t *testing.T) {
 	}
 }
 
-func TestStoreSessionNotFound(t *testing.T) {
+func TestStoreAddCommentValidation(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil)
+	tk, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
 
-	// Ticket has no session, so EndSession should return NotFoundError
-	err := store.EndSession(ticket.ID)
-	if !IsNotFound(err) {
-		t.Errorf("expected NotFoundError, got %T", err)
+	_, err := store.AddComment(tk.ID, "claude", CommentGeneral, "", nil)
+	if err == nil {
+		t.Error("expected error for empty content")
+	}
+	if _, ok := err.(*ValidationError); !ok {
+		t.Errorf("expected ValidationError, got %T", err)
+	}
+}
+
+func TestStoreListComments(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "First", nil)
+	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "Second", nil)
+
+	comments, err := store.ListComments(ticket.ID)
+	if err != nil {
+		t.Fatalf("ListComments failed: %v", err)
+	}
+
+	if len(comments) != 2 {
+		t.Fatalf("len(comments) = %d, want 2", len(comments))
+	}
+
+	// Should be sorted by created time
+	if comments[0].Content != "First" {
+		t.Errorf("first comment = %q, want %q", comments[0].Content, "First")
 	}
 }
 
@@ -428,7 +454,7 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	tk, err := store.Create("Concurrent Ticket", "initial body", "", nil, nil)
+	tk, err := store.Create("Concurrent Ticket", "initial body", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -445,7 +471,7 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 			for i := 0; i < updatesPerGoroutine; i++ {
 				title := fmt.Sprintf("Title-%d-%d", g, i)
 				body := fmt.Sprintf("Body-%d-%d", g, i)
-				_, err := store.Update(tk.ID, &title, &body, nil)
+				_, err := store.Update(tk.ID, &title, &body, nil, nil)
 				if err != nil {
 					t.Errorf("Update goroutine %d iter %d failed: %v", g, i, err)
 					return
@@ -456,7 +482,6 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 
 	wg.Wait()
 
-	// Verify the ticket is still readable and valid
 	retrieved, status, err := store.Get(tk.ID)
 	if err != nil {
 		t.Fatalf("Get after concurrent updates failed: %v", err)
@@ -473,14 +498,9 @@ func TestStoreConcurrentAddComments(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	tk, err := store.Create("Comment Ticket", "body", "", nil, nil)
+	tk, err := store.Create("Comment Ticket", "body", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
-	}
-
-	session, err := store.SetSession(tk.ID, "claude", "window", nil, nil)
-	if err != nil {
-		t.Fatalf("SetSession failed: %v", err)
 	}
 
 	const goroutines = 10
@@ -492,7 +512,7 @@ func TestStoreConcurrentAddComments(t *testing.T) {
 		go func(g int) {
 			defer wg.Done()
 			content := fmt.Sprintf("Comment from goroutine %d", g)
-			_, err := store.AddComment(tk.ID, session.ID, CommentGeneral, content, nil)
+			_, err := store.AddComment(tk.ID, "claude", CommentGeneral, content, nil)
 			if err != nil {
 				t.Errorf("AddComment goroutine %d failed: %v", g, err)
 			}
@@ -501,7 +521,7 @@ func TestStoreConcurrentAddComments(t *testing.T) {
 
 	wg.Wait()
 
-	// Verify all 10 comments are present (no lost updates)
+	// With file-per-comment, concurrent adds should not lose comments
 	retrieved, _, err := store.Get(tk.ID)
 	if err != nil {
 		t.Fatalf("Get after concurrent comments failed: %v", err)
@@ -511,19 +531,74 @@ func TestStoreConcurrentAddComments(t *testing.T) {
 	}
 }
 
-func TestStoreAddCommentValidation(t *testing.T) {
+func TestStoreDirLayout(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	tk, _ := store.Create("Test Ticket", "body", "", nil, nil)
-	session, _ := store.SetSession(tk.ID, "claude", "window", nil, nil)
+	ticket, _ := store.Create("Fix Auth Bug", "body", "", nil, nil, nil)
+	shortID := storage.ShortID(ticket.ID)
 
-	// Empty content should fail
-	_, err := store.AddComment(tk.ID, session.ID, CommentGeneral, "", nil)
-	if err == nil {
-		t.Error("expected error for empty content")
+	// Verify directory structure
+	entityDir := filepath.Join(store.ticketsDir, "backlog", "fix-auth-bug-"+shortID)
+	if _, err := os.Stat(entityDir); err != nil {
+		t.Fatalf("entity dir should exist: %v", err)
 	}
-	if _, ok := err.(*ValidationError); !ok {
-		t.Errorf("expected ValidationError, got %T", err)
+
+	indexPath := filepath.Join(entityDir, "index.md")
+	if _, err := os.Stat(indexPath); err != nil {
+		t.Fatalf("index.md should exist: %v", err)
+	}
+}
+
+func TestStoreSetDueDate(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Test", "body", "", nil, nil, nil)
+
+	due := ticket.Created.AddDate(0, 0, 7)
+	updated, err := store.SetDueDate(ticket.ID, &due)
+	if err != nil {
+		t.Fatalf("SetDueDate failed: %v", err)
+	}
+
+	if updated.Due == nil || !updated.Due.Equal(due) {
+		t.Error("due date should be set")
+	}
+}
+
+func TestStoreClearDueDate(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	due := store.ticketsDir // irrelevant, just need a time
+	_ = due
+	ticket, _ := store.Create("Test", "body", "", nil, nil, nil)
+
+	d := ticket.Created.AddDate(0, 0, 7)
+	_, _ = store.SetDueDate(ticket.ID, &d)
+
+	updated, err := store.ClearDueDate(ticket.ID)
+	if err != nil {
+		t.Fatalf("ClearDueDate failed: %v", err)
+	}
+
+	if updated.Due != nil {
+		t.Error("due date should be cleared")
+	}
+}
+
+func TestStoreStatusConstants(t *testing.T) {
+	if StatusBacklog != "backlog" {
+		t.Error("StatusBacklog should be 'backlog'")
+	}
+	if StatusProgress != "progress" {
+		t.Error("StatusProgress should be 'progress'")
+	}
+	if StatusReview != "review" {
+		t.Error("StatusReview should be 'review'")
+	}
+	if StatusDone != "done" {
+		t.Error("StatusDone should be 'done'")
 	}
 }

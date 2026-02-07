@@ -103,7 +103,7 @@ func (s *Server) registerArchitectTools() {
 		Description: "Add a comment to a ticket (types: review_requested, done, blocker, comment)",
 	}, s.handleArchitectAddComment)
 
-	// Spawn session (stub)
+	// Spawn session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "spawnSession",
 		Description: "Spawn a new agent session for a ticket",
@@ -157,6 +157,18 @@ func (s *Server) registerArchitectTools() {
 		Name:        "listDocs",
 		Description: "List documentation files with optional category, tag, and search filters",
 	}, s.handleListDocs)
+
+	// Add doc comment
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "addDocComment",
+		Description: "Add a comment to a documentation file (types: review_requested, done, blocker, comment)",
+	}, s.handleAddDocComment)
+
+	// List sessions
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "listSessions",
+		Description: "List all active agent sessions with ticket details",
+	}, s.handleListSessions)
 }
 
 // handleListProjects lists all registered projects.
@@ -217,7 +229,7 @@ func (s *Server) handleListTickets(
 		dueBefore = &parsed
 	}
 
-	resp, err := client.ListTicketsByStatus(input.Status, input.Query, dueBefore)
+	resp, err := client.ListTicketsByStatus(input.Status, input.Query, dueBefore, input.Tag)
 	if err != nil {
 		return nil, ListTicketsOutput{}, wrapSDKError(err)
 	}
@@ -286,7 +298,7 @@ func (s *Server) handleCreateTicket(
 		dueDate = &parsed
 	}
 
-	resp, err := client.CreateTicket(input.Title, input.Body, input.Type, dueDate, input.References)
+	resp, err := client.CreateTicket(input.Title, input.Body, input.Type, dueDate, input.References, input.Tags)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
@@ -314,7 +326,7 @@ func (s *Server) handleUpdateTicket(
 		return nil, UpdateTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := client.UpdateTicket(input.ID, input.Title, input.Body, input.References)
+	resp, err := client.UpdateTicket(input.ID, input.Title, input.Body, input.References, input.Tags)
 	if err != nil {
 		return nil, UpdateTicketOutput{}, wrapSDKError(err)
 	}
@@ -401,7 +413,7 @@ func (s *Server) handleArchitectAddComment(
 		return nil, AddCommentOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := client.AddComment(input.ID, input.Type, input.Content)
+	resp, err := client.AddComment(input.ID, input.Type, input.Content, "architect")
 	if err != nil {
 		return nil, AddCommentOutput{}, wrapSDKError(err)
 	}
@@ -477,7 +489,6 @@ func (s *Server) handleSpawnSession(
 		return nil, SpawnSessionOutput{
 			Success:    true,
 			TicketID:   input.TicketID,
-			SessionID:  spawnResp.Session.ID,
 			TmuxWindow: spawnResp.Session.TmuxWindow,
 		}, nil
 
@@ -651,5 +662,72 @@ func (s *Server) handleClearDueDate(
 
 	return nil, ClearDueDateOutput{
 		Ticket: ticketResponseToOutput(resp),
+	}, nil
+}
+
+// handleAddDocComment adds a comment to a doc by ID.
+func (s *Server) handleAddDocComment(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input AddDocCommentInput,
+) (*mcp.CallToolResult, AddCommentOutput, error) {
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, AddCommentOutput{}, err
+	}
+
+	client := s.getClientForProject(input.ProjectPath)
+
+	if input.ID == "" {
+		return nil, AddCommentOutput{}, NewValidationError("id", "cannot be empty")
+	}
+	if input.Content == "" {
+		return nil, AddCommentOutput{}, NewValidationError("content", "cannot be empty")
+	}
+
+	resp, err := client.AddDocComment(input.ID, input.Type, input.Content, "architect")
+	if err != nil {
+		return nil, AddCommentOutput{}, wrapSDKError(err)
+	}
+
+	return nil, AddCommentOutput{
+		Success: resp.Success,
+		Comment: resp.Comment,
+	}, nil
+}
+
+// handleListSessions lists all active sessions.
+func (s *Server) handleListSessions(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input ListSessionsInput,
+) (*mcp.CallToolResult, ListSessionsOutput, error) {
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, ListSessionsOutput{}, err
+	}
+
+	client := s.getClientForProject(input.ProjectPath)
+
+	resp, err := client.ListSessions()
+	if err != nil {
+		return nil, ListSessionsOutput{}, wrapSDKError(err)
+	}
+
+	items := make([]SessionListItem, len(resp.Sessions))
+	for i, s := range resp.Sessions {
+		items[i] = SessionListItem{
+			SessionID:   s.SessionID,
+			TicketID:    s.TicketID,
+			TicketTitle: s.TicketTitle,
+			Agent:       s.Agent,
+			TmuxWindow:  s.TmuxWindow,
+			StartedAt:   s.StartedAt,
+			Status:      s.Status,
+			Tool:        s.Tool,
+		}
+	}
+
+	return nil, ListSessionsOutput{
+		Sessions: items,
+		Total:    len(items),
 	}, nil
 }

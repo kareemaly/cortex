@@ -27,6 +27,7 @@ type ListTicketsInput struct {
 	Status      string `json:"status" jsonschema:"Ticket status to filter by (required). Must be one of: backlog, progress, review, done"`
 	Query       string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
 	DueBefore   string `json:"due_before,omitempty" jsonschema:"Optional RFC3339 timestamp to filter tickets with due date before this time."`
+	Tag         string `json:"tag,omitempty" jsonschema:"Optional tag to filter tickets (case-insensitive)."`
 	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
@@ -43,6 +44,7 @@ type CreateTicketInput struct {
 	Type        string   `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration), 'chore' (quick maintenance). Defaults to 'work' if not specified."`
 	DueDate     string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
 	References  []string `json:"references,omitempty" jsonschema:"Cross-references (e.g., 'doc:abc123', 'ticket:xyz789')"`
+	Tags        []string `json:"tags,omitempty" jsonschema:"Free-form tags for categorization"`
 	ProjectPath string   `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
@@ -52,6 +54,7 @@ type UpdateTicketInput struct {
 	Title       *string   `json:"title,omitempty" jsonschema:"New title (optional)"`
 	Body        *string   `json:"body,omitempty" jsonschema:"New body (optional)"`
 	References  *[]string `json:"references,omitempty" jsonschema:"New references (optional, full replacement)"`
+	Tags        *[]string `json:"tags,omitempty" jsonschema:"New tags (optional, full replacement)"`
 	ProjectPath string    `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
@@ -139,49 +142,44 @@ type ConcludeSessionInput struct {
 	Content string `json:"content" jsonschema:"Complete summary of work done, decisions made, and files changed"`
 }
 
-// Type aliases for identical types (map to shared types)
-type (
-	DatesOutput  = types.DatesResponse
-	StatusOutput = types.StatusEntryResponse
-)
+// CommentOutput is a comment in MCP output (alias to shared type).
 
-// CommentOutput represents a comment on a ticket.
-// Alias to shared type for JSON compatibility.
 type CommentOutput = types.CommentResponse
 
 // MCP-specific output types (structurally different from shared types)
 
-// TicketSummary is a minimal ticket representation for list views.
-// Contains only ID and title - use readTicket for full details.
+// TicketSummary is an enriched ticket representation for list views.
 type TicketSummary struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
+	ID      string     `json:"id"`
+	Title   string     `json:"title"`
+	Type    string     `json:"type"`
+	Tags    []string   `json:"tags,omitempty"`
+	Due     *time.Time `json:"due,omitempty"`
+	Created time.Time  `json:"created"`
+	Updated time.Time  `json:"updated"`
 }
 
 // SessionOutput represents a work session.
-// MCP version has IsActive but no StatusHistory/RequestedReviews.
 type SessionOutput struct {
-	ID            string        `json:"id"`
-	StartedAt     time.Time     `json:"started_at"`
-	EndedAt       *time.Time    `json:"ended_at,omitempty"`
-	Agent         string        `json:"agent"`
-	TmuxWindow    string        `json:"tmux_window"`
-	CurrentStatus *StatusOutput `json:"current_status,omitempty"`
-	IsActive      bool          `json:"is_active"`
+	Agent      string  `json:"agent"`
+	TmuxWindow string  `json:"tmux_window"`
+	Status     string  `json:"status"`
+	Tool       *string `json:"tool,omitempty"`
 }
 
 // TicketOutput is the full ticket representation.
-// Uses MCP-specific SessionOutput.
 type TicketOutput struct {
 	ID         string          `json:"id"`
 	Type       string          `json:"type"`
 	Title      string          `json:"title"`
 	Body       string          `json:"body"`
+	Tags       []string        `json:"tags,omitempty"`
 	References []string        `json:"references,omitempty"`
 	Status     string          `json:"status"`
-	Dates      DatesOutput     `json:"dates"`
+	Created    time.Time       `json:"created"`
+	Updated    time.Time       `json:"updated"`
+	Due        *time.Time      `json:"due,omitempty"`
 	Comments   []CommentOutput `json:"comments"`
-	Session    *SessionOutput  `json:"session,omitempty"`
 }
 
 // Tool output wrappers
@@ -266,6 +264,37 @@ type ClearDueDateOutput struct {
 	Ticket TicketOutput `json:"ticket"`
 }
 
+// AddDocCommentInput is the input for the addDocComment tool.
+type AddDocCommentInput struct {
+	ID          string `json:"id" jsonschema:"The document ID to add a comment to"`
+	Type        string `json:"type" jsonschema:"Comment type (review_requested/done/blocker/comment)"`
+	Content     string `json:"content" jsonschema:"The comment content"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+}
+
+// ListSessionsInput is the input for the listSessions tool.
+type ListSessionsInput struct {
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+}
+
+// SessionListItem represents a session in the listSessions output.
+type SessionListItem struct {
+	SessionID   string    `json:"session_id"`
+	TicketID    string    `json:"ticket_id"`
+	TicketTitle string    `json:"ticket_title"`
+	Agent       string    `json:"agent"`
+	TmuxWindow  string    `json:"tmux_window"`
+	StartedAt   time.Time `json:"started_at"`
+	Status      string    `json:"status"`
+	Tool        *string   `json:"tool,omitempty"`
+}
+
+// ListSessionsOutput is the output for the listSessions tool.
+type ListSessionsOutput struct {
+	Sessions []SessionListItem `json:"sessions"`
+	Total    int               `json:"total"`
+}
+
 // Doc input types
 
 // CreateDocInput is the input for the createDoc tool.
@@ -318,14 +347,15 @@ type ListDocsInput struct {
 
 // DocOutput is the full document representation for MCP.
 type DocOutput struct {
-	ID         string   `json:"id"`
-	Title      string   `json:"title"`
-	Category   string   `json:"category"`
-	Tags       []string `json:"tags"`
-	References []string `json:"references"`
-	Body       string   `json:"body"`
-	Created    string   `json:"created"`
-	Updated    string   `json:"updated"`
+	ID         string          `json:"id"`
+	Title      string          `json:"title"`
+	Category   string          `json:"category"`
+	Tags       []string        `json:"tags"`
+	References []string        `json:"references"`
+	Body       string          `json:"body"`
+	Created    string          `json:"created"`
+	Updated    string          `json:"updated"`
+	Comments   []CommentOutput `json:"comments,omitempty"`
 }
 
 // DocSummaryOutput is a brief view of a doc for list views.
@@ -392,6 +422,7 @@ func docResponseToOutput(r *types.DocResponse) DocOutput {
 		Body:       r.Body,
 		Created:    r.Created,
 		Updated:    r.Updated,
+		Comments:   r.Comments,
 	}
 }
 
@@ -413,10 +444,15 @@ func docSummaryToOutput(s *types.DocSummary) DocSummaryOutput {
 }
 
 // ticketSummaryResponseToMCP maps a shared TicketSummary (from the HTTP API)
-// to the MCP-specific TicketSummary (minimal: only ID and title).
+// to the MCP-specific TicketSummary with enriched fields.
 func ticketSummaryResponseToMCP(s *types.TicketSummary) TicketSummary {
 	return TicketSummary{
-		ID:    s.ID,
-		Title: s.Title,
+		ID:      s.ID,
+		Title:   s.Title,
+		Type:    s.Type,
+		Tags:    s.Tags,
+		Due:     s.Due,
+		Created: s.Created,
+		Updated: s.Updated,
 	}
 }

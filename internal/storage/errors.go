@@ -1,4 +1,4 @@
-package ticket
+package storage
 
 import "fmt"
 

@@ -43,6 +43,7 @@ type Model struct {
 	modalViewport   viewport.Model
 	modalCommentIdx int // index into ticket.Comments
 	executingDiff   bool
+	sessions        []sdk.SessionListItem // cached sessions for this project
 
 	// SSE subscription state
 	eventCh      <-chan sdk.Event
@@ -53,7 +54,8 @@ type Model struct {
 
 // TicketLoadedMsg is sent when a ticket is successfully fetched.
 type TicketLoadedMsg struct {
-	Ticket *sdk.TicketResponse
+	Ticket   *sdk.TicketResponse
+	Sessions []sdk.SessionListItem
 }
 
 // TicketErrorMsg is sent when fetching a ticket fails.
@@ -208,6 +210,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = nil
 		m.ticket = msg.Ticket
+		m.sessions = msg.Sessions
 		if m.ready {
 			// Preserve scroll position across SSE refreshes.
 			savedOffset := m.bodyViewport.YOffset
@@ -609,9 +612,14 @@ func (m Model) handleDetailModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// hasActiveSession returns true if there's an active (not ended) session.
+// hasActiveSession returns true if there's an active session.
+// Sessions are no longer on TicketResponse; we use ticket status as a heuristic.
+// The ticket is in "progress" or "review" status when an agent is working.
 func (m Model) hasActiveSession() bool {
-	return m.ticket != nil && m.ticket.Session != nil && m.ticket.Session.EndedAt == nil
+	if m.ticket == nil {
+		return false
+	}
+	return m.ticket.Status == "progress" || m.ticket.Status == "review"
 }
 
 // hasReviewRequests returns true if there are review_requested comments.
@@ -630,10 +638,11 @@ func (m Model) hasReviewRequests() bool {
 // killSession returns a command to kill the current session.
 func (m Model) killSession() tea.Cmd {
 	return func() tea.Msg {
-		if m.ticket == nil || m.ticket.Session == nil {
+		if m.ticket == nil {
 			return SessionKillErrorMsg{Err: fmt.Errorf("no session to kill")}
 		}
-		err := m.client.KillSession(m.ticket.Session.ID)
+		// Use ticket ID prefix (short ID) to find session
+		err := m.client.KillSession(m.ticket.ID[:8])
 		if err != nil {
 			return SessionKillErrorMsg{Err: err}
 		}
@@ -644,10 +653,11 @@ func (m Model) killSession() tea.Cmd {
 // approveSession returns a command to approve the current session.
 func (m Model) approveSession() tea.Cmd {
 	return func() tea.Msg {
-		if m.ticket == nil || m.ticket.Session == nil {
+		if m.ticket == nil {
 			return ApproveErrorMsg{Err: fmt.Errorf("no session to approve")}
 		}
-		err := m.client.ApproveSession(m.ticket.Session.ID)
+		// Use ticket ID prefix (short ID) to find session
+		err := m.client.ApproveSession(m.ticket.ID[:8])
 		if err != nil {
 			return ApproveErrorMsg{Err: err}
 		}
@@ -761,11 +771,11 @@ func (m Model) handleDeleteModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // deleteOrphanedSession returns a command to delete an orphaned session.
 func (m Model) deleteOrphanedSession() tea.Cmd {
 	return func() tea.Msg {
-		if m.ticket == nil || m.ticket.Session == nil {
+		if m.ticket == nil {
 			return SessionDeleteErrorMsg{Err: fmt.Errorf("no session to delete")}
 		}
-		// Kill the session using its ID
-		if err := m.client.KillSession(m.ticket.Session.ID); err != nil {
+		// Use ticket ID prefix (short ID) to find session
+		if err := m.client.KillSession(m.ticket.ID[:8]); err != nil {
 			return SessionDeleteErrorMsg{Err: err}
 		}
 		return SessionDeletedMsg{}
@@ -816,7 +826,7 @@ func (m Model) renderModalHeader() string {
 	}
 	comment := m.ticket.Comments[m.modalCommentIdx]
 	badge := commentBadge(comment.Type)
-	date := attributeLabelStyle.Render(formatTimeAgo(comment.CreatedAt))
+	date := attributeLabelStyle.Render(formatTimeAgo(comment.Created))
 	return badge + "  " + date
 }
 
@@ -1089,81 +1099,59 @@ func (m Model) renderAttributes(width, height int) string {
 	b.WriteString("\n")
 
 	b.WriteString(attributeLabelStyle.Render("Created  "))
-	b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Created.Format("Jan 02, 15:04")))
+	b.WriteString(attributeValueStyle.Render(m.ticket.Created.Format("Jan 02, 15:04")))
 
 	b.WriteString("\n")
 	b.WriteString(attributeLabelStyle.Render("Updated  "))
-	b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Updated.Format("Jan 02, 15:04")))
+	b.WriteString(attributeValueStyle.Render(m.ticket.Updated.Format("Jan 02, 15:04")))
 
-	if m.ticket.Dates.Progress != nil {
-		b.WriteString("\n")
-		b.WriteString(attributeLabelStyle.Render("Progress "))
-		b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Progress.Format("Jan 02, 15:04")))
-	}
-
-	if m.ticket.Dates.Reviewed != nil {
-		b.WriteString("\n")
-		b.WriteString(attributeLabelStyle.Render("Reviewed "))
-		b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Reviewed.Format("Jan 02, 15:04")))
-	}
-
-	if m.ticket.Dates.Done != nil {
-		b.WriteString("\n")
-		b.WriteString(attributeLabelStyle.Render("Done     "))
-		b.WriteString(attributeValueStyle.Render(m.ticket.Dates.Done.Format("Jan 02, 15:04")))
-	}
-
-	if m.ticket.Dates.DueDate != nil {
+	if m.ticket.Due != nil {
 		b.WriteString("\n")
 		b.WriteString(attributeLabelStyle.Render("Due      "))
 		// Color-code based on urgency
 		now := time.Now()
 		dueDateStyle := attributeValueStyle
-		if m.ticket.Dates.DueDate.Before(now) {
+		if m.ticket.Due.Before(now) {
 			dueDateStyle = overdueStyle
-		} else if m.ticket.Dates.DueDate.Before(now.Add(24 * time.Hour)) {
+		} else if m.ticket.Due.Before(now.Add(24 * time.Hour)) {
 			dueDateStyle = dueSoonStyle
 		}
-		b.WriteString(dueDateStyle.Render(m.ticket.Dates.DueDate.Format("Jan 02, 15:04")))
+		b.WriteString(dueDateStyle.Render(m.ticket.Due.Format("Jan 02, 15:04")))
 	}
 
-	// SESSION section.
-	if m.ticket.Session != nil {
-		session := m.ticket.Session
-		b.WriteString("\n\n")
-		b.WriteString(attributeHeaderStyle.Render("SESSION"))
+	if len(m.ticket.Tags) > 0 {
 		b.WriteString("\n")
+		b.WriteString(attributeLabelStyle.Render("Tags     "))
+		b.WriteString(attributeValueStyle.Render(strings.Join(m.ticket.Tags, ", ")))
+	}
 
-		b.WriteString(attributeLabelStyle.Render("Agent    "))
-		b.WriteString(attributeValueStyle.Render(session.Agent))
-
-		b.WriteString("\n")
-		b.WriteString(attributeLabelStyle.Render("Status   "))
-		if session.EndedAt == nil {
-			b.WriteString(statusStyle("progress").Render("ACTIVE"))
-		} else {
-			b.WriteString(statusStyle("done").Render("ENDED"))
+	// SESSION section
+	b.WriteString("\n\n")
+	b.WriteString(attributeHeaderStyle.Render("SESSION"))
+	b.WriteString("\n")
+	if m.sessions != nil {
+		found := false
+		for _, s := range m.sessions {
+			if s.TicketID == m.ticket.ID {
+				found = true
+				b.WriteString(attributeLabelStyle.Render("Agent    "))
+				b.WriteString(attributeValueStyle.Render(s.Agent))
+				b.WriteString("\n")
+				b.WriteString(attributeLabelStyle.Render("Status   "))
+				b.WriteString(attributeValueStyle.Render(s.Status))
+				if s.Tool != nil && *s.Tool != "" {
+					b.WriteString("\n")
+					b.WriteString(attributeLabelStyle.Render("Tool     "))
+					b.WriteString(attributeValueStyle.Render(*s.Tool))
+				}
+				break
+			}
 		}
-
-		if session.CurrentStatus != nil && session.CurrentStatus.Tool != nil {
-			b.WriteString("\n")
-			b.WriteString(attributeLabelStyle.Render("Tool     "))
-			b.WriteString(attributeValueStyle.Render(*session.CurrentStatus.Tool))
+		if !found {
+			b.WriteString(attributeLabelStyle.Render("No active session"))
 		}
-
-		b.WriteString("\n")
-		b.WriteString(attributeLabelStyle.Render("Window   "))
-		b.WriteString(attributeValueStyle.Render(session.TmuxWindow))
-
-		b.WriteString("\n")
-		b.WriteString(attributeLabelStyle.Render("Started  "))
-		b.WriteString(attributeValueStyle.Render(session.StartedAt.Format("Jan 02, 15:04")))
-
-		if session.EndedAt != nil {
-			b.WriteString("\n")
-			b.WriteString(attributeLabelStyle.Render("Ended    "))
-			b.WriteString(attributeValueStyle.Render(session.EndedAt.Format("Jan 02, 15:04")))
-		}
+	} else {
+		b.WriteString(attributeLabelStyle.Render("No active session"))
 	}
 
 	return lipgloss.NewStyle().
@@ -1218,11 +1206,15 @@ func (m Model) renderCommentList(width, height int) string {
 // renderCommentRow renders a single comment as a multi-line row (4 lines: header + 3 preview lines).
 func (m Model) renderCommentRow(comment sdk.CommentResponse, width int, selected bool) string {
 	badge := commentBadge(comment.Type)
-	timeAgo := formatTimeAgo(comment.CreatedAt)
+	timeAgo := formatTimeAgo(comment.Created)
 
-	// Build header line: [badge]  repo-prefix (if review)  ────  time-ago
+	// Build header line: [badge]  author  repo-prefix (if review)  ────  time-ago
 	var headerParts []string
 	headerParts = append(headerParts, badge)
+
+	if comment.Author != "" {
+		headerParts = append(headerParts, attributeValueStyle.Render(comment.Author))
+	}
 
 	// For review requests, show repo name.
 	if comment.Type == "review_requested" {
@@ -1448,37 +1440,20 @@ func (m Model) renderBodyContent() string {
 		return m.renderMarkdown(m.ticket.Body)
 	}
 
-	// Narrow mode: inline dates + body + session.
+	// Narrow mode: inline dates + body.
 	var b strings.Builder
 
 	// Inline dates.
 	b.WriteString(labelStyle.Render("Created: "))
-	b.WriteString(valueStyle.Render(m.ticket.Dates.Created.Format("Jan 02, 2006 15:04")))
+	b.WriteString(valueStyle.Render(m.ticket.Created.Format("Jan 02, 2006 15:04")))
 	b.WriteString("  ")
 	b.WriteString(labelStyle.Render("Updated: "))
-	b.WriteString(valueStyle.Render(m.ticket.Dates.Updated.Format("Jan 02, 2006 15:04")))
+	b.WriteString(valueStyle.Render(m.ticket.Updated.Format("Jan 02, 2006 15:04")))
 
 	// Body.
 	if m.ticket.Body != "" {
 		b.WriteString("\n\n")
 		b.WriteString(m.renderMarkdown(m.ticket.Body))
-	}
-
-	// Session.
-	if m.ticket.Session != nil {
-		session := m.ticket.Session
-		b.WriteString("\n\n")
-		b.WriteString(sectionHeaderStyle.Render("─── Session ───"))
-		b.WriteString("\n")
-		b.WriteString(labelStyle.Render("Agent: "))
-		b.WriteString(valueStyle.Render(session.Agent))
-		b.WriteString("  ")
-		b.WriteString(labelStyle.Render("Status: "))
-		if session.EndedAt == nil {
-			b.WriteString(statusStyle("progress").Render("ACTIVE"))
-		} else {
-			b.WriteString(statusStyle("done").Render("ENDED"))
-		}
 	}
 
 	return b.String()
@@ -1508,14 +1483,19 @@ func (m Model) renderMarkdown(content string) string {
 	return strings.TrimSpace(rendered)
 }
 
-// loadTicket returns a command to load the ticket.
+// loadTicket returns a command to load the ticket and sessions.
 func (m Model) loadTicket() tea.Cmd {
 	return func() tea.Msg {
 		ticket, err := m.client.FindTicketByID(m.ticketID)
 		if err != nil {
 			return TicketErrorMsg{Err: err}
 		}
-		return TicketLoadedMsg{Ticket: ticket}
+		// Fetch sessions (non-fatal if it fails)
+		var sessions []sdk.SessionListItem
+		if resp, err := m.client.ListSessions(); err == nil {
+			sessions = resp.Sessions
+		}
+		return TicketLoadedMsg{Ticket: ticket, Sessions: sessions}
 	}
 }
 

@@ -84,18 +84,23 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Create session manager and docs store manager
+	sessionManager := api.NewSessionManager(logger)
+	docsStoreManager := api.NewDocsStoreManager(logger, bus)
+
 	// Create notification dispatcher
 	var dispatcher *notifications.Dispatcher
 	if cfg.Notifications.Channels.Local.Enabled {
 		localCh := notifications.NewLocalChannel(logger)
 		if localCh.Available() {
 			dispatcher = notifications.NewDispatcher(notifications.DispatcherConfig{
-				Config:       cfg.Notifications,
-				Channels:     []notifications.Channel{localCh},
-				StoreManager: storeManager,
-				TmuxManager:  tmuxManager,
-				Bus:          bus,
-				Logger:       logger,
+				Config:         cfg.Notifications,
+				Channels:       []notifications.Channel{localCh},
+				StoreManager:   storeManager,
+				SessionManager: sessionManager,
+				TmuxManager:    tmuxManager,
+				Bus:            bus,
+				Logger:         logger,
 			})
 			for _, project := range cfg.Projects {
 				dispatcher.Subscribe(project.Path)
@@ -106,13 +111,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create docs store manager
-	docsStoreManager := api.NewDocsStoreManager(logger, bus)
-
 	// Build dependencies
 	deps := &api.Dependencies{
 		StoreManager:     storeManager,
 		DocsStoreManager: docsStoreManager,
+		SessionManager:   sessionManager,
 		TmuxManager:      tmuxManager,
 		Bus:              bus,
 		Logger:           logger,

@@ -47,7 +47,7 @@ func init() {
 }
 
 func ticketListAll(client *sdk.Client, query string) {
-	resp, err := client.ListAllTickets(query, nil)
+	resp, err := client.ListAllTickets(query, nil, "")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -95,7 +95,7 @@ func ticketListAll(client *sdk.Client, query string) {
 }
 
 func ticketListByStatus(client *sdk.Client, status, query string) {
-	resp, err := client.ListTicketsByStatus(status, query, nil)
+	resp, err := client.ListTicketsByStatus(status, query, nil, "")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -122,7 +122,7 @@ func ticketListByStatus(client *sdk.Client, status, query string) {
 }
 
 func ticketPrintTable(w *tabwriter.Writer, tickets []sdk.TicketSummary) {
-	_, _ = fmt.Fprintln(w, "ID\tTITLE\tCREATED\tACTIVE")
+	_, _ = fmt.Fprintln(w, "ID\tTYPE\tTITLE\tCREATED\tACTIVE")
 	for _, t := range tickets {
 		shortID := t.ID
 		if len(shortID) > 8 {
@@ -136,7 +136,7 @@ func ticketPrintTable(w *tabwriter.Writer, tickets []sdk.TicketSummary) {
 		if t.HasActiveSession {
 			active = "yes"
 		}
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", shortID, title, ticketFormatTime(t.Created), active)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", shortID, t.Type, title, ticketFormatTime(t.Created), active)
 	}
 }
 

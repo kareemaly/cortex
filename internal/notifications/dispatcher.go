@@ -11,6 +11,8 @@ import (
 	"github.com/kareemaly/cortex/internal/daemon/api"
 	"github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/events"
+	"github.com/kareemaly/cortex/internal/session"
+	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 )
@@ -36,22 +38,24 @@ type NotifiableEvent struct {
 
 // DispatcherConfig holds the configuration for creating a Dispatcher.
 type DispatcherConfig struct {
-	Config       config.NotificationsConfig
-	Channels     []Channel
-	StoreManager *api.StoreManager
-	TmuxManager  *tmux.Manager
-	Bus          *events.Bus
-	Logger       *slog.Logger
+	Config         config.NotificationsConfig
+	Channels       []Channel
+	StoreManager   *api.StoreManager
+	SessionManager *api.SessionManager
+	TmuxManager    *tmux.Manager
+	Bus            *events.Bus
+	Logger         *slog.Logger
 }
 
 // Dispatcher subscribes to the event bus and routes notifications to channels.
 type Dispatcher struct {
-	config       config.NotificationsConfig
-	channels     []Channel
-	storeManager *api.StoreManager
-	tmuxManager  *tmux.Manager
-	bus          *events.Bus
-	logger       *slog.Logger
+	config         config.NotificationsConfig
+	channels       []Channel
+	storeManager   *api.StoreManager
+	sessionManager *api.SessionManager
+	tmuxManager    *tmux.Manager
+	bus            *events.Bus
+	logger         *slog.Logger
 
 	// Subscription management
 	subsMu        sync.Mutex
@@ -79,6 +83,7 @@ func NewDispatcher(cfg DispatcherConfig) *Dispatcher {
 		config:           cfg.Config,
 		channels:         cfg.Channels,
 		storeManager:     cfg.StoreManager,
+		sessionManager:   cfg.SessionManager,
 		tmuxManager:      cfg.TmuxManager,
 		bus:              cfg.Bus,
 		logger:           cfg.Logger,
@@ -207,7 +212,7 @@ func (d *Dispatcher) classifyEvent(event events.Event) *NotifiableEvent {
 
 // classifySessionStatus checks if a session status event is notifiable.
 func (d *Dispatcher) classifySessionStatus(event events.Event) *NotifiableEvent {
-	// Fetch ticket to get current status
+	// Fetch ticket to get title
 	store, err := d.storeManager.GetStore(event.ProjectPath)
 	if err != nil {
 		d.logger.Debug("failed to get store", "error", err)
@@ -220,25 +225,33 @@ func (d *Dispatcher) classifySessionStatus(event events.Event) *NotifiableEvent 
 		return nil
 	}
 
-	if t.Session == nil || t.Session.CurrentStatus == nil {
+	// Look up session from session manager
+	var sess *session.Session
+	if d.sessionManager != nil {
+		sessStore := d.sessionManager.GetStore(event.ProjectPath)
+		shortID := storage.ShortID(event.TicketID)
+		sess, _ = sessStore.Get(shortID)
+	}
+
+	if sess == nil {
 		return nil
 	}
 
-	status := t.Session.CurrentStatus.Status
+	status := sess.Status
 
 	// Clear attention if agent becomes active
-	if status == ticket.AgentStatusInProgress || status == ticket.AgentStatusStarting {
+	if status == session.AgentStatusInProgress || status == session.AgentStatusStarting {
 		d.clearAttention(event.ProjectPath, event.TicketID)
 		return nil
 	}
 
 	var eventType NotifiableEventType
 	switch status {
-	case ticket.AgentStatusWaitingPermission:
+	case session.AgentStatusWaitingPermission:
 		eventType = EventAgentWaitingPermission
-	case ticket.AgentStatusIdle:
+	case session.AgentStatusIdle:
 		eventType = EventAgentIdle
-	case ticket.AgentStatusError:
+	case session.AgentStatusError:
 		eventType = EventAgentError
 	default:
 		return nil
@@ -249,7 +262,7 @@ func (d *Dispatcher) classifySessionStatus(event events.Event) *NotifiableEvent 
 		ProjectPath: event.ProjectPath,
 		TicketID:    event.TicketID,
 		TicketTitle: t.Title,
-		TmuxWindow:  t.Session.TmuxWindow,
+		TmuxWindow:  sess.TmuxWindow,
 	}
 }
 
@@ -275,9 +288,15 @@ func (d *Dispatcher) classifyCommentAdded(event events.Event) *NotifiableEvent {
 		return nil
 	}
 
+	// Look up session for tmux window
 	var tmuxWindow string
-	if t.Session != nil {
-		tmuxWindow = t.Session.TmuxWindow
+	if d.sessionManager != nil {
+		sessStore := d.sessionManager.GetStore(event.ProjectPath)
+		shortID := storage.ShortID(event.TicketID)
+		sess, _ := sessStore.Get(shortID)
+		if sess != nil {
+			tmuxWindow = sess.TmuxWindow
+		}
 	}
 
 	return &NotifiableEvent{

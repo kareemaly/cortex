@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/kareemaly/cortex/internal/session"
+	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -44,21 +46,22 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate status is a known agent status
-	agentStatus := ticket.AgentStatus(req.Status)
+	agentStatus := session.AgentStatus(req.Status)
 	if !validAgentStatus(agentStatus) {
 		writeError(w, http.StatusBadRequest, "invalid_status", "invalid agent status")
 		return
 	}
 
 	projectPath := GetProjectPath(r.Context())
+
+	// Verify ticket exists
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
 		return
 	}
 
-	// Get ticket to verify it exists and has an active session
-	t, _, err := store.Get(req.TicketID)
+	_, _, err = store.Get(req.TicketID)
 	if err != nil {
 		if ticket.IsNotFound(err) {
 			writeError(w, http.StatusNotFound, "ticket_not_found", "ticket not found")
@@ -68,13 +71,17 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if t.Session == nil || t.Session.EndedAt != nil {
+	// Check for active session via session manager
+	sessStore := h.deps.SessionManager.GetStore(projectPath)
+	shortID := storage.ShortID(req.TicketID)
+	sess, _ := sessStore.Get(shortID)
+	if sess == nil {
 		writeError(w, http.StatusBadRequest, "no_active_session", "ticket does not have an active session")
 		return
 	}
 
 	// Update the session status
-	if err := store.UpdateSessionStatus(req.TicketID, agentStatus, req.Tool, req.Work); err != nil {
+	if err := sessStore.UpdateStatus(shortID, agentStatus, req.Tool); err != nil {
 		writeError(w, http.StatusInternalServerError, "update_error", err.Error())
 		return
 	}
@@ -83,13 +90,13 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // validAgentStatus checks if the status is a known agent status.
-func validAgentStatus(status ticket.AgentStatus) bool {
+func validAgentStatus(status session.AgentStatus) bool {
 	switch status {
-	case ticket.AgentStatusStarting,
-		ticket.AgentStatusInProgress,
-		ticket.AgentStatusIdle,
-		ticket.AgentStatusWaitingPermission,
-		ticket.AgentStatusError:
+	case session.AgentStatusStarting,
+		session.AgentStatusInProgress,
+		session.AgentStatusIdle,
+		session.AgentStatusWaitingPermission,
+		session.AgentStatusError:
 		return true
 	default:
 		return false

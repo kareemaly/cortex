@@ -39,22 +39,34 @@ Single `cortexd` daemon serves all projects. **All clients communicate exclusive
 
 Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
 
+## Storage Format
+
+Tickets and docs use **YAML frontmatter + markdown body** stored as `index.md` within a directory-per-entity:
+
+- **Tickets**: `tickets/{status}/{slug}-{shortid}/index.md`
+- **Docs**: `docs/{category}/{slug}-{shortid}/index.md`
+- **Comments**: `comment-{shortid}.md` files within the entity directory
+
+Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurable via `tickets.path` and `docs.path` in `.cortex/cortex.yaml`). Sessions are ephemeral and stored in `.cortex/sessions.json`.
+
 ## Critical Implementation Notes
 
 - **HTTP-only communication**: All clients (CLI, TUI, MCP) communicate via HTTP to daemon. No direct filesystem access to ticket store.
 - **Project context**: Always use `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
 - **StoreManager**: Single source of truth for ticket state. Located in `internal/daemon/api/store_manager.go`.
 - **DocsStoreManager**: Manages doc stores per project. Located in `internal/daemon/api/docs_store_manager.go`.
-- **Spawn state detection**: Four states (normal/active/orphaned/ended) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
+- **SessionManager**: Manages ephemeral session stores per project. Located in `internal/daemon/api/session_manager.go`.
+- **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 
 ## Anti-Patterns
 
 | Don't | Do Instead | Why |
 |-------|------------|-----|
-| Access ticket JSON files directly | Use SDK client (`internal/cli/sdk/client.go`) | Daemon holds in-memory state with locks |
+| Access ticket/doc files directly | Use SDK client (`internal/cli/sdk/client.go`) | Daemon holds in-memory state with locks |
 | Spawn tmux sessions directly | Use `SpawnSession()` via SDK/API | Bypasses session tracking and MCP binding |
 | Import `internal/ticket` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
 | Import `internal/core/spawn` in CLI | Call `/tickets/{status}/{id}/spawn` | CLI should not import daemon internals |
+| Access `.cortex/sessions.json` directly | Use SessionManager API | Bypasses locking and event notifications |
 
 ## Debugging
 
@@ -84,10 +96,14 @@ Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (
 | TUI components | `internal/cli/tui/` |
 | Install/init logic | `internal/install/` |
 | Agent defaults | `internal/install/defaults/` (`claude-code`, `copilot`) |
+| Shared storage | `internal/storage/` |
+| Session store | `internal/session/` |
+| Response types | `internal/types/` |
+| Notifications | `internal/notifications/` |
 
 ## Configuration
 
-**Project** (`.cortex/cortex.yaml`): Agent type (`claude`, `opencode`, `copilot`), agent args, git worktrees, lifecycle hooks, docs path. See `internal/project/config/config.go` for schema.
+**Project** (`.cortex/cortex.yaml`): Agent type (`claude`, `opencode`, `copilot`), agent args, git worktrees, lifecycle hooks, `tickets.path`, `docs.path`. Ticket and doc paths default to `{projectRoot}/tickets` and `{projectRoot}/docs`. See `internal/project/config/config.go` for schema.
 
 **Global** (`~/.cortex/settings.yaml`): Daemon port, log level, project registry. See `internal/daemon/config/config.go` for schema.
 
@@ -128,10 +144,10 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 | Tool | Description |
 |------|-------------|
 | `listProjects` | List all registered projects (for cross-project operations) |
-| `listTickets` | List tickets by status (backlog/progress/review/done), optional search query and due_before filter |
+| `listTickets` | List tickets by status (backlog/progress/review/done), optional search query, tag, and due_before filter |
 | `readTicket` | Read full ticket details by ID |
-| `createTicket` | Create ticket with title, body, type, and optional due_date |
-| `updateTicket` | Update ticket title and/or body |
+| `createTicket` | Create ticket with title, body, type, optional due_date, references, and tags |
+| `updateTicket` | Update ticket title, body, references, and/or tags |
 | `deleteTicket` | Delete ticket by ID (current project only) |
 | `moveTicket` | Move ticket to different status |
 | `updateDueDate` | Set or update ticket due date |
@@ -145,6 +161,8 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 | `deleteDoc` | Delete a doc by ID (current project only) |
 | `moveDoc` | Move a doc to a different category |
 | `listDocs` | List docs with optional category, tag, and search filters |
+| `addDocComment` | Add a comment to a documentation file |
+| `listSessions` | List all active agent sessions |
 
 **Cross-project support**: Most architect tools accept an optional `project_path` parameter to operate on a different registered project. Use `listProjects` to discover available projects. Exception: `deleteTicket` is restricted to the current project for safety.
 
@@ -166,7 +184,7 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 4. Agent calls `requestReview` when done → ticket moves to review
 5. Architect reviews and approves → triggers lifecycle hooks, moves to done
 
-Spawn orchestration handles state detection (normal/active/orphaned/ended) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
+Spawn orchestration handles state detection (normal/active/orphaned) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 
 ## Lifecycle Hooks
 

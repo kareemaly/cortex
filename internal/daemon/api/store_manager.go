@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/kareemaly/cortex/internal/events"
+	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -56,9 +57,14 @@ func (m *StoreManager) GetStore(projectPath string) (*ticket.Store, error) {
 		return nil, fmt.Errorf("project path not found: %w", err)
 	}
 
-	// Create store at {projectPath}/.cortex/tickets/
-	ticketsDir := filepath.Join(projectPath, ".cortex", "tickets")
-	store, err := ticket.NewStore(ticketsDir, m.bus, projectPath)
+	// Load project config to resolve tickets path
+	cfg, err := projectconfig.Load(projectPath)
+	if err != nil {
+		cfg = projectconfig.DefaultConfig()
+	}
+
+	ticketsDir := cfg.TicketsPath(projectPath)
+	store, err = ticket.NewStore(ticketsDir, m.bus, projectPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ticket store: %w", err)
 	}

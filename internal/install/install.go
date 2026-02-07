@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/kareemaly/cortex/internal/daemon/config"
+	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 )
 
 // Options configures the installation.
@@ -152,18 +153,44 @@ func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
 	}
 
 	cortexDir := filepath.Join(absPath, ".cortex")
-	ticketsDir := filepath.Join(cortexDir, "tickets")
-	backlogDir := filepath.Join(ticketsDir, "backlog")
-	progressDir := filepath.Join(ticketsDir, "progress")
-	reviewDir := filepath.Join(ticketsDir, "review")
-	doneDir := filepath.Join(ticketsDir, "done")
 	configPath := filepath.Join(cortexDir, "cortex.yaml")
 
 	var items []SetupItem
 
-	// Create directories (no prompts directory - inherited from base)
-	dirs := []string{cortexDir, ticketsDir, backlogDir, progressDir, reviewDir, doneDir}
-	for _, dir := range dirs {
+	// Create .cortex/ directory first
+	item := ensureDir(cortexDir)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	// Create minimal config file that extends the claude-code defaults
+	// Config must be written before resolving paths so Load() can read it.
+	configContent := `name: ` + name + `
+extend: ~/.cortex/defaults/claude-code
+`
+	item = ensureConfigFile(configPath, configContent, force)
+	items = append(items, item)
+	if item.Error != nil {
+		return items, item.Error
+	}
+
+	// Load config to resolve tickets/docs paths (respects custom paths from cortex.yaml)
+	cfg, err := projectconfig.Load(absPath)
+	if err != nil {
+		cfg = projectconfig.DefaultConfig()
+	}
+
+	// Create tickets directory with status subdirs at config-resolved path
+	ticketsDir := cfg.TicketsPath(absPath)
+	ticketDirs := []string{
+		ticketsDir,
+		filepath.Join(ticketsDir, "backlog"),
+		filepath.Join(ticketsDir, "progress"),
+		filepath.Join(ticketsDir, "review"),
+		filepath.Join(ticketsDir, "done"),
+	}
+	for _, dir := range ticketDirs {
 		item := ensureDir(dir)
 		items = append(items, item)
 		if item.Error != nil {
@@ -171,11 +198,9 @@ func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
 		}
 	}
 
-	// Create minimal config file that extends the claude-code defaults
-	configContent := `name: ` + name + `
-extend: ~/.cortex/defaults/claude-code
-`
-	item := ensureConfigFile(configPath, configContent, force)
+	// Create docs directory at config-resolved path
+	docsDir := cfg.DocsPath(absPath)
+	item = ensureDir(docsDir)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error

@@ -1,7 +1,7 @@
 package spawn
 
 import (
-	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/session"
 )
 
 // SessionState represents the state of a ticket's agent session.
@@ -14,14 +14,12 @@ const (
 	StateActive SessionState = "active"
 	// StateOrphaned indicates a session exists but the tmux window is gone.
 	StateOrphaned SessionState = "orphaned"
-	// StateEnded indicates the session has been explicitly ended.
-	StateEnded SessionState = "ended"
 )
 
 // StateInfo contains information about a ticket's session state.
 type StateInfo struct {
 	State        SessionState
-	Session      *ticket.Session
+	Session      *session.Session
 	WindowExists bool
 }
 
@@ -31,26 +29,21 @@ type TmuxChecker interface {
 }
 
 // DetectTicketState determines the current state of a ticket's session.
-func DetectTicketState(t *ticket.Ticket, tmuxSession string, tmuxChecker TmuxChecker) (*StateInfo, error) {
+// If sess is nil, returns StateNormal.
+func DetectTicketState(sess *session.Session, tmuxSession string, tmuxChecker TmuxChecker) (*StateInfo, error) {
 	info := &StateInfo{
 		State:   StateNormal,
-		Session: t.Session,
+		Session: sess,
 	}
 
 	// No session - normal state
-	if t.Session == nil {
-		return info, nil
-	}
-
-	// Session ended explicitly
-	if t.Session.EndedAt != nil {
-		info.State = StateEnded
+	if sess == nil {
 		return info, nil
 	}
 
 	// Session exists - check if window is still running
-	if tmuxChecker != nil && tmuxSession != "" && t.Session.TmuxWindow != "" {
-		exists, err := tmuxChecker.WindowExists(tmuxSession, t.Session.TmuxWindow)
+	if tmuxChecker != nil && tmuxSession != "" && sess.TmuxWindow != "" {
+		exists, err := tmuxChecker.WindowExists(tmuxSession, sess.TmuxWindow)
 		if err != nil {
 			return nil, &TmuxError{Operation: "check window", Cause: err}
 		}
@@ -62,7 +55,7 @@ func DetectTicketState(t *ticket.Ticket, tmuxSession string, tmuxChecker TmuxChe
 			info.State = StateOrphaned
 		}
 	} else {
-		// Can't check tmux - assume active if session hasn't ended
+		// Can't check tmux - assume active if session exists
 		info.State = StateActive
 		info.WindowExists = true
 	}
@@ -72,15 +65,15 @@ func DetectTicketState(t *ticket.Ticket, tmuxSession string, tmuxChecker TmuxChe
 
 // CanSpawn returns true if a new session can be spawned based on the state.
 func (s *StateInfo) CanSpawn() bool {
-	return s.State == StateNormal || s.State == StateOrphaned || s.State == StateEnded
+	return s.State == StateNormal || s.State == StateOrphaned
 }
 
 // CanResume returns true if an existing session can be resumed.
 func (s *StateInfo) CanResume() bool {
-	return s.State == StateOrphaned && s.Session != nil && s.Session.ID != ""
+	return s.State == StateOrphaned && s.Session != nil
 }
 
 // NeedsCleanup returns true if the session should be cleaned up before spawning.
 func (s *StateInfo) NeedsCleanup() bool {
-	return s.State == StateOrphaned || s.State == StateEnded
+	return s.State == StateOrphaned
 }

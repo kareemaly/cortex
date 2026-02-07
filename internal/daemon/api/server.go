@@ -71,6 +71,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Put("/{id}", docHandlers.Update)
 			r.Delete("/{id}", docHandlers.Delete)
 			r.Post("/{id}/move", docHandlers.Move)
+			r.Post("/{id}/comments", docHandlers.AddComment)
 		})
 
 		// Architect routes
@@ -84,6 +85,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		// Session routes
 		sessionHandlers := NewSessionHandlers(deps)
 		r.Route("/sessions", func(r chi.Router) {
+			r.Get("/", sessionHandlers.List)
 			r.Delete("/{id}", sessionHandlers.Kill)
 			r.Post("/{id}/approve", sessionHandlers.Approve)
 		})

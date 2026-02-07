@@ -67,9 +67,7 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 // Re-export shared types for SDK consumers
 type (
 	ErrorResponse            = types.ErrorResponse
-	DatesResponse            = types.DatesResponse
 	CommentResponse          = types.CommentResponse
-	StatusEntryResponse      = types.StatusEntryResponse
 	SessionResponse          = types.SessionResponse
 	TicketResponse           = types.TicketResponse
 	TicketSummary            = types.TicketSummary
@@ -153,7 +151,8 @@ func (c *Client) HealthWithVersion() (*HealthResponse, error) {
 // ListAllTickets returns all tickets grouped by status.
 // If query is non-empty, filters tickets by title or body (case-insensitive).
 // If dueBefore is non-nil, filters tickets with due date before the specified time.
-func (c *Client) ListAllTickets(query string, dueBefore *time.Time) (*ListAllTicketsResponse, error) {
+// If tag is non-empty, filters tickets that have the specified tag.
+func (c *Client) ListAllTickets(query string, dueBefore *time.Time, tag string) (*ListAllTicketsResponse, error) {
 	url := c.baseURL + "/tickets"
 	params := []string{}
 	if query != "" {
@@ -161,6 +160,9 @@ func (c *Client) ListAllTickets(query string, dueBefore *time.Time) (*ListAllTic
 	}
 	if dueBefore != nil {
 		params = append(params, "due_before="+dueBefore.Format(time.RFC3339))
+	}
+	if tag != "" {
+		params = append(params, "tag="+tag)
 	}
 	if len(params) > 0 {
 		url += "?" + strings.Join(params, "&")
@@ -192,7 +194,8 @@ func (c *Client) ListAllTickets(query string, dueBefore *time.Time) (*ListAllTic
 // ListTicketsByStatus returns tickets with a specific status.
 // If query is non-empty, filters tickets by title or body (case-insensitive).
 // If dueBefore is non-nil, filters tickets with due date before the specified time.
-func (c *Client) ListTicketsByStatus(status, query string, dueBefore *time.Time) (*ListTicketsResponse, error) {
+// If tag is non-empty, filters tickets that have the specified tag.
+func (c *Client) ListTicketsByStatus(status, query string, dueBefore *time.Time, tag string) (*ListTicketsResponse, error) {
 	url := c.baseURL + "/tickets/" + status
 	params := []string{}
 	if query != "" {
@@ -200,6 +203,9 @@ func (c *Client) ListTicketsByStatus(status, query string, dueBefore *time.Time)
 	}
 	if dueBefore != nil {
 		params = append(params, "due_before="+dueBefore.Format(time.RFC3339))
+	}
+	if tag != "" {
+		params = append(params, "tag="+tag)
 	}
 	if len(params) > 0 {
 		url += "?" + strings.Join(params, "&")
@@ -254,7 +260,7 @@ func (c *Client) GetTicket(status, id string) (*TicketResponse, error) {
 }
 
 // CreateTicket creates a new ticket.
-func (c *Client) CreateTicket(title, body, ticketType string, dueDate *time.Time, references []string) (*TicketResponse, error) {
+func (c *Client) CreateTicket(title, body, ticketType string, dueDate *time.Time, references, tags []string) (*TicketResponse, error) {
 	reqBody := map[string]any{"title": title, "body": body}
 	if ticketType != "" {
 		reqBody["type"] = ticketType
@@ -264,6 +270,9 @@ func (c *Client) CreateTicket(title, body, ticketType string, dueDate *time.Time
 	}
 	if references != nil {
 		reqBody["references"] = references
+	}
+	if tags != nil {
+		reqBody["tags"] = tags
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
@@ -422,7 +431,7 @@ func (c *Client) ApproveSession(id string) error {
 
 // FindTicketByID searches for a ticket by ID across all statuses.
 func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
-	all, err := c.ListAllTickets("", nil)
+	all, err := c.ListAllTickets("", nil, "")
 	if err != nil {
 		return nil, err
 	}
@@ -539,8 +548,8 @@ type ConcludeSessionResponse struct {
 	Message  string `json:"message"`
 }
 
-// UpdateTicket updates a ticket's title, body, and/or references by ID (status-agnostic).
-func (c *Client) UpdateTicket(id string, title, body *string, references *[]string) (*TicketResponse, error) {
+// UpdateTicket updates a ticket's title, body, references, and/or tags by ID (status-agnostic).
+func (c *Client) UpdateTicket(id string, title, body *string, references, tags *[]string) (*TicketResponse, error) {
 	// Discover current status
 	current, err := c.GetTicketByID(id)
 	if err != nil {
@@ -556,6 +565,9 @@ func (c *Client) UpdateTicket(id string, title, body *string, references *[]stri
 	}
 	if references != nil {
 		reqBody["references"] = *references
+	}
+	if tags != nil {
+		reqBody["tags"] = *tags
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
@@ -733,8 +745,12 @@ func (c *Client) GetTicketByID(id string) (*TicketResponse, error) {
 }
 
 // AddComment adds a comment to a ticket.
-func (c *Client) AddComment(ticketID, commentType, content string) (*AddCommentResponse, error) {
+// If author is non-empty, it's sent explicitly; otherwise the API resolves from the session.
+func (c *Client) AddComment(ticketID, commentType, content, author string) (*AddCommentResponse, error) {
 	reqBody := map[string]string{"type": commentType, "content": content}
+	if author != "" {
+		reqBody["author"] = author
+	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)
@@ -1253,4 +1269,82 @@ func (c *Client) ListDocs(category, tag, query string) (*ListDocsResponse, error
 	}
 
 	return &listResult, nil
+}
+
+// AddDocComment adds a comment to a doc.
+func (c *Client) AddDocComment(docID, commentType, content, author string) (*AddCommentResponse, error) {
+	reqBody := map[string]string{"type": commentType, "content": content}
+	if author != "" {
+		reqBody["author"] = author
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/docs/"+docID+"/comments", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result AddCommentResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// SessionListItem represents a session in the list response.
+type SessionListItem struct {
+	SessionID   string    `json:"session_id"`
+	TicketID    string    `json:"ticket_id"`
+	TicketTitle string    `json:"ticket_title"`
+	Agent       string    `json:"agent"`
+	TmuxWindow  string    `json:"tmux_window"`
+	StartedAt   time.Time `json:"started_at"`
+	Status      string    `json:"status"`
+	Tool        *string   `json:"tool,omitempty"`
+}
+
+// ListSessionsResponse is the response from GET /sessions.
+type ListSessionsResponse struct {
+	Sessions []SessionListItem `json:"sessions"`
+	Total    int               `json:"total"`
+}
+
+// ListSessions returns all active sessions for the project.
+func (c *Client) ListSessions() (*ListSessionsResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/sessions", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ListSessionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
 }

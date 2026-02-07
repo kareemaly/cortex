@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
 )
@@ -11,9 +12,7 @@ import (
 // Re-export shared types for API consumers
 type (
 	ErrorResponse            = types.ErrorResponse
-	DatesResponse            = types.DatesResponse
 	CommentResponse          = types.CommentResponse
-	StatusEntryResponse      = types.StatusEntryResponse
 	SessionResponse          = types.SessionResponse
 	TicketResponse           = types.TicketResponse
 	TicketSummary            = types.TicketSummary
@@ -34,6 +33,7 @@ type CreateTicketRequest struct {
 	Type       string   `json:"type,omitempty"`
 	DueDate    *string  `json:"due_date,omitempty"`
 	References []string `json:"references,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
 }
 
 // UpdateTicketRequest is the request body for updating a ticket.
@@ -41,6 +41,7 @@ type UpdateTicketRequest struct {
 	Title      *string   `json:"title,omitempty"`
 	Body       *string   `json:"body,omitempty"`
 	References *[]string `json:"references,omitempty"`
+	Tags       *[]string `json:"tags,omitempty"`
 }
 
 // MoveTicketRequest is the request body for moving a ticket.
@@ -63,7 +64,15 @@ type SpawnResponse struct {
 type AddCommentRequest struct {
 	Type    string                       `json:"type"`
 	Content string                       `json:"content"`
+	Author  string                       `json:"author,omitempty"`
 	Action  *types.CommentActionResponse `json:"action,omitempty"`
+}
+
+// AddDocCommentRequest is the request body for adding a comment to a doc.
+type AddDocCommentRequest struct {
+	Type    string `json:"type"`
+	Content string `json:"content"`
+	Author  string `json:"author,omitempty"`
 }
 
 // AddCommentResponse is the response for adding a comment.
@@ -132,12 +141,17 @@ type MoveDocRequest struct {
 	Category string `json:"category"`
 }
 
-// filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
-// Query is matched case-insensitively against title or body.
-// If dueBefore is non-nil, only tickets with due date before the specified time are included.
-// If tmuxSession and checker are provided, detects orphaned sessions.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker) []TicketSummary {
+// filterSummaryList converts tickets to summaries with optional query, dueBefore, and tag filters.
+// Looks up session from session manager for each ticket.
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tag string, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string) []TicketSummary {
 	var summaries []TicketSummary
+
+	// Get the session store for this project
+	var sessStore *session.Store
+	if sessionMgr != nil {
+		sessStore = sessionMgr.GetStore(projectPath)
+	}
+
 	for _, t := range tickets {
 		// Apply query filter if specified
 		if query != "" &&
@@ -147,11 +161,32 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 		}
 		// Apply dueBefore filter if specified
 		if dueBefore != nil {
-			if t.Dates.DueDate == nil || !t.Dates.DueDate.Before(*dueBefore) {
+			if t.Due == nil || !t.Due.Before(*dueBefore) {
 				continue
 			}
 		}
-		summary := types.ToTicketSummary(t, status, true, tmuxSession, checker)
+		// Apply tag filter if specified (case-insensitive)
+		if tag != "" {
+			found := false
+			lowerTag := strings.ToLower(tag)
+			for _, tt := range t.Tags {
+				if strings.ToLower(tt) == lowerTag {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		// Look up session for this ticket
+		var sess *session.Session
+		if sessStore != nil {
+			sess, _ = sessStore.GetByTicketID(t.ID)
+		}
+
+		summary := types.ToTicketSummary(t, status, sess, tmuxSession, checker)
 		summaries = append(summaries, summary)
 	}
 	if summaries == nil {

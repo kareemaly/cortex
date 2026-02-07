@@ -7,12 +7,13 @@ import (
 	"path/filepath"
 
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
-// OrchestrateStore extends StoreInterface with Move (needed for post-spawn ticket movement).
+// OrchestrateStore defines the ticket store operations for orchestration.
 type OrchestrateStore interface {
-	StoreInterface
+	Get(id string) (*ticket.Ticket, ticket.Status, error)
 	Move(id string, to ticket.Status) error
 }
 
@@ -50,10 +51,11 @@ type OrchestrateResult struct {
 
 // OrchestrateDeps contains the external dependencies for orchestration.
 type OrchestrateDeps struct {
-	Store       OrchestrateStore
-	TmuxManager TmuxManagerInterface
-	CortexdPath string       // optional: empty means auto-discover via binpath
-	Logger      *slog.Logger // optional
+	Store        OrchestrateStore
+	SessionStore SessionStoreInterface
+	TmuxManager  TmuxManagerInterface
+	CortexdPath  string       // optional: empty means auto-discover via binpath
+	Logger       *slog.Logger // optional
 }
 
 // Orchestrate is the single source of truth for spawning ticket agent sessions.
@@ -61,11 +63,11 @@ type OrchestrateDeps struct {
 //
 // State/mode matrix:
 //
-//	| Mode    | Normal      | Active         | Orphaned    | Ended       |
-//	|---------|-------------|----------------|-------------|-------------|
-//	| normal  | Spawn new   | AlreadyActive  | StateError  | Spawn new   |
-//	| resume  | StateError  | StateError     | Resume      | StateError  |
-//	| fresh   | StateError  | StateError     | Fresh       | Fresh       |
+//	| Mode    | Normal      | Active         | Orphaned    |
+//	|---------|-------------|----------------|-------------|
+//	| normal  | Spawn new   | AlreadyActive  | StateError  |
+//	| resume  | StateError  | StateError     | Resume      |
+//	| fresh   | StateError  | StateError     | Fresh       |
 func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDeps) (*OrchestrateResult, error) {
 	// 1. Validate mode
 	if req.Mode == "" {
@@ -125,18 +127,25 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 		ticketsDir = filepath.Join(req.ProjectPath, ".cortex", "tickets")
 	}
 
-	// 7. Detect state
-	stateInfo, err := DetectTicketState(t, tmuxSession, deps.TmuxManager)
+	// 7. Look up existing session
+	var existingSess *session.Session
+	if deps.SessionStore != nil {
+		existingSess, _ = deps.SessionStore.GetByTicketID(t.ID)
+	}
+
+	// 8. Detect state
+	stateInfo, err := DetectTicketState(existingSess, tmuxSession, deps.TmuxManager)
 	if err != nil {
 		return nil, err
 	}
 
 	// 9. State/mode matrix
 	spawner := NewSpawner(Dependencies{
-		Store:       deps.Store,
-		TmuxManager: deps.TmuxManager,
-		CortexdPath: deps.CortexdPath,
-		Logger:      deps.Logger,
+		Store:        deps.Store,
+		SessionStore: deps.SessionStore,
+		TmuxManager:  deps.TmuxManager,
+		CortexdPath:  deps.CortexdPath,
+		Logger:       deps.Logger,
 	})
 
 	useWorktree := projectCfg.Git.Worktrees
@@ -196,11 +205,11 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				Message:  "session was orphaned (tmux window closed). Use mode='resume' to continue or mode='fresh' to start over",
 			}
 		case "resume":
-			if stateInfo.Session == nil || stateInfo.Session.ID == "" {
+			if stateInfo.Session == nil {
 				return nil, &StateError{
 					TicketID: req.TicketID,
 					State:    StateOrphaned,
-					Message:  "cannot resume - no session ID stored",
+					Message:  "cannot resume - no session stored",
 				}
 			}
 			result, err = spawner.Resume(ctx, ResumeRequest{
@@ -209,24 +218,11 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				TmuxSession: tmuxSession,
 				ProjectPath: req.ProjectPath,
 				TicketsDir:  ticketsDir,
-				SessionID:   stateInfo.Session.ID,
 				WindowName:  stateInfo.Session.TmuxWindow,
 				TicketID:    req.TicketID,
 				AgentArgs:   ticketRoleCfg.Args,
 			})
 			outcome = OutcomeResumed
-		case "fresh":
-			result, err = spawner.Fresh(ctx, buildSpawnReq())
-			outcome = OutcomeSpawned
-		}
-
-	case StateEnded:
-		switch req.Mode {
-		case "normal":
-			result, err = spawner.Spawn(ctx, buildSpawnReq())
-			outcome = OutcomeSpawned
-		case "resume":
-			return nil, &StateError{TicketID: req.TicketID, State: StateEnded, Message: "cannot resume - session has ended"}
 		case "fresh":
 			result, err = spawner.Fresh(ctx, buildSpawnReq())
 			outcome = OutcomeSpawned
