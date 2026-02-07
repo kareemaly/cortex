@@ -14,48 +14,13 @@ type ProjectEntry struct {
 	Title string `yaml:"title,omitempty"`
 }
 
-// LocalChannelConfig configures local desktop notifications.
-type LocalChannelConfig struct {
-	Enabled bool `yaml:"enabled"`
-	Sound   bool `yaml:"sound"`
-}
-
-// ChannelsConfig configures notification delivery channels.
-type ChannelsConfig struct {
-	Local LocalChannelConfig `yaml:"local"`
-}
-
-// BehaviorConfig configures notification behavior and timing.
-type BehaviorConfig struct {
-	BatchWindowSeconds   int  `yaml:"batch_window_seconds"`
-	NotifyOnFirstOnly    bool `yaml:"notify_on_first_only"`
-	ReminderAfterMinutes int  `yaml:"reminder_after_minutes"`
-	SuppressWhenAttached bool `yaml:"suppress_when_attached"`
-}
-
-// EventsConfig configures which events trigger notifications.
-type EventsConfig struct {
-	AgentWaitingPermission bool `yaml:"agent_waiting_permission"`
-	AgentIdle              bool `yaml:"agent_idle"`
-	AgentError             bool `yaml:"agent_error"`
-	TicketReviewRequested  bool `yaml:"ticket_review_requested"`
-}
-
-// NotificationsConfig holds all notification-related settings.
-type NotificationsConfig struct {
-	Channels ChannelsConfig `yaml:"channels"`
-	Behavior BehaviorConfig `yaml:"behavior"`
-	Events   EventsConfig   `yaml:"events"`
-}
-
 // Config holds the daemon configuration.
 type Config struct {
-	Port               int                 `yaml:"port"`
-	LogLevel           string              `yaml:"log_level"`
-	StatusHistoryLimit int                 `yaml:"status_history_limit"`
-	GitDiffTool        string              `yaml:"git_diff_tool"`
-	Projects           []ProjectEntry      `yaml:"projects,omitempty"`
-	Notifications      NotificationsConfig `yaml:"notifications"`
+	Port               int            `yaml:"port"`
+	LogLevel           string         `yaml:"log_level"`
+	StatusHistoryLimit int            `yaml:"status_history_limit"`
+	GitDiffTool        string         `yaml:"git_diff_tool"`
+	Projects           []ProjectEntry `yaml:"projects,omitempty"`
 }
 
 // DefaultConfig returns a Config with default values.
@@ -65,26 +30,6 @@ func DefaultConfig() *Config {
 		LogLevel:           "info",
 		StatusHistoryLimit: 10,
 		GitDiffTool:        "diff",
-		Notifications: NotificationsConfig{
-			Channels: ChannelsConfig{
-				Local: LocalChannelConfig{
-					Enabled: true,
-					Sound:   true,
-				},
-			},
-			Behavior: BehaviorConfig{
-				BatchWindowSeconds:   60,
-				NotifyOnFirstOnly:    true,
-				ReminderAfterMinutes: 10,
-				SuppressWhenAttached: true,
-			},
-			Events: EventsConfig{
-				AgentWaitingPermission: true,
-				AgentIdle:              true,
-				AgentError:             true,
-				TicketReviewRequested:  true,
-			},
-		},
 	}
 }
 

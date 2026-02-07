@@ -96,14 +96,12 @@ git:
 
 ### Global Config
 
-`~/.cortex/settings.yaml` - daemon and notification settings:
+`~/.cortex/settings.yaml` - daemon settings:
 
 ```yaml
 daemon:
   port: 4200
   log_level: info
-notifications:
-  enabled: true
 ```
 
 ### Customizing Prompts

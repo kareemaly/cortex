@@ -99,7 +99,6 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Shared storage | `internal/storage/` |
 | Session store | `internal/session/` |
 | Response types | `internal/types/` |
-| Notifications | `internal/notifications/` |
 
 ## Configuration
 

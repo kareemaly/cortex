@@ -11,7 +11,6 @@ import (
 	"github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/daemon/logging"
 	"github.com/kareemaly/cortex/internal/events"
-	"github.com/kareemaly/cortex/internal/notifications"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/pkg/version"
 	"github.com/spf13/cobra"
@@ -88,29 +87,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	sessionManager := api.NewSessionManager(logger)
 	docsStoreManager := api.NewDocsStoreManager(logger, bus)
 
-	// Create notification dispatcher
-	var dispatcher *notifications.Dispatcher
-	if cfg.Notifications.Channels.Local.Enabled {
-		localCh := notifications.NewLocalChannel(logger)
-		if localCh.Available() {
-			dispatcher = notifications.NewDispatcher(notifications.DispatcherConfig{
-				Config:         cfg.Notifications,
-				Channels:       []notifications.Channel{localCh},
-				StoreManager:   storeManager,
-				SessionManager: sessionManager,
-				TmuxManager:    tmuxManager,
-				Bus:            bus,
-				Logger:         logger,
-			})
-			for _, project := range cfg.Projects {
-				dispatcher.Subscribe(project.Path)
-			}
-			logger.Info("notification dispatcher started", "projects", len(cfg.Projects))
-		} else {
-			logger.Debug("notification dispatcher disabled, no notification tools available")
-		}
-	}
-
 	// Build dependencies
 	deps := &api.Dependencies{
 		StoreManager:     storeManager,
@@ -124,11 +100,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Create and run server
 	server := api.NewServer(cfg.Port, logger, deps)
 	err = server.Run(ctx)
-
-	// Shutdown notification dispatcher
-	if dispatcher != nil {
-		dispatcher.Shutdown()
-	}
 
 	return err
 }
