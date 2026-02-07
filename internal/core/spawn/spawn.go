@@ -622,7 +622,11 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 			sb.WriteString("(none)\n")
 		} else {
 			for _, t := range items {
-				sb.WriteString(fmt.Sprintf("- [%s] %s (updated: %s)\n", t.ID, t.Title, t.Updated.Format(time.DateOnly)))
+				dueStr := ""
+				if t.Due != nil {
+					dueStr = fmt.Sprintf(" (due: %s)", t.Due.Format(time.DateOnly))
+				}
+				sb.WriteString(fmt.Sprintf("- [%s] %s%s (updated: %s)\n", t.ID, t.Title, dueStr, t.Updated.Format(time.DateOnly)))
 			}
 		}
 		sb.WriteString("\n")
