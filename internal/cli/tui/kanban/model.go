@@ -481,16 +481,8 @@ func (m Model) handleDeleteModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // deleteOrphanedSession returns a command to delete an orphaned session.
 func (m Model) deleteOrphanedSession(ticket *sdk.TicketSummary) tea.Cmd {
 	return func() tea.Msg {
-		// Get the full ticket to get the session ID
-		fullTicket, err := m.client.FindTicketByID(ticket.ID)
-		if err != nil {
-			return SessionDeleteErrorMsg{Err: err}
-		}
-		if fullTicket.Session == nil {
-			return SessionDeleteErrorMsg{Err: fmt.Errorf("no session to delete")}
-		}
-		// Kill the session using its ID
-		if err := m.client.KillSession(fullTicket.Session.ID); err != nil {
+		// Use ticket ID prefix (short ID) to find and kill session
+		if err := m.client.KillSession(ticket.ID[:8]); err != nil {
 			return SessionDeleteErrorMsg{Err: err}
 		}
 		return SessionDeletedMsg{Ticket: ticket}

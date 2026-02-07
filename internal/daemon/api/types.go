@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
 )
@@ -11,9 +12,7 @@ import (
 // Re-export shared types for API consumers
 type (
 	ErrorResponse            = types.ErrorResponse
-	DatesResponse            = types.DatesResponse
 	CommentResponse          = types.CommentResponse
-	StatusEntryResponse      = types.StatusEntryResponse
 	SessionResponse          = types.SessionResponse
 	TicketResponse           = types.TicketResponse
 	TicketSummary            = types.TicketSummary
@@ -133,11 +132,16 @@ type MoveDocRequest struct {
 }
 
 // filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
-// Query is matched case-insensitively against title or body.
-// If dueBefore is non-nil, only tickets with due date before the specified time are included.
-// If tmuxSession and checker are provided, detects orphaned sessions.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker) []TicketSummary {
+// Looks up session from session manager for each ticket.
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string) []TicketSummary {
 	var summaries []TicketSummary
+
+	// Get the session store for this project
+	var sessStore *session.Store
+	if sessionMgr != nil {
+		sessStore = sessionMgr.GetStore(projectPath)
+	}
+
 	for _, t := range tickets {
 		// Apply query filter if specified
 		if query != "" &&
@@ -147,11 +151,18 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 		}
 		// Apply dueBefore filter if specified
 		if dueBefore != nil {
-			if t.Dates.DueDate == nil || !t.Dates.DueDate.Before(*dueBefore) {
+			if t.Due == nil || !t.Due.Before(*dueBefore) {
 				continue
 			}
 		}
-		summary := types.ToTicketSummary(t, status, true, tmuxSession, checker)
+
+		// Look up session for this ticket
+		var sess *session.Session
+		if sessStore != nil {
+			sess, _ = sessStore.GetByTicketID(t.ID)
+		}
+
+		summary := types.ToTicketSummary(t, status, sess, tmuxSession, checker)
 		summaries = append(summaries, summary)
 	}
 	if summaries == nil {

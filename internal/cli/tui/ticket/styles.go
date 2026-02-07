@@ -60,11 +60,6 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("255"))
 
-	// Section header style.
-	sectionHeaderStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("245"))
-
 	// Label style for field names.
 	labelStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245"))

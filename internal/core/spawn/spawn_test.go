@@ -10,24 +10,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kareemaly/cortex/internal/session"
+	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
-// mockStore implements StoreInterface for testing.
+// mockStore implements StoreInterface for testing (ticket store only).
 type mockStore struct {
-	tickets         map[string]*ticket.Ticket
-	sessions        map[string]*ticket.Session
-	setErr          error
-	endErr          error
-	getErr          error
-	lastSetID       string
-	endSessionCalls []string // tracks which ticket IDs had EndSession called
+	tickets map[string]*ticket.Ticket
+	getErr  error
 }
 
 func newMockStore() *mockStore {
 	return &mockStore{
-		tickets:  make(map[string]*ticket.Ticket),
-		sessions: make(map[string]*ticket.Session),
+		tickets: make(map[string]*ticket.Ticket),
 	}
 }
 
@@ -42,36 +38,56 @@ func (m *mockStore) Get(id string) (*ticket.Ticket, ticket.Status, error) {
 	return t, ticket.StatusBacklog, nil
 }
 
-func (m *mockStore) SetSession(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (*ticket.Session, error) {
-	if m.setErr != nil {
-		return nil, m.setErr
+// mockSessionStore implements SessionStoreInterface for testing.
+type mockSessionStore struct {
+	sessions        map[string]*session.Session // keyed by short ID
+	createErr       error
+	endErr          error
+	endCalls        []string // tracks which short IDs had End called
+	lastCreateAgent string
+}
+
+func newMockSessionStore() *mockSessionStore {
+	return &mockSessionStore{
+		sessions: make(map[string]*session.Session),
 	}
-	m.lastSetID = ticketID
-	session := &ticket.Session{
-		ID:            "session-123",
-		StartedAt:     time.Now(),
+}
+
+func (m *mockSessionStore) Create(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (string, *session.Session, error) {
+	if m.createErr != nil {
+		return "", nil, m.createErr
+	}
+	m.lastCreateAgent = agent
+	shortID := storage.ShortID(ticketID)
+	sess := &session.Session{
+		TicketID:      ticketID,
 		Agent:         agent,
 		TmuxWindow:    tmuxWindow,
 		WorktreePath:  worktreePath,
 		FeatureBranch: featureBranch,
+		StartedAt:     time.Now(),
+		Status:        session.AgentStatusStarting,
 	}
-	m.sessions[ticketID] = session
-	if t, ok := m.tickets[ticketID]; ok {
-		t.Session = session
-	}
-	return session, nil
+	m.sessions[shortID] = sess
+	return shortID, sess, nil
 }
 
-func (m *mockStore) EndSession(ticketID string) error {
+func (m *mockSessionStore) End(ticketShortID string) error {
 	if m.endErr != nil {
 		return m.endErr
 	}
-	m.endSessionCalls = append(m.endSessionCalls, ticketID)
-	if s, ok := m.sessions[ticketID]; ok {
-		now := time.Now()
-		s.EndedAt = &now
-	}
+	m.endCalls = append(m.endCalls, ticketShortID)
+	delete(m.sessions, ticketShortID)
 	return nil
+}
+
+func (m *mockSessionStore) GetByTicketID(ticketID string) (*session.Session, error) {
+	shortID := storage.ShortID(ticketID)
+	sess, ok := m.sessions[shortID]
+	if !ok {
+		return nil, nil
+	}
+	return sess, nil
 }
 
 // mockTmuxManager implements TmuxManagerInterface for testing.
@@ -124,9 +140,11 @@ func (m *mockTmuxManager) SpawnArchitect(session, windowName, agentCommand, comp
 
 func createTestTicket(id, title, body string) *ticket.Ticket {
 	return &ticket.Ticket{
-		ID:    id,
-		Title: title,
-		Body:  body,
+		TicketMeta: ticket.TicketMeta{
+			ID:    id,
+			Title: title,
+		},
+		Body: body,
 	}
 }
 
@@ -147,6 +165,7 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()
 	store := newMockStore()
+	sessStore := newMockSessionStore()
 	tmuxMgr := newMockTmuxManager()
 
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
@@ -156,6 +175,7 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
+		SessionStore: sessStore,
 		TmuxManager:  tmuxMgr,
 		CortexdPath:  "/usr/bin/cortexd",
 		MCPConfigDir: tmpDir,
@@ -178,9 +198,6 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	}
 	if !result.Success {
 		t.Fatalf("expected success, got: %s", result.Message)
-	}
-	if result.SessionID != "session-123" {
-		t.Errorf("expected session ID 'session-123', got: %s", result.SessionID)
 	}
 	if result.TmuxWindow != "test-ticket" {
 		t.Errorf("expected window 'test-ticket', got: %s", result.TmuxWindow)
@@ -219,21 +236,25 @@ func TestSpawn_TicketAgent_AlreadyActive(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()
 	store := newMockStore()
+	sessStore := newMockSessionStore()
 	tmuxMgr := newMockTmuxManager()
 	tmuxMgr.windowExists = true // Window exists
 
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
-	testTicket.Session = &ticket.Session{
-		ID:         "existing-session",
+	store.tickets["ticket-1"] = testTicket
+
+	// Create an existing session
+	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
+		TicketID:   "ticket-1",
 		TmuxWindow: "test-ticket",
 		StartedAt:  time.Now(),
 	}
-	store.tickets["ticket-1"] = testTicket
 
 	spawner := NewSpawner(Dependencies{
-		Store:       store,
-		TmuxManager: tmuxMgr,
-		CortexdPath: "/usr/bin/cortexd",
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
 	})
 
 	// Execute
@@ -266,6 +287,7 @@ func TestSpawn_CleanupOnFailure(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()
 	store := newMockStore()
+	sessStore := newMockSessionStore()
 	tmuxMgr := newMockTmuxManager()
 	tmuxMgr.spawnErr = errors.New("tmux failed")
 
@@ -276,6 +298,7 @@ func TestSpawn_CleanupOnFailure(t *testing.T) {
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
+		SessionStore: sessStore,
 		TmuxManager:  tmuxMgr,
 		CortexdPath:  "/usr/bin/cortexd",
 		MCPConfigDir: tmpDir,
@@ -300,11 +323,10 @@ func TestSpawn_CleanupOnFailure(t *testing.T) {
 		t.Error("expected failure")
 	}
 
-	// Session should have been cleaned up
-	if session, ok := store.sessions["ticket-1"]; ok {
-		if session.EndedAt == nil {
-			t.Error("expected session to be ended after cleanup")
-		}
+	// Session should have been cleaned up (End called)
+	shortID := storage.ShortID("ticket-1")
+	if !slices.Contains(sessStore.endCalls, shortID) {
+		t.Error("expected End to be called for session cleanup")
 	}
 }
 
@@ -404,21 +426,25 @@ func TestFresh_ClearsExisting(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()
 	store := newMockStore()
+	sessStore := newMockSessionStore()
 	tmuxMgr := newMockTmuxManager()
 
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
-	testTicket.Session = &ticket.Session{
-		ID:         "old-session",
+	store.tickets["ticket-1"] = testTicket
+
+	// Create an existing session
+	shortID := storage.ShortID("ticket-1")
+	sessStore.sessions[shortID] = &session.Session{
+		TicketID:   "ticket-1",
 		TmuxWindow: "old-window",
 		StartedAt:  time.Now(),
 	}
-	store.tickets["ticket-1"] = testTicket
-	store.sessions["ticket-1"] = testTicket.Session
 
 	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
+		SessionStore: sessStore,
 		TmuxManager:  tmuxMgr,
 		CortexdPath:  "/usr/bin/cortexd",
 		MCPConfigDir: tmpDir,
@@ -443,15 +469,15 @@ func TestFresh_ClearsExisting(t *testing.T) {
 		t.Fatalf("expected success, got: %s", result.Message)
 	}
 
-	// EndSession should have been called for the old session
-	if !slices.Contains(store.endSessionCalls, "ticket-1") {
-		t.Error("expected EndSession to be called for ticket-1")
+	// End should have been called for the old session
+	if !slices.Contains(sessStore.endCalls, shortID) {
+		t.Error("expected End to be called for old session")
 	}
 }
 
 func TestDetectTicketState_Normal(t *testing.T) {
-	ticket := createTestTicket("ticket-1", "Test", "Body")
-	info, err := DetectTicketState(ticket, "test-session", nil)
+	// No session = normal state
+	info, err := DetectTicketState(nil, "test-session", nil)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -465,14 +491,13 @@ func TestDetectTicketState_Active(t *testing.T) {
 	tmuxMgr := newMockTmuxManager()
 	tmuxMgr.windowExists = true
 
-	testTicket := createTestTicket("ticket-1", "Test", "Body")
-	testTicket.Session = &ticket.Session{
-		ID:         "session-1",
+	sess := &session.Session{
+		TicketID:   "ticket-1",
 		TmuxWindow: "test-window",
 		StartedAt:  time.Now(),
 	}
 
-	info, err := DetectTicketState(testTicket, "test-session", tmuxMgr)
+	info, err := DetectTicketState(sess, "test-session", tmuxMgr)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -489,14 +514,13 @@ func TestDetectTicketState_Orphaned(t *testing.T) {
 	tmuxMgr := newMockTmuxManager()
 	tmuxMgr.windowExists = false
 
-	testTicket := createTestTicket("ticket-1", "Test", "Body")
-	testTicket.Session = &ticket.Session{
-		ID:         "session-1",
+	sess := &session.Session{
+		TicketID:   "ticket-1",
 		TmuxWindow: "test-window",
 		StartedAt:  time.Now(),
 	}
 
-	info, err := DetectTicketState(testTicket, "test-session", tmuxMgr)
+	info, err := DetectTicketState(sess, "test-session", tmuxMgr)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -506,25 +530,6 @@ func TestDetectTicketState_Orphaned(t *testing.T) {
 	}
 	if info.WindowExists {
 		t.Error("expected WindowExists to be false")
-	}
-}
-
-func TestDetectTicketState_Ended(t *testing.T) {
-	now := time.Now()
-	testTicket := createTestTicket("ticket-1", "Test", "Body")
-	testTicket.Session = &ticket.Session{
-		ID:        "session-1",
-		StartedAt: now.Add(-time.Hour),
-		EndedAt:   &now,
-	}
-
-	info, err := DetectTicketState(testTicket, "test-session", nil)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if info.State != StateEnded {
-		t.Errorf("expected StateEnded, got: %s", info.State)
 	}
 }
 
@@ -777,7 +782,6 @@ func TestStateInfo_CanSpawn(t *testing.T) {
 		{StateNormal, true},
 		{StateActive, false},
 		{StateOrphaned, true},
-		{StateEnded, true},
 	}
 
 	for _, tc := range tests {
@@ -794,10 +798,9 @@ func TestStateInfo_CanResume(t *testing.T) {
 		info     StateInfo
 		expected bool
 	}{
-		{"orphaned with session ID", StateInfo{State: StateOrphaned, Session: &ticket.Session{ID: "abc"}}, true},
+		{"orphaned with session", StateInfo{State: StateOrphaned, Session: &session.Session{TicketID: "abc"}}, true},
 		{"orphaned without session", StateInfo{State: StateOrphaned}, false},
-		{"orphaned with empty session ID", StateInfo{State: StateOrphaned, Session: &ticket.Session{ID: ""}}, false},
-		{"active", StateInfo{State: StateActive, Session: &ticket.Session{ID: "abc"}}, false},
+		{"active", StateInfo{State: StateActive, Session: &session.Session{TicketID: "abc"}}, false},
 		{"normal", StateInfo{State: StateNormal}, false},
 	}
 

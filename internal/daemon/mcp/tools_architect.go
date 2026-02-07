@@ -477,7 +477,6 @@ func (s *Server) handleSpawnSession(
 		return nil, SpawnSessionOutput{
 			Success:    true,
 			TicketID:   input.TicketID,
-			SessionID:  spawnResp.Session.ID,
 			TmuxWindow: spawnResp.Session.TmuxWindow,
 		}, nil
 

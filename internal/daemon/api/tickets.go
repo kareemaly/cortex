@@ -15,6 +15,7 @@ import (
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/internal/types"
@@ -68,10 +69,10 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := ListAllTicketsResponse{
-		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager),
-		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager),
-		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query, dueBefore, tmuxSession, h.deps.TmuxManager),
-		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager),
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
 	}
 
 	// Sort by Created descending (most recent first)
@@ -129,7 +130,7 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := ListTicketsResponse{
-		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager),
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
 	}
 
 	// Sort by Created descending (most recent first)
@@ -472,15 +473,17 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delegate to shared orchestration
+	sessionStore := h.deps.SessionManager.GetStore(projectPath)
 	result, err := spawn.Orchestrate(r.Context(), spawn.OrchestrateRequest{
 		TicketID:    id,
 		Mode:        mode,
 		ProjectPath: projectPath,
 	}, spawn.OrchestrateDeps{
-		Store:       store,
-		TmuxManager: h.deps.TmuxManager,
-		Logger:      h.deps.Logger,
-		CortexdPath: h.deps.CortexdPath,
+		Store:        store,
+		SessionStore: sessionStore,
+		TmuxManager:  h.deps.TmuxManager,
+		Logger:       h.deps.Logger,
+		CortexdPath:  h.deps.CortexdPath,
 	})
 	if err != nil {
 		switch {
@@ -504,24 +507,29 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	// Already active: focus window and return existing session
 	if result.Outcome == spawn.OutcomeAlreadyActive {
-		if err := h.deps.TmuxManager.FocusWindow(result.TmuxSession, result.StateInfo.Session.TmuxWindow); err != nil {
-			h.deps.Logger.Warn("failed to focus window", "error", err)
-		}
-		if err := h.deps.TmuxManager.SwitchClient(result.TmuxSession); err != nil {
-			h.deps.Logger.Warn("failed to switch tmux client", "session", result.TmuxSession, "error", err)
+		if result.StateInfo.Session != nil {
+			if err := h.deps.TmuxManager.FocusWindow(result.TmuxSession, result.StateInfo.Session.TmuxWindow); err != nil {
+				h.deps.Logger.Warn("failed to focus window", "error", err)
+			}
+			if err := h.deps.TmuxManager.SwitchClient(result.TmuxSession); err != nil {
+				h.deps.Logger.Warn("failed to switch tmux client", "session", result.TmuxSession, "error", err)
+			}
 		}
 		resp := SpawnResponse{
-			Session: types.ToSessionResponse(*result.StateInfo.Session),
+			Session: types.ToSessionResponse(result.StateInfo.Session),
 			Ticket:  types.ToTicketResponse(result.Ticket, result.TicketStatus),
 		}
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
-	// Spawned or resumed
+	// Spawned or resumed: look up session from session store
+	sess, _ := sessionStore.GetByTicketID(id)
 	resp := SpawnResponse{
-		Session: types.ToSessionResponse(*result.Ticket.Session),
-		Ticket:  types.ToTicketResponse(result.Ticket, result.TicketStatus),
+		Ticket: types.ToTicketResponse(result.Ticket, result.TicketStatus),
+	}
+	if sess != nil {
+		resp.Session = types.ToSessionResponse(sess)
 	}
 	writeJSON(w, http.StatusCreated, resp)
 }
@@ -556,7 +564,7 @@ func (h *TicketHandlers) AddComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	t, _, err := store.Get(id)
+	_, _, err = store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -579,10 +587,13 @@ func (h *TicketHandlers) AddComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find active session ID
-	var activeSessionID string
-	if t.Session != nil && t.Session.IsActive() {
-		activeSessionID = t.Session.ID
+	// Look up session for author
+	author := "unknown"
+	if h.deps.SessionManager != nil {
+		sessStore := h.deps.SessionManager.GetStore(projectPath)
+		if sess, err := sessStore.GetByTicketID(id); err == nil && sess != nil {
+			author = sess.Agent
+		}
 	}
 
 	// Convert action from request
@@ -594,7 +605,7 @@ func (h *TicketHandlers) AddComment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	comment, err := store.AddComment(id, activeSessionID, commentType, req.Content, action)
+	comment, err := store.AddComment(id, author, commentType, req.Content, action)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -633,15 +644,13 @@ func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find active session ID
-	t, _, err := store.Get(id)
-	if err != nil {
-		handleTicketError(w, err, h.deps.Logger)
-		return
-	}
-	var activeSessionID string
-	if t.Session != nil && t.Session.IsActive() {
-		activeSessionID = t.Session.ID
+	// Look up session for author
+	author := "unknown"
+	if h.deps.SessionManager != nil {
+		sessStore := h.deps.SessionManager.GetStore(projectPath)
+		if sess, err := sessStore.GetByTicketID(id); err == nil && sess != nil {
+			author = sess.Agent
+		}
 	}
 
 	// Build git_diff action
@@ -654,7 +663,7 @@ func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
 		Args: args,
 	}
 
-	comment, err := store.AddComment(id, activeSessionID, ticket.CommentReviewRequested, req.Content, action)
+	comment, err := store.AddComment(id, author, ticket.CommentReviewRequested, req.Content, action)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -684,20 +693,17 @@ func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
 // Focus handles POST /tickets/{id}/focus - focuses the tmux window of a ticket's active session.
 func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())
-	store, err := h.deps.StoreManager.GetStore(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
 	id := chi.URLParam(r, "id")
-	t, _, err := store.Get(id)
-	if err != nil {
-		handleTicketError(w, err, h.deps.Logger)
+
+	// Look up session from session manager
+	if h.deps.SessionManager == nil {
+		writeError(w, http.StatusNotFound, "no_active_session", "no session manager available")
 		return
 	}
 
-	if t.Session == nil || !t.Session.IsActive() || t.Session.TmuxWindow == "" {
+	sessStore := h.deps.SessionManager.GetStore(projectPath)
+	sess, err := sessStore.GetByTicketID(id)
+	if err != nil || sess == nil || sess.TmuxWindow == "" {
 		writeError(w, http.StatusNotFound, "no_active_session", "ticket has no active session with a tmux window")
 		return
 	}
@@ -713,7 +719,7 @@ func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 		tmuxSession = projectCfg.Name
 	}
 
-	if err := h.deps.TmuxManager.FocusWindow(tmuxSession, t.Session.TmuxWindow); err != nil {
+	if err := h.deps.TmuxManager.FocusWindow(tmuxSession, sess.TmuxWindow); err != nil {
 		writeError(w, http.StatusInternalServerError, "focus_error", err.Error())
 		return
 	}
@@ -724,7 +730,7 @@ func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 
 	resp := FocusResponse{
 		Success: true,
-		Window:  t.Session.TmuxWindow,
+		Window:  sess.TmuxWindow,
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -739,7 +745,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	t, _, err := store.Get(id)
+	_, _, err = store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -758,28 +764,36 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 
 	// Capture session info before ending
 	var worktreePath, featureBranch *string
-	var activeSessionID string
 	var tmuxWindow string
-	if t.Session != nil {
-		worktreePath = t.Session.WorktreePath
-		featureBranch = t.Session.FeatureBranch
-		tmuxWindow = t.Session.TmuxWindow
-		if t.Session.IsActive() {
-			activeSessionID = t.Session.ID
+	var author string
+
+	if h.deps.SessionManager != nil {
+		sessStore := h.deps.SessionManager.GetStore(projectPath)
+		if sess, sessErr := sessStore.GetByTicketID(id); sessErr == nil && sess != nil {
+			worktreePath = sess.WorktreePath
+			featureBranch = sess.FeatureBranch
+			tmuxWindow = sess.TmuxWindow
+			author = sess.Agent
 		}
+	}
+	if author == "" {
+		author = "unknown"
 	}
 
 	// Add done comment with the report
-	_, err = store.AddComment(id, activeSessionID, ticket.CommentDone, req.Content, nil)
+	_, err = store.AddComment(id, author, ticket.CommentDone, req.Content, nil)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
 	// End the session
-	if err := store.EndSession(id); err != nil {
-		handleTicketError(w, err, h.deps.Logger)
-		return
+	if h.deps.SessionManager != nil {
+		sessStore := h.deps.SessionManager.GetStore(projectPath)
+		shortID := storage.ShortID(id)
+		if endErr := sessStore.End(shortID); endErr != nil {
+			h.deps.Logger.Warn("failed to end session", "error", endErr)
+		}
 	}
 
 	// Move the ticket to done
@@ -857,10 +871,14 @@ func (h *TicketHandlers) ExecuteAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify ticket has active session
-	if t.Session == nil || !t.Session.IsActive() {
-		writeError(w, http.StatusConflict, "no_active_session", "ticket has no active session")
-		return
+	// Verify ticket has active session (via session manager)
+	if h.deps.SessionManager != nil {
+		sessStore := h.deps.SessionManager.GetStore(projectPath)
+		sess, sessErr := sessStore.GetByTicketID(ticketID)
+		if sessErr != nil || sess == nil {
+			writeError(w, http.StatusConflict, "no_active_session", "ticket has no active session")
+			return
+		}
 	}
 
 	// Check tmux is available

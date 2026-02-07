@@ -11,7 +11,7 @@ func TestCreateComment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	comment, err := CreateComment(dir, "claude", CommentGeneral, "Test comment", nil)
 	if err != nil {
@@ -40,7 +40,7 @@ func TestCreateCommentEmptyContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	_, err = CreateComment(dir, "claude", CommentGeneral, "", nil)
 	if err == nil {
@@ -56,7 +56,7 @@ func TestCreateCommentWithAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	action := &CommentAction{
 		Type: "git_diff",
@@ -80,7 +80,7 @@ func TestListComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	_, _ = CreateComment(dir, "claude", CommentGeneral, "First comment", nil)
 	time.Sleep(time.Millisecond) // ensure different timestamps
@@ -109,7 +109,7 @@ func TestListCommentsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	comments, err := ListComments(dir)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestCommentActionRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	action := &CommentAction{
 		Type: "git_diff",

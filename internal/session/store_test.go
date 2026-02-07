@@ -184,8 +184,8 @@ func TestList(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	store.Create("a1b2c3d4-0000-0000-0000-000000000001", "claude", "window1", nil, nil)
-	store.Create("b2c3d4e5-0000-0000-0000-000000000002", "copilot", "window2", nil, nil)
+	_, _, _ = store.Create("a1b2c3d4-0000-0000-0000-000000000001", "claude", "window1", nil, nil)
+	_, _, _ = store.Create("b2c3d4e5-0000-0000-0000-000000000002", "copilot", "window2", nil, nil)
 
 	sessions, err := store.List()
 	if err != nil {
@@ -214,7 +214,7 @@ func TestEmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	path := filepath.Join(dir, "sessions.json")
 	_ = os.WriteFile(path, []byte(""), 0644)

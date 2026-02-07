@@ -152,35 +152,18 @@ func (s *Server) handleConcludeSession(
 
 // ticketResponseToOutput converts an SDK TicketResponse to an MCP TicketOutput.
 func ticketResponseToOutput(r *types.TicketResponse) TicketOutput {
-	var session *SessionOutput
-	if r.Session != nil {
-		s := sessionResponseToOutput(r.Session)
-		session = &s
-	}
-
 	return TicketOutput{
 		ID:         r.ID,
 		Type:       r.Type,
 		Title:      r.Title,
 		Body:       r.Body,
+		Tags:       r.Tags,
 		References: r.References,
 		Status:     r.Status,
-		Dates:      r.Dates,
+		Created:    r.Created,
+		Updated:    r.Updated,
+		Due:        r.Due,
 		Comments:   r.Comments,
-		Session:    session,
-	}
-}
-
-// sessionResponseToOutput converts an SDK SessionResponse to an MCP SessionOutput.
-func sessionResponseToOutput(r *types.SessionResponse) SessionOutput {
-	return SessionOutput{
-		ID:            r.ID,
-		StartedAt:     r.StartedAt,
-		EndedAt:       r.EndedAt,
-		Agent:         r.Agent,
-		TmuxWindow:    r.TmuxWindow,
-		CurrentStatus: r.CurrentStatus,
-		IsActive:      r.EndedAt == nil,
 	}
 }
 

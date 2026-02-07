@@ -67,9 +67,7 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 // Re-export shared types for SDK consumers
 type (
 	ErrorResponse            = types.ErrorResponse
-	DatesResponse            = types.DatesResponse
 	CommentResponse          = types.CommentResponse
-	StatusEntryResponse      = types.StatusEntryResponse
 	SessionResponse          = types.SessionResponse
 	TicketResponse           = types.TicketResponse
 	TicketSummary            = types.TicketSummary

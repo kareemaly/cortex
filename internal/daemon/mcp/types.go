@@ -139,14 +139,8 @@ type ConcludeSessionInput struct {
 	Content string `json:"content" jsonschema:"Complete summary of work done, decisions made, and files changed"`
 }
 
-// Type aliases for identical types (map to shared types)
-type (
-	DatesOutput  = types.DatesResponse
-	StatusOutput = types.StatusEntryResponse
-)
+// CommentOutput is a comment in MCP output (alias to shared type).
 
-// CommentOutput represents a comment on a ticket.
-// Alias to shared type for JSON compatibility.
 type CommentOutput = types.CommentResponse
 
 // MCP-specific output types (structurally different from shared types)
@@ -159,29 +153,26 @@ type TicketSummary struct {
 }
 
 // SessionOutput represents a work session.
-// MCP version has IsActive but no StatusHistory/RequestedReviews.
 type SessionOutput struct {
-	ID            string        `json:"id"`
-	StartedAt     time.Time     `json:"started_at"`
-	EndedAt       *time.Time    `json:"ended_at,omitempty"`
-	Agent         string        `json:"agent"`
-	TmuxWindow    string        `json:"tmux_window"`
-	CurrentStatus *StatusOutput `json:"current_status,omitempty"`
-	IsActive      bool          `json:"is_active"`
+	Agent      string  `json:"agent"`
+	TmuxWindow string  `json:"tmux_window"`
+	Status     string  `json:"status"`
+	Tool       *string `json:"tool,omitempty"`
 }
 
 // TicketOutput is the full ticket representation.
-// Uses MCP-specific SessionOutput.
 type TicketOutput struct {
 	ID         string          `json:"id"`
 	Type       string          `json:"type"`
 	Title      string          `json:"title"`
 	Body       string          `json:"body"`
+	Tags       []string        `json:"tags,omitempty"`
 	References []string        `json:"references,omitempty"`
 	Status     string          `json:"status"`
-	Dates      DatesOutput     `json:"dates"`
+	Created    time.Time       `json:"created"`
+	Updated    time.Time       `json:"updated"`
+	Due        *time.Time      `json:"due,omitempty"`
 	Comments   []CommentOutput `json:"comments"`
-	Session    *SessionOutput  `json:"session,omitempty"`
 }
 
 // Tool output wrappers

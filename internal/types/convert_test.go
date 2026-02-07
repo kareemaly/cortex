@@ -87,12 +87,14 @@ func TestExtractSnippet(t *testing.T) {
 func TestToDocSummaryWithQuery(t *testing.T) {
 	now := time.Now()
 	doc := &docs.Doc{
-		ID:       "abc123",
-		Title:    "Test Doc",
+		DocMeta: docs.DocMeta{
+			ID:      "abc123",
+			Title:   "Test Doc",
+			Tags:    []string{"api"},
+			Created: now,
+			Updated: now,
+		},
 		Category: "specs",
-		Tags:     []string{"api"},
-		Created:  now,
-		Updated:  now,
 		Body:     "This document describes the authentication flow for the API.",
 	}
 

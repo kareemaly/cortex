@@ -77,7 +77,7 @@ Flags:
 			return
 		}
 
-		fmt.Printf("Session spawned: %s\n", session.ID)
+		fmt.Printf("Session spawned for ticket: %s\n", ticket.ID)
 		fmt.Printf("  Ticket: %s (%s)\n", ticket.Title, ticket.ID)
 		fmt.Printf("  Agent:  %s\n", session.Agent)
 		fmt.Printf("  Tmux:   %s\n", session.TmuxWindow)

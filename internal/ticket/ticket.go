@@ -21,10 +21,10 @@ const DefaultTicketType = "work"
 
 // Re-export shared types from storage.
 type (
-	CommentType   = storage.CommentType
-	Comment       = storage.Comment
-	CommentAction = storage.CommentAction
-	NotFoundError = storage.NotFoundError
+	CommentType     = storage.CommentType
+	Comment         = storage.Comment
+	CommentAction   = storage.CommentAction
+	NotFoundError   = storage.NotFoundError
 	ValidationError = storage.ValidationError
 )
 

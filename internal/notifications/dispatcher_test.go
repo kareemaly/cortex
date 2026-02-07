@@ -12,6 +12,8 @@ import (
 	"github.com/kareemaly/cortex/internal/daemon/api"
 	"github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/events"
+	"github.com/kareemaly/cortex/internal/session"
+	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -77,7 +79,7 @@ func defaultTestConfig() config.NotificationsConfig {
 	}
 }
 
-func setupTestStore(t *testing.T) (string, *ticket.Store, *events.Bus) {
+func setupTestStore(t *testing.T) (string, *ticket.Store, *session.Store, *events.Bus) {
 	t.Helper()
 
 	// Create temp project directory
@@ -90,7 +92,10 @@ func setupTestStore(t *testing.T) (string, *ticket.Store, *events.Bus) {
 		t.Fatalf("failed to create store: %v", err)
 	}
 
-	return projectDir, store, bus
+	sessionsPath := filepath.Join(projectDir, ".cortex", "sessions.json")
+	sessStore := session.NewStore(sessionsPath)
+
+	return projectDir, store, sessStore, bus
 }
 
 func TestDispatcher_NewDispatcher(t *testing.T) {
@@ -149,19 +154,21 @@ func TestDispatcher_Subscribe_Unsubscribe(t *testing.T) {
 }
 
 func TestDispatcher_EventClassification_SessionStatus(t *testing.T) {
-	projectDir, store, bus := setupTestStore(t)
+	projectDir, store, sessStore, bus := setupTestStore(t)
 	cfg := defaultTestConfig()
 	ch := newMockChannel()
 	logger := testDispatcherLogger()
 
 	storeManager := api.NewStoreManager(logger, bus)
+	sessionManager := api.NewSessionManager(logger)
 
 	d := NewDispatcher(DispatcherConfig{
-		Config:       cfg,
-		Channels:     []Channel{ch},
-		StoreManager: storeManager,
-		Bus:          bus,
-		Logger:       logger,
+		Config:         cfg,
+		Channels:       []Channel{ch},
+		StoreManager:   storeManager,
+		SessionManager: sessionManager,
+		Bus:            bus,
+		Logger:         logger,
 	})
 	defer d.Shutdown()
 
@@ -171,28 +178,30 @@ func TestDispatcher_EventClassification_SessionStatus(t *testing.T) {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
 
-	_, err = store.SetSession(tkt.ID, "claude", "ticket-window", nil, nil)
+	_, _, err = sessStore.Create(tkt.ID, "claude", "ticket-window", nil, nil)
 	if err != nil {
-		t.Fatalf("failed to set session: %v", err)
+		t.Fatalf("failed to create session: %v", err)
 	}
+
+	shortID := storage.ShortID(tkt.ID)
 
 	tests := []struct {
 		name       string
-		status     ticket.AgentStatus
+		status     session.AgentStatus
 		wantType   NotifiableEventType
 		wantNotify bool
 	}{
-		{"waiting_permission", ticket.AgentStatusWaitingPermission, EventAgentWaitingPermission, true},
-		{"idle", ticket.AgentStatusIdle, EventAgentIdle, true},
-		{"error", ticket.AgentStatusError, EventAgentError, true},
-		{"in_progress", ticket.AgentStatusInProgress, "", false},
-		{"starting", ticket.AgentStatusStarting, "", false},
+		{"waiting_permission", session.AgentStatusWaitingPermission, EventAgentWaitingPermission, true},
+		{"idle", session.AgentStatusIdle, EventAgentIdle, true},
+		{"error", session.AgentStatusError, EventAgentError, true},
+		{"in_progress", session.AgentStatusInProgress, "", false},
+		{"starting", session.AgentStatusStarting, "", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Update session status
-			err := store.UpdateSessionStatus(tkt.ID, tt.status, nil, nil)
+			err := sessStore.UpdateStatus(shortID, tt.status, nil)
 			if err != nil {
 				t.Fatalf("failed to update status: %v", err)
 			}
@@ -223,7 +232,7 @@ func TestDispatcher_EventClassification_SessionStatus(t *testing.T) {
 }
 
 func TestDispatcher_EventClassification_CommentAdded(t *testing.T) {
-	projectDir, store, bus := setupTestStore(t)
+	projectDir, store, _, bus := setupTestStore(t)
 	cfg := defaultTestConfig()
 	ch := newMockChannel()
 	logger := testDispatcherLogger()
@@ -268,7 +277,7 @@ func TestDispatcher_EventClassification_CommentAdded(t *testing.T) {
 }
 
 func TestDispatcher_EventClassification_CommentAdded_NonReview(t *testing.T) {
-	projectDir, store, bus := setupTestStore(t)
+	projectDir, store, _, bus := setupTestStore(t)
 	cfg := defaultTestConfig()
 	ch := newMockChannel()
 	logger := testDispatcherLogger()
@@ -393,7 +402,7 @@ func TestDispatcher_AttentionTracking(t *testing.T) {
 }
 
 func TestDispatcher_NotifyOnFirstOnly(t *testing.T) {
-	projectDir, store, bus := setupTestStore(t)
+	projectDir, store, sessStore, bus := setupTestStore(t)
 
 	cfg := defaultTestConfig()
 	cfg.Behavior.NotifyOnFirstOnly = true
@@ -403,13 +412,15 @@ func TestDispatcher_NotifyOnFirstOnly(t *testing.T) {
 	logger := testDispatcherLogger()
 
 	storeManager := api.NewStoreManager(logger, bus)
+	sessionManager := api.NewSessionManager(logger)
 
 	d := NewDispatcher(DispatcherConfig{
-		Config:       cfg,
-		Channels:     []Channel{ch},
-		StoreManager: storeManager,
-		Bus:          bus,
-		Logger:       logger,
+		Config:         cfg,
+		Channels:       []Channel{ch},
+		StoreManager:   storeManager,
+		SessionManager: sessionManager,
+		Bus:            bus,
+		Logger:         logger,
 	})
 	defer d.Shutdown()
 
@@ -417,13 +428,14 @@ func TestDispatcher_NotifyOnFirstOnly(t *testing.T) {
 
 	// Create first ticket and trigger notification
 	tkt1, _ := store.Create("Ticket 1", "body", "", nil, nil)
-	_, _ = store.SetSession(tkt1.ID, "claude", "window1", nil, nil)
+	_, _, _ = sessStore.Create(tkt1.ID, "claude", "window1", nil, nil)
 
 	// Clear any previous notifications
 	ch.clear()
 
 	// First notification should go through
-	_ = store.UpdateSessionStatus(tkt1.ID, ticket.AgentStatusIdle, nil, nil)
+	_ = sessStore.UpdateStatus(storage.ShortID(tkt1.ID), session.AgentStatusIdle, nil)
+	bus.Emit(events.Event{Type: events.SessionStatus, ProjectPath: projectDir, TicketID: tkt1.ID})
 
 	// Wait for processing
 	time.Sleep(100 * time.Millisecond)
@@ -437,8 +449,9 @@ func TestDispatcher_NotifyOnFirstOnly(t *testing.T) {
 
 	// Create second ticket - should NOT trigger notification (not first)
 	tkt2, _ := store.Create("Ticket 2", "body", "", nil, nil)
-	_, _ = store.SetSession(tkt2.ID, "claude", "window2", nil, nil)
-	_ = store.UpdateSessionStatus(tkt2.ID, ticket.AgentStatusIdle, nil, nil)
+	_, _, _ = sessStore.Create(tkt2.ID, "claude", "window2", nil, nil)
+	_ = sessStore.UpdateStatus(storage.ShortID(tkt2.ID), session.AgentStatusIdle, nil)
+	bus.Emit(events.Event{Type: events.SessionStatus, ProjectPath: projectDir, TicketID: tkt2.ID})
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -449,7 +462,7 @@ func TestDispatcher_NotifyOnFirstOnly(t *testing.T) {
 }
 
 func TestDispatcher_BatchWindow(t *testing.T) {
-	projectDir, store, bus := setupTestStore(t)
+	projectDir, store, sessStore, bus := setupTestStore(t)
 
 	cfg := defaultTestConfig()
 	cfg.Behavior.BatchWindowSeconds = 1 // 1 second batch window
@@ -459,13 +472,15 @@ func TestDispatcher_BatchWindow(t *testing.T) {
 	logger := testDispatcherLogger()
 
 	storeManager := api.NewStoreManager(logger, bus)
+	sessionManager := api.NewSessionManager(logger)
 
 	d := NewDispatcher(DispatcherConfig{
-		Config:       cfg,
-		Channels:     []Channel{ch},
-		StoreManager: storeManager,
-		Bus:          bus,
-		Logger:       logger,
+		Config:         cfg,
+		Channels:       []Channel{ch},
+		StoreManager:   storeManager,
+		SessionManager: sessionManager,
+		Bus:            bus,
+		Logger:         logger,
 	})
 	defer d.Shutdown()
 
@@ -474,8 +489,9 @@ func TestDispatcher_BatchWindow(t *testing.T) {
 	// Create multiple tickets quickly
 	for i := 0; i < 3; i++ {
 		tkt, _ := store.Create("Ticket", "body", "", nil, nil)
-		_, _ = store.SetSession(tkt.ID, "claude", "window", nil, nil)
-		_ = store.UpdateSessionStatus(tkt.ID, ticket.AgentStatusIdle, nil, nil)
+		_, _, _ = sessStore.Create(tkt.ID, "claude", "window", nil, nil)
+		_ = sessStore.UpdateStatus(storage.ShortID(tkt.ID), session.AgentStatusIdle, nil)
+		bus.Emit(events.Event{Type: events.SessionStatus, ProjectPath: projectDir, TicketID: tkt.ID})
 	}
 
 	// Should not have notifications yet (within batch window)
