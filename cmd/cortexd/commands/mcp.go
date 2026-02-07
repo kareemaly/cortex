@@ -33,16 +33,17 @@ Examples:
 }
 
 func init() {
-	mcpCmd.Flags().StringVar(&mcpTicketID, "ticket-id", "", "Ticket ID for ticket sessions (also reads CORTEX_TICKET_ID env)")
+	mcpCmd.Flags().StringVar(&mcpTicketID, "ticket-id", "", "Ticket ID for ticket sessions")
 	rootCmd.AddCommand(mcpCmd)
 }
 
 func runMCP(cmd *cobra.Command, args []string) error {
-	// Get ticket ID from flag or environment
+	// Get ticket ID from flag only.
+	// Do NOT fall back to CORTEX_TICKET_ID env var — that env var is set
+	// in the launcher for lifecycle hooks (e.g., "architect" for architect
+	// sessions) and must not leak into MCP session type detection.
+	// The MCP config explicitly passes --ticket-id for ticket sessions.
 	ticketID := mcpTicketID
-	if ticketID == "" {
-		ticketID = os.Getenv("CORTEX_TICKET_ID")
-	}
 
 	// Get optional config from environment
 	projectPath := os.Getenv("CORTEX_PROJECT_PATH")
