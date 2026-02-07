@@ -10,9 +10,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kareemaly/cortex/internal/events"
+	"github.com/kareemaly/cortex/internal/storage"
 )
 
-// Store manages doc storage with markdown files organized by category subdirectories.
+// Store manages doc storage with directory-per-entity organized by category.
 type Store struct {
 	docsDir     string
 	locks       sync.Map // maps doc ID → *sync.Mutex
@@ -57,14 +58,17 @@ func (s *Store) Create(title, category, body string, tags, references []string) 
 
 	now := time.Now().UTC()
 	doc := &Doc{
-		ID:         uuid.New().String(),
-		Title:      title,
-		Category:   category,
-		Tags:       tags,
-		References: references,
-		Created:    now,
-		Updated:    now,
-		Body:       body,
+		DocMeta: DocMeta{
+			ID:         uuid.New().String(),
+			Title:      title,
+			Tags:       tags,
+			References: references,
+			Created:    now,
+			Updated:    now,
+		},
+		Category: category,
+		Body:     body,
+		Comments: []Comment{},
 	}
 
 	// Ensure category subdirectory exists
@@ -77,7 +81,7 @@ func (s *Store) Create(title, category, body string, tags, references []string) 
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err := s.save(doc); err != nil {
+	if err := s.saveDoc(doc); err != nil {
 		return nil, fmt.Errorf("save doc: %w", err)
 	}
 
@@ -86,12 +90,25 @@ func (s *Store) Create(title, category, body string, tags, references []string) 
 }
 
 // Get retrieves a doc by ID, scanning all category subdirectories.
+// Loads comments from comment-*.md files.
 func (s *Store) Get(id string) (*Doc, error) {
-	path, err := s.findDocPath(id)
+	entityDir, err := s.findEntityDir(id)
 	if err != nil {
 		return nil, err
 	}
-	return s.loadFile(path)
+
+	doc, err := s.loadIndex(entityDir)
+	if err != nil {
+		return nil, err
+	}
+
+	comments, err := storage.ListComments(entityDir)
+	if err != nil {
+		return nil, fmt.Errorf("load comments: %w", err)
+	}
+	doc.Comments = comments
+
+	return doc, nil
 }
 
 // Update modifies a doc's fields. Only non-nil parameters are applied.
@@ -100,12 +117,12 @@ func (s *Store) Update(id string, title, body *string, tags, references *[]strin
 	mu.Lock()
 	defer mu.Unlock()
 
-	path, err := s.findDocPath(id)
+	entityDir, err := s.findEntityDir(id)
 	if err != nil {
 		return nil, err
 	}
 
-	doc, err := s.loadFile(path)
+	doc, err := s.loadIndex(entityDir)
 	if err != nil {
 		return nil, err
 	}
@@ -132,14 +149,17 @@ func (s *Store) Update(id string, title, body *string, tags, references *[]strin
 
 	doc.Updated = time.Now().UTC()
 
-	// If title changed, slug changes → remove old file and save new
 	if titleChanged {
-		if err := os.Remove(path); err != nil {
-			return nil, fmt.Errorf("remove old doc file: %w", err)
+		// Title change means slug changes → rename directory
+		newDirName := storage.DirName(doc.Title, doc.ID, "doc")
+		newDir := filepath.Join(s.docsDir, doc.Category, newDirName)
+		if err := os.Rename(entityDir, newDir); err != nil {
+			return nil, fmt.Errorf("rename entity dir: %w", err)
 		}
+		entityDir = newDir
 	}
 
-	if err := s.save(doc); err != nil {
+	if err := s.writeIndex(entityDir, doc); err != nil {
 		return nil, fmt.Errorf("save doc: %w", err)
 	}
 
@@ -147,19 +167,19 @@ func (s *Store) Update(id string, title, body *string, tags, references *[]strin
 	return doc, nil
 }
 
-// Delete removes a doc by ID.
+// Delete removes a doc by ID (entire entity directory).
 func (s *Store) Delete(id string) error {
 	mu := s.docMu(id)
 	mu.Lock()
 	defer mu.Unlock()
 
-	path, err := s.findDocPath(id)
+	entityDir, err := s.findEntityDir(id)
 	if err != nil {
 		return err
 	}
 
-	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("remove doc file: %w", err)
+	if err := os.RemoveAll(entityDir); err != nil {
+		return fmt.Errorf("remove entity directory: %w", err)
 	}
 
 	s.locks.Delete(id)
@@ -177,36 +197,37 @@ func (s *Store) Move(id, category string) (*Doc, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	path, err := s.findDocPath(id)
+	entityDir, err := s.findEntityDir(id)
 	if err != nil {
 		return nil, err
 	}
 
-	doc, err := s.loadFile(path)
+	doc, err := s.loadIndex(entityDir)
 	if err != nil {
 		return nil, err
 	}
 
 	if doc.Category == category {
-		return doc, nil // Already in target category
+		return doc, nil
 	}
-
-	// Remove from old location
-	if err := os.Remove(path); err != nil {
-		return nil, fmt.Errorf("remove old doc file: %w", err)
-	}
-
-	// Update category and save to new location
-	doc.Category = category
-	doc.Updated = time.Now().UTC()
 
 	// Ensure new category subdirectory exists
-	catDir := filepath.Join(s.docsDir, category)
-	if err := os.MkdirAll(catDir, 0755); err != nil {
+	newCatDir := filepath.Join(s.docsDir, category)
+	if err := os.MkdirAll(newCatDir, 0755); err != nil {
 		return nil, fmt.Errorf("create category directory: %w", err)
 	}
 
-	if err := s.save(doc); err != nil {
+	// Move entity directory to new category
+	dirName := filepath.Base(entityDir)
+	newDir := filepath.Join(newCatDir, dirName)
+	if err := os.Rename(entityDir, newDir); err != nil {
+		return nil, fmt.Errorf("move entity dir: %w", err)
+	}
+
+	doc.Category = category
+	doc.Updated = time.Now().UTC()
+
+	if err := s.writeIndex(newDir, doc); err != nil {
 		return nil, fmt.Errorf("save doc: %w", err)
 	}
 
@@ -215,15 +236,14 @@ func (s *Store) Move(id, category string) (*Doc, error) {
 }
 
 // List returns docs with optional filtering by category, tag, and query.
+// Does NOT load comments for performance.
 func (s *Store) List(category, tag, query string) ([]*Doc, error) {
 	query = strings.ToLower(query)
 
-	var dirs []string
+	var catDirs []string
 	if category != "" {
-		// Only scan the specified category
-		dirs = []string{filepath.Join(s.docsDir, category)}
+		catDirs = []string{filepath.Join(s.docsDir, category)}
 	} else {
-		// Scan all subdirectories
 		entries, err := os.ReadDir(s.docsDir)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -233,37 +253,36 @@ func (s *Store) List(category, tag, query string) ([]*Doc, error) {
 		}
 		for _, entry := range entries {
 			if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
-				dirs = append(dirs, filepath.Join(s.docsDir, entry.Name()))
+				catDirs = append(catDirs, filepath.Join(s.docsDir, entry.Name()))
 			}
 		}
 	}
 
 	var docs []*Doc
-	for _, dir := range dirs {
-		entries, err := os.ReadDir(dir)
+	for _, catDir := range catDirs {
+		entries, err := os.ReadDir(catDir)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return nil, fmt.Errorf("read directory %s: %w", dir, err)
+			return nil, fmt.Errorf("read directory %s: %w", catDir, err)
 		}
 
 		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") || strings.HasPrefix(entry.Name(), ".tmp-") {
+			if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 				continue
 			}
 
-			doc, err := s.loadFile(filepath.Join(dir, entry.Name()))
+			entityDir := filepath.Join(catDir, entry.Name())
+			doc, err := s.loadIndex(entityDir)
 			if err != nil {
 				return nil, err
 			}
 
-			// Apply tag filter
 			if tag != "" && !containsTag(doc.Tags, tag) {
 				continue
 			}
 
-			// Apply query filter (case-insensitive substring in title + body)
 			if query != "" &&
 				!strings.Contains(strings.ToLower(doc.Title), query) &&
 				!strings.Contains(strings.ToLower(doc.Body), query) {
@@ -280,84 +299,95 @@ func (s *Store) List(category, tag, query string) ([]*Doc, error) {
 	return docs, nil
 }
 
-// filename generates the filename for a doc: {slug}-{shortID}.md
-func (s *Store) filename(doc *Doc) string {
-	slug := GenerateSlug(doc.Title)
-	shortID := doc.ID
-	if len(shortID) > 8 {
-		shortID = shortID[:8]
+// AddComment adds a comment to a doc.
+func (s *Store) AddComment(docID, author string, commentType CommentType, content string, action *storage.CommentAction) (*Comment, error) {
+	mu := s.docMu(docID)
+	mu.Lock()
+	defer mu.Unlock()
+
+	entityDir, err := s.findEntityDir(docID)
+	if err != nil {
+		return nil, err
 	}
-	return fmt.Sprintf("%s-%s.md", slug, shortID)
+
+	comment, err := storage.CreateComment(entityDir, author, commentType, content, action)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update the doc's updated timestamp
+	doc, err := s.loadIndex(entityDir)
+	if err != nil {
+		return nil, err
+	}
+	doc.Updated = time.Now().UTC()
+	if err := s.writeIndex(entityDir, doc); err != nil {
+		return nil, fmt.Errorf("save doc: %w", err)
+	}
+
+	s.emit(events.DocUpdated, docID)
+	return comment, nil
 }
 
-// save writes a doc to its category directory using atomic write.
-func (s *Store) save(doc *Doc) error {
-	dir := filepath.Join(s.docsDir, doc.Category)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("create category directory: %w", err)
+// ListComments returns all comments for a doc sorted by created time.
+func (s *Store) ListComments(docID string) ([]Comment, error) {
+	entityDir, err := s.findEntityDir(docID)
+	if err != nil {
+		return nil, err
+	}
+	return storage.ListComments(entityDir)
+}
+
+// saveDoc creates the entity directory and writes index.md.
+func (s *Store) saveDoc(doc *Doc) error {
+	dirName := storage.DirName(doc.Title, doc.ID, "doc")
+	entityDir := filepath.Join(s.docsDir, doc.Category, dirName)
+
+	if err := os.MkdirAll(entityDir, 0755); err != nil {
+		return fmt.Errorf("create entity dir: %w", err)
 	}
 
-	target := filepath.Join(dir, s.filename(doc))
+	return s.writeIndex(entityDir, doc)
+}
 
-	data, err := SerializeDoc(doc)
+// writeIndex writes the index.md file in the given entity directory.
+func (s *Store) writeIndex(entityDir string, doc *Doc) error {
+	data, err := storage.SerializeFrontmatter(&doc.DocMeta, doc.Body)
 	if err != nil {
 		return fmt.Errorf("serialize doc: %w", err)
 	}
 
-	// Write to a temp file in the same directory (same filesystem for atomic rename)
-	tmp, err := os.CreateTemp(dir, ".tmp-*.md")
-	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
-	}
-	tmpPath := tmp.Name()
-
-	// Clean up temp file on error
-	defer func() {
-		if tmpPath != "" {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temp file: %w", err)
-	}
-
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp file: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, target); err != nil {
-		return fmt.Errorf("rename temp file: %w", err)
-	}
-
-	// Rename succeeded — prevent deferred cleanup from removing the target
-	tmpPath = ""
-
-	return nil
+	target := filepath.Join(entityDir, "index.md")
+	return storage.AtomicWriteFile(target, data)
 }
 
-// loadFile reads and parses a doc from a file.
-func (s *Store) loadFile(path string) (*Doc, error) {
-	data, err := os.ReadFile(path)
+// loadIndex reads and parses index.md from the given entity directory.
+// Derives Category from the parent directory name.
+func (s *Store) loadIndex(entityDir string) (*Doc, error) {
+	data, err := os.ReadFile(filepath.Join(entityDir, "index.md"))
 	if err != nil {
-		return nil, fmt.Errorf("read file: %w", err)
+		return nil, fmt.Errorf("read index.md: %w", err)
 	}
 
-	doc, err := ParseDoc(data)
+	meta, body, err := storage.ParseFrontmatter[DocMeta](data)
 	if err != nil {
-		return nil, fmt.Errorf("parse doc %s: %w", path, err)
+		return nil, fmt.Errorf("parse index.md: %w", err)
 	}
 
-	return doc, nil
+	// Category is derived from the parent directory of the entity dir
+	category := filepath.Base(filepath.Dir(entityDir))
+
+	return &Doc{
+		DocMeta:  *meta,
+		Category: category,
+		Body:     body,
+		Comments: []Comment{},
+	}, nil
 }
 
-// findDocPath finds the file path for a doc by scanning all category subdirectories.
-func (s *Store) findDocPath(id string) (string, error) {
-	shortID := id
-	if len(shortID) > 8 {
-		shortID = shortID[:8]
-	}
+// findEntityDir finds the entity directory for a doc by scanning all category subdirectories.
+func (s *Store) findEntityDir(id string) (string, error) {
+	shortID := storage.ShortID(id)
 
 	entries, err := os.ReadDir(s.docsDir)
 	if err != nil {
@@ -379,11 +409,11 @@ func (s *Store) findDocPath(id string) (string, error) {
 		}
 
 		for _, catEntry := range catEntries {
-			if catEntry.IsDir() {
+			if !catEntry.IsDir() {
 				continue
 			}
 			name := catEntry.Name()
-			if strings.HasSuffix(name, "-"+shortID+".md") || strings.HasSuffix(name, "-"+id+".md") {
+			if strings.HasSuffix(name, "-"+shortID) || strings.HasSuffix(name, "-"+id) {
 				return filepath.Join(catDir, name), nil
 			}
 		}

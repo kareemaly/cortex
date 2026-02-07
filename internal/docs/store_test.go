@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kareemaly/cortex/internal/storage"
 )
 
 func setupTestStore(t *testing.T) (*Store, func()) {
@@ -90,7 +92,6 @@ func TestStoreCreateCategoryDir(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	// Category subdirectory should be created
 	catDir := filepath.Join(store.docsDir, "decisions")
 	info, err := os.Stat(catDir)
 	if err != nil {
@@ -158,6 +159,44 @@ func TestStoreGet(t *testing.T) {
 	}
 	if len(retrieved.References) != 1 || retrieved.References[0] != "ticket:abc" {
 		t.Errorf("references = %v, want [ticket:abc]", retrieved.References)
+	}
+}
+
+func TestStoreGetLoadsComments(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	doc, _ := store.Create("Test Doc", "specs", "body", nil, nil)
+	_, _ = store.AddComment(doc.ID, "claude", storage.CommentGeneral, "comment 1", nil)
+	_, _ = store.AddComment(doc.ID, "human", storage.CommentGeneral, "comment 2", nil)
+
+	retrieved, err := store.Get(doc.ID)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	if len(retrieved.Comments) != 2 {
+		t.Errorf("comments count = %d, want 2", len(retrieved.Comments))
+	}
+}
+
+func TestStoreListDoesNotLoadComments(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	doc, _ := store.Create("Test Doc", "specs", "body", nil, nil)
+	_, _ = store.AddComment(doc.ID, "claude", storage.CommentGeneral, "comment", nil)
+
+	docs, err := store.List("", "", "")
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+
+	if len(docs) != 1 {
+		t.Fatalf("len(docs) = %d, want 1", len(docs))
+	}
+	if len(docs[0].Comments) != 0 {
+		t.Errorf("List should not load comments, got %d", len(docs[0].Comments))
 	}
 }
 
@@ -268,17 +307,17 @@ func TestStoreUpdateEmptyTitle(t *testing.T) {
 	}
 }
 
-func TestStoreUpdateTitleReslugs(t *testing.T) {
+func TestStoreUpdateTitleRename(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
 	doc, _ := store.Create("Old Title", "specs", "body", nil, nil)
-	shortID := doc.ID[:8]
+	shortID := storage.ShortID(doc.ID)
 
-	// Verify old file exists
-	oldPath := filepath.Join(store.docsDir, "specs", "old-title-"+shortID+".md")
-	if _, err := os.Stat(oldPath); err != nil {
-		t.Fatalf("old file should exist: %v", err)
+	// Verify old dir exists
+	oldDir := filepath.Join(store.docsDir, "specs", "old-title-"+shortID)
+	if _, err := os.Stat(oldDir); err != nil {
+		t.Fatalf("old dir should exist: %v", err)
 	}
 
 	newTitle := "New Title"
@@ -287,15 +326,24 @@ func TestStoreUpdateTitleReslugs(t *testing.T) {
 		t.Fatalf("Update failed: %v", err)
 	}
 
-	// Old file should be gone
-	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
-		t.Error("old file should be removed after title change")
+	// Old dir should be gone
+	if _, err := os.Stat(oldDir); !os.IsNotExist(err) {
+		t.Error("old dir should be removed after title change")
 	}
 
-	// New file should exist
-	newPath := filepath.Join(store.docsDir, "specs", "new-title-"+shortID+".md")
-	if _, err := os.Stat(newPath); err != nil {
-		t.Errorf("new file should exist: %v", err)
+	// New dir should exist
+	newDir := filepath.Join(store.docsDir, "specs", "new-title-"+shortID)
+	if _, err := os.Stat(newDir); err != nil {
+		t.Errorf("new dir should exist: %v", err)
+	}
+
+	// Should still be retrievable
+	retrieved, err := store.Get(doc.ID)
+	if err != nil {
+		t.Fatalf("Get after rename failed: %v", err)
+	}
+	if retrieved.Title != "New Title" {
+		t.Errorf("title = %q, want %q", retrieved.Title, "New Title")
 	}
 }
 
@@ -340,7 +388,6 @@ func TestStoreMove(t *testing.T) {
 		t.Errorf("category = %q, want %q", moved.Category, "decisions")
 	}
 
-	// Verify file is in new location
 	retrieved, err := store.Get(doc.ID)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
@@ -524,46 +571,76 @@ func TestFrontmatterRoundTrip(t *testing.T) {
 	}
 }
 
-func TestSlugGeneration(t *testing.T) {
+func TestCategoryNotInFrontmatter(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	doc, err := store.Create("Hello World: A Test!", "specs", "body", nil, nil)
+	doc, _ := store.Create("Test Doc", "specs", "body", nil, nil)
+	shortID := storage.ShortID(doc.ID)
+
+	// Read raw index.md file
+	indexPath := filepath.Join(store.docsDir, "specs", storage.DirName(doc.Title, doc.ID, "doc"), "index.md")
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("read index.md: %v", err)
+	}
+
+	content := string(data)
+	if strings.Contains(content, "category:") {
+		t.Error("category should NOT be in frontmatter")
+	}
+	if !strings.Contains(content, "id: "+doc.ID) {
+		t.Errorf("expected id in frontmatter, shortID=%s", shortID)
+	}
+
+	// But Category should be populated on load
+	retrieved, err := store.Get(doc.ID)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if retrieved.Category != "specs" {
+		t.Errorf("category = %q, want %q (derived from path)", retrieved.Category, "specs")
+	}
+}
+
+func TestStoreDirLayout(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	doc, _ := store.Create("API Design", "specs", "body", nil, nil)
+	shortID := storage.ShortID(doc.ID)
+
+	entityDir := filepath.Join(store.docsDir, "specs", "api-design-"+shortID)
+	if _, err := os.Stat(entityDir); err != nil {
+		t.Fatalf("entity dir should exist: %v", err)
+	}
+
+	indexPath := filepath.Join(entityDir, "index.md")
+	if _, err := os.Stat(indexPath); err != nil {
+		t.Fatalf("index.md should exist: %v", err)
+	}
+}
+
+func TestStoreCreateWithReferences(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	refs := []string{"ticket:abc123", "doc:xyz789"}
+	doc, err := store.Create("Linked Doc", "specs", "body", nil, refs)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	shortID := doc.ID[:8]
-	expectedFile := filepath.Join(store.docsDir, "specs", "hello-world-a-test-"+shortID+".md")
-	if _, err := os.Stat(expectedFile); err != nil {
-		// Try to find actual file for debugging
-		entries, _ := os.ReadDir(filepath.Join(store.docsDir, "specs"))
-		var names []string
-		for _, e := range entries {
-			names = append(names, e.Name())
-		}
-		t.Errorf("expected file %s not found, actual files: %v", filepath.Base(expectedFile), names)
-	}
-}
-
-func TestContainsTag(t *testing.T) {
-	tests := []struct {
-		tags []string
-		tag  string
-		want bool
-	}{
-		{[]string{"api", "v2"}, "api", true},
-		{[]string{"api", "v2"}, "API", true}, // case-insensitive
-		{[]string{"api", "v2"}, "v3", false},
-		{nil, "api", false},
-		{[]string{}, "api", false},
+	if len(doc.References) != 2 {
+		t.Errorf("references length = %d, want 2", len(doc.References))
 	}
 
-	for _, tt := range tests {
-		got := containsTag(tt.tags, tt.tag)
-		if got != tt.want {
-			t.Errorf("containsTag(%v, %q) = %v, want %v", tt.tags, tt.tag, got, tt.want)
-		}
+	retrieved, err := store.Get(doc.ID)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if len(retrieved.References) != 2 || retrieved.References[0] != "ticket:abc123" {
+		t.Errorf("references = %v, want [ticket:abc123 doc:xyz789]", retrieved.References)
 	}
 }
 
@@ -597,42 +674,66 @@ func TestStoreListQueryCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestStoreCreateWithReferences(t *testing.T) {
+func TestStoreAddComment(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	refs := []string{"ticket:abc123", "doc:xyz789"}
-	doc, err := store.Create("Linked Doc", "specs", "body", nil, refs)
+	doc, _ := store.Create("Test Doc", "specs", "body", nil, nil)
+
+	comment, err := store.AddComment(doc.ID, "claude", storage.CommentGeneral, "Test comment", nil)
 	if err != nil {
-		t.Fatalf("Create failed: %v", err)
+		t.Fatalf("AddComment failed: %v", err)
 	}
 
-	if len(doc.References) != 2 {
-		t.Errorf("references length = %d, want 2", len(doc.References))
+	if comment.ID == "" {
+		t.Error("comment ID should not be empty")
 	}
-
-	// Verify persisted
-	retrieved, err := store.Get(doc.ID)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
+	if comment.Author != "claude" {
+		t.Errorf("author = %q, want %q", comment.Author, "claude")
 	}
-	if len(retrieved.References) != 2 || retrieved.References[0] != "ticket:abc123" {
-		t.Errorf("references = %v, want [ticket:abc123 doc:xyz789]", retrieved.References)
+	if comment.Content != "Test comment" {
+		t.Errorf("content = %q, want %q", comment.Content, "Test comment")
 	}
 }
 
-func TestStoreFilenameFormat(t *testing.T) {
+func TestStoreListComments(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	doc, _ := store.Create("My Test Doc", "specs", "body", nil, nil)
-	shortID := doc.ID[:8]
+	doc, _ := store.Create("Test Doc", "specs", "body", nil, nil)
+	_, _ = store.AddComment(doc.ID, "claude", storage.CommentGeneral, "First", nil)
+	_, _ = store.AddComment(doc.ID, "human", storage.CommentGeneral, "Second", nil)
 
-	fn := store.filename(doc)
-	if !strings.HasPrefix(fn, "my-test-doc-") {
-		t.Errorf("filename = %q, expected prefix 'my-test-doc-'", fn)
+	comments, err := store.ListComments(doc.ID)
+	if err != nil {
+		t.Fatalf("ListComments failed: %v", err)
 	}
-	if !strings.HasSuffix(fn, shortID+".md") {
-		t.Errorf("filename = %q, expected suffix '%s.md'", fn, shortID)
+
+	if len(comments) != 2 {
+		t.Fatalf("len(comments) = %d, want 2", len(comments))
+	}
+	if comments[0].Content != "First" {
+		t.Errorf("first comment = %q, want %q", comments[0].Content, "First")
+	}
+}
+
+func TestContainsTag(t *testing.T) {
+	tests := []struct {
+		tags []string
+		tag  string
+		want bool
+	}{
+		{[]string{"api", "v2"}, "api", true},
+		{[]string{"api", "v2"}, "API", true},
+		{[]string{"api", "v2"}, "v3", false},
+		{nil, "api", false},
+		{[]string{}, "api", false},
+	}
+
+	for _, tt := range tests {
+		got := containsTag(tt.tags, tt.tag)
+		if got != tt.want {
+			t.Errorf("containsTag(%v, %q) = %v, want %v", tt.tags, tt.tag, got, tt.want)
+		}
 	}
 }
