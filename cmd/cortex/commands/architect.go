@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 
 var (
 	architectDetachFlag bool
+	architectModeFlag   string
 )
 
 var architectCmd = &cobra.Command{
@@ -24,15 +26,21 @@ management and spawning ticket sessions.
 If an architect window already exists, it will be focused.
 Otherwise, a fresh architect session will be spawned.
 
+If a session was orphaned (tmux window closed but session record remains),
+use --mode fresh to start a new session or --mode resume to continue.
+
 Examples:
-  cortex architect           # Start or attach to architect
-  cortex architect --detach  # Start architect without attaching`,
+  cortex architect              # Start or attach to architect
+  cortex architect --detach     # Start architect without attaching
+  cortex architect --mode fresh # Clear orphaned session, start new`,
 	Run: runArchitect,
 }
 
 func init() {
 	architectCmd.Flags().BoolVar(&architectDetachFlag, "detach", false,
 		"Spawn architect without attaching to session")
+	architectCmd.Flags().StringVar(&architectModeFlag, "mode", "",
+		"Spawn mode: normal (default), fresh (clear orphaned session), resume (continue orphaned session)")
 	rootCmd.AddCommand(architectCmd)
 }
 
@@ -49,9 +57,17 @@ func runArchitect(cmd *cobra.Command, args []string) {
 	// Create SDK client
 	client := sdk.DefaultClient(projectPath)
 
-	// Spawn architect via SDK (no mode parameter - simplified)
-	resp, err := client.SpawnArchitect("")
+	// Spawn architect via SDK
+	resp, err := client.SpawnArchitect(architectModeFlag)
 	if err != nil {
+		var apiErr *sdk.APIError
+		if errors.As(err, &apiErr) && apiErr.IsOrphanedSession() {
+			fmt.Fprintf(os.Stderr, "Architect session is orphaned (tmux window was closed but session record remains).\n\n")
+			fmt.Fprintf(os.Stderr, "Options:\n")
+			fmt.Fprintf(os.Stderr, "  cortex architect --mode fresh   # Start a new session\n")
+			fmt.Fprintf(os.Stderr, "  cortex architect --mode resume  # Resume the previous session\n")
+			os.Exit(1)
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

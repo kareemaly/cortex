@@ -54,6 +54,25 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 	projectPath := GetProjectPath(r.Context())
 
+	sessStore := h.deps.SessionManager.GetStore(projectPath)
+
+	// Special handling for architect sessions
+	if req.TicketID == session.ArchitectSessionKey {
+		sess, _ := sessStore.GetArchitect()
+		if sess == nil {
+			writeError(w, http.StatusBadRequest, "no_active_session", "architect does not have an active session")
+			return
+		}
+
+		if err := sessStore.UpdateStatus(session.ArchitectSessionKey, agentStatus, req.Tool); err != nil {
+			writeError(w, http.StatusInternalServerError, "update_error", err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// Verify ticket exists
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
@@ -72,7 +91,6 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for active session via session manager
-	sessStore := h.deps.SessionManager.GetStore(projectPath)
 	shortID := storage.ShortID(req.TicketID)
 	sess, _ := sessStore.Get(shortID)
 	if sess == nil {

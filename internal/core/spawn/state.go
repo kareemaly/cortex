@@ -63,6 +63,42 @@ func DetectTicketState(sess *session.Session, tmuxSession string, tmuxChecker Tm
 	return info, nil
 }
 
+// DetectArchitectState determines the current state of the architect session.
+// Unlike DetectTicketState, this also handles the case where no session record
+// exists but a tmux window named "architect" is present (pre-migration window).
+func DetectArchitectState(sess *session.Session, tmuxSession string, tmuxChecker TmuxChecker) (*StateInfo, error) {
+	info := &StateInfo{
+		State:   StateNormal,
+		Session: sess,
+	}
+
+	// Check if architect tmux window exists
+	windowExists := false
+	if tmuxChecker != nil && tmuxSession != "" {
+		exists, err := tmuxChecker.WindowExists(tmuxSession, "architect")
+		if err != nil {
+			return nil, &TmuxError{Operation: "check architect window", Cause: err}
+		}
+		windowExists = exists
+		info.WindowExists = exists
+	}
+
+	if sess != nil {
+		// Session record exists — check if window is still running
+		if windowExists {
+			info.State = StateActive
+		} else {
+			info.State = StateOrphaned
+		}
+	} else if windowExists {
+		// No session record but window exists (pre-migration or manual window).
+		// Treat as active — we can't orphan-detect without a session record.
+		info.State = StateActive
+	}
+
+	return info, nil
+}
+
 // CanSpawn returns true if a new session can be spawned based on the state.
 func (s *StateInfo) CanSpawn() bool {
 	return s.State == StateNormal || s.State == StateOrphaned

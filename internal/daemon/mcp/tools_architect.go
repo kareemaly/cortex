@@ -169,6 +169,12 @@ func (s *Server) registerArchitectTools() {
 		Name:        "listSessions",
 		Description: "List all active agent sessions with ticket details",
 	}, s.handleListSessions)
+
+	// Conclude architect session
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "concludeSession",
+		Description: "Conclude the architect session. Call this when done with the current session to clean up the session state.",
+	}, s.handleArchitectConcludeSession)
 }
 
 // handleListProjects lists all registered projects.
@@ -716,6 +722,7 @@ func (s *Server) handleListSessions(
 	for i, s := range resp.Sessions {
 		items[i] = SessionListItem{
 			SessionID:   s.SessionID,
+			SessionType: s.SessionType,
 			TicketID:    s.TicketID,
 			TicketTitle: s.TicketTitle,
 			Agent:       s.Agent,
@@ -729,5 +736,26 @@ func (s *Server) handleListSessions(
 	return nil, ListSessionsOutput{
 		Sessions: items,
 		Total:    len(items),
+	}, nil
+}
+
+// handleArchitectConcludeSession concludes the architect session.
+func (s *Server) handleArchitectConcludeSession(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input ConcludeSessionInput,
+) (*mcp.CallToolResult, ArchitectConcludeOutput, error) {
+	if input.Content == "" {
+		return nil, ArchitectConcludeOutput{}, NewValidationError("content", "cannot be empty")
+	}
+
+	resp, err := s.sdkClient.ConcludeArchitectSession(input.Content)
+	if err != nil {
+		return nil, ArchitectConcludeOutput{}, wrapSDKError(err)
+	}
+
+	return nil, ArchitectConcludeOutput{
+		Success: resp.Success,
+		Message: resp.Message,
 	}, nil
 }

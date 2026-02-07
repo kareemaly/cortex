@@ -3,7 +3,7 @@ id: 388d881d-14c1-4a6a-a399-3bfaa89bd8d2
 title: Migration script for ~/kesc to new storage format
 type: work
 created: 2026-02-07T10:44:55.932619Z
-updated: 2026-02-07T10:55:33.388124Z
+updated: 2026-02-07T11:14:49.628394Z
 ---
 ## Overview
 

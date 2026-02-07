@@ -44,6 +44,9 @@ type SessionStoreInterface interface {
 	Create(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (string, *session.Session, error)
 	End(ticketShortID string) error
 	GetByTicketID(ticketID string) (*session.Session, error)
+	CreateArchitect(agent, tmuxWindow string) (*session.Session, error)
+	GetArchitect() (*session.Session, error)
+	EndArchitect() error
 }
 
 // TmuxManagerInterface defines the tmux operations needed for spawning.
@@ -191,15 +194,23 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		workingDir = wtPath
 	}
 
-	// Create session in store (ticket agents only)
-	if req.AgentType == AgentTypeTicketAgent && s.deps.SessionStore != nil {
-		_, _, err := s.deps.SessionStore.Create(req.TicketID, req.Agent, windowName, worktreePath, featureBranch)
-		if err != nil {
-			if worktreePath != nil && featureBranch != nil {
-				wm := worktree.NewManager(req.ProjectPath)
-				_ = wm.Remove(ctx, *worktreePath, *featureBranch)
+	// Create session in store
+	if s.deps.SessionStore != nil {
+		switch req.AgentType {
+		case AgentTypeTicketAgent:
+			_, _, err := s.deps.SessionStore.Create(req.TicketID, req.Agent, windowName, worktreePath, featureBranch)
+			if err != nil {
+				if worktreePath != nil && featureBranch != nil {
+					wm := worktree.NewManager(req.ProjectPath)
+					_ = wm.Remove(ctx, *worktreePath, *featureBranch)
+				}
+				return nil, err
 			}
-			return nil, err
+		case AgentTypeArchitect:
+			_, err := s.deps.SessionStore.CreateArchitect(req.Agent, windowName)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -281,6 +292,10 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	switch req.AgentType {
 	case AgentTypeArchitect:
 		launcherParams.ReplaceSystemPrompt = true
+		launcherParams.EnvVars = map[string]string{
+			"CORTEX_TICKET_ID": session.ArchitectSessionKey,
+			"CORTEX_PROJECT":   req.ProjectPath,
+		}
 	case AgentTypeTicketAgent:
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": req.TicketID,
@@ -314,17 +329,22 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	}, nil
 }
 
-// Resume resumes an orphaned ticket agent session.
-// Note: This is only used for ticket agents - architect sessions do not support resume.
+// Resume resumes an orphaned agent session (ticket or architect).
 func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, error) {
-	if req.TicketID == "" {
-		return nil, &ConfigError{Field: "TicketID", Message: "cannot be empty for resume (only ticket agents support resume)"}
+	if req.AgentType == AgentTypeTicketAgent && req.TicketID == "" {
+		return nil, &ConfigError{Field: "TicketID", Message: "cannot be empty for ticket agent resume"}
 	}
 
 	// Find cortexd path
 	cortexdPath, err := s.getCortexdPath()
 	if err != nil {
 		return nil, err
+	}
+
+	// Determine identifier for file naming
+	identifier := req.TicketID
+	if identifier == "" {
+		identifier = "architect"
 	}
 
 	// Generate MCP config
@@ -336,9 +356,20 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		TmuxSession: req.TmuxSession,
 	})
 
-	mcpConfigPath, err := WriteMCPConfig(mcpConfig, req.TicketID, s.deps.MCPConfigDir)
+	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
 	if err != nil {
 		return nil, err
+	}
+
+	// Determine env vars based on agent type
+	envVars := map[string]string{
+		"CORTEX_PROJECT": req.ProjectPath,
+	}
+	switch req.AgentType {
+	case AgentTypeTicketAgent:
+		envVars["CORTEX_TICKET_ID"] = req.TicketID
+	case AgentTypeArchitect:
+		envVars["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
 	}
 
 	// Generate and write settings config (hooks) - skip for Copilot (doesn't support --settings)
@@ -346,11 +377,11 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	if req.Agent != "copilot" {
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
 			CortexdPath: cortexdPath,
-			TicketID:    req.TicketID,
+			TicketID:    identifier,
 			ProjectPath: req.ProjectPath,
 		})
 
-		settingsPath, err = WriteSettingsConfig(settingsConfig, req.TicketID, s.deps.SettingsConfigDir)
+		settingsPath, err = WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
 		if err != nil {
 			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
 				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
@@ -368,14 +399,15 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		Resume:        req.SessionID == "",
 		ResumeID:      req.SessionID,
 		AgentArgs:     req.AgentArgs,
-		EnvVars: map[string]string{
-			"CORTEX_TICKET_ID": req.TicketID,
-			"CORTEX_PROJECT":   req.ProjectPath,
-		},
-		CleanupFiles: tempFiles,
+		EnvVars:       envVars,
+		CleanupFiles:  tempFiles,
 	}
 
-	launcherPath, err := WriteLauncherScript(launcherParams, req.TicketID, s.deps.MCPConfigDir)
+	if req.AgentType == AgentTypeArchitect {
+		launcherParams.ReplaceSystemPrompt = true
+	}
+
+	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
 	if err != nil {
 		for _, path := range tempFiles {
 			if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
@@ -386,11 +418,24 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	}
 	allTempFiles := append(tempFiles, launcherPath)
 
+	// Create session in store for architect resume
+	if req.AgentType == AgentTypeArchitect && s.deps.SessionStore != nil {
+		if _, createErr := s.deps.SessionStore.CreateArchitect(req.Agent, req.WindowName); createErr != nil {
+			s.logWarn("resume: failed to create architect session", "error", createErr)
+		}
+	}
+
 	// Spawn in tmux
 	launchCmd := "bash " + launcherPath
-	companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
+	var windowIndex int
 
-	windowIndex, err := s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, companionCmd, req.ProjectPath, req.ProjectPath)
+	switch req.AgentType {
+	case AgentTypeArchitect:
+		err = s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, req.WindowName, launchCmd, "cortex kanban", req.ProjectPath, req.ProjectPath)
+	case AgentTypeTicketAgent:
+		companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
+		windowIndex, err = s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, companionCmd, req.ProjectPath, req.ProjectPath)
+	}
 	if err != nil {
 		for _, path := range allTempFiles {
 			if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
@@ -413,21 +458,27 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 // Fresh clears any existing session and spawns a new one.
 func (s *Spawner) Fresh(ctx context.Context, req SpawnRequest) (*SpawnResult, error) {
-	// End existing session if present
-	if req.AgentType == AgentTypeTicketAgent && s.deps.SessionStore != nil {
-		existingSess, _ := s.deps.SessionStore.GetByTicketID(req.TicketID)
-		if existingSess != nil {
-			shortID := storage.ShortID(req.TicketID)
-			if err := s.deps.SessionStore.End(shortID); err != nil {
-				s.logWarn("fresh: failed to end existing session", "ticketID", req.TicketID, "error", err)
-			}
-
-			// Clean up existing worktree and branch so Spawn() can create fresh ones
-			if existingSess.WorktreePath != nil && existingSess.FeatureBranch != nil {
-				wm := worktree.NewManager(req.ProjectPath)
-				if err := wm.Remove(ctx, *existingSess.WorktreePath, *existingSess.FeatureBranch); err != nil {
-					s.logWarn("fresh: failed to clean up old worktree/branch", "error", err)
+	if s.deps.SessionStore != nil {
+		switch req.AgentType {
+		case AgentTypeTicketAgent:
+			existingSess, _ := s.deps.SessionStore.GetByTicketID(req.TicketID)
+			if existingSess != nil {
+				shortID := storage.ShortID(req.TicketID)
+				if err := s.deps.SessionStore.End(shortID); err != nil {
+					s.logWarn("fresh: failed to end existing session", "ticketID", req.TicketID, "error", err)
 				}
+
+				// Clean up existing worktree and branch so Spawn() can create fresh ones
+				if existingSess.WorktreePath != nil && existingSess.FeatureBranch != nil {
+					wm := worktree.NewManager(req.ProjectPath)
+					if err := wm.Remove(ctx, *existingSess.WorktreePath, *existingSess.FeatureBranch); err != nil {
+						s.logWarn("fresh: failed to clean up old worktree/branch", "error", err)
+					}
+				}
+			}
+		case AgentTypeArchitect:
+			if err := s.deps.SessionStore.EndArchitect(); err != nil {
+				s.logWarn("fresh: failed to end existing architect session", "error", err)
 			}
 		}
 	}
@@ -687,10 +738,19 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDi
 
 // cleanupOnFailure cleans up resources when spawn fails.
 func (s *Spawner) cleanupOnFailure(ctx context.Context, agentType AgentType, ticketID string, tempFiles []string, worktreePath, featureBranch *string, projectPath string) {
-	if agentType == AgentTypeTicketAgent && ticketID != "" && s.deps.SessionStore != nil {
-		shortID := storage.ShortID(ticketID)
-		if err := s.deps.SessionStore.End(shortID); err != nil {
-			s.logWarn("cleanup: failed to end session", "ticketID", ticketID, "error", err)
+	if s.deps.SessionStore != nil {
+		switch agentType {
+		case AgentTypeTicketAgent:
+			if ticketID != "" {
+				shortID := storage.ShortID(ticketID)
+				if err := s.deps.SessionStore.End(shortID); err != nil {
+					s.logWarn("cleanup: failed to end session", "ticketID", ticketID, "error", err)
+				}
+			}
+		case AgentTypeArchitect:
+			if err := s.deps.SessionStore.EndArchitect(); err != nil {
+				s.logWarn("cleanup: failed to end architect session", "error", err)
+			}
 		}
 	}
 	for _, path := range tempFiles {

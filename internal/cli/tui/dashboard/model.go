@@ -38,9 +38,9 @@ type projectData struct {
 	err       error
 }
 
-// isActive returns true if the project has an active architect or ticket session.
+// isActive returns true if the project has an active or orphaned architect or ticket session.
 func (pd projectData) isActive() bool {
-	if pd.architect != nil && pd.architect.State == "active" {
+	if pd.architect != nil && (pd.architect.State == "active" || pd.architect.State == "orphaned") {
 		return true
 	}
 	if pd.tickets != nil {
@@ -482,6 +482,11 @@ func (m Model) handleFocusCurrentRow() (tea.Model, tea.Cmd) {
 			m.statusIsError = false
 			return m, m.spawnArchitect(pd.project.Path)
 		}
+		if pd.architect != nil && pd.architect.State == "orphaned" {
+			m.statusMsg = "Architect is orphaned. Press [s] to respawn."
+			m.statusIsError = false
+			return m, m.clearStatusAfterDelay()
+		}
 		m.statusMsg = "No active architect. Press [s] to spawn."
 		m.statusIsError = false
 		return m, m.clearStatusAfterDelay()
@@ -676,17 +681,28 @@ func (m Model) logBadge() string {
 func (m Model) renderProjectRow(projectIdx int, selected bool) string {
 	pd := m.projects[projectIdx]
 
-	// Architect active indicator.
+	// Architect state indicator.
 	architectActive := pd.architect != nil && pd.architect.State == "active"
+	architectOrphaned := pd.architect != nil && pd.architect.State == "orphaned"
 	indicator := "○"
-	if architectActive {
-		indicator = "●"
+	if architectOrphaned {
+		indicator = "◌"
+	} else if architectActive {
+		indicator = architectSessionIcon(pd.architect)
 	}
 
 	// Title.
 	title := pd.project.Title
 	if title == "" {
 		title = filepath.Base(pd.project.Path)
+	}
+
+	// Architect status badge.
+	archBadge := ""
+	if architectOrphaned {
+		archBadge = " [arch: orphaned]"
+	} else if architectActive && pd.architect.Session != nil {
+		archBadge = architectStatusBadge(pd.architect.Session)
 	}
 
 	// Counts.
@@ -716,14 +732,44 @@ func (m Model) renderProjectRow(projectIdx int, selected bool) string {
 	}
 
 	if selected {
-		plainLine := fmt.Sprintf("%s %s %s", indicator, title, counts)
+		plainLine := fmt.Sprintf("%s %s%s %s", indicator, title, archBadge, counts)
 		return selectedStyle.Render(plainLine)
 	}
 
+	if architectOrphaned {
+		return orphanedIconStyle.Render(indicator) + " " + projectStyle.Render(title) + orphanedIconStyle.Render(archBadge) + " " + countsStyle.Render(counts)
+	}
 	if architectActive {
-		return activeIconStyle.Render(indicator) + " " + projectStyle.Render(title) + " " + countsStyle.Render(counts)
+		return activeIconStyle.Render(indicator) + " " + projectStyle.Render(title) + activeIconStyle.Render(archBadge) + " " + countsStyle.Render(counts)
 	}
 	return mutedStyleRender.Render(indicator) + " " + dimmedProjectStyle.Render(title) + " " + countsStyle.Render(counts)
+}
+
+// architectSessionIcon returns an icon based on the architect's agent status.
+func architectSessionIcon(arch *sdk.ArchitectStateResponse) string {
+	if arch.Session == nil || arch.Session.Status == nil {
+		return "●"
+	}
+	symbols := map[string]string{
+		"starting":           "▶",
+		"in_progress":        "●",
+		"idle":               "○",
+		"waiting_permission": "⏸",
+		"error":              "✗",
+	}
+	if s, ok := symbols[*arch.Session.Status]; ok {
+		return s
+	}
+	return "●"
+}
+
+// architectStatusBadge returns a short status badge for the architect session.
+func architectStatusBadge(sess *sdk.ArchitectSessionResponse) string {
+	dur := formatDuration(time.Since(sess.StartedAt))
+	if sess.Tool != nil && *sess.Tool != "" {
+		return fmt.Sprintf(" [arch: %s %s]", *sess.Tool, dur)
+	}
+	return fmt.Sprintf(" [arch: %s]", dur)
 }
 
 // renderSessionRow renders a single session row.

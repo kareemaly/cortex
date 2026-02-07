@@ -80,6 +80,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Get("/", architectHandlers.GetState)
 			r.Post("/spawn", architectHandlers.Spawn)
 			r.Post("/focus", architectHandlers.Focus)
+			r.Post("/conclude", architectHandlers.Conclude)
 		})
 
 		// Session routes

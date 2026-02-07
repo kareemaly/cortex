@@ -114,7 +114,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Command | Description |
 |---------|-------------|
 | `cortex init` | Initialize `.cortex/` in current directory, register in global config |
-| `cortex architect` | Start/attach architect session |
+| `cortex architect` | Start/attach architect session (`--mode fresh\|resume` for orphaned) |
 | `cortex kanban` | Kanban TUI for current project |
 | `cortex show [id]` | Ticket detail TUI |
 | `cortex ticket list` | List tickets |
@@ -133,7 +133,7 @@ Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/s
 
 **Global** (no project header): `GET /health`, `GET /projects`
 
-**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn, session kill/approve, SSE events, docs CRUD.
+**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn/conclude, session kill/approve, SSE events, docs CRUD.
 
 ## MCP Tools
 
@@ -163,6 +163,7 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 | `listDocs` | List docs with optional category, tag, and search filters |
 | `addDocComment` | Add a comment to a documentation file |
 | `listSessions` | List all active agent sessions |
+| `concludeSession` | Conclude the architect session and clean up |
 
 **Cross-project support**: Most architect tools accept an optional `project_path` parameter to operate on a different registered project. Use `listProjects` to discover available projects. Exception: `deleteTicket` is restricted to the current project for safety.
 
@@ -184,7 +185,7 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 4. Agent calls `requestReview` when done → ticket moves to review
 5. Architect reviews and approves → triggers lifecycle hooks, moves to done
 
-Spawn orchestration handles state detection (normal/active/orphaned) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
+Spawn orchestration handles state detection (normal/active/orphaned) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`. Both architect and ticket agent sessions are tracked in `.cortex/sessions.json` with the same state detection and orphan recovery patterns.
 
 ## Lifecycle Hooks
 

@@ -280,6 +280,7 @@ type ListSessionsInput struct {
 // SessionListItem represents a session in the listSessions output.
 type SessionListItem struct {
 	SessionID   string    `json:"session_id"`
+	SessionType string    `json:"session_type"`
 	TicketID    string    `json:"ticket_id"`
 	TicketTitle string    `json:"ticket_title"`
 	Agent       string    `json:"agent"`
@@ -287,6 +288,12 @@ type SessionListItem struct {
 	StartedAt   time.Time `json:"started_at"`
 	Status      string    `json:"status"`
 	Tool        *string   `json:"tool,omitempty"`
+}
+
+// ArchitectConcludeOutput is the output for the architect concludeSession tool.
+type ArchitectConcludeOutput struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
 }
 
 // ListSessionsOutput is the output for the listSessions tool.

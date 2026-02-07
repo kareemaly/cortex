@@ -43,6 +43,7 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 
 	type sessionListItem struct {
 		SessionID   string    `json:"session_id"`
+		SessionType string    `json:"session_type"`
 		TicketID    string    `json:"ticket_id"`
 		TicketTitle string    `json:"ticket_title"`
 		Agent       string    `json:"agent"`
@@ -54,14 +55,19 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]sessionListItem, 0, len(sessions))
 	for shortID, sess := range sessions {
+		sessionType := "ticket"
 		title := ""
-		if ticketStore != nil {
+		if shortID == session.ArchitectSessionKey {
+			sessionType = "architect"
+			title = "Architect"
+		} else if ticketStore != nil {
 			if t, _, err := ticketStore.Get(sess.TicketID); err == nil {
 				title = t.Title
 			}
 		}
 		items = append(items, sessionListItem{
 			SessionID:   shortID,
+			SessionType: sessionType,
 			TicketID:    sess.TicketID,
 			TicketTitle: title,
 			Agent:       sess.Agent,

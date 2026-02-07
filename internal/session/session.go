@@ -13,6 +13,11 @@ const (
 	AgentStatusError             AgentStatus = "error"
 )
 
+// ArchitectSessionKey is the session store key for the architect session.
+// This is used as-is (not shortened via storage.ShortID) because the
+// architect is a singleton per project.
+const ArchitectSessionKey = "architect"
+
 // Session represents an active work session for a ticket.
 // Sessions are ephemeral — deleted when ended.
 type Session struct {

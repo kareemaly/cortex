@@ -117,6 +117,9 @@ type ArchitectSessionResponse struct {
 	TmuxWindow  string     `json:"tmux_window"`
 	StartedAt   time.Time  `json:"started_at"`
 	EndedAt     *time.Time `json:"ended_at,omitempty"`
+	Status      *string    `json:"status,omitempty"`
+	Tool        *string    `json:"tool,omitempty"`
+	IsOrphaned  bool       `json:"is_orphaned,omitempty"`
 }
 
 // ArchitectStateResponse is the response for GET /architect.

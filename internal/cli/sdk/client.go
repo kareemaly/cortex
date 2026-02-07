@@ -847,6 +847,38 @@ func (c *Client) ConcludeSession(ticketID, content string) (*ConcludeSessionResp
 	return &result, nil
 }
 
+// ConcludeArchitectSession concludes the architect session.
+func (c *Client) ConcludeArchitectSession(content string) (*ConcludeSessionResponse, error) {
+	reqBody := map[string]string{"content": content}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/architect/conclude", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ConcludeSessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // FocusDaemonDashboard focuses the CortexDaemon dashboard window.
 func (c *Client) FocusDaemonDashboard() error {
 	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/daemon/focus", nil)
@@ -1309,6 +1341,7 @@ func (c *Client) AddDocComment(docID, commentType, content, author string) (*Add
 // SessionListItem represents a session in the list response.
 type SessionListItem struct {
 	SessionID   string    `json:"session_id"`
+	SessionType string    `json:"session_type"`
 	TicketID    string    `json:"ticket_id"`
 	TicketTitle string    `json:"ticket_title"`
 	Agent       string    `json:"agent"`

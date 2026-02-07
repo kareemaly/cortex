@@ -90,6 +90,39 @@ func (m *mockSessionStore) GetByTicketID(ticketID string) (*session.Session, err
 	return sess, nil
 }
 
+func (m *mockSessionStore) CreateArchitect(agent, tmuxWindow string) (*session.Session, error) {
+	if m.createErr != nil {
+		return nil, m.createErr
+	}
+	m.lastCreateAgent = agent
+	sess := &session.Session{
+		TicketID:   session.ArchitectSessionKey,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now(),
+		Status:     session.AgentStatusStarting,
+	}
+	m.sessions[session.ArchitectSessionKey] = sess
+	return sess, nil
+}
+
+func (m *mockSessionStore) GetArchitect() (*session.Session, error) {
+	sess, ok := m.sessions[session.ArchitectSessionKey]
+	if !ok {
+		return nil, &storage.NotFoundError{Resource: "session", ID: session.ArchitectSessionKey}
+	}
+	return sess, nil
+}
+
+func (m *mockSessionStore) EndArchitect() error {
+	if m.endErr != nil {
+		return m.endErr
+	}
+	m.endCalls = append(m.endCalls, session.ArchitectSessionKey)
+	delete(m.sessions, session.ArchitectSessionKey)
+	return nil
+}
+
 // mockTmuxManager implements TmuxManagerInterface for testing.
 type mockTmuxManager struct {
 	windows          map[string]bool // window existence by name
@@ -395,6 +428,7 @@ func TestResume_NoTicketID(t *testing.T) {
 	spawner := NewSpawner(Dependencies{})
 
 	_, err := spawner.Resume(context.Background(), ResumeRequest{
+		AgentType:   AgentTypeTicketAgent,
 		TmuxSession: "test-session",
 		WindowName:  "test-window",
 		SessionID:   "session-abc",

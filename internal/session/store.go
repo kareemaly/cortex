@@ -53,6 +53,44 @@ func (s *Store) Create(ticketID, agent, tmuxWindow string, worktreePath, feature
 	return key, session, nil
 }
 
+// CreateArchitect adds a new architect session.
+// Uses ArchitectSessionKey as the literal key (not shortened via ShortID).
+func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sessions, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+
+	sess := &Session{
+		TicketID:   ArchitectSessionKey,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now().UTC(),
+		Status:     AgentStatusStarting,
+	}
+
+	sessions[ArchitectSessionKey] = sess
+
+	if err := s.save(sessions); err != nil {
+		return nil, err
+	}
+
+	return sess, nil
+}
+
+// GetArchitect retrieves the architect session.
+func (s *Store) GetArchitect() (*Session, error) {
+	return s.Get(ArchitectSessionKey)
+}
+
+// EndArchitect removes the architect session entry.
+func (s *Store) EndArchitect() error {
+	return s.End(ArchitectSessionKey)
+}
+
 // Get retrieves a session by ticket short ID.
 func (s *Store) Get(ticketShortID string) (*Session, error) {
 	s.mu.Lock()
