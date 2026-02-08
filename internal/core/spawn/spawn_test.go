@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
@@ -586,8 +587,8 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 		t.Errorf("expected CORTEX_TICKETS_DIR, got: %v", server.Env)
 	}
 
-	if server.Env["CORTEX_DAEMON_URL"] != "http://localhost:4200" {
-		t.Errorf("expected CORTEX_DAEMON_URL=http://localhost:4200, got: %v", server.Env["CORTEX_DAEMON_URL"])
+	if server.Env["CORTEX_DAEMON_URL"] != daemonconfig.DefaultDaemonURL {
+		t.Errorf("expected CORTEX_DAEMON_URL=%s, got: %v", daemonconfig.DefaultDaemonURL, server.Env["CORTEX_DAEMON_URL"])
 	}
 }
 

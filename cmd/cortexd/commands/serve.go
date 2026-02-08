@@ -29,7 +29,7 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 
 	// Register flags
-	serveCmd.Flags().IntVar(&servePort, "port", 4200, "Port for the HTTP server")
+	serveCmd.Flags().IntVar(&servePort, "port", config.DefaultPort, "Port for the HTTP server")
 
 	// Set serve as the default command when no subcommand is specified
 	rootCmd.RunE = runServe

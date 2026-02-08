@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"slices"
@@ -815,7 +814,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	if worktreePath != nil && featureBranch != nil && projectPath != "" {
 		wm := worktree.NewManager(projectPath)
 		if err := wm.Remove(context.Background(), *worktreePath, *featureBranch); err != nil {
-			log.Printf("warning: failed to cleanup worktree: %v", err)
+			h.deps.Logger.Warn("failed to cleanup worktree", "error", err)
 		}
 	}
 
@@ -829,7 +828,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 
 		if killErr := h.deps.TmuxManager.KillWindow(tmuxSession, tmuxWindow); killErr != nil {
 			if !tmux.IsWindowNotFound(killErr) && !tmux.IsSessionNotFound(killErr) {
-				log.Printf("warning: failed to kill tmux window %q: %v", tmuxWindow, killErr)
+				h.deps.Logger.Warn("failed to kill tmux window", "window", tmuxWindow, "error", killErr)
 			}
 		}
 	}

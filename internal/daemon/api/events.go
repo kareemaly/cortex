@@ -20,7 +20,7 @@ func NewEventHandlers(deps *Dependencies) *EventHandlers {
 func (h *EventHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "internal_error", "streaming not supported")
 		return
 	}
 

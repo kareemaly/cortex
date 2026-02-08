@@ -17,12 +17,6 @@ func NewPromptHandlers(deps *Dependencies) *PromptHandlers {
 	return &PromptHandlers{deps: deps}
 }
 
-// ResolvePromptResponse is the response for the resolve prompt endpoint.
-type ResolvePromptResponse struct {
-	Content    string `json:"content"`
-	SourcePath string `json:"source_path"`
-}
-
 // Resolve handles GET /prompts/resolve - resolves a prompt file with extension fallback.
 // Query parameters:
 //   - role: "architect" or "ticket" (required)

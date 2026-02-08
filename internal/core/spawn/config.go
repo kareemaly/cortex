@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 )
 
 // MCPServerConfig represents the MCP server configuration for claude.
@@ -26,6 +28,7 @@ type MCPConfigParams struct {
 	TicketsDir  string
 	ProjectPath string
 	TmuxSession string
+	DaemonURL   string // optional; defaults to daemonconfig.DefaultDaemonURL
 }
 
 // GenerateMCPConfig creates an MCP configuration for a claude agent.
@@ -53,7 +56,11 @@ func GenerateMCPConfig(params MCPConfigParams) *ClaudeMCPConfig {
 	}
 
 	// Pass daemon URL so ticket sessions can route mutations through the HTTP API
-	serverConfig.Env["CORTEX_DAEMON_URL"] = "http://localhost:4200"
+	daemonURL := params.DaemonURL
+	if daemonURL == "" {
+		daemonURL = daemonconfig.DefaultDaemonURL
+	}
+	serverConfig.Env["CORTEX_DAEMON_URL"] = daemonURL
 
 	return &ClaudeMCPConfig{
 		MCPServers: map[string]MCPServerConfig{

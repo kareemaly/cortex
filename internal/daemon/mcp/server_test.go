@@ -3,6 +3,8 @@ package mcp
 import (
 	"os"
 	"testing"
+
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 )
 
 func TestNewServerArchitect(t *testing.T) {
@@ -14,7 +16,7 @@ func TestNewServerArchitect(t *testing.T) {
 
 	server, err := NewServer(&Config{
 		ProjectPath: tmpDir,
-		DaemonURL:   "http://localhost:4200",
+		DaemonURL:   daemonconfig.DefaultDaemonURL,
 	})
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)
@@ -43,7 +45,7 @@ func TestNewServerTicket(t *testing.T) {
 
 	server, err := NewServer(&Config{
 		TicketID:    "test-ticket-123",
-		DaemonURL:   "http://localhost:4200",
+		DaemonURL:   daemonconfig.DefaultDaemonURL,
 		ProjectPath: tmpDir,
 	})
 	if err != nil {

@@ -9,13 +9,11 @@ import (
 	"os"
 	"time"
 
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/spf13/cobra"
 )
 
-const (
-	defaultDaemonURL = "http://localhost:4200"
-	hookTimeout      = 5 * time.Second
-)
+const hookTimeout = 5 * time.Second
 
 // hookInput represents the JSON input from Claude hooks.
 type hookInput struct {
@@ -112,7 +110,11 @@ func postAgentStatus(ticketID, projectPath, status string, tool *string) error {
 		return nil // Fail gracefully
 	}
 
-	url := fmt.Sprintf("%s/agent/status", defaultDaemonURL)
+	baseURL := os.Getenv("CORTEX_DAEMON_URL")
+	if baseURL == "" {
+		baseURL = daemonconfig.DefaultDaemonURL
+	}
+	url := fmt.Sprintf("%s/agent/status", baseURL)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil // Fail gracefully

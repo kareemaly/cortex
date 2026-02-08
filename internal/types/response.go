@@ -136,3 +136,51 @@ type ArchitectSpawnResponse struct {
 	TmuxSession string                   `json:"tmux_session"`
 	TmuxWindow  string                   `json:"tmux_window"`
 }
+
+// HealthResponse is the response structure for the health endpoint.
+type HealthResponse struct {
+	Status  string `json:"status"`
+	Version string `json:"version"`
+}
+
+// ProjectTicketCounts holds ticket counts by status.
+type ProjectTicketCounts struct {
+	Backlog  int `json:"backlog"`
+	Progress int `json:"progress"`
+	Review   int `json:"review"`
+	Done     int `json:"done"`
+}
+
+// ProjectResponse represents a single project in the API response.
+type ProjectResponse struct {
+	Path   string               `json:"path"`
+	Title  string               `json:"title"`
+	Exists bool                 `json:"exists"`
+	Counts *ProjectTicketCounts `json:"counts,omitempty"`
+}
+
+// AddCommentResponse is the response for adding a comment.
+type AddCommentResponse struct {
+	Success bool            `json:"success"`
+	Comment CommentResponse `json:"comment"`
+}
+
+// RequestReviewResponse is the response for requesting a review.
+type RequestReviewResponse struct {
+	Success bool            `json:"success"`
+	Message string          `json:"message"`
+	Comment CommentResponse `json:"comment"`
+}
+
+// ConcludeSessionResponse is the response for concluding a session.
+type ConcludeSessionResponse struct {
+	Success  bool   `json:"success"`
+	TicketID string `json:"ticket_id"`
+	Message  string `json:"message"`
+}
+
+// ResolvePromptResponse is the response for the resolve prompt endpoint.
+type ResolvePromptResponse struct {
+	Content    string `json:"content"`
+	SourcePath string `json:"source_path"`
+}
