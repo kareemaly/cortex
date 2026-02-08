@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/types"
 )
 
@@ -95,8 +96,8 @@ func TestNewClient(t *testing.T) {
 
 func TestDefaultClient(t *testing.T) {
 	c := DefaultClient("/my/project")
-	if c.baseURL != defaultBaseURL {
-		t.Errorf("expected baseURL %q, got %q", defaultBaseURL, c.baseURL)
+	if c.baseURL != daemonconfig.DefaultDaemonURL {
+		t.Errorf("expected baseURL %q, got %q", daemonconfig.DefaultDaemonURL, c.baseURL)
 	}
 }
 
