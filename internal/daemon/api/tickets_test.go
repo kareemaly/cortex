@@ -124,7 +124,7 @@ func TestSetDueDate_Success(t *testing.T) {
 
 	body := SetDueDateRequest{DueDate: "2025-06-01T00:00:00Z"}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -148,7 +148,7 @@ func TestSetDueDate_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 
@@ -166,7 +166,7 @@ func TestSetDueDate_EmptyDueDate(t *testing.T) {
 
 	body := SetDueDateRequest{DueDate: ""}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 
@@ -184,7 +184,7 @@ func TestSetDueDate_InvalidFormat(t *testing.T) {
 
 	body := SetDueDateRequest{DueDate: "not-a-date"}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 
@@ -200,7 +200,7 @@ func TestSetDueDate_NotFound(t *testing.T) {
 
 	body := SetDueDateRequest{DueDate: "2025-06-01T00:00:00Z"}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/nonexistent/due-date", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusNotFound)
 }
@@ -214,7 +214,7 @@ func TestClearDueDate_Success(t *testing.T) {
 	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
 
 	resp := ts.makeRequest(t, http.MethodDelete, "/tickets/"+created.ID+"/due-date", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -229,7 +229,7 @@ func TestClearDueDate_NotFound(t *testing.T) {
 	defer ts.Close()
 
 	resp := ts.makeRequest(t, http.MethodDelete, "/tickets/nonexistent/due-date", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusNotFound)
 }
@@ -243,7 +243,7 @@ func TestGetByID_Success(t *testing.T) {
 	created, _ := ts.store.Create("Test Ticket", "body", "", nil, nil, nil)
 
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/by-id/"+created.ID, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -261,7 +261,7 @@ func TestGetByID_NotFound(t *testing.T) {
 	defer ts.Close()
 
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/by-id/nonexistent", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusNotFound)
 }
@@ -280,7 +280,7 @@ func TestAddComment_Success(t *testing.T) {
 		Author:  "test-agent",
 	}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/comments", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -310,7 +310,7 @@ func TestAddComment_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 }
@@ -326,7 +326,7 @@ func TestAddComment_InvalidType(t *testing.T) {
 		Content: "test",
 	}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/comments", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 
@@ -345,7 +345,7 @@ func TestAddComment_TicketNotFound(t *testing.T) {
 		Content: "test",
 	}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/nonexistent/comments", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusNotFound)
 }
@@ -366,7 +366,7 @@ func TestAddComment_AllValidTypes(t *testing.T) {
 				Author:  "agent",
 			}
 			resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/comments", body)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assertStatus(t, resp, http.StatusOK)
 
@@ -393,7 +393,7 @@ func TestAddComment_WithExplicitAuthor(t *testing.T) {
 		Author:  "custom-author",
 	}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/comments", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -417,7 +417,7 @@ func TestRequestReview_Success(t *testing.T) {
 		Content:  "please review",
 	}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/reviews", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -441,7 +441,7 @@ func TestRequestReview_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 }
@@ -457,7 +457,7 @@ func TestRequestReview_EmptyRepoPath(t *testing.T) {
 		Content:  "review this",
 	}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/reviews", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 
@@ -478,7 +478,7 @@ func TestRequestReview_EmptyContent(t *testing.T) {
 		Content:  "",
 	}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/reviews", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 
@@ -500,7 +500,7 @@ func TestRequestReview_MovesToReview(t *testing.T) {
 		Content:  "review please",
 	}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/reviews", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -521,7 +521,7 @@ func TestConclude_Success(t *testing.T) {
 
 	body := ConcludeSessionRequest{Content: "done report"}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -554,7 +554,7 @@ func TestConclude_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 }
@@ -567,7 +567,7 @@ func TestConclude_EmptyContent(t *testing.T) {
 
 	body := ConcludeSessionRequest{Content: ""}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 
@@ -583,7 +583,7 @@ func TestConclude_NotFound(t *testing.T) {
 
 	body := ConcludeSessionRequest{Content: "done"}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/nonexistent/conclude", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusNotFound)
 }
@@ -621,7 +621,7 @@ func TestFocus_NoSessionManager(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/tickets/"+created.ID+"/focus", nil)
 	req.Header.Set(ProjectHeader, tmpDir)
 	resp, _ := http.DefaultClient.Do(req)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusNotFound)
 
@@ -638,7 +638,7 @@ func TestFocus_NoActiveSession(t *testing.T) {
 	created, _ := ts.store.Create("Focus Ticket", "body", "", nil, nil, nil)
 
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/focus", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusNotFound)
 
@@ -661,7 +661,7 @@ func TestListAll_DueBeforeInvalidFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 
@@ -675,8 +675,8 @@ func TestListAll_WithQueryFilter(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	ts.store.Create("Alpha Ticket", "body1", "", nil, nil, nil)
-	ts.store.Create("Beta Ticket", "body2", "", nil, nil, nil)
+	_, _ = ts.store.Create("Alpha Ticket", "body1", "", nil, nil, nil)
+	_, _ = ts.store.Create("Beta Ticket", "body2", "", nil, nil, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/tickets?query=alpha", nil)
 	req.Header.Set(ProjectHeader, ts.projectRoot)
@@ -685,7 +685,7 @@ func TestListAll_WithQueryFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -702,8 +702,8 @@ func TestListAll_WithTagFilter(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	ts.store.Create("Tagged Ticket", "body", "", nil, nil, []string{"important"})
-	ts.store.Create("Untagged Ticket", "body", "", nil, nil, nil)
+	_, _ = ts.store.Create("Tagged Ticket", "body", "", nil, nil, []string{"important"})
+	_, _ = ts.store.Create("Untagged Ticket", "body", "", nil, nil, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/tickets?tag=important", nil)
 	req.Header.Set(ProjectHeader, ts.projectRoot)
@@ -712,7 +712,7 @@ func TestListAll_WithTagFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusOK)
 
@@ -735,7 +735,7 @@ func TestCreate_WithDueDate(t *testing.T) {
 	}
 
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusCreated)
 
@@ -756,7 +756,7 @@ func TestCreate_InvalidDueDate(t *testing.T) {
 	}
 
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 
@@ -779,7 +779,7 @@ func TestListByStatus_DueBeforeInvalidFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusBadRequest)
 

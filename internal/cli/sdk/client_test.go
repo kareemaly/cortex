@@ -140,7 +140,7 @@ func TestDoRequest_InjectsProjectHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	last := rs.lastRequest()
 	if last.Headers.Get(ProjectHeader) != "/my/project" {
@@ -158,7 +158,7 @@ func TestDoRequest_EmptyProjectPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	last := rs.lastRequest()
 	if last.Headers.Get(ProjectHeader) != "" {
@@ -222,7 +222,7 @@ func TestHealthWithVersion_Success(t *testing.T) {
 func TestHealthWithVersion_BadJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("not json"))
+		_, _ = w.Write([]byte("not json"))
 	}))
 	defer srv.Close()
 
