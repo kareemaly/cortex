@@ -920,7 +920,7 @@ func TestParseError_WithDetails(t *testing.T) {
 func TestParseError_MalformedJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
-		w.Write([]byte("gateway error"))
+		_, _ = w.Write([]byte("gateway error"))
 	}))
 	defer srv.Close()
 
