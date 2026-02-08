@@ -99,9 +99,9 @@ git:
 `~/.cortex/settings.yaml` - daemon settings:
 
 ```yaml
-daemon:
-  port: 4200
-  log_level: info
+port: 4200
+bind_address: 127.0.0.1  # use 0.0.0.0 for remote VM deployments
+log_level: info
 ```
 
 ### Customizing Prompts

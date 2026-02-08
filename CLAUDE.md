@@ -104,7 +104,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 
 **Project** (`.cortex/cortex.yaml`): Agent type (`claude`, `opencode`, `copilot`), agent args, git worktrees, lifecycle hooks, `tickets.path`, `docs.path`. Ticket and doc paths default to `{projectRoot}/tickets` and `{projectRoot}/docs`. See `internal/project/config/config.go` for schema.
 
-**Global** (`~/.cortex/settings.yaml`): Daemon port, log level, project registry. See `internal/daemon/config/config.go` for schema.
+**Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, project registry. See `internal/daemon/config/config.go` for schema.
 
 **Project registry**: Global config tracks all projects (`projects` list). Auto-registered on `cortex init`. Used by `GET /projects` endpoint and `cortex projects` CLI.
 
