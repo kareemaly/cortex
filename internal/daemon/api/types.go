@@ -24,6 +24,13 @@ type (
 	DocResponse              = types.DocResponse
 	DocSummary               = types.DocSummary
 	ListDocsResponse         = types.ListDocsResponse
+	HealthResponse           = types.HealthResponse
+	ProjectTicketCounts      = types.ProjectTicketCounts
+	ProjectResponse          = types.ProjectResponse
+	AddCommentResponse       = types.AddCommentResponse
+	RequestReviewResponse    = types.RequestReviewResponse
+	ConcludeSessionResponse  = types.ConcludeSessionResponse
+	ResolvePromptResponse    = types.ResolvePromptResponse
 )
 
 // CreateTicketRequest is the request body for creating a ticket.
@@ -75,12 +82,6 @@ type AddDocCommentRequest struct {
 	Author  string `json:"author,omitempty"`
 }
 
-// AddCommentResponse is the response for adding a comment.
-type AddCommentResponse struct {
-	Success bool            `json:"success"`
-	Comment CommentResponse `json:"comment"`
-}
-
 // RequestReviewRequest is the request body for requesting a review.
 type RequestReviewRequest struct {
 	RepoPath string `json:"repo_path"`
@@ -88,23 +89,9 @@ type RequestReviewRequest struct {
 	Commit   string `json:"commit,omitempty"`
 }
 
-// RequestReviewResponse is the response for requesting a review.
-type RequestReviewResponse struct {
-	Success bool            `json:"success"`
-	Message string          `json:"message"`
-	Comment CommentResponse `json:"comment"`
-}
-
 // ConcludeSessionRequest is the request body for concluding a session.
 type ConcludeSessionRequest struct {
 	Content string `json:"content"`
-}
-
-// ConcludeSessionResponse is the response for concluding a session.
-type ConcludeSessionResponse struct {
-	Success  bool   `json:"success"`
-	TicketID string `json:"ticket_id"`
-	Message  string `json:"message"`
 }
 
 // FocusResponse is the response for the focus endpoint.

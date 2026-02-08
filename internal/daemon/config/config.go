@@ -8,6 +8,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	// DefaultPort is the default port for the cortexd HTTP server.
+	DefaultPort = 4200
+
+	// DefaultDaemonURL is the default URL for the cortexd HTTP API.
+	DefaultDaemonURL = "http://localhost:4200"
+)
+
+// DaemonURL returns the daemon URL for the given port.
+func DaemonURL(port int) string {
+	return fmt.Sprintf("http://localhost:%d", port)
+}
+
 // ProjectEntry represents a registered project in the global config.
 type ProjectEntry struct {
 	Path  string `yaml:"path"`
@@ -27,7 +40,7 @@ type Config struct {
 // DefaultConfig returns a Config with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		Port:               4200,
+		Port:               DefaultPort,
 		BindAddress:        "127.0.0.1",
 		LogLevel:           "info",
 		StatusHistoryLimit: 10,

@@ -8,12 +8,6 @@ import (
 	"github.com/kareemaly/cortex/pkg/version"
 )
 
-// HealthResponse is the response structure for the health endpoint.
-type HealthResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-}
-
 // DaemonFocusHandler returns a handler that focuses the CortexDaemon dashboard window.
 func DaemonFocusHandler(tmuxMgr *tmux.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +40,7 @@ func HealthHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to encode response")
 		}
 	}
 }

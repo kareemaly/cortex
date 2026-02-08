@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/pkg/version"
@@ -98,7 +99,7 @@ func NewServer(cfg *Config) (*Server, error) {
 		}
 
 		if cfg.DaemonURL == "" {
-			cfg.DaemonURL = "http://localhost:4200"
+			cfg.DaemonURL = daemonconfig.DefaultDaemonURL
 		}
 
 		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ProjectPath)

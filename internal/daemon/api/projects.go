@@ -10,22 +10,6 @@ import (
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
-// ProjectTicketCounts holds ticket counts by status.
-type ProjectTicketCounts struct {
-	Backlog  int `json:"backlog"`
-	Progress int `json:"progress"`
-	Review   int `json:"review"`
-	Done     int `json:"done"`
-}
-
-// ProjectResponse represents a single project in the API response.
-type ProjectResponse struct {
-	Path   string               `json:"path"`
-	Title  string               `json:"title"`
-	Exists bool                 `json:"exists"`
-	Counts *ProjectTicketCounts `json:"counts,omitempty"`
-}
-
 // ProjectsListResponse is the response for GET /projects.
 type ProjectsListResponse struct {
 	Projects []ProjectResponse `json:"projects"`
@@ -37,23 +21,23 @@ func UnlinkProjectHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		projectPath := r.URL.Query().Get("path")
 		if projectPath == "" {
-			http.Error(w, `{"error": "missing path parameter"}`, http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "bad_request", "missing path parameter")
 			return
 		}
 
 		cfg, err := config.Load()
 		if err != nil {
-			http.Error(w, `{"error": "failed to load config"}`, http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load config")
 			return
 		}
 
 		if !cfg.UnregisterProject(projectPath) {
-			http.Error(w, `{"error": "project not found"}`, http.StatusNotFound)
+			writeError(w, http.StatusNotFound, "not_found", "project not found")
 			return
 		}
 
 		if err := cfg.Save(); err != nil {
-			http.Error(w, `{"error": "failed to save config"}`, http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to save config")
 			return
 		}
 
@@ -66,7 +50,7 @@ func ProjectsHandler(storeManager *StoreManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cfg, err := config.Load()
 		if err != nil {
-			http.Error(w, "failed to load config", http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load config")
 			return
 		}
 
@@ -103,7 +87,7 @@ func ProjectsHandler(storeManager *StoreManager) http.HandlerFunc {
 		resp := ProjectsListResponse{Projects: projects}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to encode response")
 		}
 	}
 }

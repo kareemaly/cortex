@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/types"
 )
-
-const defaultBaseURL = "http://localhost:4200"
 
 // ProjectHeader is the HTTP header name for specifying the project path.
 const ProjectHeader = "X-Cortex-Project"
@@ -38,8 +38,13 @@ func NewClient(baseURL, projectPath string) *Client {
 }
 
 // DefaultClient returns a client configured for the default daemon address.
+// It checks CORTEX_DAEMON_URL env var first, falling back to the default.
 func DefaultClient(projectPath string) *Client {
-	return NewClient(defaultBaseURL, projectPath)
+	baseURL := os.Getenv("CORTEX_DAEMON_URL")
+	if baseURL == "" {
+		baseURL = daemonconfig.DefaultDaemonURL
+	}
+	return NewClient(baseURL, projectPath)
 }
 
 // WithProject returns a new Client targeting a different project.
@@ -79,13 +84,14 @@ type (
 	DocResponse              = types.DocResponse
 	DocSummary               = types.DocSummary
 	ListDocsResponse         = types.ListDocsResponse
+	HealthResponse           = types.HealthResponse
+	ProjectTicketCounts      = types.ProjectTicketCounts
+	ProjectResponse          = types.ProjectResponse
+	AddCommentResponse       = types.AddCommentResponse
+	RequestReviewResponse    = types.RequestReviewResponse
+	ConcludeSessionResponse  = types.ConcludeSessionResponse
+	ResolvePromptResponse    = types.ResolvePromptResponse
 )
-
-// HealthResponse is the response from the health endpoint.
-type HealthResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-}
 
 // APIError represents an error response from the API with its code preserved.
 type APIError struct {
@@ -461,22 +467,6 @@ func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
 	return nil, fmt.Errorf("ticket not found: %s", ticketID)
 }
 
-// ProjectTicketCounts holds ticket counts by status.
-type ProjectTicketCounts struct {
-	Backlog  int `json:"backlog"`
-	Progress int `json:"progress"`
-	Review   int `json:"review"`
-	Done     int `json:"done"`
-}
-
-// ProjectResponse represents a single project in the API response.
-type ProjectResponse struct {
-	Path   string               `json:"path"`
-	Title  string               `json:"title"`
-	Exists bool                 `json:"exists"`
-	Counts *ProjectTicketCounts `json:"counts,omitempty"`
-}
-
 // ListProjectsResponse is the response from GET /projects.
 type ListProjectsResponse struct {
 	Projects []ProjectResponse `json:"projects"`
@@ -526,26 +516,6 @@ func (c *Client) UnlinkProject(projectPath string) error {
 	}
 
 	return nil
-}
-
-// AddCommentResponse is the response from the add comment endpoint.
-type AddCommentResponse struct {
-	Success bool            `json:"success"`
-	Comment CommentResponse `json:"comment"`
-}
-
-// RequestReviewResponse is the response from the request review endpoint.
-type RequestReviewResponse struct {
-	Success bool            `json:"success"`
-	Message string          `json:"message"`
-	Comment CommentResponse `json:"comment"`
-}
-
-// ConcludeSessionResponse is the response from the conclude session endpoint.
-type ConcludeSessionResponse struct {
-	Success  bool   `json:"success"`
-	TicketID string `json:"ticket_id"`
-	Message  string `json:"message"`
 }
 
 // UpdateTicket updates a ticket's title, body, references, and/or tags by ID (status-agnostic).
@@ -1062,12 +1032,6 @@ type ResolvePromptRequest struct {
 	Role       string // "architect" or "ticket"
 	Stage      string // "SYSTEM", "KICKOFF", "APPROVE"
 	TicketType string // for ticket prompts only
-}
-
-// ResolvePromptResponse is the response from the resolve prompt endpoint.
-type ResolvePromptResponse struct {
-	Content    string `json:"content"`
-	SourcePath string `json:"source_path"`
 }
 
 // ResolvePrompt resolves a prompt file with extension fallback.
