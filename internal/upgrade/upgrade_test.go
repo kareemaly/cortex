@@ -164,7 +164,7 @@ func TestVerifyChecksum_FileNotFound(t *testing.T) {
 func TestDownload_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("binary content"))
+		_, _ = w.Write([]byte("binary content"))
 	}))
 	defer srv.Close()
 
@@ -202,7 +202,7 @@ func TestDownload_ServerError(t *testing.T) {
 func TestDownloadString_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("hello string"))
+		_, _ = w.Write([]byte("hello string"))
 	}))
 	defer srv.Close()
 
