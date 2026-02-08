@@ -60,7 +60,7 @@ func DetectBinaryLocations() (*BinaryInfo, error) {
 // BackupBinary creates a backup of a binary in the backup directory.
 // Returns the backup path.
 func BackupBinary(srcPath, backupDir string) (string, error) {
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
+	if err := os.MkdirAll(backupDir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -75,7 +75,7 @@ func BackupBinary(srcPath, backupDir string) (string, error) {
 	}
 
 	// Write to backup
-	if err := os.WriteFile(backupPath, content, 0755); err != nil {
+	if err := os.WriteFile(backupPath, content, 0700); err != nil {
 		return "", fmt.Errorf("failed to write backup: %w", err)
 	}
 
@@ -104,7 +104,7 @@ func ReplaceBinary(oldPath, newPath string, needsSudo bool) error {
 			return fmt.Errorf("failed to read new binary: %w", err)
 		}
 
-		if err := os.WriteFile(oldPath, content, 0755); err != nil {
+		if err := os.WriteFile(oldPath, content, 0700); err != nil {
 			return fmt.Errorf("failed to write binary: %w", err)
 		}
 	}

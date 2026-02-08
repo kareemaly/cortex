@@ -106,11 +106,11 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 }
 
 // NewServer creates a new Server with the given configuration.
-func NewServer(port int, logger *slog.Logger, deps *Dependencies) *Server {
+func NewServer(port int, bindAddress string, logger *slog.Logger, deps *Dependencies) *Server {
 	r := NewRouter(deps, logger)
 
 	httpServer := &http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
+		Addr:         fmt.Sprintf("%s:%d", bindAddress, port),
 		Handler:      r,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 0, // No timeout for SSE support

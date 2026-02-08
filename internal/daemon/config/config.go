@@ -17,6 +17,7 @@ type ProjectEntry struct {
 // Config holds the daemon configuration.
 type Config struct {
 	Port               int            `yaml:"port"`
+	BindAddress        string         `yaml:"bind_address"`
 	LogLevel           string         `yaml:"log_level"`
 	StatusHistoryLimit int            `yaml:"status_history_limit"`
 	GitDiffTool        string         `yaml:"git_diff_tool"`
@@ -27,6 +28,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Port:               4200,
+		BindAddress:        "127.0.0.1",
 		LogLevel:           "info",
 		StatusHistoryLimit: 10,
 		GitDiffTool:        "diff",
@@ -87,7 +89,7 @@ func (c *Config) SaveToFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // RegisterProject adds a project to the registry if not already present.

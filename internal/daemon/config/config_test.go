@@ -89,6 +89,9 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	if loaded.Port != 4200 {
 		t.Errorf("expected default port 4200, got %d", loaded.Port)
 	}
+	if loaded.BindAddress != "127.0.0.1" {
+		t.Errorf("expected default bind_address 127.0.0.1, got %s", loaded.BindAddress)
+	}
 }
 
 func TestLoadFromFileMissing(t *testing.T) {

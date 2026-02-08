@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 )
 
@@ -44,9 +45,13 @@ func (h *EventHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 			}
 			data, err := json.Marshal(event)
 			if err != nil {
+				slog.Warn("failed to marshal SSE event", "error", err)
 				continue
 			}
-			_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+				slog.Warn("failed to write SSE event", "error", err)
+				return
+			}
 			flusher.Flush()
 		}
 	}

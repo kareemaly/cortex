@@ -98,7 +98,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create and run server
-	server := api.NewServer(cfg.Port, logger, deps)
+	server := api.NewServer(cfg.Port, cfg.BindAddress, logger, deps)
 	err = server.Run(ctx)
 
 	return err
