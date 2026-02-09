@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
-	"github.com/kareemaly/cortex/internal/cli/tui/kanban"
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
+	"github.com/kareemaly/cortex/internal/cli/tui/views"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/spf13/cobra"
 )
@@ -27,7 +27,7 @@ var kanbanCmd = &cobra.Command{
 		client := sdk.DefaultClient(projectPath)
 		logBuf := tuilog.NewBuffer(tuilog.DefaultCapacity)
 		p := tea.NewProgram(
-			kanban.New(client, logBuf),
+			views.New(client, logBuf),
 			tea.WithAltScreen(),
 		)
 		if _, err := p.Run(); err != nil {

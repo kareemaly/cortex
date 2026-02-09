@@ -93,7 +93,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Daemon config | `internal/daemon/config/` |
 | Tmux manager | `internal/tmux/` |
 | Worktree manager | `internal/worktree/` |
-| TUI components | `internal/cli/tui/` |
+| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `docs/`, `ticket/`) |
 | Install/init logic | `internal/install/` |
 | Agent defaults | `internal/install/defaults/` (`claude-code`, `copilot`) |
 | Shared storage | `internal/storage/` |
@@ -114,7 +114,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 |---------|-------------|
 | `cortex init` | Initialize `.cortex/` in current directory, register in global config |
 | `cortex architect` | Start/attach architect session (`--mode fresh\|resume` for orphaned) |
-| `cortex kanban` | Kanban TUI for current project |
+| `cortex kanban` | Kanban + Docs TUI with tab switching (`tab`/`[`/`]`) |
 | `cortex show [id]` | Ticket detail TUI |
 | `cortex ticket list` | List tickets |
 | `cortex ticket spawn <id>` | Spawn ticket agent session |
