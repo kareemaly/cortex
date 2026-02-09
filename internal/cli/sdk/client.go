@@ -91,6 +91,8 @@ type (
 	RequestReviewResponse    = types.RequestReviewResponse
 	ConcludeSessionResponse  = types.ConcludeSessionResponse
 	ResolvePromptResponse    = types.ResolvePromptResponse
+	ListTagsResponse         = types.ListTagsResponse
+	TagCount                 = types.TagCount
 )
 
 // APIError represents an error response from the API with its code preserved.
@@ -1265,6 +1267,31 @@ func (c *Client) ListDocs(category, tag, query string) (*ListDocsResponse, error
 	}
 
 	return &listResult, nil
+}
+
+// ListTags returns aggregated tags from tickets and docs, sorted by count descending.
+func (c *Client) ListTags() (*ListTagsResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tags", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ListTagsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
 }
 
 // AddDocComment adds a comment to a doc.

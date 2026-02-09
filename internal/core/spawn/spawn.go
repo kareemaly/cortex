@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -694,6 +695,37 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 
 	ticketList := sb.String()
 
+	// Fetch top tags (graceful degradation)
+	var topTags string
+	tagsResp, tagsErr := client.ListTags()
+	if tagsErr == nil && len(tagsResp.Tags) > 0 {
+		limit := min(20, len(tagsResp.Tags))
+		tagNames := make([]string, limit)
+		for i := range limit {
+			tagNames[i] = tagsResp.Tags[i].Name
+		}
+		topTags = strings.Join(tagNames, ", ")
+	}
+
+	// Fetch recent docs (graceful degradation)
+	var docsList string
+	docsResp, docsErr := client.ListDocs("", "", "")
+	if docsErr == nil && len(docsResp.Docs) > 0 {
+		// Sort by Created descending (RFC3339 strings sort correctly)
+		sorted := make([]sdk.DocSummary, len(docsResp.Docs))
+		copy(sorted, docsResp.Docs)
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i].Created > sorted[j].Created
+		})
+		limit := min(20, len(sorted))
+		var docSB strings.Builder
+		for i := range limit {
+			d := sorted[i]
+			docSB.WriteString(fmt.Sprintf("- [%s] %s (%s, created: %s)\n", d.ID, d.Title, d.Category, d.Created))
+		}
+		docsList = docSB.String()
+	}
+
 	// Try to load and render KICKOFF template
 	kickoffTemplate, kickoffErr := resolver.ResolveArchitectPrompt(prompt.StageKickoff)
 	if kickoffErr == nil {
@@ -701,6 +733,8 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 			ProjectName: req.ProjectName,
 			TicketList:  ticketList,
 			CurrentDate: time.Now().Format("2006-01-02 15:04 MST"),
+			TopTags:     topTags,
+			DocsList:    docsList,
 		}
 		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
 		if renderErr == nil {

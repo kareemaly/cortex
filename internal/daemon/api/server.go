@@ -97,6 +97,9 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Post("/status", agentHandlers.UpdateStatus)
 		})
 
+		// Tags route
+		r.Get("/tags", TagsHandler(deps.StoreManager, deps.DocsStoreManager))
+
 		// Prompt routes
 		promptHandlers := NewPromptHandlers(deps)
 		r.Get("/prompts/resolve", promptHandlers.Resolve)

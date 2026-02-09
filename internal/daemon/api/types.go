@@ -31,6 +31,8 @@ type (
 	RequestReviewResponse    = types.RequestReviewResponse
 	ConcludeSessionResponse  = types.ConcludeSessionResponse
 	ResolvePromptResponse    = types.ResolvePromptResponse
+	ListTagsResponse         = types.ListTagsResponse
+	TagCount                 = types.TagCount
 )
 
 // CreateTicketRequest is the request body for creating a ticket.

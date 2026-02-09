@@ -184,3 +184,14 @@ type ResolvePromptResponse struct {
 	Content    string `json:"content"`
 	SourcePath string `json:"source_path"`
 }
+
+// TagCount represents a tag and how many times it appears across tickets and docs.
+type TagCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// ListTagsResponse is the response for GET /tags.
+type ListTagsResponse struct {
+	Tags []TagCount `json:"tags"`
+}

@@ -21,6 +21,8 @@ type ArchitectKickoffVars struct {
 	ProjectName string
 	TicketList  string
 	CurrentDate string
+	TopTags     string // comma-separated top tags
+	DocsList    string // formatted recent docs list
 }
 
 // RenderTemplate renders a template string with the given variables.

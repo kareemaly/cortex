@@ -887,6 +887,56 @@ func TestAddDocComment(t *testing.T) {
 	}
 }
 
+// --- ListTags ---
+
+func TestListTags_Success(t *testing.T) {
+	srv, rs := newRoutedServer(t)
+	rs.setRoute("GET", "/tags", http.StatusOK, ListTagsResponse{
+		Tags: []TagCount{
+			{Name: "api", Count: 3},
+			{Name: "bug", Count: 1},
+		},
+	})
+
+	c := NewClient(srv.URL, "/p")
+	resp, err := c.ListTags()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(resp.Tags))
+	}
+	if resp.Tags[0].Name != "api" || resp.Tags[0].Count != 3 {
+		t.Errorf("expected first tag api:3, got %s:%d", resp.Tags[0].Name, resp.Tags[0].Count)
+	}
+
+	last := rs.lastRequest()
+	if last.Headers.Get(ProjectHeader) != "/p" {
+		t.Errorf("expected project header /p, got %q", last.Headers.Get(ProjectHeader))
+	}
+}
+
+func TestListTags_Error(t *testing.T) {
+	srv, rs := newRoutedServer(t)
+	rs.setRoute("GET", "/tags", http.StatusInternalServerError, types.ErrorResponse{
+		Error: "internal error",
+		Code:  "internal_error",
+	})
+
+	c := NewClient(srv.URL, "/p")
+	_, err := c.ListTags()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected APIError, got %T", err)
+	}
+	if apiErr.Status != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", apiErr.Status)
+	}
+}
+
 // --- Error parsing ---
 
 func TestParseError_WithDetails(t *testing.T) {
