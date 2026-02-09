@@ -29,15 +29,19 @@ Single `cortexd` daemon serves all projects. **All clients communicate exclusive
 │  cortex CLI/TUI │──┐
 └─────────────────┘  │
 ┌─────────────────┐  │  HTTP :4200   ┌──────────────────────┐
-│  MCP Architect  │──┼──────────────▶│      cortexd         │
+│  MCP Meta       │──┤──────────────▶│      cortexd         │
 └─────────────────┘  │               │  ├─ HTTP API         │
 ┌─────────────────┐  │               │  ├─ StoreManager     │
-│  MCP Ticket     │──┘               │  ├─ Tmux management  │
-└─────────────────┘                  │  └─ SSE event bus    │
-                                     └──────────────────────┘
+│  MCP Architect  │──┤               │  ├─ Tmux management  │
+└─────────────────┘  │               │  └─ SSE event bus    │
+┌─────────────────┐  │               └──────────────────────┘
+│  MCP Ticket     │──┘
+└─────────────────┘
 ```
 
-Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
+Three-tier agent hierarchy: **Meta** (global) → **Architect** (project-scoped) → **Ticket Agent** (ticket-scoped).
+
+Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP). Meta sessions are global and don't require project context.
 
 ## Storage Format
 
@@ -56,6 +60,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 - **StoreManager**: Single source of truth for ticket state. Located in `internal/daemon/api/store_manager.go`.
 - **DocsStoreManager**: Manages doc stores per project. Located in `internal/daemon/api/docs_store_manager.go`.
 - **SessionManager**: Manages ephemeral session stores per project. Located in `internal/daemon/api/session_manager.go`.
+- **MetaSessionManager**: Manages the global meta session at `~/.cortex/meta-session.json`. Located in `internal/daemon/api/meta_session_manager.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 
 ## Anti-Patterns
@@ -113,6 +118,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Command | Description |
 |---------|-------------|
 | `cortex init` | Initialize `.cortex/` in current directory, register in global config |
+| `cortex meta` | Start/attach global meta session (`--mode fresh\|resume` for orphaned) |
 | `cortex architect` | Start/attach architect session (`--mode fresh\|resume` for orphaned) |
 | `cortex kanban` | Kanban + Docs TUI with tab switching (`tab`/`[`/`]`) |
 | `cortex show [id]` | Ticket detail TUI |
@@ -130,13 +136,36 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 
 Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/sdk/client.go`.
 
-**Global** (no project header): `GET /health`, `GET /projects`
+**Global** (no project header): `GET /health`, `GET /projects`, `POST /projects`, meta session (`/meta/*`), global config (`/config/global`), daemon logs/status (`/daemon/logs`, `/daemon/status`).
 
-**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn/conclude, session kill/approve, SSE events, docs CRUD, tags aggregation.
+**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn/conclude, session kill/approve, SSE events, docs CRUD, tags aggregation, project config (`/config/project`).
 
 ## MCP Tools
 
-Defined in `internal/daemon/mcp/`. Two session types with different tool access:
+Defined in `internal/daemon/mcp/`. Three session types with different tool access:
+
+**Meta** (`tools_meta.go`) — global session, no project context required:
+
+| Tool | Description |
+|------|-------------|
+| `listProjects` | List all registered projects |
+| `registerProject` | Register a project directory |
+| `unregisterProject` | Remove project from registry |
+| `spawnArchitect` | Spawn architect for a project |
+| `listSessions` | List active sessions for a project |
+| `readProjectConfig` | Read project's cortex.yaml |
+| `updateProjectConfig` | Update project's cortex.yaml |
+| `readGlobalConfig` | Read global settings.yaml |
+| `updateGlobalConfig` | Update global settings.yaml |
+| `readPrompt` | Read a prompt template |
+| `updatePrompt` | Update/eject a prompt template |
+| `readDaemonLogs` | Read recent daemon logs |
+| `daemonStatus` | Get daemon uptime, version, project count |
+| `listTickets` | List tickets from a project (requires project_path) |
+| `readTicket` | Read ticket from a project |
+| `listDocs` | List docs from a project |
+| `readDoc` | Read doc from a project |
+| `concludeSession` | Conclude the meta session |
 
 **Architect** (`tools_architect.go`):
 
@@ -178,13 +207,14 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 
 ## Agent Workflow
 
-1. Architect reads backlog → calls `spawnSession` for a ticket
-2. Daemon creates tmux window with ticket-scoped MCP (30% agent pane, 70% companion pane)
-3. Ticket agent works, uses `addComment` to log progress
-4. Agent calls `requestReview` when done → ticket moves to review
-5. Architect reviews and approves → triggers lifecycle hooks, moves to done
+1. **Meta** (optional) manages projects, configs, and spawns architects across projects
+2. Architect reads backlog → calls `spawnSession` for a ticket
+3. Daemon creates tmux window with ticket-scoped MCP (30% agent pane, 70% companion pane)
+4. Ticket agent works, uses `addComment` to log progress
+5. Agent calls `requestReview` when done → ticket moves to review
+6. Architect reviews and approves → triggers lifecycle hooks, moves to done
 
-Spawn orchestration handles state detection (normal/active/orphaned) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`. Both architect and ticket agent sessions are tracked in `.cortex/sessions.json` with the same state detection and orphan recovery patterns.
+Spawn orchestration handles state detection (normal/active/orphaned) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`. Architect and ticket agent sessions are tracked in `.cortex/sessions.json`; meta sessions are global at `~/.cortex/meta-session.json`. All session types share the same state detection and orphan recovery patterns.
 
 ## Lifecycle Hooks
 
