@@ -481,7 +481,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		if workDir == "" {
 			workDir = homeDir
 		}
-		err = s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, req.WindowName, launchCmd, "cortex projects", workDir, workDir)
+		err = s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, req.WindowName, launchCmd, "cortex dashboard", workDir, workDir)
 	}
 	if err != nil {
 		for _, path := range allTempFiles {
@@ -907,8 +907,8 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDi
 		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, "cortex kanban", workingDir, req.ProjectPath)
 		return 0, err
 	case AgentTypeMeta:
-		// Companion command shows project listing
-		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, "cortex projects", workingDir, workingDir)
+		// Companion command shows project dashboard
+		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, "cortex dashboard", workingDir, workingDir)
 		return 0, err
 	default:
 		return 0, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
