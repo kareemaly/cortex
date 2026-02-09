@@ -132,7 +132,7 @@ Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/s
 
 **Global** (no project header): `GET /health`, `GET /projects`
 
-**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn/conclude, session kill/approve, SSE events, docs CRUD.
+**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn/conclude, session kill/approve, SSE events, docs CRUD, tags aggregation.
 
 ## MCP Tools
 
