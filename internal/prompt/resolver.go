@@ -119,6 +119,42 @@ func (r *PromptResolver) ResolveTicketPromptWithPath(ticketType, stage string) (
 	}
 }
 
+// ResolveMetaPrompt finds and loads a meta prompt file.
+// Checks base config path only (meta prompts are global, not per-project).
+func (r *PromptResolver) ResolveMetaPrompt(stage string) (string, error) {
+	resolved, err := r.ResolveMetaPromptWithPath(stage)
+	if err != nil {
+		return "", err
+	}
+	return resolved.Content, nil
+}
+
+// ResolveMetaPromptWithPath finds and loads a meta prompt file,
+// returning both content and source path. Checks base config path.
+func (r *PromptResolver) ResolveMetaPromptWithPath(stage string) (*ResolvedPrompt, error) {
+	var searchPaths []string
+
+	// Try base fallback (meta prompts live in defaults, not per-project)
+	if r.BaseRoot != "" {
+		basePath := BaseMetaPromptPath(r.BaseRoot, stage)
+		searchPaths = append(searchPaths, basePath)
+		content, err := r.loadIfExists(basePath)
+		if err != nil {
+			return nil, err
+		}
+		if content != "" {
+			return &ResolvedPrompt{Content: content, SourcePath: basePath}, nil
+		}
+	}
+
+	// Not found
+	return nil, &NotFoundError{
+		Role:        "meta",
+		Stage:       stage,
+		SearchPaths: searchPaths,
+	}
+}
+
 // loadIfExists loads a file if it exists, returns empty string if not found.
 // Returns error only for read errors (not missing files).
 func (r *PromptResolver) loadIfExists(path string) (string, error) {

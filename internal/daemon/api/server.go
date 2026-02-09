@@ -30,8 +30,28 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 	// Global endpoints (no project required)
 	r.Get("/health", HealthHandler())
 	r.Get("/projects", ProjectsHandler(deps.StoreManager))
+	r.Post("/projects", RegisterProjectHandler())
 	r.Delete("/projects", UnlinkProjectHandler())
 	r.Post("/daemon/focus", DaemonFocusHandler(deps.TmuxManager))
+
+	// Meta routes (global, no project header required)
+	metaHandlers := NewMetaHandlers(deps)
+	r.Route("/meta", func(r chi.Router) {
+		r.Get("/", metaHandlers.GetState)
+		r.Post("/spawn", metaHandlers.Spawn)
+		r.Post("/focus", metaHandlers.Focus)
+		r.Post("/conclude", metaHandlers.Conclude)
+	})
+
+	// Global config routes (no project header required)
+	configHandlers := NewConfigHandlers(deps)
+	r.Get("/config/global", configHandlers.ReadGlobalConfig)
+	r.Put("/config/global", configHandlers.UpdateGlobalConfig)
+
+	// Daemon logs and status (global)
+	logsHandlers := NewLogsHandlers(deps)
+	r.Get("/daemon/logs", logsHandlers.ReadDaemonLogs)
+	r.Get("/daemon/status", logsHandlers.DaemonStatus)
 
 	// Project-scoped routes
 	r.Group(func(r chi.Router) {
@@ -103,6 +123,10 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		// Prompt routes
 		promptHandlers := NewPromptHandlers(deps)
 		r.Get("/prompts/resolve", promptHandlers.Resolve)
+
+		// Project config routes (project-scoped)
+		r.Get("/config/project", configHandlers.ReadProjectConfig)
+		r.Put("/config/project", configHandlers.UpdateProjectConfig)
 	})
 
 	return r

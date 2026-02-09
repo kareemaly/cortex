@@ -46,6 +46,17 @@ func BaseTicketPromptPath(cortexConfigDir, ticketType, stage string) string {
 	return filepath.Join(BasePromptsDir(cortexConfigDir), "ticket", ticketType, stage+".md")
 }
 
+// MetaPromptPath returns the path to a meta prompt file by stage.
+// e.g. .cortex/prompts/meta/SYSTEM.md
+func MetaPromptPath(projectRoot, stage string) string {
+	return filepath.Join(PromptsDir(projectRoot), "meta", stage+".md")
+}
+
+// BaseMetaPromptPath returns the path to a meta prompt in a cortex config directory.
+func BaseMetaPromptPath(cortexConfigDir, stage string) string {
+	return filepath.Join(BasePromptsDir(cortexConfigDir), "meta", stage+".md")
+}
+
 // ValidatePromptFile checks that a prompt file exists.
 func ValidatePromptFile(path string) error {
 	_, err := os.Stat(path)

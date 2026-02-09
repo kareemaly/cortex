@@ -12,6 +12,7 @@ type SessionType string
 const (
 	SessionTypeArchitect SessionType = "architect"
 	SessionTypeTicket    SessionType = "ticket"
+	SessionTypeMeta      SessionType = "meta"
 )
 
 // Session holds the current session context.
@@ -448,6 +449,103 @@ func docSummaryToOutput(s *types.DocSummary) DocSummaryOutput {
 		Created:  s.Created,
 		Updated:  s.Updated,
 	}
+}
+
+// Meta input types
+
+// RegisterProjectInput is the input for the registerProject tool.
+type RegisterProjectInput struct {
+	Path  string `json:"path" jsonschema:"Absolute path to the project directory (required)"`
+	Title string `json:"title,omitempty" jsonschema:"Optional display name for the project. Defaults to directory name."`
+}
+
+// UnregisterProjectInput is the input for the unregisterProject tool.
+type UnregisterProjectInput struct {
+	Path string `json:"path" jsonschema:"Absolute path to the project to unregister (required)"`
+}
+
+// SpawnArchitectInput is the input for the spawnArchitect tool.
+type SpawnArchitectInput struct {
+	ProjectPath string `json:"project_path" jsonschema:"Absolute path to the project to spawn an architect for (required)"`
+	Mode        string `json:"mode,omitempty" jsonschema:"Spawn mode: 'normal' (default), 'resume', or 'fresh'"`
+}
+
+// ReadProjectConfigInput is the input for the readProjectConfig tool.
+type ReadProjectConfigInput struct {
+	ProjectPath string `json:"project_path" jsonschema:"Absolute path to the project (required)"`
+}
+
+// UpdateProjectConfigInput is the input for the updateProjectConfig tool.
+type UpdateProjectConfigInput struct {
+	ProjectPath string `json:"project_path" jsonschema:"Absolute path to the project (required)"`
+	Content     string `json:"content" jsonschema:"Full YAML content for cortex.yaml (required)"`
+}
+
+// ReadGlobalConfigInput is the input for the readGlobalConfig tool.
+type ReadGlobalConfigInput struct{}
+
+// UpdateGlobalConfigInput is the input for the updateGlobalConfig tool.
+type UpdateGlobalConfigInput struct {
+	Content string `json:"content" jsonschema:"Full YAML content for settings.yaml (required)"`
+}
+
+// ReadPromptInput is the input for the readPrompt tool.
+type ReadPromptInput struct {
+	ProjectPath string `json:"project_path" jsonschema:"Absolute path to the project (required)"`
+	Role        string `json:"role" jsonschema:"Prompt role: 'architect' or 'ticket' (required)"`
+	Stage       string `json:"stage" jsonschema:"Prompt stage: 'SYSTEM', 'KICKOFF', or 'APPROVE' (required)"`
+	TicketType  string `json:"ticket_type,omitempty" jsonschema:"Ticket type for ticket role prompts: 'work', 'debug', 'research', 'chore'"`
+}
+
+// UpdatePromptInput is the input for the updatePrompt tool.
+type UpdatePromptInput struct {
+	ProjectPath string `json:"project_path" jsonschema:"Absolute path to the project (required)"`
+	Role        string `json:"role" jsonschema:"Prompt role: 'architect' or 'ticket' (required)"`
+	Stage       string `json:"stage" jsonschema:"Prompt stage: 'SYSTEM', 'KICKOFF', or 'APPROVE' (required)"`
+	TicketType  string `json:"ticket_type,omitempty" jsonschema:"Ticket type for ticket role prompts: 'work', 'debug', 'research', 'chore'"`
+	Content     string `json:"content" jsonschema:"New prompt content (required)"`
+}
+
+// ReadDaemonLogsInput is the input for the readDaemonLogs tool.
+type ReadDaemonLogsInput struct {
+	Lines int    `json:"lines,omitempty" jsonschema:"Number of recent log lines to return. Defaults to 100."`
+	Level string `json:"level,omitempty" jsonschema:"Filter by log level: 'debug', 'info', 'warn', 'error'. If empty, returns all levels."`
+}
+
+// DaemonStatusInput is the input for the daemonStatus tool.
+type DaemonStatusInput struct{}
+
+// MetaConcludeSessionInput is the input for the meta concludeSession tool.
+type MetaConcludeSessionInput struct {
+	Content string `json:"content" jsonschema:"Complete summary of work done and decisions made"`
+}
+
+// Meta output types
+
+// ConfigOutput is the output for config read operations.
+type ConfigOutput struct {
+	Content string `json:"content"`
+	Path    string `json:"path"`
+}
+
+// PromptOutput is the output for prompt read operations.
+type PromptOutput struct {
+	Content    string `json:"content"`
+	SourcePath string `json:"source_path"`
+}
+
+// DaemonLogsOutput is the output for the readDaemonLogs tool.
+type DaemonLogsOutput struct {
+	Content string `json:"content"`
+	Path    string `json:"path"`
+}
+
+// DaemonStatusOutput is the output for the daemonStatus tool.
+type DaemonStatusOutput struct {
+	Status       string `json:"status"`
+	Version      string `json:"version"`
+	Uptime       string `json:"uptime"`
+	ProjectCount int    `json:"project_count"`
 }
 
 // ticketSummaryResponseToMCP maps a shared TicketSummary (from the HTTP API)

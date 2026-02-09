@@ -41,6 +41,7 @@ type Config struct {
 	Extend    string        `yaml:"extend,omitempty"`
 	Name      string        `yaml:"name"`
 	Architect RoleConfig    `yaml:"architect"`
+	Meta      RoleConfig    `yaml:"meta,omitempty"`
 	Ticket    TicketConfig  `yaml:"ticket"`
 	Git       GitConfig     `yaml:"git"`
 	Docs      DocsConfig    `yaml:"docs,omitempty"`

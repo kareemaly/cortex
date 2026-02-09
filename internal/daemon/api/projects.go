@@ -45,6 +45,73 @@ func UnlinkProjectHandler() http.HandlerFunc {
 	}
 }
 
+// RegisterProjectRequest is the request body for POST /projects.
+type RegisterProjectRequest struct {
+	Path  string `json:"path"`
+	Title string `json:"title,omitempty"`
+}
+
+// RegisterProjectHandler returns a handler for POST /projects.
+func RegisterProjectHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req RegisterProjectRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
+			return
+		}
+
+		if req.Path == "" {
+			writeError(w, http.StatusBadRequest, "validation_error", "path is required")
+			return
+		}
+
+		// Resolve absolute path
+		absPath := req.Path
+		if !filepath.IsAbs(absPath) {
+			writeError(w, http.StatusBadRequest, "validation_error", "path must be absolute")
+			return
+		}
+
+		// Check .cortex directory exists
+		cortexDir := filepath.Join(absPath, ".cortex")
+		if _, err := os.Stat(cortexDir); err != nil {
+			writeError(w, http.StatusBadRequest, "validation_error", "not a cortex project (no .cortex directory)")
+			return
+		}
+
+		cfg, err := config.Load()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load config")
+			return
+		}
+
+		title := req.Title
+		if title == "" {
+			title = filepath.Base(absPath)
+		}
+
+		if !cfg.RegisterProject(absPath, title) {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"success": true,
+				"message": "project already registered",
+			})
+			return
+		}
+
+		if err := cfg.Save(); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to save config")
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"success": true,
+			"message": "project registered",
+			"path":    absPath,
+			"title":   title,
+		})
+	}
+}
+
 // ProjectsHandler returns a handler for GET /projects.
 func ProjectsHandler(storeManager *StoreManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

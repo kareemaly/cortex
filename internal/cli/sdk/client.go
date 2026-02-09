@@ -93,6 +93,8 @@ type (
 	ResolvePromptResponse    = types.ResolvePromptResponse
 	ListTagsResponse         = types.ListTagsResponse
 	TagCount                 = types.TagCount
+	MetaSpawnResponse        = types.MetaSpawnResponse
+	MetaStateResponse        = types.MetaStateResponse
 )
 
 // APIError represents an error response from the API with its code preserved.
@@ -1371,4 +1373,141 @@ func (c *Client) ListSessions() (*ListSessionsResponse, error) {
 	}
 
 	return &result, nil
+}
+
+// SpawnMeta spawns or reattaches to the meta session.
+func (c *Client) SpawnMeta(mode string) (*MetaSpawnResponse, error) {
+	url := c.baseURL + "/meta/spawn"
+	if mode != "" {
+		url += "?mode=" + mode
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req) // No project header needed
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, c.parseError(resp)
+	}
+
+	var result MetaSpawnResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetMetaState returns the current meta session state.
+func (c *Client) GetMetaState() (*MetaStateResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/meta", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req) // No project header needed
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result MetaStateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ConcludeMetaSession concludes the meta session.
+func (c *Client) ConcludeMetaSession(content string) (*ConcludeSessionResponse, error) {
+	reqBody := map[string]string{"content": content}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/meta/conclude", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req) // No project header needed
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ConcludeSessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// FocusMeta focuses the meta tmux window.
+func (c *Client) FocusMeta() error {
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/meta/focus", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req) // No project header needed
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
+// RegisterProject registers a project with the daemon.
+func (c *Client) RegisterProject(path, title string) error {
+	reqBody := map[string]string{"path": path}
+	if title != "" {
+		reqBody["title"] = title
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/projects", bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req) // No project header needed
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return c.parseError(resp)
+	}
+
+	return nil
 }

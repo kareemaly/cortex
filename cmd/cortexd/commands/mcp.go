@@ -13,6 +13,7 @@ import (
 
 var (
 	mcpTicketID string
+	mcpMeta     bool
 )
 
 var mcpCmd = &cobra.Command{
@@ -34,6 +35,7 @@ Examples:
 
 func init() {
 	mcpCmd.Flags().StringVar(&mcpTicketID, "ticket-id", "", "Ticket ID for ticket sessions")
+	mcpCmd.Flags().BoolVar(&mcpMeta, "meta", false, "Start a meta session (global, above architects)")
 	rootCmd.AddCommand(mcpCmd)
 }
 
@@ -53,6 +55,7 @@ func runMCP(cmd *cobra.Command, args []string) error {
 	// Create MCP server config
 	cfg := &mcp.Config{
 		TicketID:    ticketID,
+		IsMeta:      mcpMeta,
 		ProjectPath: projectPath,
 		TmuxSession: tmuxSession,
 		DaemonURL:   daemonURL,

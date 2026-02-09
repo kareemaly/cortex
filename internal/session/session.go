@@ -19,12 +19,17 @@ type SessionType string
 const (
 	SessionTypeArchitect SessionType = "architect"
 	SessionTypeTicket    SessionType = "ticket"
+	SessionTypeMeta      SessionType = "meta"
 )
 
 // ArchitectSessionKey is the session store key for the architect session.
 // This is used as-is (not shortened via storage.ShortID) because the
 // architect is a singleton per project.
 const ArchitectSessionKey = "architect"
+
+// MetaSessionKey is the session store key for the meta session.
+// The meta agent is a global singleton (one per daemon).
+const MetaSessionKey = "meta"
 
 // Session represents an active work session for a ticket.
 // Sessions are ephemeral — deleted when ended.

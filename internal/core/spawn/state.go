@@ -99,6 +99,40 @@ func DetectArchitectState(sess *session.Session, tmuxSession string, tmuxChecker
 	return info, nil
 }
 
+// DetectMetaState determines the current state of the meta session.
+// Same pattern as DetectArchitectState but checks for window named "meta".
+func DetectMetaState(sess *session.Session, tmuxSession string, tmuxChecker TmuxChecker) (*StateInfo, error) {
+	info := &StateInfo{
+		State:   StateNormal,
+		Session: sess,
+	}
+
+	// Check if meta tmux window exists
+	windowExists := false
+	if tmuxChecker != nil && tmuxSession != "" {
+		exists, err := tmuxChecker.WindowExists(tmuxSession, "meta")
+		if err != nil {
+			return nil, &TmuxError{Operation: "check meta window", Cause: err}
+		}
+		windowExists = exists
+		info.WindowExists = exists
+	}
+
+	if sess != nil {
+		// Session record exists — check if window is still running
+		if windowExists {
+			info.State = StateActive
+		} else {
+			info.State = StateOrphaned
+		}
+	} else if windowExists {
+		// No session record but window exists — treat as active.
+		info.State = StateActive
+	}
+
+	return info, nil
+}
+
 // CanSpawn returns true if a new session can be spawned based on the state.
 func (s *StateInfo) CanSpawn() bool {
 	return s.State == StateNormal || s.State == StateOrphaned

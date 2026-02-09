@@ -92,6 +92,44 @@ func (s *Store) EndArchitect() error {
 	return s.End(ArchitectSessionKey)
 }
 
+// CreateMeta adds a new meta session.
+// Uses MetaSessionKey as the literal key (global singleton).
+func (s *Store) CreateMeta(agent, tmuxWindow string) (*Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sessions, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+
+	sess := &Session{
+		Type:       SessionTypeMeta,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now().UTC(),
+		Status:     AgentStatusStarting,
+	}
+
+	sessions[MetaSessionKey] = sess
+
+	if err := s.save(sessions); err != nil {
+		return nil, err
+	}
+
+	return sess, nil
+}
+
+// GetMeta retrieves the meta session.
+func (s *Store) GetMeta() (*Session, error) {
+	return s.Get(MetaSessionKey)
+}
+
+// EndMeta removes the meta session entry.
+func (s *Store) EndMeta() error {
+	return s.End(MetaSessionKey)
+}
+
 // Get retrieves a session by ticket short ID.
 func (s *Store) Get(ticketShortID string) (*Session, error) {
 	s.mu.Lock()

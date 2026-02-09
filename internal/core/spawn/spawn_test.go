@@ -125,6 +125,39 @@ func (m *mockSessionStore) EndArchitect() error {
 	return nil
 }
 
+func (m *mockSessionStore) CreateMeta(agent, tmuxWindow string) (*session.Session, error) {
+	if m.createErr != nil {
+		return nil, m.createErr
+	}
+	m.lastCreateAgent = agent
+	sess := &session.Session{
+		Type:       session.SessionTypeMeta,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now(),
+		Status:     session.AgentStatusStarting,
+	}
+	m.sessions[session.MetaSessionKey] = sess
+	return sess, nil
+}
+
+func (m *mockSessionStore) GetMeta() (*session.Session, error) {
+	sess, ok := m.sessions[session.MetaSessionKey]
+	if !ok {
+		return nil, &storage.NotFoundError{Resource: "session", ID: session.MetaSessionKey}
+	}
+	return sess, nil
+}
+
+func (m *mockSessionStore) EndMeta() error {
+	if m.endErr != nil {
+		return m.endErr
+	}
+	m.endCalls = append(m.endCalls, session.MetaSessionKey)
+	delete(m.sessions, session.MetaSessionKey)
+	return nil
+}
+
 // mockTmuxManager implements TmuxManagerInterface for testing.
 type mockTmuxManager struct {
 	windows          map[string]bool // window existence by name

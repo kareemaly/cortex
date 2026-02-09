@@ -195,3 +195,15 @@ type TagCount struct {
 type ListTagsResponse struct {
 	Tags []TagCount `json:"tags"`
 }
+
+// MetaSpawnResponse is the response for POST /meta/spawn.
+type MetaSpawnResponse struct {
+	State       string `json:"state"`
+	TmuxSession string `json:"tmux_session"`
+	TmuxWindow  string `json:"tmux_window"`
+}
+
+// MetaStateResponse is the response for GET /meta.
+type MetaStateResponse struct {
+	State string `json:"state"`
+}
