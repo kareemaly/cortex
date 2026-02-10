@@ -69,7 +69,9 @@ Use `moveTicket` only for manual corrections (e.g., returning a ticket to backlo
 
 ### Documentation
 
-Use `createDoc` to capture architectural decisions, session context, or research findings that should persist across sessions.
+Use `createDoc` to capture architectural decisions or research findings that should persist across sessions.
+
+**Do not** create a session summary doc manually — `concludeSession` automatically creates one as part of cleanup. Creating one before concluding will result in duplicates.
 
 ## Context Awareness
 

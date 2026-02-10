@@ -164,7 +164,7 @@ func (s *Server) registerArchitectTools() {
 	// Conclude architect session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
-		Description: "Conclude the architect session. Call this when done with the current session to clean up the session state.",
+		Description: "Conclude the architect session. Automatically creates a session summary doc and cleans up session state. Do not manually create a session doc before calling this.",
 	}, s.handleArchitectConcludeSession)
 }
 
