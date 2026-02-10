@@ -42,12 +42,11 @@ func (m *Manager) CreateWindow(session, windowName, workingDir string) (int, err
 	// Without -a, tmux resolves -t to the current window and tries to create AT that index,
 	// which fails with "index N in use" if the window already exists.
 	//
-	// Use "session:" (with trailing colon) to force tmux to resolve the target as a session name.
-	// Without the colon, tmux treats -t as a target-window and may prefix-match a window name
-	// in the current session (e.g., "cortex" matches "cortexd"), creating the window in the
-	// wrong session when the daemon runs inside a different tmux session.
-	sessionTarget := fmt.Sprintf("%s:", session)
-	args := []string{"new-window", "-a", "-t", sessionTarget, "-n", windowName, "-P", "-F", "#{window_index}"}
+	// Use "=session:" to enforce exact session name matching. The "=" prefix disables
+	// tmux's fnmatch and substring resolution. The trailing colon forces tmux to resolve
+	// the target as a session (not a window name in the current session).
+	sessTarget := fmt.Sprintf("%s:", sessionTarget(session))
+	args := []string{"new-window", "-a", "-t", sessTarget, "-n", windowName, "-P", "-F", "#{window_index}"}
 	if workingDir != "" {
 		args = append(args, "-c", workingDir)
 	}
@@ -75,7 +74,7 @@ func (m *Manager) CreateArchitectWindow(session, windowName string) error {
 		return &SessionNotFoundError{Session: session}
 	}
 
-	target := fmt.Sprintf("%s:%d", session, ArchitectWindowIndex)
+	target := fmt.Sprintf("%s:%d", sessionTarget(session), ArchitectWindowIndex)
 	output, err := m.run("rename-window", "-t", target, windowName)
 	if err != nil {
 		return &CommandError{Command: "rename-window", Output: strings.TrimSpace(string(output))}
@@ -102,7 +101,7 @@ func (m *Manager) KillWindowByIndex(session string, index int) error {
 		return &SessionNotFoundError{Session: session}
 	}
 
-	target := fmt.Sprintf("%s:%d", session, index)
+	target := fmt.Sprintf("%s:%d", sessionTarget(session), index)
 	output, err := m.run("kill-window", "-t", target)
 	if err != nil {
 		return &CommandError{Command: "kill-window", Output: strings.TrimSpace(string(output))}
@@ -120,7 +119,7 @@ func (m *Manager) FocusWindowByIndex(session string, index int) error {
 		return &SessionNotFoundError{Session: session}
 	}
 
-	target := fmt.Sprintf("%s:%d", session, index)
+	target := fmt.Sprintf("%s:%d", sessionTarget(session), index)
 	output, err := m.run("select-window", "-t", target)
 	if err != nil {
 		return &CommandError{Command: "select-window", Output: strings.TrimSpace(string(output))}
@@ -135,7 +134,7 @@ func (m *Manager) FocusWindow(session, windowName string) error {
 		return err
 	}
 
-	target := fmt.Sprintf("%s:%d", session, window.Index)
+	target := fmt.Sprintf("%s:%d", sessionTarget(session), window.Index)
 	output, err := m.run("select-window", "-t", target)
 	if err != nil {
 		return &CommandError{Command: "select-window", Output: strings.TrimSpace(string(output))}
@@ -154,7 +153,7 @@ func (m *Manager) ListWindows(session string) ([]Window, error) {
 	}
 
 	// Format: index:name:active_flag
-	output, err := m.run("list-windows", "-t", session+":", "-F", "#{window_index}:#{window_name}:#{window_active}")
+	output, err := m.run("list-windows", "-t", sessionTarget(session)+":", "-F", "#{window_index}:#{window_name}:#{window_active}")
 	if err != nil {
 		return nil, &CommandError{Command: "list-windows", Output: strings.TrimSpace(string(output))}
 	}

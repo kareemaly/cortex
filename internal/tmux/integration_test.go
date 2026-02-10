@@ -434,7 +434,7 @@ func TestIntegrationSpawnAgentWithCompanion(t *testing.T) {
 	}
 
 	// Verify panes exist and have correct width ratio (30%/70%)
-	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:%d", session, index), "-F", "#{pane_index}:#{pane_width}")
+	output, err := m.run("list-panes", "-t", fmt.Sprintf("=%s:%d", session, index), "-F", "#{pane_index}:#{pane_width}")
 	if err != nil {
 		t.Fatalf("list-panes failed: %v", err)
 	}
@@ -536,7 +536,7 @@ func TestIntegrationSpawnArchitectWithCompanion(t *testing.T) {
 	}
 
 	// Verify panes exist and have correct width ratio (30%/70%)
-	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:%d", session, ArchitectWindowIndex), "-F", "#{pane_index}:#{pane_width}")
+	output, err := m.run("list-panes", "-t", fmt.Sprintf("=%s:%d", session, ArchitectWindowIndex), "-F", "#{pane_index}:#{pane_width}")
 	if err != nil {
 		t.Fatalf("list-panes failed: %v", err)
 	}
@@ -586,7 +586,7 @@ func TestIntegrationSplitWindowHorizontal(t *testing.T) {
 	}
 
 	// Verify we now have 2 panes with correct width ratio (30%/70%)
-	output, err := m.run("list-panes", "-t", fmt.Sprintf("%s:0", session), "-F", "#{pane_index}:#{pane_width}")
+	output, err := m.run("list-panes", "-t", fmt.Sprintf("=%s:0", session), "-F", "#{pane_index}:#{pane_width}")
 	if err != nil {
 		t.Fatalf("list-panes failed: %v", err)
 	}

@@ -16,7 +16,7 @@ func (m *Manager) RunCommand(session, windowName, command string) error {
 
 // RunCommandInIndex sends a command to a window by index and presses Enter.
 func (m *Manager) RunCommandInIndex(session string, index int, command string) error {
-	target := fmt.Sprintf("%s:%d", session, index)
+	target := fmt.Sprintf("%s:%d", sessionTarget(session), index)
 	output, err := m.run("send-keys", "-t", target, command, "Enter")
 	if err != nil {
 		return &CommandError{Command: "send-keys", Output: strings.TrimSpace(string(output))}
@@ -36,7 +36,7 @@ func (m *Manager) SendKeys(session, windowName string, keys ...string) error {
 
 // SendKeysToIndex sends key sequences to a window by index without pressing Enter.
 func (m *Manager) SendKeysToIndex(session string, index int, keys ...string) error {
-	target := fmt.Sprintf("%s:%d", session, index)
+	target := fmt.Sprintf("%s:%d", sessionTarget(session), index)
 	args := append([]string{"send-keys", "-t", target}, keys...)
 	output, err := m.run(args...)
 	if err != nil {

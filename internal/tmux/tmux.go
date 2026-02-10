@@ -80,3 +80,9 @@ func (m *Manager) runSilent(args ...string) error {
 func (m *Manager) runBackground(args ...string) error {
 	return m.runner.RunBackground(args...)
 }
+
+// sessionTarget returns a tmux target string that enforces exact session name matching.
+// The "=" prefix disables tmux's default fnmatch and substring resolution (supported since tmux 2.1).
+func sessionTarget(name string) string {
+	return "=" + name
+}
