@@ -81,27 +81,6 @@ func (s *Server) registerMetaTools() {
 		Description: "Get daemon status including uptime, version, and project count.",
 	}, s.handleDaemonStatus)
 
-	// Cross-project awareness
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "listTickets",
-		Description: "List tickets by status for a specific project. Requires project_path.",
-	}, s.handleListTickets)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "readTicket",
-		Description: "Read full ticket details by ID from a specific project.",
-	}, s.handleReadTicket)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "listDocs",
-		Description: "List documentation files from a specific project.",
-	}, s.handleListDocs)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "readDoc",
-		Description: "Read a documentation file by ID from a specific project.",
-	}, s.handleReadDoc)
-
 	// Session management
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
@@ -248,6 +227,10 @@ func (s *Server) handleMetaListSessions(
 	req *mcp.CallToolRequest,
 	input ListSessionsInput,
 ) (*mcp.CallToolResult, ListSessionsOutput, error) {
+	if input.ProjectPath == "" {
+		return nil, ListSessionsOutput{}, NewValidationError("project_path", "cannot be empty")
+	}
+
 	if err := s.validateProjectPath(input.ProjectPath); err != nil {
 		return nil, ListSessionsOutput{}, err
 	}

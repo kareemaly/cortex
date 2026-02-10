@@ -5,14 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/daemon/api"
-	"github.com/kareemaly/cortex/internal/install"
 	"github.com/kareemaly/cortex/internal/types"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -108,12 +105,6 @@ func (s *Server) registerArchitectTools() {
 		Name:        "spawnSession",
 		Description: "Spawn a new agent session for a ticket",
 	}, s.handleSpawnSession)
-
-	// Get config docs
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "getCortexConfigDocs",
-		Description: "Get CONFIG_DOCS.md with configuration documentation for this project's agent type",
-	}, s.handleGetCortexConfigDocs)
 
 	// Update due date
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -561,49 +552,6 @@ func parseStateFromError(code, message string) string {
 		}
 	}
 	return "unknown"
-}
-
-// handleGetCortexConfigDocs returns the CONFIG_DOCS.md for this project's agent type.
-func (s *Server) handleGetCortexConfigDocs(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	input GetCortexConfigDocsInput,
-) (*mcp.CallToolResult, GetCortexConfigDocsOutput, error) {
-	// Determine config name from agent type
-	// "claude" -> "claude-code" directory
-	// "copilot" -> "copilot" directory (no "-code" suffix)
-	configName := "claude-code" // default
-	if s.projectConfig != nil && s.projectConfig.Architect.Agent != "" {
-		agent := string(s.projectConfig.Architect.Agent)
-		if agent == "copilot" {
-			configName = "copilot"
-		} else {
-			configName = agent + "-code"
-		}
-	}
-
-	// Try reading from resolved extend path first (allows user customization)
-	if s.projectConfig != nil && s.projectConfig.ResolvedExtendPath() != "" {
-		docPath := filepath.Join(s.projectConfig.ResolvedExtendPath(), "CONFIG_DOCS.md")
-		if content, err := os.ReadFile(docPath); err == nil {
-			return nil, GetCortexConfigDocsOutput{
-				Content:    string(content),
-				ConfigName: configName,
-			}, nil
-		}
-	}
-
-	// Fall back to embedded file
-	content, err := install.GetConfigDocs(configName)
-	if err != nil {
-		return nil, GetCortexConfigDocsOutput{},
-			NewNotFoundError("CONFIG_DOCS.md", configName)
-	}
-
-	return nil, GetCortexConfigDocsOutput{
-		Content:    content,
-		ConfigName: configName,
-	}, nil
 }
 
 // handleUpdateDueDate sets or updates the due date for a ticket.

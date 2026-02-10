@@ -99,10 +99,6 @@ type ClearDueDateInput struct {
 	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
-// GetCortexConfigDocsInput is the input for the getCortexConfigDocs tool.
-// This tool takes no parameters.
-type GetCortexConfigDocsInput struct{}
-
 // ListProjectsInput is the input for the listProjects tool.
 // This tool takes no parameters.
 type ListProjectsInput struct{}
@@ -247,12 +243,6 @@ type ConcludeSessionOutput struct {
 	Success  bool   `json:"success"`
 	TicketID string `json:"ticket_id"`
 	Message  string `json:"message,omitempty"`
-}
-
-// GetCortexConfigDocsOutput is the output for the getCortexConfigDocs tool.
-type GetCortexConfigDocsOutput struct {
-	Content    string `json:"content"`
-	ConfigName string `json:"config_name"`
 }
 
 // UpdateDueDateOutput is the output for the updateDueDate tool.
