@@ -90,6 +90,11 @@ type DocFetchErrorMsg struct {
 	Err error
 }
 
+// DocEditMsg is sent when a doc edit action completes.
+type DocEditMsg struct {
+	Err error
+}
+
 // ClearStatusMsg clears the status message after a delay.
 type ClearStatusMsg struct{}
 
@@ -180,6 +185,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = fmt.Sprintf("Error loading doc: %s", msg.Err)
 		m.statusIsError = true
 		m.logBuf.Errorf("api", "failed to fetch doc: %s", msg.Err)
+		return m, m.clearStatusAfterDelay()
+
+	case DocEditMsg:
+		if msg.Err != nil {
+			m.statusMsg = fmt.Sprintf("Edit failed: %s", msg.Err)
+			m.statusIsError = true
+		} else {
+			m.statusMsg = "Opened in editor"
+			m.statusIsError = false
+		}
 		return m, m.clearStatusAfterDelay()
 
 	case ClearStatusMsg:
@@ -312,8 +327,8 @@ func (m Model) handleExplorerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor--
 			return m, m.fetchSelectedDoc()
 		}
-	case isKey(msg, KeyEnter):
-		return m.toggleCategory()
+	case isKey(msg, KeyE):
+		return m.editSelectedDoc()
 	case isKey(msg, KeyCtrlD):
 		m.cursor = min(m.cursor+10, max(len(m.tree)-1, 0))
 		return m, m.fetchSelectedDoc()
@@ -446,22 +461,28 @@ func (m Model) renderExplorer(width, height int) string {
 		return lipgloss.NewStyle().Width(width).Height(height).Render(b.String() + empty)
 	}
 
-	// Render tree items into a string.
+	// Render tree items into a string with left-border indicator.
 	var content strings.Builder
-	itemWidth := max(width-4, 10)
+	itemWidth := max(width-5, 10) // reserve 1 char for indicator
+	itemStartLines := make([]int, len(m.tree))
+	currentLine := 0
 	for i, item := range m.tree {
+		itemStartLines[i] = currentLine
 		line := m.renderTreeItem(item, itemWidth)
+		var indicator string
 		if i == m.cursor && m.focusPane == paneExplorer {
-			line = selectedStyle.Width(itemWidth).Render(line)
+			indicator = selectedIndicator.Render("▎")
+			line = selectedStyle.Render(line)
 		} else if i == m.cursor {
-			// Cursor visible but not focused — subtle highlight.
-			line = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("255")).
-				Background(lipgloss.Color("238")).
-				Width(itemWidth).
-				Render(line)
+			// Cursor visible but not focused — dim indicator.
+			indicator = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("▎")
+			line = lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Render(line)
+		} else {
+			indicator = " "
 		}
-		content.WriteString(line)
+		rendered := indicator + line
+		content.WriteString(rendered)
+		currentLine += lipgloss.Height(rendered)
 		if i < len(m.tree)-1 {
 			content.WriteString("\n")
 		}
@@ -475,12 +496,19 @@ func (m Model) renderExplorer(width, height int) string {
 	m.explorerVP.SetContent(content.String())
 	m.explorerVP.SetYOffset(savedOffset)
 
-	// Ensure cursor is visible.
-	if m.cursor < m.explorerVP.YOffset {
-		m.explorerVP.SetYOffset(m.cursor)
-	}
-	if m.cursor >= m.explorerVP.YOffset+treeHeight {
-		m.explorerVP.SetYOffset(m.cursor - treeHeight + 1)
+	// Ensure cursor is visible using line offsets.
+	if m.cursor >= 0 && m.cursor < len(itemStartLines) {
+		cursorLine := itemStartLines[m.cursor]
+		cursorHeight := 1
+		if m.cursor+1 < len(itemStartLines) {
+			cursorHeight = itemStartLines[m.cursor+1] - cursorLine
+		}
+		if cursorLine < m.explorerVP.YOffset {
+			m.explorerVP.SetYOffset(cursorLine)
+		}
+		if cursorLine+cursorHeight > m.explorerVP.YOffset+treeHeight {
+			m.explorerVP.SetYOffset(cursorLine + cursorHeight - treeHeight)
+		}
 	}
 
 	b.WriteString(m.explorerVP.View())
@@ -507,10 +535,8 @@ func (m Model) renderTreeItem(item treeItem, width int) string {
 	connector := treeConnector.Render("  ├─ ")
 	title := item.doc.Title
 	maxTitle := max(width-6, 5)
-	if len(title) > maxTitle {
-		title = title[:maxTitle-3] + "..."
-	}
-	return connector + docTitleStyle.Render(title)
+	wrapped := lipgloss.NewStyle().Width(maxTitle).Render(title)
+	return connector + docTitleStyle.Render(wrapped)
 }
 
 // renderPreviewPane renders the right pane with markdown preview.
@@ -686,6 +712,20 @@ func (m *Model) selectedDoc() *sdk.DocSummary {
 		return nil
 	}
 	return item.doc
+}
+
+// editSelectedDoc opens the selected doc in $EDITOR via tmux popup.
+func (m Model) editSelectedDoc() (tea.Model, tea.Cmd) {
+	doc := m.selectedDoc()
+	if doc == nil {
+		return m, nil
+	}
+	id := doc.ID
+	client := m.client
+	return m, func() tea.Msg {
+		err := client.OpenDocInEditor(id)
+		return DocEditMsg{Err: err}
+	}
 }
 
 // fetchSelectedDoc returns a command to fetch the full doc if the cursor is on a doc.

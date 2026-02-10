@@ -422,6 +422,15 @@ func (s *Store) findEntityDir(id string) (string, error) {
 	return "", &NotFoundError{Resource: "doc", ID: id}
 }
 
+// GetFilePath returns the filesystem path to a doc's index.md file.
+func (s *Store) GetFilePath(id string) (string, error) {
+	entityDir, err := s.findEntityDir(id)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(entityDir, "index.md"), nil
+}
+
 // containsTag checks if a slice of tags contains a specific tag (case-insensitive).
 func containsTag(tags []string, tag string) bool {
 	tag = strings.ToLower(tag)

@@ -1231,6 +1231,26 @@ func (c *Client) MoveDoc(id, category string) (*DocResponse, error) {
 	return &docResult, nil
 }
 
+// OpenDocInEditor opens a doc in $EDITOR via tmux popup.
+func (c *Client) OpenDocInEditor(id string) error {
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/docs/"+id+"/edit", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
 // ListDocs lists docs with optional filters.
 func (c *Client) ListDocs(category, tag, query string) (*ListDocsResponse, error) {
 	url := c.baseURL + "/docs"

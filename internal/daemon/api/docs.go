@@ -2,9 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
+	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/types"
 )
@@ -216,4 +219,54 @@ func (h *DocHandlers) Move(w http.ResponseWriter, r *http.Request) {
 
 	resp := types.ToDocResponse(d)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// Edit handles POST /docs/{id}/edit - opens a doc in $EDITOR via tmux popup.
+func (h *DocHandlers) Edit(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.DocsStoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	filePath, err := store.GetFilePath(id)
+	if err != nil {
+		handleDocError(w, err, h.deps.Logger)
+		return
+	}
+
+	// Check tmux is available
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	// Resolve editor
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+
+	command := fmt.Sprintf("%s %q", editor, filePath)
+
+	// Get tmux session name
+	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	tmuxSession := "cortex"
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
+	// Execute popup
+	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, "", command); err != nil {
+		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
+		return
+	}
+
+	editResp := ExecuteActionResponse{
+		Success: true,
+		Message: "Opened in editor",
+	}
+	writeJSON(w, http.StatusOK, editResp)
 }
