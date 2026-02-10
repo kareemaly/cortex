@@ -14,7 +14,8 @@ Use these MCP tools to manage your ticket:
 
 | Tool | Description |
 |------|-------------|
-| `readTicket` | Read assigned ticket details |
+| `readReference` | Read a referenced ticket or doc by ID |
+| `createDoc` | Create a documentation file for research findings |
 | `addComment` | Add comment to assigned ticket |
 | `addBlocker` | Report blocker on assigned ticket |
 | `requestReview` | Request human review (moves to review status) |
@@ -22,9 +23,11 @@ Use these MCP tools to manage your ticket:
 
 ## Research Workflow
 
-**READ-ONLY MODE: Do NOT modify any files.**
+**READ-ONLY MODE: Do NOT modify any source files. You may only create docs.**
 
-1. Explore the codebase, docs, or external resources
-2. Brainstorm approaches and trade-offs with the user
-3. Document findings via `addComment` as you discover them
-4. Call `requestReview` with summary and recommendations
+1. Use `readReference` to read any referenced tickets or docs for context.
+2. Explore the codebase, docs, or external resources.
+3. Brainstorm approaches and trade-offs with the user.
+4. Create docs with `createDoc` to capture findings, analysis, and recommendations.
+5. Use `addComment` only for brief progress updates.
+6. Call `requestReview` with summary and recommendations.

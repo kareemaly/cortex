@@ -220,6 +220,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				TicketsDir:  ticketsDir,
 				WindowName:  stateInfo.Session.TmuxWindow,
 				TicketID:    req.TicketID,
+				TicketType:  ticketType,
 				AgentArgs:   ticketRoleCfg.Args,
 			})
 			outcome = OutcomeResumed

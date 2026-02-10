@@ -635,17 +635,58 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	return mcpServer, tk.ID, cleanup
 }
 
-func TestHandleReadOwnTicket(t *testing.T) {
+func TestHandleReadReference_Ticket(t *testing.T) {
 	server, ticketID, cleanup := setupTicketSession(t)
 	defer cleanup()
 
-	_, output, err := server.handleReadOwnTicket(context.Background(), nil, EmptyInput{})
+	_, output, err := server.handleReadReference(context.Background(), nil, ReadReferenceInput{
+		ID:   ticketID,
+		Type: "ticket",
+	})
 	if err != nil {
-		t.Fatalf("handleReadOwnTicket failed: %v", err)
+		t.Fatalf("handleReadReference ticket failed: %v", err)
 	}
 
+	if output.Ticket == nil {
+		t.Fatal("expected ticket in output")
+	}
 	if output.Ticket.ID != ticketID {
 		t.Errorf("ID = %q, want %q", output.Ticket.ID, ticketID)
+	}
+	if output.Doc != nil {
+		t.Error("expected doc to be nil for ticket reference")
+	}
+}
+
+func TestHandleReadReference_InvalidType(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, _, err := server.handleReadReference(context.Background(), nil, ReadReferenceInput{
+		ID:   "some-id",
+		Type: "invalid",
+	})
+	if err == nil {
+		t.Fatal("expected validation error for invalid type")
+	}
+	if !IsToolError(err) {
+		t.Errorf("expected ToolError, got: %T", err)
+	}
+}
+
+func TestHandleReadReference_EmptyID(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, _, err := server.handleReadReference(context.Background(), nil, ReadReferenceInput{
+		ID:   "",
+		Type: "ticket",
+	})
+	if err == nil {
+		t.Fatal("expected validation error for empty ID")
+	}
+	if !IsToolError(err) {
+		t.Errorf("expected ToolError, got: %T", err)
 	}
 }
 

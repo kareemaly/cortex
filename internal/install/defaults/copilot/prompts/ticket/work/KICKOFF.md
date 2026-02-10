@@ -23,7 +23,7 @@ Use these MCP tools to manage your ticket:
 
 | Tool | Description |
 |------|-------------|
-| `readTicket` | Read assigned ticket details |
+| `readReference` | Read a referenced ticket or doc by ID |
 | `addComment` | Add comment to assigned ticket |
 | `addBlocker` | Report blocker on assigned ticket |
 | `requestReview` | Request human review (moves to review status) |
@@ -31,8 +31,9 @@ Use these MCP tools to manage your ticket:
 
 ## Workflow
 
-1. Read and understand the ticket requirements
-2. Ask clarifying questions if anything is ambiguous
-3. Implement changes with appropriate tests
-4. Verify your changes work (run tests, check build)
-5. Call `requestReview` with a summary of changes
+1. Understand the ticket requirements (already provided above)
+2. Use `readReference` to read any referenced tickets or docs mentioned in the ticket
+3. Ask clarifying questions if anything is ambiguous
+4. Implement changes with appropriate tests
+5. Verify your changes work (run tests, check build)
+6. Call `requestReview` with a summary of changes

@@ -125,7 +125,8 @@ type ResumeRequest struct {
 	WindowName  string
 
 	// For ticket agents
-	TicketID string
+	TicketID   string
+	TicketType string // ticket type (work/debug/research/chore)
 
 	// Extra CLI args appended to the agent command
 	AgentArgs []string
@@ -229,6 +230,12 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	mcpConfig := GenerateMCPConfig(MCPConfigParams{
 		CortexdPath: cortexdPath,
 		TicketID:    req.TicketID,
+		TicketType: func() string {
+			if req.Ticket != nil {
+				return req.Ticket.Type
+			}
+			return ""
+		}(),
 		TicketsDir:  req.TicketsDir,
 		ProjectPath: req.ProjectPath,
 		TmuxSession: req.TmuxSession,
@@ -376,6 +383,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	mcpConfig := GenerateMCPConfig(MCPConfigParams{
 		CortexdPath: cortexdPath,
 		TicketID:    req.TicketID,
+		TicketType:  req.TicketType,
 		TicketsDir:  req.TicketsDir,
 		ProjectPath: req.ProjectPath,
 		TmuxSession: req.TmuxSession,

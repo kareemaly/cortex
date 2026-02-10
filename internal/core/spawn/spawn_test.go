@@ -592,6 +592,7 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 	config := GenerateMCPConfig(MCPConfigParams{
 		CortexdPath: "/usr/bin/cortexd",
 		TicketID:    "ticket-123",
+		TicketType:  "research",
 		TicketsDir:  "/path/to/tickets",
 		ProjectPath: "/path/to/project",
 		TmuxSession: "dev-session",
@@ -606,9 +607,9 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 		t.Errorf("expected command '/usr/bin/cortexd', got: %s", server.Command)
 	}
 
-	expectedArgs := []string{"mcp", "--ticket-id", "ticket-123"}
+	expectedArgs := []string{"mcp", "--ticket-id", "ticket-123", "--ticket-type", "research"}
 	if len(server.Args) != len(expectedArgs) {
-		t.Fatalf("expected %d args, got: %d", len(expectedArgs), len(server.Args))
+		t.Fatalf("expected %d args, got: %d (%v)", len(expectedArgs), len(server.Args), server.Args)
 	}
 	for i, arg := range expectedArgs {
 		if server.Args[i] != arg {
@@ -622,6 +623,29 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 
 	if server.Env["CORTEX_DAEMON_URL"] != daemonconfig.DefaultDaemonURL {
 		t.Errorf("expected CORTEX_DAEMON_URL=%s, got: %v", daemonconfig.DefaultDaemonURL, server.Env["CORTEX_DAEMON_URL"])
+	}
+}
+
+func TestGenerateMCPConfig_WithTicketNoType(t *testing.T) {
+	config := GenerateMCPConfig(MCPConfigParams{
+		CortexdPath: "/usr/bin/cortexd",
+		TicketID:    "ticket-123",
+		TicketsDir:  "/path/to/tickets",
+		ProjectPath: "/path/to/project",
+		TmuxSession: "dev-session",
+	})
+
+	server := config.MCPServers["cortex"]
+
+	// Without TicketType, should only have 3 args: mcp --ticket-id ticket-123
+	expectedArgs := []string{"mcp", "--ticket-id", "ticket-123"}
+	if len(server.Args) != len(expectedArgs) {
+		t.Fatalf("expected %d args, got: %d (%v)", len(expectedArgs), len(server.Args), server.Args)
+	}
+	for i, arg := range expectedArgs {
+		if server.Args[i] != arg {
+			t.Errorf("arg[%d]: expected %s, got: %s", i, arg, server.Args[i])
+		}
 	}
 }
 

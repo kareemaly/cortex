@@ -23,7 +23,7 @@ Use these MCP tools to manage your ticket:
 
 | Tool | Description |
 |------|-------------|
-| `readTicket` | Read assigned ticket details |
+| `readReference` | Read a referenced ticket or doc by ID |
 | `addComment` | Add comment to assigned ticket |
 | `addBlocker` | Report blocker on assigned ticket |
 | `requestReview` | Request human review (moves to review status) |
@@ -32,8 +32,9 @@ Use these MCP tools to manage your ticket:
 ## Debug Workflow
 
 1. **Reproduce**: Confirm you can trigger the issue. Document exact steps.
-2. **Investigate**: Form hypotheses, test them systematically. Narrow down.
-3. **Document**: Call `addComment` with root cause findings BEFORE fixing.
-4. **Fix**: Implement minimal fix that addresses root cause.
-5. **Verify**: Confirm fix works and doesn't break other functionality.
-6. Call `requestReview` with root cause explanation and fix summary.
+2. Use `readReference` to read any referenced tickets or docs for additional context.
+3. **Investigate**: Form hypotheses, test them systematically. Narrow down.
+4. **Document**: Call `addComment` with root cause findings BEFORE fixing.
+5. **Fix**: Implement minimal fix that addresses root cause.
+6. **Verify**: Confirm fix works and doesn't break other functionality.
+7. Call `requestReview` with root cause explanation and fix summary.

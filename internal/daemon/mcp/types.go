@@ -17,8 +17,9 @@ const (
 
 // Session holds the current session context.
 type Session struct {
-	Type     SessionType
-	TicketID string // Only set for ticket sessions
+	Type       SessionType
+	TicketID   string // Only set for ticket sessions
+	TicketType string // Only set for ticket sessions (work/debug/research/chore)
 }
 
 // Input types for architect tools
@@ -120,6 +121,26 @@ type ListProjectsOutput struct {
 }
 
 // Input types for ticket tools
+
+// ReadReferenceInput is the input for the readReference tool.
+type ReadReferenceInput struct {
+	ID   string `json:"id" jsonschema:"The reference ID to read"`
+	Type string `json:"type" jsonschema:"Reference type: 'ticket' or 'doc'"`
+}
+
+// ReadReferenceOutput is the output for the readReference tool.
+type ReadReferenceOutput struct {
+	Ticket *TicketOutput `json:"ticket,omitempty"`
+	Doc    *DocOutput    `json:"doc,omitempty"`
+}
+
+// TicketCreateDocInput is a simplified createDoc input for ticket agents (no cross-project).
+type TicketCreateDocInput struct {
+	Title    string   `json:"title" jsonschema:"The document title (required)"`
+	Category string   `json:"category" jsonschema:"Subdirectory/category name (required, e.g., 'findings', 'research')"`
+	Body     string   `json:"body,omitempty" jsonschema:"Markdown body content"`
+	Tags     []string `json:"tags,omitempty" jsonschema:"Free-form tags for categorization"`
+}
 
 // AddCommentInput is the input for the addComment tool.
 type AddCommentInput struct {

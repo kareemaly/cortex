@@ -25,6 +25,7 @@ type ClaudeMCPConfig struct {
 type MCPConfigParams struct {
 	CortexdPath string
 	TicketID    string // for ticket agents
+	TicketType  string // for ticket agents (work/debug/research/chore)
 	TicketsDir  string
 	ProjectPath string
 	TmuxSession string
@@ -39,6 +40,9 @@ func GenerateMCPConfig(params MCPConfigParams) *ClaudeMCPConfig {
 		args = append(args, "--meta")
 	} else if params.TicketID != "" {
 		args = append(args, "--ticket-id", params.TicketID)
+		if params.TicketType != "" {
+			args = append(args, "--ticket-type", params.TicketType)
+		}
 	}
 
 	serverConfig := MCPServerConfig{

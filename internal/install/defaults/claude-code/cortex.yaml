@@ -21,7 +21,7 @@ ticket:
       - "plan"
       - "--allow-dangerously-skip-permissions"
       - "--allowedTools"
-      - "mcp__cortex__readTicket"
+      - "mcp__cortex__readReference"
   debug:
     agent: claude
     args:
@@ -29,18 +29,18 @@ ticket:
       - "plan"
       - "--allow-dangerously-skip-permissions"
       - "--allowedTools"
-      - "mcp__cortex__readTicket,mcp__cortex__addComment"
+      - "mcp__cortex__readReference,mcp__cortex__addComment"
   research:
     agent: claude
     args:
       - "--allow-dangerously-skip-permissions"
       - "--allowedTools"
-      - "mcp__cortex__readTicket,mcp__cortex__addComment"
+      - "mcp__cortex__readReference,mcp__cortex__addComment,mcp__cortex__createDoc"
   chore:
     agent: claude
     args:
       - "--allow-dangerously-skip-permissions"
       - "--allowedTools"
-      - "mcp__cortex__readTicket"
+      - "mcp__cortex__readReference"
 git:
   worktrees: false

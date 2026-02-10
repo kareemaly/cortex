@@ -23,7 +23,7 @@ Use these MCP tools to manage your ticket:
 
 | Tool | Description |
 |------|-------------|
-| `readTicket` | Read assigned ticket details |
+| `readReference` | Read a referenced ticket or doc by ID |
 | `addComment` | Add comment to assigned ticket |
 | `addBlocker` | Report blocker on assigned ticket |
 | `requestReview` | Request human review (moves to review status) |
@@ -31,7 +31,8 @@ Use these MCP tools to manage your ticket:
 
 ## Chore Workflow
 
-1. Understand the task
-2. Execute directly—minimal ceremony
-3. Verify nothing broke (run tests if applicable)
-4. Call `requestReview` with brief summary
+1. Understand the task (already provided above)
+2. Use `readReference` to read any referenced tickets or docs if needed.
+3. Execute directly—minimal ceremony
+4. Verify nothing broke (run tests if applicable)
+5. Call `requestReview` with brief summary

@@ -138,3 +138,46 @@ func TestNewServerWithProjectPath(t *testing.T) {
 		t.Error("expected architect session with project path")
 	}
 }
+
+func TestNewServerTicketWithType(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "mcp-server-test")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	server, err := NewServer(&Config{
+		TicketID:    "test-ticket-123",
+		TicketType:  "research",
+		DaemonURL:   daemonconfig.DefaultDaemonURL,
+		ProjectPath: tmpDir,
+	})
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
+
+	if server.Session().TicketType != "research" {
+		t.Errorf("ticket type = %q, want %q", server.Session().TicketType, "research")
+	}
+}
+
+func TestNewServerTicketDefaultType(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "mcp-server-test")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	server, err := NewServer(&Config{
+		TicketID:    "test-ticket-123",
+		DaemonURL:   daemonconfig.DefaultDaemonURL,
+		ProjectPath: tmpDir,
+	})
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
+
+	if server.Session().TicketType != "" {
+		t.Errorf("ticket type = %q, want empty", server.Session().TicketType)
+	}
+}

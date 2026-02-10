@@ -19,6 +19,10 @@ type Config struct {
 	// If empty, the session is an architect session with full access.
 	TicketID string
 
+	// TicketType is the ticket type (work/debug/research/chore).
+	// Only used for ticket sessions, to conditionally register tools.
+	TicketType string
+
 	// ProjectPath is the project root for hook execution.
 	// If set, project config is loaded from this path.
 	// Required for architect sessions.
@@ -76,8 +80,9 @@ func NewServer(cfg *Config) (*Server, error) {
 		}
 	} else if cfg.TicketID != "" {
 		session = &Session{
-			Type:     SessionTypeTicket,
-			TicketID: cfg.TicketID,
+			Type:       SessionTypeTicket,
+			TicketID:   cfg.TicketID,
+			TicketType: cfg.TicketType,
 		}
 	} else {
 		session = &Session{

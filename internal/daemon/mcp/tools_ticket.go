@@ -10,11 +10,11 @@ import (
 
 // registerTicketTools registers all tools available to ticket sessions.
 func (s *Server) registerTicketTools() {
-	// Read own ticket (no input needed, uses session ticket ID)
+	// Read reference (follow cross-references to tickets or docs)
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "readTicket",
-		Description: "Read your assigned ticket details",
-	}, s.handleReadOwnTicket)
+		Name:        "readReference",
+		Description: "Read a referenced ticket or doc by ID",
+	}, s.handleReadReference)
 
 	// Add comment tool
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -39,24 +39,71 @@ func (s *Server) registerTicketTools() {
 		Name:        "concludeSession",
 		Description: "Conclude the session and mark the ticket as done. Call this after all reviews are approved.",
 	}, s.handleConcludeSession)
+
+	// createDoc — research tickets only
+	if s.session.TicketType == "research" {
+		mcp.AddTool(s.mcpServer, &mcp.Tool{
+			Name:        "createDoc",
+			Description: "Create a documentation file for research findings",
+		}, s.handleTicketCreateDoc)
+	}
 }
 
-// EmptyInput is used for tools that don't require input.
-type EmptyInput struct{}
-
-// handleReadOwnTicket reads the ticket assigned to this session via the daemon API.
-func (s *Server) handleReadOwnTicket(
+// handleReadReference reads a referenced ticket or doc by ID via the daemon API.
+func (s *Server) handleReadReference(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
-	input EmptyInput,
-) (*mcp.CallToolResult, ReadTicketOutput, error) {
-	resp, err := s.sdkClient.GetTicketByID(s.session.TicketID)
-	if err != nil {
-		return nil, ReadTicketOutput{}, wrapSDKError(err)
+	input ReadReferenceInput,
+) (*mcp.CallToolResult, ReadReferenceOutput, error) {
+	if input.ID == "" {
+		return nil, ReadReferenceOutput{}, NewValidationError("id", "cannot be empty")
+	}
+	if input.Type != "ticket" && input.Type != "doc" {
+		return nil, ReadReferenceOutput{}, NewValidationError("type", "must be 'ticket' or 'doc'")
 	}
 
-	return nil, ReadTicketOutput{
-		Ticket: ticketResponseToOutput(resp),
+	switch input.Type {
+	case "ticket":
+		resp, err := s.sdkClient.GetTicketByID(input.ID)
+		if err != nil {
+			return nil, ReadReferenceOutput{}, wrapSDKError(err)
+		}
+		out := ticketResponseToOutput(resp)
+		return nil, ReadReferenceOutput{Ticket: &out}, nil
+
+	case "doc":
+		resp, err := s.sdkClient.GetDoc(input.ID)
+		if err != nil {
+			return nil, ReadReferenceOutput{}, wrapSDKError(err)
+		}
+		out := docResponseToOutput(resp)
+		return nil, ReadReferenceOutput{Doc: &out}, nil
+
+	default:
+		return nil, ReadReferenceOutput{}, NewValidationError("type", "must be 'ticket' or 'doc'")
+	}
+}
+
+// handleTicketCreateDoc creates a doc for research ticket agents via the daemon API.
+func (s *Server) handleTicketCreateDoc(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input TicketCreateDocInput,
+) (*mcp.CallToolResult, CreateDocOutput, error) {
+	if input.Title == "" {
+		return nil, CreateDocOutput{}, NewValidationError("title", "cannot be empty")
+	}
+	if input.Category == "" {
+		return nil, CreateDocOutput{}, NewValidationError("category", "cannot be empty")
+	}
+
+	resp, err := s.sdkClient.CreateDoc(input.Title, input.Category, input.Body, input.Tags, nil)
+	if err != nil {
+		return nil, CreateDocOutput{}, wrapSDKError(err)
+	}
+
+	return nil, CreateDocOutput{
+		Doc: docResponseToOutput(resp),
 	}, nil
 }
 
