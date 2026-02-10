@@ -247,7 +247,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		if req.AgentType == AgentTypeMeta {
 			identifier = "meta"
 		} else {
-			identifier = "architect"
+			identifier = "architect-" + req.TmuxSession
 		}
 	}
 
@@ -375,7 +375,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		if req.AgentType == AgentTypeMeta {
 			identifier = "meta"
 		} else {
-			identifier = "architect"
+			identifier = "architect-" + req.TmuxSession
 		}
 	}
 
