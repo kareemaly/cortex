@@ -9,7 +9,7 @@ import "fmt"
 //   - workingDir: the working directory for the command (can be empty)
 //   - command: the command to execute in the popup
 func (m *Manager) DisplayPopup(session, workingDir, command string) error {
-	args := []string{"display-popup", "-E", "-w", "80%", "-h", "80%", "-t", session}
+	args := []string{"display-popup", "-E", "-w", "80%", "-h", "80%", "-t", session + ":"}
 	if workingDir != "" {
 		args = append(args, "-d", workingDir)
 		command = fmt.Sprintf("cd %q && %s", workingDir, command)

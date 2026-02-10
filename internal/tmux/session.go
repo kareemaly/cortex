@@ -14,7 +14,7 @@ func IsInsideTmux() bool {
 
 // SessionExists checks if a tmux session with the given name exists.
 func (m *Manager) SessionExists(name string) (bool, error) {
-	err := m.runSilent("has-session", "-t", name)
+	err := m.runSilent("has-session", "-t", name+":")
 	if err != nil {
 		// tmux returns exit code 1 if session doesn't exist
 		if _, ok := err.(*exec.ExitError); ok {
@@ -60,7 +60,7 @@ func (m *Manager) KillSession(name string) error {
 		return &SessionNotFoundError{Session: name}
 	}
 
-	output, err := m.run("kill-session", "-t", name)
+	output, err := m.run("kill-session", "-t", name+":")
 	if err != nil {
 		return &CommandError{Command: "kill-session", Output: strings.TrimSpace(string(output))}
 	}
@@ -85,15 +85,15 @@ func (m *Manager) AttachSession(name string) error {
 
 	// Choose command based on whether we're inside tmux
 	if IsInsideTmux() {
-		return m.runner.RunInteractive("switch-client", "-t", name)
+		return m.runner.RunInteractive("switch-client", "-t", name+":")
 	}
-	return m.runner.RunInteractive("attach-session", "-t", name)
+	return m.runner.RunInteractive("attach-session", "-t", name+":")
 }
 
 // SwitchClient switches the most recently active tmux client to the given session.
 // This is a non-interactive command safe for daemon use.
 func (m *Manager) SwitchClient(session string) error {
-	output, err := m.run("switch-client", "-t", session)
+	output, err := m.run("switch-client", "-t", session+":")
 	if err != nil {
 		return &CommandError{Command: "switch-client", Output: strings.TrimSpace(string(output))}
 	}

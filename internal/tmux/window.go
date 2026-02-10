@@ -154,7 +154,7 @@ func (m *Manager) ListWindows(session string) ([]Window, error) {
 	}
 
 	// Format: index:name:active_flag
-	output, err := m.run("list-windows", "-t", session, "-F", "#{window_index}:#{window_name}:#{window_active}")
+	output, err := m.run("list-windows", "-t", session+":", "-F", "#{window_index}:#{window_name}:#{window_active}")
 	if err != nil {
 		return nil, &CommandError{Command: "list-windows", Output: strings.TrimSpace(string(output))}
 	}

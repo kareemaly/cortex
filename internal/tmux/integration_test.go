@@ -704,6 +704,45 @@ func TestIntegrationWindowNotFoundError(t *testing.T) {
 	}
 }
 
+func TestIntegrationSessionExistsExactMatch(t *testing.T) {
+	skipIfCI(t)
+	skipIfNoTmux(t)
+
+	m, err := NewManager()
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+
+	// Create a session with a "-meta" suffix (simulates cortex-meta)
+	fullSession := testSessionName(t) + "-meta"
+	defer func() {
+		_ = m.KillSession(fullSession)
+	}()
+
+	if err := m.CreateSession(fullSession, ""); err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	// Full name should match
+	exists, err := m.SessionExists(fullSession)
+	if err != nil {
+		t.Fatalf("SessionExists(%q) failed: %v", fullSession, err)
+	}
+	if !exists {
+		t.Errorf("SessionExists(%q) = false, want true", fullSession)
+	}
+
+	// Prefix (without -meta suffix) must NOT match
+	prefix := strings.TrimSuffix(fullSession, "-meta")
+	exists, err = m.SessionExists(prefix)
+	if err != nil {
+		t.Fatalf("SessionExists(%q) failed: %v", prefix, err)
+	}
+	if exists {
+		t.Errorf("SessionExists(%q) = true, want false (prefix should not match %q)", prefix, fullSession)
+	}
+}
+
 func TestIntegrationSessionNotFoundForWindow(t *testing.T) {
 	skipIfCI(t)
 	skipIfNoTmux(t)

@@ -120,13 +120,13 @@ func TestSwitchClient(t *testing.T) {
 		// Find the switch-client call
 		found := false
 		for _, call := range runner.Calls {
-			if len(call) >= 3 && call[0] == "switch-client" && call[1] == "-t" && call[2] == "myproject" {
+			if len(call) >= 3 && call[0] == "switch-client" && call[1] == "-t" && call[2] == "myproject:" {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("expected switch-client -t myproject call, got calls: %v", runner.Calls)
+			t.Errorf("expected switch-client -t myproject: call, got calls: %v", runner.Calls)
 		}
 	})
 

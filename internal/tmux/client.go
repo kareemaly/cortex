@@ -27,7 +27,7 @@ func (m *Manager) ListClients(session string) ([]Client, error) {
 	}
 
 	// Format: tty:session:window_index:window_name
-	output, err := m.run("list-clients", "-t", session, "-F", "#{client_tty}:#{client_session}:#{window_index}:#{window_name}")
+	output, err := m.run("list-clients", "-t", session+":", "-F", "#{client_tty}:#{client_session}:#{window_index}:#{window_name}")
 	if err != nil {
 		// list-clients returns error if no clients, but we want empty slice
 		return []Client{}, nil
