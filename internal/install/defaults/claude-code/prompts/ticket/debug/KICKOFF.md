@@ -12,3 +12,9 @@ Investigate this issue systematically. Document your findings as comments before
 - **Path**: {{.WorktreePath}}
 - **Branch**: {{.WorktreeBranch}}
 {{end}}
+{{if .Comments}}
+
+## Comments
+
+{{.Comments}}
+{{end}}

@@ -300,6 +300,198 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	}
 }
 
+func TestSpawn_TicketAgent_WithComments(t *testing.T) {
+	// Setup
+	tmpDir := t.TempDir()
+	store := newMockStore()
+	sessStore := newMockSessionStore()
+	tmuxMgr := newMockTmuxManager()
+
+	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
+	testTicket.Comments = []ticket.Comment{
+		{
+			CommentMeta: storage.CommentMeta{
+				ID:      "c1",
+				Author:  "architect",
+				Type:    ticket.CommentBlocker,
+				Created: time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC),
+			},
+			Content: "Blocked on API design decision",
+		},
+		{
+			CommentMeta: storage.CommentMeta{
+				ID:      "c2",
+				Author:  "claude",
+				Type:    ticket.CommentGeneral,
+				Created: time.Date(2025, 6, 16, 14, 0, 0, 0, time.UTC),
+			},
+			Content: "Investigated the root cause",
+		},
+	}
+	store.tickets["ticket-1"] = testTicket
+
+	createTestPromptFile(t, tmpDir, "ticket/work/KICKOFF.md",
+		"# Ticket: {{.TicketTitle}}\n\n{{.TicketBody}}\n{{if .Comments}}\n\n## Comments\n\n{{.Comments}}\n{{end}}")
+	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+
+	spawner := NewSpawner(Dependencies{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+		MCPConfigDir: tmpDir,
+	})
+
+	// Execute
+	result, err := spawner.Spawn(context.Background(), SpawnRequest{
+		AgentType:   AgentTypeTicketAgent,
+		Agent:       "claude",
+		TmuxSession: "test-session",
+		ProjectPath: tmpDir,
+		TicketsDir:  filepath.Join(tmpDir, "tickets"),
+		TicketID:    "ticket-1",
+		Ticket:      testTicket,
+	})
+
+	// Verify
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success, got: %s", result.Message)
+	}
+
+	// Read the generated prompt file and verify comments are present
+	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
+	launcherData, err := os.ReadFile(launcherPath)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+
+	// Extract prompt file path from launcher script — format is "$(cat '/path/to/file')"
+	script := string(launcherData)
+	promptPath := extractPromptPath(t, script)
+
+	promptData, err := os.ReadFile(promptPath)
+	if err != nil {
+		t.Fatalf("failed to read prompt file: %v", err)
+	}
+	promptText := string(promptData)
+
+	// Verify comments section exists
+	if !containsSubstr(promptText, "## Comments") {
+		t.Error("expected prompt to contain '## Comments' section")
+	}
+	if !containsSubstr(promptText, "[blocker]") {
+		t.Error("expected prompt to contain '[blocker]' comment type")
+	}
+	if !containsSubstr(promptText, "Blocked on API design decision") {
+		t.Error("expected prompt to contain first comment content")
+	}
+	if !containsSubstr(promptText, "[comment]") {
+		t.Error("expected prompt to contain '[comment]' comment type")
+	}
+	if !containsSubstr(promptText, "Investigated the root cause") {
+		t.Error("expected prompt to contain second comment content")
+	}
+	if !containsSubstr(promptText, "2025-06-15 10:30 UTC") {
+		t.Error("expected prompt to contain first comment timestamp")
+	}
+}
+
+func TestSpawn_TicketAgent_NoComments(t *testing.T) {
+	// Setup - ticket with no comments should not have a Comments section
+	tmpDir := t.TempDir()
+	store := newMockStore()
+	sessStore := newMockSessionStore()
+	tmuxMgr := newMockTmuxManager()
+
+	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
+	store.tickets["ticket-1"] = testTicket
+
+	createTestPromptFile(t, tmpDir, "ticket/work/KICKOFF.md",
+		"# Ticket: {{.TicketTitle}}\n\n{{.TicketBody}}\n{{if .Comments}}\n\n## Comments\n\n{{.Comments}}\n{{end}}")
+	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+
+	spawner := NewSpawner(Dependencies{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+		MCPConfigDir: tmpDir,
+	})
+
+	result, err := spawner.Spawn(context.Background(), SpawnRequest{
+		AgentType:   AgentTypeTicketAgent,
+		Agent:       "claude",
+		TmuxSession: "test-session",
+		ProjectPath: tmpDir,
+		TicketsDir:  filepath.Join(tmpDir, "tickets"),
+		TicketID:    "ticket-1",
+		Ticket:      testTicket,
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success, got: %s", result.Message)
+	}
+
+	// Read prompt and verify NO comments section
+	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
+	launcherData, err := os.ReadFile(launcherPath)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(launcherData)
+	promptPath := extractPromptPath(t, script)
+
+	promptData, err := os.ReadFile(promptPath)
+	if err != nil {
+		t.Fatalf("failed to read prompt file: %v", err)
+	}
+	promptText := string(promptData)
+
+	if containsSubstr(promptText, "## Comments") {
+		t.Error("expected prompt to NOT contain '## Comments' section when no comments exist")
+	}
+}
+
+func TestFormatTicketComments(t *testing.T) {
+	// Empty comments
+	result := formatTicketComments(nil)
+	if result != "" {
+		t.Errorf("expected empty string for nil comments, got: %q", result)
+	}
+
+	result = formatTicketComments([]ticket.Comment{})
+	if result != "" {
+		t.Errorf("expected empty string for empty comments, got: %q", result)
+	}
+
+	// Single comment
+	comments := []ticket.Comment{
+		{
+			CommentMeta: storage.CommentMeta{
+				Type:    ticket.CommentBlocker,
+				Created: time.Date(2025, 3, 10, 8, 0, 0, 0, time.UTC),
+			},
+			Content: "Need clarification",
+		},
+	}
+	result = formatTicketComments(comments)
+	if !containsSubstr(result, "### [blocker]") {
+		t.Errorf("expected '[blocker]' header, got: %q", result)
+	}
+	if !containsSubstr(result, "2025-03-10 08:00 UTC") {
+		t.Errorf("expected timestamp, got: %q", result)
+	}
+	if !containsSubstr(result, "Need clarification") {
+		t.Errorf("expected content, got: %q", result)
+	}
+}
+
 func TestSpawn_TicketAgent_AlreadyActive(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()
@@ -922,6 +1114,23 @@ func TestStateInfo_CanResume(t *testing.T) {
 			}
 		})
 	}
+}
+
+// extractPromptPath extracts the prompt file path from a launcher script.
+// The format is: "$(cat '/path/to/file')"
+func extractPromptPath(t *testing.T, script string) string {
+	t.Helper()
+	marker := "\"$(cat '"
+	idx := strings.Index(script, marker)
+	if idx == -1 {
+		t.Fatal("could not find $(cat '...') in launcher script")
+	}
+	pathStart := idx + len(marker)
+	pathEnd := strings.Index(script[pathStart:], "')")
+	if pathEnd == -1 {
+		t.Fatal("could not find closing ') in launcher script")
+	}
+	return script[pathStart : pathStart+pathEnd]
 }
 
 // Helper function

@@ -10,3 +10,9 @@
 
 All changes should be made in this worktree. The branch will be merged on approval.
 {{end}}
+{{if .Comments}}
+
+## Comments
+
+{{.Comments}}
+{{end}}

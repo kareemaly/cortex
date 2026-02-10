@@ -11,6 +11,7 @@ type TicketVars struct {
 	TicketID       string
 	TicketTitle    string
 	TicketBody     string
+	Comments       string // pre-formatted comments block
 	IsWorktree     bool   // true when running in a worktree
 	WorktreePath   string // worktree only
 	WorktreeBranch string // worktree only

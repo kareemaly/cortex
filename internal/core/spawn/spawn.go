@@ -690,6 +690,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 		TicketID:    req.TicketID,
 		TicketTitle: req.Ticket.Title,
 		TicketBody:  req.Ticket.Body,
+		Comments:    formatTicketComments(req.Ticket.Comments),
 		IsWorktree:  worktreePath != nil,
 	}
 	if worktreePath != nil {
@@ -708,6 +709,23 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 		PromptText:          promptText,
 		SystemPromptContent: systemPromptContent,
 	}, nil
+}
+
+// formatTicketComments formats ticket comments into a markdown string for prompt injection.
+func formatTicketComments(comments []ticket.Comment) string {
+	if len(comments) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for i, c := range comments {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(fmt.Sprintf("### [%s] — %s\n", c.Type, c.Created.UTC().Format("2006-01-02 15:04 UTC")))
+		sb.WriteString(c.Content)
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 // buildArchitectPrompt creates the dynamic architect prompt with ticket list.
