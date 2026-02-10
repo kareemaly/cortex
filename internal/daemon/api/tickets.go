@@ -961,3 +961,99 @@ func (h *TicketHandlers) ExecuteAction(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
+
+// Edit handles POST /tickets/{id}/edit - opens the ticket's index.md in $EDITOR via tmux popup.
+func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	ticketID := chi.URLParam(r, "id")
+
+	// Get the file path for the ticket's index.md
+	indexPath, err := store.IndexPath(ticketID)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	// Check tmux is available
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	// Build editor command
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim"
+	}
+	command := fmt.Sprintf("%s %q", editor, indexPath)
+
+	// Get tmux session name
+	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	tmuxSession := "cortex"
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
+	// Execute popup
+	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, "", command); err != nil {
+		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ExecuteActionResponse{
+		Success: true,
+		Message: "Editor opened",
+	})
+}
+
+// ShowPopup handles POST /tickets/{id}/show-popup - opens cortex show in a tmux popup.
+func (h *TicketHandlers) ShowPopup(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	ticketID := chi.URLParam(r, "id")
+
+	// Validate ticket exists
+	_, _, err = store.Get(ticketID)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	// Check tmux is available
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	// Build command
+	command := fmt.Sprintf("cortex show %s", ticketID)
+
+	// Get tmux session name
+	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	tmuxSession := "cortex"
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
+	// Execute popup
+	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, projectPath, command); err != nil {
+		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ExecuteActionResponse{
+		Success: true,
+		Message: "Popup opened",
+	})
+}

@@ -43,6 +43,7 @@ type Model struct {
 	modalViewport   viewport.Model
 	modalCommentIdx int // index into ticket.Comments
 	executingDiff   bool
+	executingEdit   bool
 	sessions        []sdk.SessionListItem // cached sessions for this project
 
 	// SSE subscription state
@@ -109,6 +110,14 @@ type DiffExecutedMsg struct{}
 
 // DiffErrorMsg is sent when executing a diff action fails.
 type DiffErrorMsg struct {
+	Err error
+}
+
+// EditExecutedMsg is sent when the editor is successfully opened.
+type EditExecutedMsg struct{}
+
+// EditErrorMsg is sent when opening the editor fails.
+type EditErrorMsg struct {
 	Err error
 }
 
@@ -300,6 +309,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.executingDiff = false
 		m.err = msg.Err
 		return m, nil
+
+	case EditExecutedMsg:
+		m.executingEdit = false
+		m.loading = true
+		return m, m.loadTicket()
+
+	case EditErrorMsg:
+		m.executingEdit = false
+		m.err = msg.Err
+		return m, nil
 	}
 
 	// Handle viewport scroll messages.
@@ -340,8 +359,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseDetailMsg{} }
 	}
 
-	// If loading, killing, approving, spawning, or executing diff, don't process other keys.
-	if m.loading || m.killing || m.approving || m.spawning || m.executingDiff {
+	// If loading, killing, approving, spawning, or executing diff/edit, don't process other keys.
+	if m.loading || m.killing || m.approving || m.spawning || m.executingDiff || m.executingEdit {
 		return m, nil
 	}
 
@@ -399,6 +418,12 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.spawnSession()
 		}
 		return m, nil
+	}
+
+	// Edit ticket in $EDITOR.
+	if isKey(msg, KeyEdit) {
+		m.executingEdit = true
+		return m, m.editTicket()
 	}
 
 	// Handle 'ga' - focus architect window.
@@ -552,6 +577,12 @@ func (m Model) handleCommentListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Edit ticket in $EDITOR.
+	if isKey(msg, KeyEdit) {
+		m.executingEdit = true
+		return m, m.editTicket()
+	}
+
 	return m, nil
 }
 
@@ -689,6 +720,20 @@ func (m Model) executeDiffAction(commentID string) tea.Cmd {
 			return DiffErrorMsg{Err: err}
 		}
 		return DiffExecutedMsg{}
+	}
+}
+
+// editTicket returns a command to open the ticket in $EDITOR via tmux popup.
+func (m Model) editTicket() tea.Cmd {
+	return func() tea.Msg {
+		if m.ticket == nil {
+			return EditErrorMsg{Err: fmt.Errorf("no ticket")}
+		}
+		err := m.client.EditTicket(m.ticket.ID)
+		if err != nil {
+			return EditErrorMsg{Err: err}
+		}
+		return EditExecutedMsg{}
 	}
 }
 
@@ -955,6 +1000,12 @@ func (m Model) View() string {
 	// Handle executing diff state.
 	if m.executingDiff {
 		b.WriteString(loadingStyle.Render("Opening diff..."))
+		return b.String()
+	}
+
+	// Handle executing edit state.
+	if m.executingEdit {
+		b.WriteString(loadingStyle.Render("Opening editor..."))
 		return b.String()
 	}
 

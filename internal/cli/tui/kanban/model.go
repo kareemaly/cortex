@@ -9,7 +9,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
-	"github.com/kareemaly/cortex/internal/cli/tui/ticket"
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
 )
 
@@ -35,10 +34,6 @@ type Model struct {
 
 	// Vim navigation state
 	pendingG bool // tracking 'g' key for 'gg' sequence
-
-	// Ticket detail view state
-	showDetail  bool
-	detailModel *ticket.Model
 
 	// SSE subscription state
 	eventCh      <-chan sdk.Event
@@ -101,6 +96,16 @@ type SessionDeleteErrorMsg struct {
 	Err error
 }
 
+// PopupOpenedMsg is sent when a ticket popup is successfully opened.
+type PopupOpenedMsg struct {
+	Ticket *sdk.TicketSummary
+}
+
+// PopupErrorMsg is sent when opening a ticket popup fails.
+type PopupErrorMsg struct {
+	Err error
+}
+
 // sseConnectedMsg is sent when the SSE connection is established.
 type sseConnectedMsg struct {
 	ch     <-chan sdk.Event
@@ -149,29 +154,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		var cmd tea.Cmd
 		m.logViewer, cmd = m.logViewer.Update(msg)
-		return m, cmd
-	}
-
-	// Handle close from ticket detail view.
-	if _, ok := msg.(ticket.CloseDetailMsg); ok {
-		m.showDetail = false
-		m.detailModel = nil
-		m.loading = true
-		return m, m.loadTickets()
-	}
-
-	// Delegate to detail model when active.
-	if m.showDetail && m.detailModel != nil {
-		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
-			m.width = sizeMsg.Width
-			m.height = sizeMsg.Height
-			m.ready = true
-		}
-		var cmd tea.Cmd
-		updatedModel, cmd := m.detailModel.Update(msg)
-		if dm, ok := updatedModel.(ticket.Model); ok {
-			m.detailModel = &dm
-		}
 		return m, cmd
 	}
 
@@ -247,6 +229,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logBuf.Errorf("delete", "delete failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
+	case PopupOpenedMsg:
+		m.statusMsg = fmt.Sprintf("Opened: %s", msg.Ticket.Title)
+		m.statusIsError = false
+		return m, m.clearStatusAfterDelay()
+
+	case PopupErrorMsg:
+		m.statusMsg = fmt.Sprintf("Error: %s", msg.Err)
+		m.statusIsError = true
+		m.logBuf.Errorf("popup", "popup failed: %s", msg.Err)
+		return m, m.clearStatusAfterDelay()
+
 	case ClearStatusMsg:
 		m.statusMsg = ""
 		m.statusIsError = false
@@ -260,11 +253,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case EventMsg:
 		m.logBuf.Debug("sse", "event received")
-		cmds := []tea.Cmd{m.loadTickets(), m.waitForEvent()}
-		if m.showDetail && m.detailModel != nil {
-			cmds = append(cmds, func() tea.Msg { return ticket.RefreshMsg{} })
-		}
-		return m, tea.Batch(cmds...)
+		return m, tea.Batch(m.loadTickets(), m.waitForEvent())
 	}
 
 	return m, nil
@@ -407,18 +396,13 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Open ticket detail.
+	// Open ticket detail in tmux popup.
 	if isKey(msg, KeyOpen, KeyEnter) {
 		t := m.columns[m.activeColumn].SelectedTicket()
 		if t != nil {
-			detailModel := ticket.NewEmbedded(m.client, t.ID)
-			m.detailModel = &detailModel
-			m.showDetail = true
-			initCmd := m.detailModel.Init()
-			sizeCmd := func() tea.Msg {
-				return tea.WindowSizeMsg{Width: m.width, Height: m.height}
-			}
-			return m, tea.Batch(initCmd, sizeCmd)
+			m.statusMsg = fmt.Sprintf("Opening: %s...", t.Title)
+			m.statusIsError = false
+			return m, m.showTicketPopup(t)
 		}
 		return m, nil
 	}
@@ -493,11 +477,6 @@ func (m Model) deleteOrphanedSession(ticket *sdk.TicketSummary) tea.Cmd {
 func (m Model) View() string {
 	if !m.ready {
 		return "Loading..."
-	}
-
-	// Delegate to detail view when active.
-	if m.showDetail && m.detailModel != nil {
-		return m.detailModel.View()
 	}
 
 	// Log viewer overlay.
@@ -656,6 +635,16 @@ func (m Model) focusDaemonDashboard() tea.Cmd {
 			return FocusErrorMsg{Err: err}
 		}
 		return FocusSuccessMsg{Window: "daemon dashboard"}
+	}
+}
+
+// showTicketPopup returns a command to open a ticket detail in a tmux popup.
+func (m Model) showTicketPopup(t *sdk.TicketSummary) tea.Cmd {
+	return func() tea.Msg {
+		if err := m.client.ShowTicketPopup(t.ID); err != nil {
+			return PopupErrorMsg{Err: err}
+		}
+		return PopupOpenedMsg{Ticket: t}
 	}
 }
 

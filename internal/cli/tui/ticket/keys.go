@@ -43,6 +43,7 @@ const (
 	KeyLeftBracket  Key = "["
 	KeyRightBracket Key = "]"
 	KeyDiff         Key = "d"
+	KeyEdit         Key = "e"
 	KeyDeleteOrphan Key = "D"
 )
 
@@ -72,16 +73,16 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, 
 		scroll = "[Tab/[/]] comments  [j/k/gg/G] scroll  [ctrl+u/d] page"
 	}
 
-	actions := "[r]efresh  [ga] architect"
+	actions := "[r]efresh  [e]dit  [ga] architect"
 
 	if hasActiveSession {
 		sessionActions := "[x] kill"
 		if hasReviewRequests {
 			sessionActions += "  [a]pprove"
 		}
-		actions = "[r]efresh  " + sessionActions + "  [ga] architect"
+		actions = "[r]efresh  [e]dit  " + sessionActions + "  [ga] architect"
 	} else if canSpawn {
-		actions = "[r]efresh  [s]pawn  [ga] architect"
+		actions = "[r]efresh  [e]dit  [s]pawn  [ga] architect"
 	}
 
 	return scroll + "  " + actions + "  " + quit + "  " + percentStr(scrollPercent)
