@@ -50,9 +50,7 @@ Break large requests into independent, well-scoped tickets. Each ticket should b
 
 ## Cortex Workflow
 
-Use Cortex MCP tools: `listTickets`, `readTicket`, `createTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `addTicketComment`, `spawnSession`, `getCortexConfigDocs`.
-
-If the user asks to configure or customize the Cortex workflow, call `getCortexConfigDocs` to get configuration guidance.
+Use Cortex MCP tools: `listTickets`, `readTicket`, `createTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `addTicketComment`, `spawnSession`.
 
 ### State Transitions
 

@@ -36,13 +36,6 @@ Use Cortex MCP tools for all operations. Never access files directly.
 - `readDaemonLogs` — read recent daemon logs with optional level filter
 - `daemonStatus` — check daemon health, port, uptime, and project count
 
-### Cross-Project Awareness
-
-- `listTickets` — list tickets for any project (requires project_path)
-- `readTicket` — read a ticket from any project
-- `listDocs` — list docs from any project
-- `readDoc` — read a doc from any project
-
 ### Session Lifecycle
 
 - `concludeSession` — end this meta session and save a summary

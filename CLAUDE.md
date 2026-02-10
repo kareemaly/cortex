@@ -152,7 +152,7 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 | `registerProject` | Register a project directory |
 | `unregisterProject` | Remove project from registry |
 | `spawnArchitect` | Spawn architect for a project |
-| `listSessions` | List active sessions for a project |
+| `listSessions` | List active sessions for a project (requires project_path) |
 | `readProjectConfig` | Read project's cortex.yaml |
 | `updateProjectConfig` | Update project's cortex.yaml |
 | `readGlobalConfig` | Read global settings.yaml |
@@ -161,10 +161,6 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 | `updatePrompt` | Update/eject a prompt template |
 | `readDaemonLogs` | Read recent daemon logs |
 | `daemonStatus` | Get daemon uptime, version, project count |
-| `listTickets` | List tickets from a project (requires project_path) |
-| `readTicket` | Read ticket from a project |
-| `listDocs` | List docs from a project |
-| `readDoc` | Read doc from a project |
 | `concludeSession` | Conclude the meta session |
 
 **Architect** (`tools_architect.go`):
@@ -182,7 +178,6 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 | `clearDueDate` | Remove due date from ticket |
 | `addTicketComment` | Add comment to ticket (types: review_requested, done, blocker, comment) |
 | `spawnSession` | Spawn agent session for ticket (modes: normal, resume, fresh) |
-| `getCortexConfigDocs` | Get CONFIG_DOCS.md for customization guidance |
 | `createDoc` | Create a markdown doc with frontmatter in a category subdirectory |
 | `readDoc` | Read a doc by ID |
 | `updateDoc` | Update doc title, body, tags, or references |
