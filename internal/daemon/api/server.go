@@ -91,6 +91,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Put("/{id}", docHandlers.Update)
 			r.Delete("/{id}", docHandlers.Delete)
 			r.Post("/{id}/move", docHandlers.Move)
+			r.Post("/{id}/edit", docHandlers.Edit)
 			r.Post("/{id}/comments", docHandlers.AddComment)
 		})
 

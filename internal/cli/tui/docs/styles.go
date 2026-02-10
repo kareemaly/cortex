@@ -36,8 +36,11 @@ var (
 
 	selectedStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("255")).
-			Background(accentColor)
+			Foreground(lipgloss.Color("255"))
+
+	selectedIndicator = lipgloss.NewStyle().
+				Foreground(accentColor).
+				Bold(true)
 
 	treeConnector = lipgloss.NewStyle().
 			Foreground(mutedColor)

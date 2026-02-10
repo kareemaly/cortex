@@ -14,7 +14,7 @@ const (
 	KeyJ      Key = "j"
 	KeyH      Key = "h"
 	KeyL      Key = "l"
-	KeyEnter  Key = "enter"
+	KeyE      Key = "e"
 	KeyCtrlC  Key = "ctrl+c"
 	KeyCtrlU  Key = "ctrl+u"
 	KeyCtrlD  Key = "ctrl+d"
@@ -36,5 +36,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the docs browser.
 func helpText() string {
-	return "[h/l] pane  [j/k/gg/G] navigate  [enter] expand  [ctrl+u/d] scroll  [r]efresh  [!] logs  [q]uit"
+	return "[h/l] pane  [j/k/gg/G] navigate  [ctrl+u/d] scroll  [e]dit  [r]efresh  [!] logs  [q]uit"
 }
