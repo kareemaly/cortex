@@ -431,3 +431,12 @@ func (s *Store) findEntityDirAllStatuses(id string) (string, Status, error) {
 	}
 	return "", "", &NotFoundError{Resource: "ticket", ID: id}
 }
+
+// IndexPath returns the filesystem path to a ticket's index.md file.
+func (s *Store) IndexPath(id string) (string, error) {
+	entityDir, _, err := s.findEntityDirAllStatuses(id)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(entityDir, "index.md"), nil
+}
