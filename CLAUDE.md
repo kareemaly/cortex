@@ -199,11 +199,12 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 
 | Tool | Description |
 |------|-------------|
-| `readTicket` | Read assigned ticket details (no ID required) |
+| `readReference` | Read a referenced ticket or doc by ID |
 | `addComment` | Add comment to assigned ticket |
 | `addBlocker` | Report blocker on assigned ticket |
 | `requestReview` | Request human review, moves ticket to review status |
 | `concludeSession` | Complete work, move to done, trigger cleanup |
+| `createDoc` | Create a doc for research findings (research type only) |
 
 ## Agent Workflow
 
