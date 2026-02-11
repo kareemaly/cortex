@@ -34,7 +34,7 @@ func init() {
 }
 
 // defaultConfigs lists all config directories to upgrade.
-var defaultConfigs = []string{"claude-code", "copilot"}
+var defaultConfigs = []string{"claude-code", "copilot", "opencode"}
 
 func runDefaultsUpgradeCmd(cmd *cobra.Command, args []string) error {
 	homeDir, err := os.UserHomeDir()

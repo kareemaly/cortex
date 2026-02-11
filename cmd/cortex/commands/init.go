@@ -14,6 +14,7 @@ import (
 var (
 	initGlobalOnly bool
 	initForce      bool
+	initAgent      string
 )
 
 var initCmd = &cobra.Command{
@@ -29,11 +30,20 @@ directory in the current directory. Use --global-only to skip project setup.`,
 func init() {
 	initCmd.Flags().BoolVarP(&initGlobalOnly, "global-only", "g", false, "Only set up global ~/.cortex/, skip project setup")
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing config files")
+	initCmd.Flags().StringVarP(&initAgent, "agent", "a", "claude", "Agent type: claude, opencode, copilot")
 	rootCmd.AddCommand(initCmd)
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
+	switch initAgent {
+	case "claude", "opencode", "copilot":
+		// valid
+	default:
+		return fmt.Errorf("invalid agent type %q: must be claude, opencode, or copilot", initAgent)
+	}
+
 	opts := install.Options{
+		Agent: initAgent,
 		Force: initForce,
 	}
 

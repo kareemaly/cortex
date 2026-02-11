@@ -29,6 +29,7 @@ The architect will guide you through creating and managing tickets.
 - **git** - version control
 - **AI agent** (one of):
   - [Claude CLI](https://claude.ai/code) - recommended
+  - [OpenCode](https://github.com/opencode-ai/opencode)
   - [GitHub Copilot CLI](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line)
 
 ## Core Workflow

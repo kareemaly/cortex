@@ -3,22 +3,44 @@
 
 architect:
   agent: opencode
-  args: []
+  args:
+    - "--allow-dangerously-skip-permissions"
+    - "--allowedTools"
+    - "mcp__cortex__listTickets,mcp__cortex__readTicket"
 meta:
   agent: opencode
-  args: []
+  args:
+    - "--allow-dangerously-skip-permissions"
+    - "--allowedTools"
+    - "mcp__cortex__listProjects,mcp__cortex__readProjectConfig,mcp__cortex__readGlobalConfig,mcp__cortex__daemonStatus,mcp__cortex__readDaemonLogs,mcp__cortex__listTickets,mcp__cortex__readTicket,mcp__cortex__listDocs,mcp__cortex__readDoc,mcp__cortex__listSessions,mcp__cortex__readPrompt"
 ticket:
   work:
     agent: opencode
-    args: []
+    args:
+      - "--permission-mode"
+      - "plan"
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readReference"
   debug:
     agent: opencode
-    args: []
+    args:
+      - "--permission-mode"
+      - "plan"
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readReference,mcp__cortex__addComment"
   research:
     agent: opencode
-    args: []
+    args:
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readReference,mcp__cortex__addComment,mcp__cortex__createDoc"
   chore:
     agent: opencode
-    args: []
+    args:
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readReference"
 git:
   worktrees: false

@@ -100,7 +100,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Worktree manager | `internal/worktree/` |
 | TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `docs/`, `ticket/`) |
 | Install/init logic | `internal/install/` |
-| Agent defaults | `internal/install/defaults/` (`claude-code`, `opencode`, `copilot`) |
+| Agent defaults | `internal/install/defaults/` (`claude-code`, `copilot`, `opencode`) |
 | Shared storage | `internal/storage/` |
 | Session store | `internal/session/` |
 | Response types | `internal/types/` |
@@ -117,7 +117,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 
 | Command | Description |
 |---------|-------------|
-| `cortex init` | Initialize `.cortex/` in current directory, register in global config |
+| `cortex init` | Initialize `.cortex/` in current directory, register in global config (`--agent claude\|opencode\|copilot`) |
 | `cortex meta` | Start/attach global meta session (`--mode fresh\|resume` for orphaned) |
 | `cortex architect` | Start/attach architect session (`--mode fresh\|resume` for orphaned) |
 | `cortex kanban` | Kanban + Docs TUI with tab switching (`tab`/`[`/`]`) |

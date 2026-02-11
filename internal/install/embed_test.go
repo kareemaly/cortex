@@ -3,6 +3,7 @@ package install
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -54,6 +55,60 @@ func TestCopyEmbeddedDefaults(t *testing.T) {
 	}
 	if len(content) == 0 {
 		t.Error("cortex.yaml is empty")
+	}
+}
+
+func TestCopyEmbeddedDefaultsOpenCode(t *testing.T) {
+	tmpDir := t.TempDir()
+	targetDir := filepath.Join(tmpDir, "opencode")
+
+	// Copy embedded defaults
+	items, err := CopyEmbeddedDefaults("opencode", targetDir, false)
+	if err != nil {
+		t.Fatalf("CopyEmbeddedDefaults failed: %v", err)
+	}
+
+	// Verify we got items
+	if len(items) == 0 {
+		t.Error("expected items to be created, got none")
+	}
+
+	// Expected files — same structure as claude-code
+	expectedFiles := []string{
+		"cortex.yaml",
+		"CONFIG_DOCS.md",
+		"prompts/meta/SYSTEM.md",
+		"prompts/meta/KICKOFF.md",
+		"prompts/architect/SYSTEM.md",
+		"prompts/architect/KICKOFF.md",
+		"prompts/ticket/work/SYSTEM.md",
+		"prompts/ticket/work/KICKOFF.md",
+		"prompts/ticket/work/APPROVE.md",
+		"prompts/ticket/debug/SYSTEM.md",
+		"prompts/ticket/debug/KICKOFF.md",
+		"prompts/ticket/debug/APPROVE.md",
+		"prompts/ticket/research/SYSTEM.md",
+		"prompts/ticket/research/KICKOFF.md",
+		"prompts/ticket/research/APPROVE.md",
+		"prompts/ticket/chore/SYSTEM.md",
+		"prompts/ticket/chore/KICKOFF.md",
+		"prompts/ticket/chore/APPROVE.md",
+	}
+
+	for _, file := range expectedFiles {
+		path := filepath.Join(targetDir, file)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("expected file %s to exist", file)
+		}
+	}
+
+	// Verify cortex.yaml references opencode agent
+	content, err := os.ReadFile(filepath.Join(targetDir, "cortex.yaml"))
+	if err != nil {
+		t.Fatalf("failed to read cortex.yaml: %v", err)
+	}
+	if !strings.Contains(string(content), "agent: opencode") {
+		t.Error("cortex.yaml does not contain 'agent: opencode'")
 	}
 }
 

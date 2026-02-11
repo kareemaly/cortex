@@ -1,30 +1,21 @@
 # OpenCode Configuration
 
-Configuration guide for Cortex projects using the opencode agent type.
-
-## Overview
-
-OpenCode uses the same CLI binary (`claude`) and supports the same flags as claude-code (`--system-prompt`, `--mcp-config`, `--settings`). The key difference is that permissions are handled via the `OPENCODE_CONFIG_CONTENT` environment variable rather than CLI flags like `--allowedTools` or `--permission-mode`.
-
-This means agent args in `cortex.yaml` are typically empty — permission configuration lives outside of Cortex.
+Configuration guide for Cortex projects using opencode agent type.
 
 ## Project Config Schema
 
 Project configuration lives in `.cortex/cortex.yaml`:
 
 ```yaml
-name: my-project                     # Project display name
-extend: ~/.cortex/defaults/opencode  # Inherit from base config
+name: my-project                      # Project display name
+extend: ~/.cortex/defaults/opencode   # Inherit from base config
 architect:
   agent: opencode
-  args: []
+  args: ["--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"]
 ticket:
   work:
     agent: opencode
-    args: []
-  debug:
-    agent: opencode
-    args: []
+    args: ["--permission-mode", "plan"]
 git:
   worktrees: false  # Enable git worktrees for ticket isolation
 ```
@@ -34,14 +25,12 @@ git:
 | `name` | Project display name |
 | `extend` | Path to base config for inheritance |
 | `architect.agent` | Agent type (`opencode`) |
-| `architect.args` | CLI arguments passed to architect agent (typically empty) |
+| `architect.args` | CLI arguments passed to architect agent |
 | `ticket.<type>.agent` | Agent type for ticket type |
-| `ticket.<type>.args` | CLI arguments for ticket agent (typically empty) |
+| `ticket.<type>.args` | CLI arguments for ticket agent |
 | `git.worktrees` | Enable git worktrees per ticket |
 
 ## Prompt Structure
-
-OpenCode uses the same prompt structure as claude-code:
 
 | Path | Purpose |
 |------|---------|
@@ -50,6 +39,7 @@ OpenCode uses the same prompt structure as claude-code:
 | `ticket/work/SYSTEM.md` | Ticket agent workflow instructions |
 | `ticket/work/KICKOFF.md` | Ticket details and context |
 | `ticket/work/APPROVE.md` | Post-approval commit instructions |
+| `ticket/work/REJECT.md` | Rollback instructions |
 
 ## Customizing Prompts
 
@@ -110,6 +100,13 @@ git:
   worktrees: true
 ```
 
+### Restrict Agent Permissions
+
+```yaml
+architect:
+  args: ["--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"]
+```
+
 ### Add Test Requirements
 
 Override `.cortex/prompts/ticket/work/APPROVE.md`:
@@ -138,7 +135,7 @@ Override `.cortex/prompts/ticket/work/KICKOFF.md`:
 
 | Command | Description |
 |---------|-------------|
-| `cortex init` | Initialize project with `.cortex/` directory |
+| `cortex init --agent opencode` | Initialize project with opencode defaults |
 | `cortex eject <path>` | Copy prompt to project for customization |
 | `cortex architect` | Start or attach to architect session |
 | `cortex kanban` | Open kanban board TUI |
