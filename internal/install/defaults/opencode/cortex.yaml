@@ -1,0 +1,24 @@
+# Default configuration for Cortex projects using OpenCode
+# Projects can extend this via: extend: ~/.cortex/defaults/opencode
+
+architect:
+  agent: opencode
+  args: []
+meta:
+  agent: opencode
+  args: []
+ticket:
+  work:
+    agent: opencode
+    args: []
+  debug:
+    agent: opencode
+    args: []
+  research:
+    agent: opencode
+    args: []
+  chore:
+    agent: opencode
+    args: []
+git:
+  worktrees: false
