@@ -100,7 +100,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Worktree manager | `internal/worktree/` |
 | TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `docs/`, `ticket/`) |
 | Install/init logic | `internal/install/` |
-| Agent defaults | `internal/install/defaults/` (`claude-code`, `copilot`) |
+| Agent defaults | `internal/install/defaults/` (`claude-code`, `opencode`, `copilot`) |
 | Shared storage | `internal/storage/` |
 | Session store | `internal/session/` |
 | Response types | `internal/types/` |

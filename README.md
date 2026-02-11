@@ -78,7 +78,7 @@ The architect will guide you through creating and managing tickets.
 name: my-project
 extend: ~/.cortex/defaults/claude-code
 architect:
-  agent: claude  # Options: claude, copilot
+  agent: claude  # Options: claude, opencode, copilot
   args: ["--allowedTools", "mcp__cortex__*"]
 ticket:
   work:     # Default implementation workflow
