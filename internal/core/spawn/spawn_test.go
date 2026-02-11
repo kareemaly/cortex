@@ -1954,7 +1954,7 @@ func TestWriteLauncherScript_OpenCode(t *testing.T) {
 
 // extractExportedEnvVar extracts the value of a shell-exported env var from a launcher script.
 // The launcher writes lines like: export VAR='value'
-// This reverses the shellQuote escaping ('\'' → ').
+// This reverses the shellQuote escaping (backslash-quote sequences).
 func extractExportedEnvVar(t *testing.T, script, varName string) string {
 	t.Helper()
 	prefix := "export " + varName + "='"
