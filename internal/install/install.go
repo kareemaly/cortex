@@ -15,8 +15,22 @@ type Options struct {
 	ProjectPath string
 	// ProjectName overrides auto-detected project name.
 	ProjectName string
+	// Agent selects which agent defaults to use (claude, opencode, copilot). Defaults to claude.
+	Agent string
 	// Force overwrites existing config files.
 	Force bool
+}
+
+// DefaultsDirForAgent returns the defaults directory name for the given agent type.
+func DefaultsDirForAgent(agent string) string {
+	switch agent {
+	case "opencode":
+		return "opencode"
+	case "copilot":
+		return "copilot"
+	default:
+		return "claude-code"
+	}
 }
 
 // Run performs the installation with the given options.
@@ -38,7 +52,7 @@ func Run(opts Options) (*Result, error) {
 		}
 		result.ProjectName = name
 
-		projectItems, err := setupProject(opts.ProjectPath, name, opts.Force)
+		projectItems, err := setupProject(opts.ProjectPath, name, opts.Agent, opts.Force)
 		if err != nil {
 			return nil, err
 		}
@@ -128,6 +142,13 @@ git_diff_tool: ` + gitDiffTool + `
 	}
 	items = append(items, copilotItems...)
 
+	// Create defaults/opencode directory with full config and prompts
+	opencodeItems, err := setupOpenCodeDefaults(homeDir, force)
+	if err != nil {
+		return append(items, opencodeItems...), err
+	}
+	items = append(items, opencodeItems...)
+
 	return items, nil
 }
 
@@ -143,10 +164,16 @@ func setupCopilotDefaults(homeDir string, force bool) ([]SetupItem, error) {
 	return CopyEmbeddedDefaults("copilot", targetDir, force)
 }
 
+// setupOpenCodeDefaults copies embedded default config to ~/.cortex/defaults/opencode/.
+func setupOpenCodeDefaults(homeDir string, force bool) ([]SetupItem, error) {
+	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "opencode")
+	return CopyEmbeddedDefaults("opencode", targetDir, force)
+}
+
 // setupProject creates the project .cortex/ directory and config.
-// Creates a minimal config that extends ~/.cortex/defaults/claude-code.
+// Creates a minimal config that extends the appropriate defaults directory.
 // Prompts are inherited from the base config, not copied to the project.
-func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
+func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, error) {
 	absPath, err := filepath.Abs(projectPath)
 	if err != nil {
 		return nil, err
@@ -164,10 +191,11 @@ func setupProject(projectPath, name string, force bool) ([]SetupItem, error) {
 		return items, item.Error
 	}
 
-	// Create minimal config file that extends the claude-code defaults
+	// Create minimal config file that extends the appropriate defaults
 	// Config must be written before resolving paths so Load() can read it.
+	defaultsDir := DefaultsDirForAgent(agent)
 	configContent := `name: ` + name + `
-extend: ~/.cortex/defaults/claude-code
+extend: ~/.cortex/defaults/` + defaultsDir + `
 `
 	item = ensureConfigFile(configPath, configContent, force)
 	items = append(items, item)
