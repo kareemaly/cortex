@@ -2,6 +2,7 @@ package spawn
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -1766,5 +1767,185 @@ func TestOrchestrate_InvalidMode(t *testing.T) {
 	}
 	if !IsConfigError(err) {
 		t.Errorf("expected ConfigError, got: %T", err)
+	}
+}
+
+func TestGenerateOpenCodeConfigContent(t *testing.T) {
+	claudeConfig := &ClaudeMCPConfig{
+		MCPServers: map[string]MCPServerConfig{
+			"cortex": {
+				Command: "/usr/bin/cortexd",
+				Args:    []string{"mcp", "--ticket-id", "ticket-123"},
+				Env: map[string]string{
+					"CORTEX_PROJECT_PATH": "/path/to/project",
+					"CORTEX_DAEMON_URL":   "http://127.0.0.1:4200",
+				},
+			},
+		},
+	}
+
+	result, err := GenerateOpenCodeConfigContent(claudeConfig, "You are a helpful agent.")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Parse the JSON to verify structure
+	var config OpenCodeConfigContent
+	if err := json.Unmarshal([]byte(result), &config); err != nil {
+		t.Fatalf("failed to parse result JSON: %v", err)
+	}
+
+	// Verify agent config
+	agent, ok := config.Agent["cortex"]
+	if !ok {
+		t.Fatal("expected 'cortex' agent in config")
+	}
+	if agent.Prompt != "You are a helpful agent." {
+		t.Errorf("expected system prompt, got: %s", agent.Prompt)
+	}
+	if agent.Mode != "bypassPermissions" {
+		t.Errorf("expected mode 'bypassPermissions', got: %s", agent.Mode)
+	}
+	if agent.Permission["*"] != "allow" {
+		t.Errorf("expected permission '*' = 'allow', got: %v", agent.Permission)
+	}
+
+	// Verify MCP config
+	mcp, ok := config.MCP["cortex"]
+	if !ok {
+		t.Fatal("expected 'cortex' MCP server in config")
+	}
+	if mcp.Type != "local" {
+		t.Errorf("expected type 'local', got: %s", mcp.Type)
+	}
+
+	// Verify command array = Command + Args combined
+	expectedCmd := []string{"/usr/bin/cortexd", "mcp", "--ticket-id", "ticket-123"}
+	if len(mcp.Command) != len(expectedCmd) {
+		t.Fatalf("expected %d command elements, got: %d (%v)", len(expectedCmd), len(mcp.Command), mcp.Command)
+	}
+	for i, expected := range expectedCmd {
+		if mcp.Command[i] != expected {
+			t.Errorf("command[%d]: expected %s, got: %s", i, expected, mcp.Command[i])
+		}
+	}
+
+	// Verify environment mapping
+	if mcp.Environment["CORTEX_PROJECT_PATH"] != "/path/to/project" {
+		t.Errorf("expected CORTEX_PROJECT_PATH, got: %v", mcp.Environment)
+	}
+	if mcp.Environment["CORTEX_DAEMON_URL"] != "http://127.0.0.1:4200" {
+		t.Errorf("expected CORTEX_DAEMON_URL, got: %v", mcp.Environment)
+	}
+}
+
+func TestGenerateOpenCodeConfigContent_EmptySystemPrompt(t *testing.T) {
+	claudeConfig := &ClaudeMCPConfig{
+		MCPServers: map[string]MCPServerConfig{
+			"cortex": {
+				Command: "/usr/bin/cortexd",
+				Args:    []string{"mcp", "--meta"},
+			},
+		},
+	}
+
+	result, err := GenerateOpenCodeConfigContent(claudeConfig, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var config OpenCodeConfigContent
+	if err := json.Unmarshal([]byte(result), &config); err != nil {
+		t.Fatalf("failed to parse result JSON: %v", err)
+	}
+
+	// Agent prompt should be empty (resume case)
+	agent := config.Agent["cortex"]
+	if agent.Prompt != "" {
+		t.Errorf("expected empty prompt for resume, got: %s", agent.Prompt)
+	}
+
+	// MCP command should combine command + args
+	mcp := config.MCP["cortex"]
+	expectedCmd := []string{"/usr/bin/cortexd", "mcp", "--meta"}
+	if len(mcp.Command) != len(expectedCmd) {
+		t.Fatalf("expected %d command elements, got: %d", len(expectedCmd), len(mcp.Command))
+	}
+	for i, expected := range expectedCmd {
+		if mcp.Command[i] != expected {
+			t.Errorf("command[%d]: expected %s, got: %s", i, expected, mcp.Command[i])
+		}
+	}
+}
+
+func TestWriteLauncherScript_OpenCode(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	params := LauncherParams{
+		AgentType:      "opencode",
+		PromptFilePath: "/tmp/cortex-prompt-test.txt",
+		AgentArgs:      []string{"--verbose"},
+		EnvVars: map[string]string{
+			"CORTEX_TICKET_ID":        "ticket-1",
+			"CORTEX_PROJECT":          "/path/to/project",
+			"OPENCODE_CONFIG_CONTENT": `{"agent":{"cortex":{"prompt":"test"}},"mcp":{}}`,
+		},
+		CleanupFiles: []string{"/tmp/cortex-prompt-test.txt"},
+	}
+
+	path, err := WriteLauncherScript(params, "opencode-test", tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+
+	// Verify shebang
+	if !containsSubstr(script, "#!/usr/bin/env bash") {
+		t.Error("expected shebang line")
+	}
+
+	// Verify command starts with opencode
+	if !containsSubstr(script, "opencode --agent cortex") {
+		t.Error("expected 'opencode --agent cortex' in script")
+	}
+
+	// Verify prompt via $(cat)
+	if !containsSubstr(script, "--prompt") {
+		t.Error("expected --prompt flag")
+	}
+	if !containsSubstr(script, "\"$(cat") {
+		t.Error("expected $(cat) syntax for prompt file")
+	}
+
+	// Verify OPENCODE_CONFIG_CONTENT is exported
+	if !containsSubstr(script, "export OPENCODE_CONFIG_CONTENT=") {
+		t.Error("expected OPENCODE_CONFIG_CONTENT export")
+	}
+
+	// Verify NO Claude-specific flags
+	if containsSubstr(script, "--mcp-config") {
+		t.Error("opencode should not have --mcp-config flag")
+	}
+	if containsSubstr(script, "--settings") {
+		t.Error("opencode should not have --settings flag")
+	}
+	if containsSubstr(script, "--system-prompt") {
+		t.Error("opencode should not have --system-prompt flag")
+	}
+	if containsSubstr(script, "--append-system-prompt") {
+		t.Error("opencode should not have --append-system-prompt flag")
+	}
+	if containsSubstr(script, "--session-id") {
+		t.Error("opencode should not have --session-id flag")
+	}
+
+	// Verify extra agent args
+	if !containsSubstr(script, "'--verbose'") {
+		t.Error("expected '--verbose' via AgentArgs")
 	}
 }

@@ -257,9 +257,9 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		return nil, err
 	}
 
-	// Generate and write settings config (hooks) - skip for Copilot (doesn't support --settings)
+	// Generate and write settings config (hooks) - skip for Copilot and OpenCode (they don't support --settings)
 	var settingsPath string
-	if req.Agent != "copilot" {
+	if req.Agent != "copilot" && req.Agent != "opencode" {
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
 			CortexdPath: cortexdPath,
 			TicketID:    req.TicketID,
@@ -300,6 +300,16 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}
 	}
 
+	// Generate OpenCode config content if needed
+	var openCodeConfigJSON string
+	if req.Agent == "opencode" {
+		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, pInfo.SystemPromptContent)
+		if err != nil {
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath), worktreePath, featureBranch, req.ProjectPath)
+			return nil, err
+		}
+	}
+
 	// Build launcher params based on agent type
 	tempFiles := nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath)
 	launcherParams := LauncherParams{
@@ -329,6 +339,10 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": session.MetaSessionKey,
 		}
+	}
+
+	if openCodeConfigJSON != "" {
+		launcherParams.EnvVars["OPENCODE_CONFIG_CONTENT"] = openCodeConfigJSON
 	}
 
 	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
@@ -409,9 +423,9 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		envVars["CORTEX_TICKET_ID"] = session.MetaSessionKey
 	}
 
-	// Generate and write settings config (hooks) - skip for Copilot (doesn't support --settings)
+	// Generate and write settings config (hooks) - skip for Copilot and OpenCode (they don't support --settings)
 	var settingsPath string
-	if req.Agent != "copilot" {
+	if req.Agent != "copilot" && req.Agent != "opencode" {
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
 			CortexdPath: cortexdPath,
 			TicketID:    identifier,
@@ -419,6 +433,18 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		})
 
 		settingsPath, err = WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
+		if err != nil {
+			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
+				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
+			}
+			return nil, err
+		}
+	}
+
+	// Generate OpenCode config content for resume (empty system prompt — resume has no prompts)
+	var openCodeConfigJSON string
+	if req.Agent == "opencode" {
+		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, "")
 		if err != nil {
 			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
 				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
@@ -442,6 +468,10 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 	if req.AgentType == AgentTypeArchitect || req.AgentType == AgentTypeMeta {
 		launcherParams.ReplaceSystemPrompt = true
+	}
+
+	if openCodeConfigJSON != "" {
+		launcherParams.EnvVars["OPENCODE_CONFIG_CONTENT"] = openCodeConfigJSON
 	}
 
 	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)

@@ -87,8 +87,10 @@ func buildLauncherScript(params LauncherParams, cleanupFiles []string) string {
 	switch params.AgentType {
 	case "copilot":
 		command = buildCopilotCommand(params)
+	case "opencode":
+		command = buildOpenCodeCommand(params)
 	default:
-		// Default to claude (works for both "claude" and "opencode")
+		// Default to claude
 		command = buildClaudeCommand(params)
 	}
 
@@ -183,6 +185,30 @@ func buildCopilotCommand(params LauncherParams) string {
 
 	// Note: Copilot doesn't support --session-id, --system-prompt, or --settings
 	// SystemPromptFilePath and SettingsPath are ignored for Copilot
+
+	// Add extra agent args
+	for _, arg := range params.AgentArgs {
+		parts = append(parts, shellQuote(arg))
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// buildOpenCodeCommand builds the opencode CLI command string.
+// OpenCode receives its configuration (MCP servers, system prompt) via the
+// OPENCODE_CONFIG_CONTENT env var, so this command only needs the agent flag,
+// prompt, and any extra args.
+func buildOpenCodeCommand(params LauncherParams) string {
+	var parts []string
+	parts = append(parts, "opencode")
+
+	// Select the cortex agent (defined in OPENCODE_CONFIG_CONTENT)
+	parts = append(parts, "--agent", "cortex")
+
+	// Add prompt via $(cat file)
+	if params.PromptFilePath != "" {
+		parts = append(parts, "--prompt", fmt.Sprintf("\"$(cat %s)\"", shellQuote(params.PromptFilePath)))
+	}
 
 	// Add extra agent args
 	for _, arg := range params.AgentArgs {
