@@ -117,7 +117,7 @@ type SpawnRequest struct {
 // ResumeRequest contains parameters for resuming an orphaned session.
 type ResumeRequest struct {
 	AgentType   AgentType
-	Agent       string // agent identifier (e.g., "claude", "copilot")
+	Agent       string // agent identifier (e.g., "claude", "opencode")
 	TmuxSession string
 	ProjectPath string
 	TicketsDir  string
@@ -257,9 +257,9 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		return nil, err
 	}
 
-	// Generate and write settings config (hooks) - skip for Copilot and OpenCode (they don't support --settings)
+	// Generate and write settings config (hooks) - skip for OpenCode (it doesn't support --settings)
 	var settingsPath string
-	if req.Agent != "copilot" && req.Agent != "opencode" {
+	if req.Agent != "opencode" {
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
 			CortexdPath: cortexdPath,
 			TicketID:    req.TicketID,
@@ -423,9 +423,9 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		envVars["CORTEX_TICKET_ID"] = session.MetaSessionKey
 	}
 
-	// Generate and write settings config (hooks) - skip for Copilot and OpenCode (they don't support --settings)
+	// Generate and write settings config (hooks) - skip for OpenCode (it doesn't support --settings)
 	var settingsPath string
-	if req.Agent != "copilot" && req.Agent != "opencode" {
+	if req.Agent != "opencode" {
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
 			CortexdPath: cortexdPath,
 			TicketID:    identifier,
@@ -693,9 +693,8 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 	resolver := prompt.NewPromptResolver(req.ProjectPath, req.BaseConfigPath)
 
 	// Load system prompt (MCP tool instructions and workflow)
-	// Skip for Copilot - it doesn't support --system-prompt CLI flag
 	var systemPromptContent string
-	if req.Agent != "copilot" {
+	{
 		var err error
 		systemPromptContent, err = resolver.ResolveTicketPrompt(ticketType, prompt.StageSystem)
 		if err != nil {
@@ -764,9 +763,8 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	resolver := prompt.NewPromptResolver(req.ProjectPath, req.BaseConfigPath)
 
 	// Load system prompt (MCP tool instructions and workflow)
-	// Skip for Copilot - it doesn't support --system-prompt CLI flag
 	var systemPromptContent string
-	if req.Agent != "copilot" {
+	{
 		var err error
 		systemPromptContent, err = resolver.ResolveArchitectPrompt(prompt.StageSystem)
 		if err != nil {
@@ -877,7 +875,7 @@ func (s *Spawner) buildMetaPrompt(req SpawnRequest) (*promptInfo, error) {
 
 	// Load system prompt
 	var systemPromptContent string
-	if req.Agent != "copilot" {
+	{
 		var err error
 		systemPromptContent, err = resolver.ResolveMetaPrompt(prompt.StageSystem)
 		if err != nil {

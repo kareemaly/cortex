@@ -100,14 +100,14 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Worktree manager | `internal/worktree/` |
 | TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `docs/`, `ticket/`) |
 | Install/init logic | `internal/install/` |
-| Agent defaults | `internal/install/defaults/` (`claude-code`, `copilot`, `opencode`) |
+| Agent defaults | `internal/install/defaults/` (`claude-code`, `opencode`) |
 | Shared storage | `internal/storage/` |
 | Session store | `internal/session/` |
 | Response types | `internal/types/` |
 
 ## Configuration
 
-**Project** (`.cortex/cortex.yaml`): Agent type (`claude`, `opencode`, `copilot`), agent args, git worktrees, lifecycle hooks, `tickets.path`, `docs.path`. Ticket and doc paths default to `{projectRoot}/tickets` and `{projectRoot}/docs`. See `internal/project/config/config.go` for schema.
+**Project** (`.cortex/cortex.yaml`): Agent type (`claude`, `opencode`), agent args, git worktrees, lifecycle hooks, `tickets.path`, `docs.path`. Ticket and doc paths default to `{projectRoot}/tickets` and `{projectRoot}/docs`. See `internal/project/config/config.go` for schema.
 
 **Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, project registry. See `internal/daemon/config/config.go` for schema.
 
@@ -117,7 +117,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 
 | Command | Description |
 |---------|-------------|
-| `cortex init` | Initialize `.cortex/` in current directory, register in global config (`--agent claude\|opencode\|copilot`) |
+| `cortex init` | Initialize `.cortex/` in current directory, register in global config (`--agent claude\|opencode`) |
 | `cortex meta` | Start/attach global meta session (`--mode fresh\|resume` for orphaned) |
 | `cortex architect` | Start/attach architect session (`--mode fresh\|resume` for orphaned) |
 | `cortex kanban` | Kanban + Docs TUI with tab switching (`tab`/`[`/`]`) |

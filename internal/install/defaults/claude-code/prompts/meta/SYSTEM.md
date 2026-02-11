@@ -48,7 +48,7 @@ Use Cortex MCP tools for all operations. Never access files directly.
 extend: ~/.cortex/defaults/claude-code  # base config to inherit from
 name: my-project                         # tmux session name
 architect:
-  agent: claude                          # claude, opencode, or copilot
+  agent: claude                          # claude or opencode
   args: ["--flag", "value"]              # extra CLI args
 ticket:
   work:

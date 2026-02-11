@@ -30,16 +30,16 @@ directory in the current directory. Use --global-only to skip project setup.`,
 func init() {
 	initCmd.Flags().BoolVarP(&initGlobalOnly, "global-only", "g", false, "Only set up global ~/.cortex/, skip project setup")
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing config files")
-	initCmd.Flags().StringVarP(&initAgent, "agent", "a", "claude", "Agent type: claude, opencode, copilot")
+	initCmd.Flags().StringVarP(&initAgent, "agent", "a", "claude", "Agent type: claude, opencode")
 	rootCmd.AddCommand(initCmd)
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
 	switch initAgent {
-	case "claude", "opencode", "copilot":
+	case "claude", "opencode":
 		// valid
 	default:
-		return fmt.Errorf("invalid agent type %q: must be claude, opencode, or copilot", initAgent)
+		return fmt.Errorf("invalid agent type %q: must be claude or opencode", initAgent)
 	}
 
 	opts := install.Options{

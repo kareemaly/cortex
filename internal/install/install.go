@@ -15,7 +15,7 @@ type Options struct {
 	ProjectPath string
 	// ProjectName overrides auto-detected project name.
 	ProjectName string
-	// Agent selects which agent defaults to use (claude, opencode, copilot). Defaults to claude.
+	// Agent selects which agent defaults to use (claude, opencode). Defaults to claude.
 	Agent string
 	// Force overwrites existing config files.
 	Force bool
@@ -26,8 +26,6 @@ func DefaultsDirForAgent(agent string) string {
 	switch agent {
 	case "opencode":
 		return "opencode"
-	case "copilot":
-		return "copilot"
 	default:
 		return "claude-code"
 	}
@@ -135,13 +133,6 @@ git_diff_tool: ` + gitDiffTool + `
 	}
 	items = append(items, claudeItems...)
 
-	// Create defaults/copilot directory with full config and prompts
-	copilotItems, err := setupCopilotDefaults(homeDir, force)
-	if err != nil {
-		return append(items, copilotItems...), err
-	}
-	items = append(items, copilotItems...)
-
 	// Create defaults/opencode directory with full config and prompts
 	opencodeItems, err := setupOpenCodeDefaults(homeDir, force)
 	if err != nil {
@@ -156,12 +147,6 @@ git_diff_tool: ` + gitDiffTool + `
 func setupClaudeCodeDefaults(homeDir string, force bool) ([]SetupItem, error) {
 	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "claude-code")
 	return CopyEmbeddedDefaults("claude-code", targetDir, force)
-}
-
-// setupCopilotDefaults copies embedded default config to ~/.cortex/defaults/copilot/.
-func setupCopilotDefaults(homeDir string, force bool) ([]SetupItem, error) {
-	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "copilot")
-	return CopyEmbeddedDefaults("copilot", targetDir, force)
 }
 
 // setupOpenCodeDefaults copies embedded default config to ~/.cortex/defaults/opencode/.

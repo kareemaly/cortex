@@ -10,7 +10,6 @@ func TestDefaultsDirForAgent(t *testing.T) {
 		{"claude", "claude-code"},
 		{"", "claude-code"},
 		{"opencode", "opencode"},
-		{"copilot", "copilot"},
 		{"unknown", "claude-code"},
 	}
 

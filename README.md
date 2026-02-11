@@ -30,7 +30,6 @@ The architect will guide you through creating and managing tickets.
 - **AI agent** (one of):
   - [Claude CLI](https://claude.ai/code) - recommended
   - [OpenCode](https://github.com/opencode-ai/opencode)
-  - [GitHub Copilot CLI](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line)
 
 ## Core Workflow
 
@@ -79,14 +78,14 @@ The architect will guide you through creating and managing tickets.
 name: my-project
 extend: ~/.cortex/defaults/claude-code
 architect:
-  agent: claude  # Options: claude, opencode, copilot
+  agent: claude  # Options: claude, opencode
   args: ["--allowedTools", "mcp__cortex__*"]
 ticket:
   work:     # Default implementation workflow
     agent: claude
     args: ["--permission-mode", "plan"]
   debug:    # Root cause analysis workflow
-    agent: copilot  # Mix agents per workflow
+    agent: opencode  # Mix agents per workflow
   research: # Read-only exploration workflow
     agent: claude
   chore:    # Quick maintenance workflow
