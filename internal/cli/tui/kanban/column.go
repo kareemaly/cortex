@@ -117,7 +117,11 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 		// Build type badge
 		typeBadge := ""
 		if t.Type != "" {
-			typeBadge = typeBadgeStyle(t.Type).Render("[" + t.Type + "] ")
+			badgeStyle := typeBadgeStyle(t.Type)
+			if i == c.cursor && isActive {
+				badgeStyle = badgeStyle.Background(lipgloss.Color("62")).Bold(true)
+			}
+			typeBadge = badgeStyle.Render("[" + t.Type + "] ")
 		}
 
 		// Build due date indicator
@@ -125,9 +129,17 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 		if t.Due != nil && c.status == "backlog" {
 			now := time.Now()
 			if t.Due.Before(now) {
-				dueDateIndicator = overdueStyle.Render(" [OVERDUE]")
+				style := overdueStyle
+				if i == c.cursor && isActive {
+					style = style.Background(lipgloss.Color("62")).Bold(true)
+				}
+				dueDateIndicator = style.Render(" [OVERDUE]")
 			} else if t.Due.Before(now.Add(24 * time.Hour)) {
-				dueDateIndicator = dueSoonStyle.Render(" [DUE SOON]")
+				style := dueSoonStyle
+				if i == c.cursor && isActive {
+					style = style.Background(lipgloss.Color("62")).Bold(true)
+				}
+				dueDateIndicator = style.Render(" [DUE SOON]")
 			}
 		}
 
