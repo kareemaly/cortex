@@ -116,10 +116,6 @@ var (
 	workTypeBadgeStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("35")) // cyan/teal
 
-	// Tags style (muted, distinct from date).
-	tagsStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")) // gray
-
 	// Due date styles
 	dueSoonStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")) // yellow/orange

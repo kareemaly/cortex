@@ -146,16 +146,6 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 			wrappedTitle[0] = wrappedTitle[0] + dueDateIndicator
 		}
 
-		// Build tags string
-		tagsStr := ""
-		if len(t.Tags) > 0 {
-			var tagParts []string
-			for _, tag := range t.Tags {
-				tagParts = append(tagParts, "#"+tag)
-			}
-			tagsStr = strings.Join(tagParts, " ")
-		}
-
 		// Format creation date
 		dateStr := t.Created.Format("Jan 2")
 
@@ -166,13 +156,10 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 				b.WriteString(selectedTicketStyle.Width(width - 2).Render(line))
 				b.WriteString("\n")
 			}
-			// Metadata line: agent status + tags + date
+			// Metadata line: agent status + date
 			meta := ""
 			if t.HasActiveSession {
 				meta += agentStatusLabel(t) + " · "
-			}
-			if tagsStr != "" {
-				meta += tagsStr + " · "
 			}
 			meta += dateStr
 			b.WriteString(selectedTicketStyle.Width(width - 2).Render(meta))
@@ -182,7 +169,7 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 				b.WriteString(ticketStyle.Width(width - 2).Render(line))
 				b.WriteString("\n")
 			}
-			// Metadata line: agent status + tags + date
+			// Metadata line: agent status + date
 			meta := ""
 			if t.HasActiveSession {
 				if t.IsOrphaned {
@@ -190,9 +177,6 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 				} else {
 					meta += activeSessionStyle.Render(agentStatusLabel(t)) + " · "
 				}
-			}
-			if tagsStr != "" {
-				meta += tagsStyle.Render(tagsStr) + " · "
 			}
 			meta += dateStr
 			b.WriteString(ticketDateStyle.Width(width - 2).Render(meta))
