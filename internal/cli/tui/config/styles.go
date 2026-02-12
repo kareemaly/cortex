@@ -22,11 +22,10 @@ var (
 
 	selectedStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("255"))
+			Foreground(accentColor)
 
-	selectedIndicator = lipgloss.NewStyle().
-				Foreground(accentColor).
-				Bold(true)
+	unfocusedSelectedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("245"))
 
 	treeConnector = lipgloss.NewStyle().
 			Foreground(mutedColor)

@@ -697,11 +697,11 @@ func (m Model) renderExplorer(width, height int) string {
 		line := m.renderListItem(item, itemWidth)
 		var indicator string
 		if i == m.cursor && m.focusPane == paneExplorer {
-			indicator = selectedIndicator.Render("▎")
+			indicator = " "
 			line = selectedStyle.Render(line)
 		} else if i == m.cursor {
-			indicator = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("▎")
-			line = lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Render(line)
+			indicator = " "
+			line = unfocusedSelectedStyle.Render(line)
 		} else {
 			indicator = " "
 		}
