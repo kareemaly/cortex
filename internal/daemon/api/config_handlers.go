@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
@@ -163,5 +165,48 @@ func (h *ConfigHandlers) UpdateGlobalConfig(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, ReadGlobalConfigResponse{
 		Content: req.Content,
 		Path:    configPath,
+	})
+}
+
+// EditProjectConfig handles POST /config/project/edit - opens cortex.yaml in $EDITOR via tmux popup.
+func (h *ConfigHandlers) EditProjectConfig(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+
+	configPath := filepath.Join(projectPath, ".cortex", "cortex.yaml")
+	if _, err := os.Stat(configPath); err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, "not_found", "project config not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "stat_error", err.Error())
+		return
+	}
+
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+
+	command := fmt.Sprintf("%s %q", editor, configPath)
+
+	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	tmuxSession := "cortex"
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
+	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, "", command); err != nil {
+		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ExecuteActionResponse{
+		Success: true,
+		Message: "Opened in editor",
 	})
 }

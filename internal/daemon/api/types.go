@@ -33,6 +33,9 @@ type (
 	ResolvePromptResponse    = types.ResolvePromptResponse
 	ListTagsResponse         = types.ListTagsResponse
 	TagCount                 = types.TagCount
+	PromptFileInfo           = types.PromptFileInfo
+	PromptGroupInfo          = types.PromptGroupInfo
+	ListPromptsResponse      = types.ListPromptsResponse
 )
 
 // CreateTicketRequest is the request body for creating a ticket.
@@ -128,6 +131,16 @@ type UpdateDocRequest struct {
 // MoveDocRequest is the request body for moving a doc.
 type MoveDocRequest struct {
 	Category string `json:"category"`
+}
+
+// EjectPromptRequest is the request body for ejecting a prompt.
+type EjectPromptRequest struct {
+	Path string `json:"path"`
+}
+
+// EditPromptRequest is the request body for editing a prompt in $EDITOR.
+type EditPromptRequest struct {
+	Path string `json:"path"`
 }
 
 // filterSummaryList converts tickets to summaries with optional query, dueBefore, and tag filters.

@@ -125,11 +125,17 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 
 		// Prompt routes
 		promptHandlers := NewPromptHandlers(deps)
-		r.Get("/prompts/resolve", promptHandlers.Resolve)
+		r.Route("/prompts", func(r chi.Router) {
+			r.Get("/resolve", promptHandlers.Resolve)
+			r.Get("/", promptHandlers.List)
+			r.Post("/eject", promptHandlers.Eject)
+			r.Post("/edit", promptHandlers.Edit)
+		})
 
 		// Project config routes (project-scoped)
 		r.Get("/config/project", configHandlers.ReadProjectConfig)
 		r.Put("/config/project", configHandlers.UpdateProjectConfig)
+		r.Post("/config/project/edit", configHandlers.EditProjectConfig)
 	})
 
 	return r

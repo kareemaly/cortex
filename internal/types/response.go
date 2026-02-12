@@ -207,3 +207,27 @@ type MetaSpawnResponse struct {
 type MetaStateResponse struct {
 	State string `json:"state"`
 }
+
+// PromptFileInfo describes a single prompt file with its ejection status.
+type PromptFileInfo struct {
+	Path     string `json:"path"`
+	Group    string `json:"group"`
+	Subgroup string `json:"subgroup,omitempty"`
+	Stage    string `json:"stage"`
+	Ejected  bool   `json:"ejected"`
+	Content  string `json:"content"`
+}
+
+// PromptGroupInfo groups related prompt files under a display name.
+type PromptGroupInfo struct {
+	Name  string           `json:"name"`
+	Key   string           `json:"key"`
+	Files []PromptFileInfo `json:"files"`
+}
+
+// ListPromptsResponse is the response for GET /prompts.
+type ListPromptsResponse struct {
+	Groups        []PromptGroupInfo `json:"groups"`
+	ConfigPath    string            `json:"config_path"`
+	ConfigContent string            `json:"config_content"`
+}

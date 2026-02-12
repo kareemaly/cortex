@@ -98,7 +98,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Daemon config | `internal/daemon/config/` |
 | Tmux manager | `internal/tmux/` |
 | Worktree manager | `internal/worktree/` |
-| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `docs/`, `ticket/`) |
+| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `docs/`, `config/`, `ticket/`) |
 | Install/init logic | `internal/install/` |
 | Agent defaults | `internal/install/defaults/` (`claude-code`, `opencode`) |
 | Shared storage | `internal/storage/` |
@@ -138,7 +138,7 @@ Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/s
 
 **Global** (no project header): `GET /health`, `GET /projects`, `POST /projects`, meta session (`/meta/*`), global config (`/config/global`), daemon logs/status (`/daemon/logs`, `/daemon/status`).
 
-**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn/conclude, session kill/approve, SSE events, docs CRUD, tags aggregation, project config (`/config/project`).
+**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn/conclude, session kill/approve, SSE events, docs CRUD, tags aggregation, project config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`).
 
 ## MCP Tools
 

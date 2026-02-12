@@ -95,6 +95,9 @@ type (
 	TagCount                 = types.TagCount
 	MetaSpawnResponse        = types.MetaSpawnResponse
 	MetaStateResponse        = types.MetaStateResponse
+	PromptFileInfo           = types.PromptFileInfo
+	PromptGroupInfo          = types.PromptGroupInfo
+	ListPromptsResponse      = types.ListPromptsResponse
 )
 
 // APIError represents an error response from the API with its code preserved.
@@ -1530,6 +1533,110 @@ func (c *Client) FocusMeta() error {
 	}
 
 	resp, err := c.httpClient.Do(req) // No project header needed
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
+// ListPrompts returns all prompt files with ejection status.
+func (c *Client) ListPrompts() (*ListPromptsResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/prompts", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ListPromptsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// EjectPrompt ejects a prompt file from base to project for customization.
+func (c *Client) EjectPrompt(path string) (*PromptFileInfo, error) {
+	reqBody := map[string]string{"path": path}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/prompts/eject", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result PromptFileInfo
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// EditPromptInEditor opens an ejected prompt in $EDITOR via tmux popup.
+func (c *Client) EditPromptInEditor(path string) error {
+	reqBody := map[string]string{"path": path}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/prompts/edit", bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
+// EditProjectConfigInEditor opens cortex.yaml in $EDITOR via tmux popup.
+func (c *Client) EditProjectConfigInEditor() error {
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/config/project/edit", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return fmt.Errorf("failed to connect to daemon: %w", err)
 	}
