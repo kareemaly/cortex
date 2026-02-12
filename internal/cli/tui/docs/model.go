@@ -535,8 +535,8 @@ func (m Model) renderTreeItem(item treeItem, width int) string {
 	connector := treeConnector.Render("  ├─ ")
 	title := item.doc.Title
 	maxTitle := max(width-6, 5)
-	wrapped := lipgloss.NewStyle().Width(maxTitle).Render(title)
-	return connector + docTitleStyle.Render(wrapped)
+	truncated := truncateToWidth(title, maxTitle)
+	return connector + docTitleStyle.Render(truncated)
 }
 
 // renderPreviewPane renders the right pane with markdown preview.
@@ -877,4 +877,27 @@ func categoryColorByName(name string, cats []categoryNode) lipgloss.Color {
 		}
 	}
 	return categoryColors[0]
+}
+
+// truncateToWidth truncates a string to fit within maxWidth, appending "…" if truncated.
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= maxWidth {
+		return s
+	}
+	// Truncate rune by rune.
+	var result strings.Builder
+	currentWidth := 0
+	for _, r := range s {
+		charWidth := lipgloss.Width(string(r))
+		if currentWidth+charWidth+1 > maxWidth { // +1 for "…"
+			result.WriteString("…")
+			return result.String()
+		}
+		result.WriteRune(r)
+		currentWidth += charWidth
+	}
+	return result.String()
 }

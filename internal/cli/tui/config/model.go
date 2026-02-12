@@ -675,7 +675,7 @@ func (m Model) renderListItem(item listItem, width int) string {
 			badge = defaultBadgeStyle.Render("○ default")
 		}
 		maxName := max(width-20, 5)
-		name := lipgloss.NewStyle().Width(maxName).Render(filename)
+		name := truncateToWidth(filename, maxName)
 		return connector + name + "  " + badge
 	}
 
@@ -797,4 +797,27 @@ func (m Model) logBadge() string {
 		parts = append(parts, warnBadgeStyle.Render(fmt.Sprintf("W:%d", wc)))
 	}
 	return strings.Join(parts, " ")
+}
+
+// truncateToWidth truncates a string to fit within maxWidth, appending "…" if truncated.
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= maxWidth {
+		return s
+	}
+	// Truncate rune by rune.
+	var result strings.Builder
+	currentWidth := 0
+	for _, r := range s {
+		charWidth := lipgloss.Width(string(r))
+		if currentWidth+charWidth+1 > maxWidth { // +1 for "…"
+			result.WriteString("…")
+			return result.String()
+		}
+		result.WriteRune(r)
+		currentWidth += charWidth
+	}
+	return result.String()
 }
