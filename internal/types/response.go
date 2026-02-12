@@ -67,6 +67,7 @@ type TicketSummary struct {
 	AgentStatus      *string    `json:"agent_status,omitempty"`
 	AgentTool        *string    `json:"agent_tool,omitempty"`
 	IsOrphaned       bool       `json:"is_orphaned,omitempty"`
+	SessionStartedAt *time.Time `json:"session_started_at,omitempty"`
 }
 
 // ListTicketsResponse is a list of tickets with a single status.

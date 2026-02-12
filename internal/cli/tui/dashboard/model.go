@@ -859,6 +859,9 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 	}
 
 	dur := formatDuration(time.Since(ticket.Updated))
+	if ticket.SessionStartedAt != nil {
+		dur = formatDuration(time.Since(*ticket.SessionStartedAt))
+	}
 
 	if selected {
 		plain := fmt.Sprintf("%s%s %-24s %-10s %s", indent, icon, name, badge, dur)
@@ -872,7 +875,7 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 
 // rebuildRows flattens the project tree into rows.
 func (m *Model) rebuildRows() {
-	// Sort projects: active first, preserving relative order within groups.
+	// Sort projects: active first; among active projects, newest session first.
 	slices.SortStableFunc(m.projects, func(a, b projectData) int {
 		aActive, bActive := a.isActive(), b.isActive()
 		if aActive && !bActive {
@@ -881,6 +884,16 @@ func (m *Model) rebuildRows() {
 		if !aActive && bActive {
 			return 1
 		}
+		if aActive && bActive {
+			aNewest := newestSessionTime(a)
+			bNewest := newestSessionTime(b)
+			if aNewest.After(bNewest) {
+				return -1
+			}
+			if bNewest.After(aNewest) {
+				return 1
+			}
+		}
 		return 0
 	})
 
@@ -888,17 +901,39 @@ func (m *Model) rebuildRows() {
 	for i, pd := range m.projects {
 		rows = append(rows, row{kind: rowProject, projectIndex: i})
 
-		// Add ticket session rows for progress/review tickets with active sessions.
+		// Collect all tickets with active sessions from progress and review.
 		if pd.tickets != nil {
+			var sessionTickets []sdk.TicketSummary
 			for _, t := range pd.tickets.Progress {
 				if t.HasActiveSession {
-					rows = append(rows, row{kind: rowSession, projectIndex: i, ticketID: t.ID})
+					sessionTickets = append(sessionTickets, t)
 				}
 			}
 			for _, t := range pd.tickets.Review {
 				if t.HasActiveSession {
-					rows = append(rows, row{kind: rowSession, projectIndex: i, ticketID: t.ID})
+					sessionTickets = append(sessionTickets, t)
 				}
+			}
+			// Sort by SessionStartedAt descending (most recent first).
+			slices.SortStableFunc(sessionTickets, func(a, b sdk.TicketSummary) int {
+				aTime := a.Updated
+				if a.SessionStartedAt != nil {
+					aTime = *a.SessionStartedAt
+				}
+				bTime := b.Updated
+				if b.SessionStartedAt != nil {
+					bTime = *b.SessionStartedAt
+				}
+				if aTime.After(bTime) {
+					return -1
+				}
+				if bTime.After(aTime) {
+					return 1
+				}
+				return 0
+			})
+			for _, t := range sessionTickets {
+				rows = append(rows, row{kind: rowSession, projectIndex: i, ticketID: t.ID})
 			}
 		}
 	}
@@ -942,6 +977,28 @@ func (m Model) findTicket(pd projectData, ticketID string) *sdk.TicketSummary {
 		}
 	}
 	return nil
+}
+
+// newestSessionTime returns the most recent session start time across architect
+// and ticket sessions for a project. Returns zero time if no sessions exist.
+func newestSessionTime(pd projectData) time.Time {
+	var newest time.Time
+	if pd.architect != nil && pd.architect.Session != nil {
+		newest = pd.architect.Session.StartedAt
+	}
+	if pd.tickets != nil {
+		for _, t := range pd.tickets.Progress {
+			if t.SessionStartedAt != nil && t.SessionStartedAt.After(newest) {
+				newest = *t.SessionStartedAt
+			}
+		}
+		for _, t := range pd.tickets.Review {
+			if t.SessionStartedAt != nil && t.SessionStartedAt.After(newest) {
+				newest = *t.SessionStartedAt
+			}
+		}
+	}
+	return newest
 }
 
 // ensureCursorVisible adjusts scrollOffset for viewport.

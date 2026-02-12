@@ -89,6 +89,7 @@ func ToTicketSummary(t *ticket.Ticket, status ticket.Status, sess *session.Sessi
 		statusStr := string(sess.Status)
 		summary.AgentStatus = &statusStr
 		summary.AgentTool = sess.Tool
+		summary.SessionStartedAt = &sess.StartedAt
 	}
 
 	// Detect orphaned sessions: active session but tmux window no longer exists.
