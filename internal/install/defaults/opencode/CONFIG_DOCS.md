@@ -11,11 +11,9 @@ name: my-project                      # Project display name
 extend: ~/.cortex/defaults/opencode   # Inherit from base config
 architect:
   agent: opencode
-  args: ["--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"]
 ticket:
   work:
     agent: opencode
-    args: ["--permission-mode", "plan"]
 git:
   worktrees: false  # Enable git worktrees for ticket isolation
 ```
@@ -98,13 +96,6 @@ Ejected prompts are placed in `.cortex/prompts/`:
 ```yaml
 git:
   worktrees: true
-```
-
-### Restrict Agent Permissions
-
-```yaml
-architect:
-  args: ["--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"]
 ```
 
 ### Add Test Requirements
