@@ -22,6 +22,10 @@ const (
 	KeyG      Key = "g"
 	KeyShiftG Key = "G"
 	KeyR      Key = "r"
+	KeyX      Key = "x"
+	KeyY      Key = "y"
+	KeyN      Key = "n"
+	KeyEscape Key = "esc"
 	KeyBang   Key = "!"
 )
 
@@ -37,5 +41,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the config browser.
 func helpText() string {
-	return "[j/k] navigate  [e]ject/edit  [c]onfig  [h/l] pane  [ctrl+u/d] scroll  [r]efresh  [!] logs  [q]uit"
+	return "[j/k] navigate  [e]ject/edit  [x] reset  [c]onfig  [h/l] pane  [ctrl+u/d] scroll  [r]efresh  [!] logs  [q]uit"
 }

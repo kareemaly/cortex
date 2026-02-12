@@ -143,6 +143,11 @@ type EditPromptRequest struct {
 	Path string `json:"path"`
 }
 
+// ResetPromptRequest is the request body for resetting an ejected prompt to default.
+type ResetPromptRequest struct {
+	Path string `json:"path"`
+}
+
 // filterSummaryList converts tickets to summaries with optional query, dueBefore, and tag filters.
 // Looks up session from session manager for each ticket.
 func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tag string, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string) []TicketSummary {

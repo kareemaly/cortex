@@ -51,6 +51,9 @@ type Model struct {
 
 	statusMsg     string
 	statusIsError bool
+
+	showResetModal  bool
+	resetPromptPath string
 }
 
 // Message types for async operations.
@@ -67,6 +70,11 @@ type PromptsErrorMsg struct {
 
 // PromptEjectMsg is sent when a prompt eject action completes.
 type PromptEjectMsg struct {
+	Err error
+}
+
+// PromptResetMsg is sent when a prompt reset action completes.
+type PromptResetMsg struct {
 	Err error
 }
 
@@ -163,6 +171,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.clearStatusAfterDelay()
 
+	case PromptResetMsg:
+		if msg.Err != nil {
+			m.statusMsg = fmt.Sprintf("Reset failed: %s", msg.Err)
+			m.statusIsError = true
+		} else {
+			m.statusMsg = "Prompt reset to default"
+			m.statusIsError = false
+			return m, tea.Batch(m.loadPrompts(), m.clearStatusAfterDelay())
+		}
+		return m, m.clearStatusAfterDelay()
+
 	case PromptEditMsg:
 		if msg.Err != nil {
 			m.statusMsg = fmt.Sprintf("Edit failed: %s", msg.Err)
@@ -207,6 +226,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.logViewer.Reset()
 		}
 		return m, nil
+	}
+
+	// Modal state takes priority.
+	if m.showResetModal {
+		return m.handleResetModalKey(msg)
 	}
 
 	// Don't process other keys while loading or if there's an error (except refresh).
@@ -296,6 +320,8 @@ func (m Model) handleExplorerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.updatePreview()
 	case isKey(msg, KeyE):
 		return m.handleAction()
+	case isKey(msg, KeyX):
+		return m.handleResetAction()
 	case isKey(msg, KeyCtrlD):
 		for i := 0; i < 10; i++ {
 			m.moveNext()
@@ -467,6 +493,62 @@ func (m Model) handleAction() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleResetAction handles the 'x' key to initiate prompt reset.
+func (m Model) handleResetAction() (tea.Model, tea.Cmd) {
+	item := m.currentItem()
+	if item == nil || item.promptFile == nil {
+		return m, nil
+	}
+
+	if !item.promptFile.Ejected {
+		m.statusMsg = "Already using default"
+		m.statusIsError = false
+		return m, m.clearStatusAfterDelay()
+	}
+
+	m.showResetModal = true
+	m.resetPromptPath = item.promptFile.Path
+	return m, nil
+}
+
+// handleResetModalKey handles keyboard input when the reset confirmation modal is shown.
+func (m Model) handleResetModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case isKey(msg, KeyY):
+		m.showResetModal = false
+		m.statusMsg = "Resetting..."
+		m.statusIsError = false
+		return m, m.resetPrompt(m.resetPromptPath)
+
+	case isKey(msg, KeyN, KeyEscape):
+		m.showResetModal = false
+		m.resetPromptPath = ""
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// resetPrompt returns a command to reset an ejected prompt to default.
+func (m Model) resetPrompt(path string) tea.Cmd {
+	client := m.client
+	return func() tea.Msg {
+		err := client.ResetPrompt(path)
+		return PromptResetMsg{Err: err}
+	}
+}
+
+// renderResetModal renders the reset confirmation modal prompt.
+func (m Model) renderResetModal() string {
+	path := m.resetPromptPath
+	if len(path) > 40 {
+		path = path[:37] + "..."
+	}
+	prompt := fmt.Sprintf("Reset \"%s\" to default?", path)
+	options := "[y]es  [n]o"
+	return statusBarStyle.Render(prompt) + "\n" + helpBarStyle.Render(options)
+}
+
 // updatePreview renders the preview for the current item.
 func (m *Model) updatePreview() {
 	item := m.currentItem()
@@ -554,25 +636,29 @@ func (m Model) View() string {
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, explorer, preview))
 	b.WriteString("\n")
 
-	// Status bar.
-	if m.statusMsg != "" {
-		style := statusBarStyle
-		if m.statusIsError {
-			style = errorStatusStyle
-		}
-		b.WriteString(style.Render(m.statusMsg))
-		b.WriteString("\n")
+	// Status bar / Modal.
+	if m.showResetModal {
+		b.WriteString(m.renderResetModal())
 	} else {
-		b.WriteString("\n")
-	}
+		if m.statusMsg != "" {
+			style := statusBarStyle
+			if m.statusIsError {
+				style = errorStatusStyle
+			}
+			b.WriteString(style.Render(m.statusMsg))
+			b.WriteString("\n")
+		} else {
+			b.WriteString("\n")
+		}
 
-	// Help bar.
-	help := helpBarStyle.Render(helpText())
-	badge := m.logBadge()
-	if badge != "" {
-		help = help + "  " + badge
+		// Help bar.
+		help := helpBarStyle.Render(helpText())
+		badge := m.logBadge()
+		if badge != "" {
+			help = help + "  " + badge
+		}
+		b.WriteString(help)
 	}
-	b.WriteString(help)
 
 	return b.String()
 }

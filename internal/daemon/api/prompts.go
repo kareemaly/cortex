@@ -382,6 +382,65 @@ func (h *PromptHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Reset handles POST /prompts/reset - deletes an ejected prompt so it falls back to the built-in default.
+func (h *PromptHandlers) Reset(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetProjectPath(r.Context())
+
+	var req ResetPromptRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
+		return
+	}
+
+	if req.Path == "" {
+		writeError(w, http.StatusBadRequest, "validation_error", "path is required")
+		return
+	}
+
+	promptPath := strings.TrimPrefix(req.Path, "/")
+	promptPath = filepath.Clean(promptPath)
+
+	projectPromptsDir := prompt.PromptsDir(projectPath)
+	ejectedPath := filepath.Join(projectPromptsDir, promptPath)
+
+	// Verify the file exists (i.e. is ejected)
+	if _, err := os.Stat(ejectedPath); err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusBadRequest, "not_ejected", "prompt is not ejected")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "stat_error", err.Error())
+		return
+	}
+
+	if err := os.Remove(ejectedPath); err != nil {
+		writeError(w, http.StatusInternalServerError, "remove_error", err.Error())
+		return
+	}
+
+	// Clean up empty parent directories up to the prompts root
+	removeEmptyParents(filepath.Dir(ejectedPath), projectPromptsDir)
+
+	writeJSON(w, http.StatusOK, ExecuteActionResponse{
+		Success: true,
+		Message: "Prompt reset to default",
+	})
+}
+
+// removeEmptyParents removes empty directories from dir up to (but not including) root.
+func removeEmptyParents(dir, root string) {
+	for dir != root && dir != "." && dir != "/" {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) > 0 {
+			return
+		}
+		if err := os.Remove(dir); err != nil {
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
+}
+
 // copyPromptFile copies a file from src to dst.
 func copyPromptFile(src, dst string) (err error) {
 	sourceFile, err := os.Open(src)

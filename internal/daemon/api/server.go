@@ -130,6 +130,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Get("/", promptHandlers.List)
 			r.Post("/eject", promptHandlers.Eject)
 			r.Post("/edit", promptHandlers.Edit)
+			r.Post("/reset", promptHandlers.Reset)
 		})
 
 		// Project config routes (project-scoped)

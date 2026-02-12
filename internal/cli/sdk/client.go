@@ -1602,6 +1602,33 @@ func (c *Client) EjectPrompt(path string) (*PromptFileInfo, error) {
 	return &result, nil
 }
 
+// ResetPrompt resets an ejected prompt to the built-in default by deleting the ejected file.
+func (c *Client) ResetPrompt(path string) error {
+	reqBody := map[string]string{"path": path}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/prompts/reset", bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
 // EditPromptInEditor opens an ejected prompt in $EDITOR via tmux popup.
 func (c *Client) EditPromptInEditor(path string) error {
 	reqBody := map[string]string{"path": path}
