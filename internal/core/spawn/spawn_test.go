@@ -1837,6 +1837,18 @@ func TestGenerateOpenCodeConfigContent(t *testing.T) {
 	if mcp.Environment["CORTEX_DAEMON_URL"] != "http://127.0.0.1:4200" {
 		t.Errorf("expected CORTEX_DAEMON_URL, got: %v", mcp.Environment)
 	}
+
+	// Regression: verify no hardcoded "model" key in agent config JSON.
+	// OpenCode should use its own default model unless overridden via AgentArgs.
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(result), &raw); err != nil {
+		t.Fatalf("failed to unmarshal raw JSON: %v", err)
+	}
+	agentMap := raw["agent"].(map[string]any)
+	cortexAgent := agentMap["cortex"].(map[string]any)
+	if _, hasModel := cortexAgent["model"]; hasModel {
+		t.Error("agent config must not contain a hardcoded 'model' key; model should be set via AgentArgs")
+	}
 }
 
 func TestGenerateOpenCodeConfigContent_EmptySystemPrompt(t *testing.T) {
@@ -2521,5 +2533,39 @@ func TestWriteLauncherScript_OpenCode_Resume(t *testing.T) {
 	// --resume should NOT be in the script (OpenCode doesn't support it)
 	if containsSubstr(script, "--resume") {
 		t.Error("opencode should not have --resume flag (not supported by design)")
+	}
+}
+
+func TestWriteLauncherScript_OpenCode_WithModelArg(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	params := LauncherParams{
+		AgentType:      "opencode",
+		PromptFilePath: "/tmp/cortex-prompt-test.txt",
+		AgentArgs:      []string{"-m", "anthropic/claude-sonnet-4"},
+		EnvVars: map[string]string{
+			"CORTEX_TICKET_ID":        "ticket-1",
+			"OPENCODE_CONFIG_CONTENT": `{"agent":{"cortex":{"prompt":"test"}},"mcp":{}}`,
+		},
+		CleanupFiles: []string{"/tmp/cortex-prompt-test.txt"},
+	}
+
+	path, err := WriteLauncherScript(params, "opencode-model", tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+
+	// Verify model arg flows through to the opencode command
+	if !containsSubstr(script, "'-m'") {
+		t.Error("expected '-m' flag in script from AgentArgs")
+	}
+	if !containsSubstr(script, "'anthropic/claude-sonnet-4'") {
+		t.Error("expected 'anthropic/claude-sonnet-4' model value in script from AgentArgs")
 	}
 }
