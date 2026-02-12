@@ -122,7 +122,7 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 
 		// Build due date indicator
 		dueDateIndicator := ""
-		if t.Due != nil {
+		if t.Due != nil && c.status == "backlog" {
 			now := time.Now()
 			if t.Due.Before(now) {
 				dueDateIndicator = overdueStyle.Render(" [OVERDUE]")
