@@ -1,0 +1,10 @@
+{
+  "architect": {
+    "type": "architect",
+    "agent": "claude",
+    "tmux_window": "architect",
+    "started_at": "2026-02-12T07:29:10.614821Z",
+    "status": "in_progress",
+    "tool": "Bash"
+  }
+}
