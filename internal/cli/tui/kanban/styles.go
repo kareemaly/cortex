@@ -128,6 +128,40 @@ var (
 			Foreground(lipgloss.Color("214")) // yellow/orange
 )
 
+// selectedFgColor is the default foreground color for selected card text.
+const selectedFgColor = "255"
+
+// inlineFgColorChange returns a raw ANSI escape that changes only the foreground
+// color without resetting other attributes. This preserves the outer background
+// set by selectedTicketStyle.Render().
+func inlineFgColorChange(colorCode string) string {
+	return "\x1b[38;5;" + colorCode + "m"
+}
+
+// typeBadgeColorCode returns the 256-color code for a ticket type badge.
+func typeBadgeColorCode(ticketType string) string {
+	switch ticketType {
+	case "debug":
+		return "196"
+	case "research":
+		return "39"
+	case "chore":
+		return "245"
+	case "work":
+		return "35"
+	default:
+		return selectedFgColor
+	}
+}
+
+// dueDateColorCode returns the 256-color code for a due date indicator.
+func dueDateColorCode(overdue bool) string {
+	if overdue {
+		return "196"
+	}
+	return "214"
+}
+
 // columnHeaderStyle returns the appropriate header style for a status.
 func columnHeaderStyle(status string) lipgloss.Style {
 	switch status {

@@ -114,14 +114,19 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 	var b strings.Builder
 
 	for i, t := range c.tickets {
+		isSelected := i == c.cursor && isActive
+
 		// Build type badge
 		typeBadge := ""
 		if t.Type != "" {
-			badgeStyle := typeBadgeStyle(t.Type)
-			if i == c.cursor && isActive {
-				badgeStyle = badgeStyle.Background(lipgloss.Color("62")).Bold(true)
+			if isSelected {
+				// Use raw ANSI foreground-only change to preserve outer background
+				typeBadge = inlineFgColorChange(typeBadgeColorCode(t.Type)) +
+					"[" + t.Type + "] " +
+					inlineFgColorChange(selectedFgColor)
+			} else {
+				typeBadge = typeBadgeStyle(t.Type).Render("[" + t.Type + "] ")
 			}
-			typeBadge = badgeStyle.Render("[" + t.Type + "] ")
 		}
 
 		// Build due date indicator
@@ -129,17 +134,21 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 		if t.Due != nil && c.status == "backlog" {
 			now := time.Now()
 			if t.Due.Before(now) {
-				style := overdueStyle
-				if i == c.cursor && isActive {
-					style = style.Background(lipgloss.Color("62")).Bold(true)
+				if isSelected {
+					dueDateIndicator = " " + inlineFgColorChange(dueDateColorCode(true)) +
+						"[OVERDUE]" +
+						inlineFgColorChange(selectedFgColor)
+				} else {
+					dueDateIndicator = overdueStyle.Render(" [OVERDUE]")
 				}
-				dueDateIndicator = style.Render(" [OVERDUE]")
 			} else if t.Due.Before(now.Add(24 * time.Hour)) {
-				style := dueSoonStyle
-				if i == c.cursor && isActive {
-					style = style.Background(lipgloss.Color("62")).Bold(true)
+				if isSelected {
+					dueDateIndicator = " " + inlineFgColorChange(dueDateColorCode(false)) +
+						"[DUE SOON]" +
+						inlineFgColorChange(selectedFgColor)
+				} else {
+					dueDateIndicator = dueSoonStyle.Render(" [DUE SOON]")
 				}
-				dueDateIndicator = style.Render(" [DUE SOON]")
 			}
 		}
 
