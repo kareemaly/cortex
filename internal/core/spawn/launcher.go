@@ -21,6 +21,7 @@ type LauncherParams struct {
 	AgentArgs            []string          // extra CLI args appended to the agent command
 	EnvVars              map[string]string // env vars to export (e.g., CORTEX_TICKET_ID)
 	CleanupFiles         []string          // temp paths to rm on exit (launcher path is added automatically)
+	CleanupDirs          []string          // temp directories to rm -rf on exit
 }
 
 // WriteLauncherScript generates and writes a bash launcher script.
@@ -67,12 +68,25 @@ func buildLauncherScript(params LauncherParams, cleanupFiles []string) string {
 
 	sb.WriteString("#!/usr/bin/env bash\n")
 
-	// Trap to clean up all temp files on exit
-	if len(cleanupFiles) > 0 {
-		sb.WriteString("trap 'rm -f")
-		for _, f := range cleanupFiles {
-			sb.WriteString(" ")
-			sb.WriteString(shellQuote(f))
+	// Trap to clean up all temp files and directories on exit
+	if len(cleanupFiles) > 0 || len(params.CleanupDirs) > 0 {
+		sb.WriteString("trap '")
+		if len(cleanupFiles) > 0 {
+			sb.WriteString("rm -f")
+			for _, f := range cleanupFiles {
+				sb.WriteString(" ")
+				sb.WriteString(shellQuote(f))
+			}
+		}
+		if len(params.CleanupDirs) > 0 {
+			if len(cleanupFiles) > 0 {
+				sb.WriteString("; ")
+			}
+			sb.WriteString("rm -rf")
+			for _, d := range params.CleanupDirs {
+				sb.WriteString(" ")
+				sb.WriteString(shellQuote(d))
+			}
 		}
 		sb.WriteString("' EXIT\n")
 	}

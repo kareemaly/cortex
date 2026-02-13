@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
@@ -345,6 +346,22 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		launcherParams.EnvVars["OPENCODE_CONFIG_CONTENT"] = openCodeConfigJSON
 	}
 
+	// Inject OpenCode status plugin for agent status reporting
+	if req.Agent == "opencode" {
+		pluginContent := GenerateOpenCodeStatusPlugin(
+			daemonconfig.DefaultDaemonURL,
+			launcherParams.EnvVars["CORTEX_TICKET_ID"],
+			req.ProjectPath,
+		)
+		pluginDir, pluginErr := WriteOpenCodePluginDir(pluginContent, identifier)
+		if pluginErr != nil {
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles, worktreePath, featureBranch, req.ProjectPath)
+			return nil, pluginErr
+		}
+		launcherParams.CleanupDirs = []string{pluginDir}
+		launcherParams.EnvVars["OPENCODE_CONFIG_DIR"] = pluginDir
+	}
+
 	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
 	if err != nil {
 		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles, worktreePath, featureBranch, req.ProjectPath)
@@ -472,6 +489,27 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 	if openCodeConfigJSON != "" {
 		launcherParams.EnvVars["OPENCODE_CONFIG_CONTENT"] = openCodeConfigJSON
+	}
+
+	// Inject OpenCode status plugin for agent status reporting
+	if req.Agent == "opencode" {
+		ticketID := envVars["CORTEX_TICKET_ID"]
+		pluginContent := GenerateOpenCodeStatusPlugin(
+			daemonconfig.DefaultDaemonURL,
+			ticketID,
+			req.ProjectPath,
+		)
+		pluginDir, pluginErr := WriteOpenCodePluginDir(pluginContent, identifier)
+		if pluginErr != nil {
+			for _, path := range tempFiles {
+				if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
+					s.logWarn("cleanup: failed to remove temp file", "path", path, "error", rmErr)
+				}
+			}
+			return nil, pluginErr
+		}
+		launcherParams.CleanupDirs = []string{pluginDir}
+		launcherParams.EnvVars["OPENCODE_CONFIG_DIR"] = pluginDir
 	}
 
 	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
