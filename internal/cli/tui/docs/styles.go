@@ -34,13 +34,6 @@ var (
 
 	docTitleStyle = lipgloss.NewStyle()
 
-	selectedStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(accentColor)
-
-	unfocusedSelectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245"))
-
 	treeConnector = lipgloss.NewStyle().
 			Foreground(mutedColor)
 

@@ -468,16 +468,17 @@ func (m Model) renderExplorer(width, height int) string {
 	currentLine := 0
 	for i, item := range m.tree {
 		itemStartLines[i] = currentLine
-		line := m.renderTreeItem(item, itemWidth)
 		var indicator string
+		var line string
 		if i == m.cursor && m.focusPane == paneExplorer {
 			indicator = " "
-			line = selectedStyle.Render(line)
+			line = m.renderTreeItem(item, itemWidth, true, false)
 		} else if i == m.cursor {
 			indicator = " "
-			line = unfocusedSelectedStyle.Render(line)
+			line = m.renderTreeItem(item, itemWidth, true, true)
 		} else {
 			indicator = " "
+			line = m.renderTreeItem(item, itemWidth, false, false)
 		}
 		rendered := indicator + line
 		content.WriteString(rendered)
@@ -516,7 +517,31 @@ func (m Model) renderExplorer(width, height int) string {
 }
 
 // renderTreeItem renders a single tree item (category or doc).
-func (m Model) renderTreeItem(item treeItem, width int) string {
+// When selected && !unfocused: accent color + bold on all segments.
+// When selected && unfocused: gray on all segments.
+// When !selected: normal styling.
+func (m Model) renderTreeItem(item treeItem, width int, selected, unfocused bool) string {
+	if selected {
+		style := lipgloss.NewStyle().Foreground(accentColor).Bold(true)
+		if unfocused {
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+		}
+		if item.isCategory {
+			cat := m.categories[item.catIndex]
+			arrow := "▼ "
+			if !cat.expanded {
+				arrow = "▶ "
+			}
+			count := fmt.Sprintf(" (%d)", len(cat.docs))
+			return style.Render(arrow+cat.name) + style.Render(count)
+		}
+		connector := style.Render("  ├─ ")
+		title := item.doc.Title
+		maxTitle := max(width-6, 5)
+		truncated := truncateToWidth(title, maxTitle)
+		return connector + style.Render(truncated)
+	}
+
 	if item.isCategory {
 		cat := m.categories[item.catIndex]
 		arrow := "▼ "

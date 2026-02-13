@@ -694,16 +694,17 @@ func (m Model) renderExplorer(width, height int) string {
 	currentLine := 0
 	for i, item := range m.items {
 		itemStartLines[i] = currentLine
-		line := m.renderListItem(item, itemWidth)
 		var indicator string
+		var line string
 		if i == m.cursor && m.focusPane == paneExplorer {
 			indicator = " "
-			line = selectedStyle.Render(line)
+			line = m.renderListItem(item, itemWidth, true, false)
 		} else if i == m.cursor {
 			indicator = " "
-			line = unfocusedSelectedStyle.Render(line)
+			line = m.renderListItem(item, itemWidth, true, true)
 		} else {
 			indicator = " "
+			line = m.renderListItem(item, itemWidth, false, false)
 		}
 		rendered := indicator + line
 		content.WriteString(rendered)
@@ -742,13 +743,41 @@ func (m Model) renderExplorer(width, height int) string {
 }
 
 // renderListItem renders a single item in the list.
-func (m Model) renderListItem(item listItem, width int) string {
-	if item.isConfigFile {
-		return configItemStyle.Render("cortex.yaml")
-	}
-
+// When selected && !unfocused: accent color + bold on all segments.
+// When selected && unfocused: gray on all segments.
+// When !selected: normal styling.
+// Section headers are never selected (not navigable), so always render normally.
+func (m Model) renderListItem(item listItem, width int, selected, unfocused bool) string {
 	if item.isSectionHeader {
 		return sectionHeaderStyle.Render("  " + item.sectionName)
+	}
+
+	if selected {
+		style := lipgloss.NewStyle().Foreground(accentColor).Bold(true)
+		if unfocused {
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+		}
+		if item.isConfigFile {
+			return style.Render("cortex.yaml")
+		}
+		if item.promptFile != nil {
+			connector := style.Render("  ├─ ")
+			filename := item.promptFile.Stage + ".md"
+			var badgeText string
+			if item.promptFile.Ejected {
+				badgeText = "● ejected"
+			} else {
+				badgeText = "○ default"
+			}
+			maxName := max(width-20, 5)
+			name := truncateToWidth(filename, maxName)
+			return connector + style.Render(name) + "  " + style.Render(badgeText)
+		}
+		return ""
+	}
+
+	if item.isConfigFile {
+		return configItemStyle.Render("cortex.yaml")
 	}
 
 	if item.promptFile != nil {
