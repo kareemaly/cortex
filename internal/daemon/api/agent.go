@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
@@ -69,6 +70,16 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		h.deps.Bus.Emit(events.Event{
+			Type:        events.SessionStatus,
+			ProjectPath: projectPath,
+			TicketID:    req.TicketID,
+			Payload: map[string]any{
+				"status": req.Status,
+				"tool":   req.Tool,
+			},
+		})
+
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -103,6 +114,16 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "update_error", err.Error())
 		return
 	}
+
+	h.deps.Bus.Emit(events.Event{
+		Type:        events.SessionStatus,
+		ProjectPath: projectPath,
+		TicketID:    req.TicketID,
+		Payload: map[string]any{
+			"status": req.Status,
+			"tool":   req.Tool,
+		},
+	})
 
 	w.WriteHeader(http.StatusOK)
 }
