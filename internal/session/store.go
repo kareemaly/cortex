@@ -153,8 +153,8 @@ func (s *Store) GetByTicketID(ticketID string) (*Session, error) {
 	return s.Get(storage.ShortID(ticketID))
 }
 
-// UpdateStatus updates the status and optional tool for a session.
-func (s *Store) UpdateStatus(ticketShortID string, status AgentStatus, tool *string) error {
+// UpdateStatus updates the status, optional tool, and optional work description for a session.
+func (s *Store) UpdateStatus(ticketShortID string, status AgentStatus, tool *string, work *string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -170,6 +170,7 @@ func (s *Store) UpdateStatus(ticketShortID string, status AgentStatus, tool *str
 
 	session.Status = status
 	session.Tool = tool
+	session.Work = work
 
 	return s.save(sessions)
 }

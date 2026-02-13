@@ -129,7 +129,7 @@ func TestUpdateStatus(t *testing.T) {
 	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window", nil, nil)
 
 	tool := "Edit"
-	err := store.UpdateStatus(key, AgentStatusInProgress, &tool)
+	err := store.UpdateStatus(key, AgentStatusInProgress, &tool, nil)
 	if err != nil {
 		t.Fatalf("UpdateStatus failed: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestUpdateStatusNotFound(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	err := store.UpdateStatus("nonexistent", AgentStatusInProgress, nil)
+	err := store.UpdateStatus("nonexistent", AgentStatusInProgress, nil, nil)
 	if !storage.IsNotFound(err) {
 		t.Errorf("expected NotFoundError, got %T", err)
 	}
@@ -339,7 +339,7 @@ func TestConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			tool := "Read"
-			_ = store.UpdateStatus(key, AgentStatusInProgress, &tool)
+			_ = store.UpdateStatus(key, AgentStatusInProgress, &tool, nil)
 		}()
 	}
 

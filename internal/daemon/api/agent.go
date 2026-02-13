@@ -65,7 +65,7 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := sessStore.UpdateStatus(session.ArchitectSessionKey, agentStatus, req.Tool); err != nil {
+		if err := sessStore.UpdateStatus(session.ArchitectSessionKey, agentStatus, req.Tool, req.Work); err != nil {
 			writeError(w, http.StatusInternalServerError, "update_error", err.Error())
 			return
 		}
@@ -77,6 +77,7 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 			Payload: map[string]any{
 				"status": req.Status,
 				"tool":   req.Tool,
+				"work":   req.Work,
 			},
 		})
 
@@ -110,7 +111,7 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update the session status
-	if err := sessStore.UpdateStatus(shortID, agentStatus, req.Tool); err != nil {
+	if err := sessStore.UpdateStatus(shortID, agentStatus, req.Tool, req.Work); err != nil {
 		writeError(w, http.StatusInternalServerError, "update_error", err.Error())
 		return
 	}
@@ -122,6 +123,7 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		Payload: map[string]any{
 			"status": req.Status,
 			"tool":   req.Tool,
+			"work":   req.Work,
 		},
 	})
 

@@ -14,9 +14,14 @@ type ClaudeSettingsConfig struct {
 
 // HooksConfig defines the hooks section of Claude settings.
 type HooksConfig struct {
-	PostToolUse       []HookEntry `json:"PostToolUse,omitempty"`
-	Stop              []HookEntry `json:"Stop,omitempty"`
-	PermissionRequest []HookEntry `json:"PermissionRequest,omitempty"`
+	PostToolUse        []HookEntry `json:"PostToolUse,omitempty"`
+	PostToolUseFailure []HookEntry `json:"PostToolUseFailure,omitempty"`
+	Stop               []HookEntry `json:"Stop,omitempty"`
+	PermissionRequest  []HookEntry `json:"PermissionRequest,omitempty"`
+	SessionStart       []HookEntry `json:"SessionStart,omitempty"`
+	SessionEnd         []HookEntry `json:"SessionEnd,omitempty"`
+	SubagentStart      []HookEntry `json:"SubagentStart,omitempty"`
+	SubagentStop       []HookEntry `json:"SubagentStop,omitempty"`
 }
 
 // HookEntry is a single hook configuration.
@@ -29,6 +34,7 @@ type HookEntry struct {
 type HookAction struct {
 	Type    string `json:"type"`
 	Command string `json:"command"`
+	Async   bool   `json:"async,omitempty"`
 }
 
 // SettingsConfigParams contains parameters for generating settings config.
@@ -49,6 +55,19 @@ func GenerateSettingsConfig(params SettingsConfigParams) *ClaudeSettingsConfig {
 						{
 							Type:    "command",
 							Command: params.CortexdPath + " hook post-tool-use",
+							Async:   true,
+						},
+					},
+				},
+			},
+			PostToolUseFailure: []HookEntry{
+				{
+					Matcher: "*",
+					Hooks: []HookAction{
+						{
+							Type:    "command",
+							Command: params.CortexdPath + " hook post-tool-use-failure",
+							Async:   true,
 						},
 					},
 				},
@@ -59,6 +78,7 @@ func GenerateSettingsConfig(params SettingsConfigParams) *ClaudeSettingsConfig {
 						{
 							Type:    "command",
 							Command: params.CortexdPath + " hook stop",
+							Async:   true,
 						},
 					},
 				},
@@ -69,6 +89,51 @@ func GenerateSettingsConfig(params SettingsConfigParams) *ClaudeSettingsConfig {
 						{
 							Type:    "command",
 							Command: params.CortexdPath + " hook permission-request",
+							Async:   true,
+						},
+					},
+				},
+			},
+			SessionStart: []HookEntry{
+				{
+					Hooks: []HookAction{
+						{
+							Type:    "command",
+							Command: params.CortexdPath + " hook session-start",
+							Async:   true,
+						},
+					},
+				},
+			},
+			SessionEnd: []HookEntry{
+				{
+					Hooks: []HookAction{
+						{
+							Type:    "command",
+							Command: params.CortexdPath + " hook session-end",
+							Async:   true,
+						},
+					},
+				},
+			},
+			SubagentStart: []HookEntry{
+				{
+					Hooks: []HookAction{
+						{
+							Type:    "command",
+							Command: params.CortexdPath + " hook subagent-start",
+							Async:   true,
+						},
+					},
+				},
+			},
+			SubagentStop: []HookEntry{
+				{
+					Hooks: []HookAction{
+						{
+							Type:    "command",
+							Command: params.CortexdPath + " hook subagent-stop",
+							Async:   true,
 						},
 					},
 				},

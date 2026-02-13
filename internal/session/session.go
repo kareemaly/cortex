@@ -43,4 +43,5 @@ type Session struct {
 	StartedAt     time.Time   `json:"started_at"`
 	Status        AgentStatus `json:"status"`
 	Tool          *string     `json:"tool,omitempty"`
+	Work          *string     `json:"work,omitempty"`
 }
