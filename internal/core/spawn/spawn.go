@@ -758,6 +758,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 		TicketTitle: req.Ticket.Title,
 		TicketBody:  req.Ticket.Body,
 		Comments:    formatTicketComments(req.Ticket.Comments),
+		References:  formatTicketReferences(req.Ticket.References),
 		IsWorktree:  worktreePath != nil,
 	}
 	if worktreePath != nil {
@@ -791,6 +792,22 @@ func formatTicketComments(comments []ticket.Comment) string {
 		sb.WriteString(fmt.Sprintf("### [%s] — %s\n", c.Type, c.Created.UTC().Format("2006-01-02 15:04 UTC")))
 		sb.WriteString(c.Content)
 		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+// formatTicketReferences formats ticket references into a bulleted markdown list.
+func formatTicketReferences(refs []string) string {
+	if len(refs) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for i, ref := range refs {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("- ")
+		sb.WriteString(ref)
 	}
 	return sb.String()
 }

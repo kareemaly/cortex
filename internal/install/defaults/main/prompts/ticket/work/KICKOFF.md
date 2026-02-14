@@ -1,6 +1,12 @@
 # Ticket: {{.TicketTitle}}
 
 {{.TicketBody}}
+{{if .References}}
+
+## References
+
+{{.References}}
+{{end}}
 {{if .IsWorktree}}
 
 ## Worktree Information

@@ -1,6 +1,12 @@
 # Research: {{.TicketTitle}}
 
 {{.TicketBody}}
+{{if .References}}
+
+## References
+
+{{.References}}
+{{end}}
 
 ## Your Task
 
