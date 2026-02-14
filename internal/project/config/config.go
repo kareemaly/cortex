@@ -138,33 +138,14 @@ func FindProjectRoot(startPath string) (string, error) {
 
 // Load loads configuration from projectRoot/.cortex/cortex.yaml.
 // Returns default config if file doesn't exist.
-// If the config has an extend field, it recursively loads and merges the base config.
+// The extend field is validated and stored for prompt resolution only (no config merging).
 func Load(projectRoot string) (*Config, error) {
-	return loadWithVisited(projectRoot, false, make(map[string]bool))
-}
-
-// loadWithVisited loads config with circular reference detection.
-// isBaseConfig indicates whether we're loading a base config (via extend) or a project config.
-// Base configs have cortex.yaml at root; project configs have .cortex/cortex.yaml.
-func loadWithVisited(configRoot string, isBaseConfig bool, visited map[string]bool) (*Config, error) {
-	absPath, err := filepath.Abs(configRoot)
+	absPath, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check for circular reference
-	if visited[absPath] {
-		return nil, &CircularExtendError{Path: absPath}
-	}
-	visited[absPath] = true
-
-	// Base configs have cortex.yaml at root; project configs have .cortex/cortex.yaml
-	var configPath string
-	if isBaseConfig {
-		configPath = filepath.Join(configRoot, "cortex.yaml")
-	} else {
-		configPath = filepath.Join(configRoot, ".cortex", "cortex.yaml")
-	}
+	configPath := filepath.Join(absPath, ".cortex", "cortex.yaml")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -173,45 +154,25 @@ func loadWithVisited(configRoot string, isBaseConfig bool, visited map[string]bo
 		return nil, err
 	}
 
-	// Parse raw config (without merging defaults yet)
-	var rawCfg Config
-	if err := yaml.Unmarshal(data, &rawCfg); err != nil {
+	cfg := DefaultConfig()
+	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, &ConfigParseError{Path: configPath, Err: err}
 	}
 
-	// If no extend, apply defaults and return
-	if rawCfg.Extend == "" {
-		cfg := DefaultConfig()
-		if err := yaml.Unmarshal(data, cfg); err != nil {
-			return nil, &ConfigParseError{Path: configPath, Err: err}
-		}
-		if err := cfg.Validate(); err != nil {
+	// Validate extend path (for prompt resolution only, no config merging)
+	if cfg.Extend != "" {
+		resolved, err := ValidateExtendPath(cfg.Extend, absPath)
+		if err != nil {
 			return nil, err
 		}
-		return cfg, nil
+		cfg.resolvedExtendPath = resolved
 	}
 
-	// Resolve and validate extend path
-	resolvedExtendPath, err := ValidateExtendPath(rawCfg.Extend, configRoot)
-	if err != nil {
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Recursively load base config (base configs have cortex.yaml at root)
-	baseCfg, err := loadWithVisited(resolvedExtendPath, true, visited)
-	if err != nil {
-		return nil, err
-	}
-
-	// Merge: base first, then overlay project config
-	merged := MergeConfigs(baseCfg, &rawCfg)
-	merged.resolvedExtendPath = resolvedExtendPath
-
-	if err := merged.Validate(); err != nil {
-		return nil, err
-	}
-
-	return merged, nil
+	return cfg, nil
 }
 
 // LoadFromPath finds the project root from the given path and loads config.

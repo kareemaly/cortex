@@ -199,13 +199,13 @@ func (h *MetaHandlers) spawnMetaSession(w http.ResponseWriter, r *http.Request, 
 		Logger:       h.deps.Logger,
 	})
 
-	// Load meta agent config from defaults (~/.cortex/defaults/claude-code)
+	// Load meta agent config from defaults (~/.cortex/defaults/main)
 	homeDir, _ := os.UserHomeDir()
 	if homeDir == "" {
 		homeDir = os.TempDir()
 	}
 
-	baseConfigPath := filepath.Join(homeDir, ".cortex", "defaults", "claude-code")
+	baseConfigPath := filepath.Join(homeDir, ".cortex", "defaults", "main")
 	metaAgent := "claude"
 	var metaArgs []string
 

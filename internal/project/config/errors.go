@@ -71,18 +71,3 @@ func IsExtendPathNotFound(err error) bool {
 	_, ok := err.(*ExtendPathNotFoundError)
 	return ok
 }
-
-// CircularExtendError indicates a circular reference in extend chain.
-type CircularExtendError struct {
-	Path string
-}
-
-func (e *CircularExtendError) Error() string {
-	return fmt.Sprintf("circular extend reference detected at: %s", e.Path)
-}
-
-// IsCircularExtend returns true if err is a CircularExtendError.
-func IsCircularExtend(err error) bool {
-	_, ok := err.(*CircularExtendError)
-	return ok
-}

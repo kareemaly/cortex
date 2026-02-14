@@ -18,9 +18,9 @@ var (
 var configShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Display resolved project configuration",
-	Long: `Display the fully resolved project configuration after all extends are merged.
+	Long: `Display the project configuration.
 
-This helps verify your config is correct and debug inheritance issues.
+This helps verify your config is correct.
 The output is valid YAML that could be copy-pasted into a config file.`,
 	RunE: runConfigShow,
 }
@@ -65,9 +65,6 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("no cortex project found at %s\n\nRun 'cortex init' to initialize a project", path)
 		}
 		if projectconfig.IsExtendPathNotFound(err) {
-			return fmt.Errorf("config error: %w", err)
-		}
-		if projectconfig.IsCircularExtend(err) {
 			return fmt.Errorf("config error: %w", err)
 		}
 		if projectconfig.IsConfigParseError(err) {

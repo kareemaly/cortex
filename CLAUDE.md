@@ -100,14 +100,14 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Worktree manager | `internal/worktree/` |
 | TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `docs/`, `config/`, `ticket/`) |
 | Install/init logic | `internal/install/` |
-| Agent defaults | `internal/install/defaults/` (`claude-code`, `opencode`) |
+| Agent defaults | `internal/install/defaults/main/` (shared prompts for all agents) |
 | Shared storage | `internal/storage/` |
 | Session store | `internal/session/` |
 | Response types | `internal/types/` |
 
 ## Configuration
 
-**Project** (`.cortex/cortex.yaml`): Agent type (`claude`, `opencode`), agent args, git worktrees, lifecycle hooks, `tickets.path`, `docs.path`. Ticket and doc paths default to `{projectRoot}/tickets` and `{projectRoot}/docs`. See `internal/project/config/config.go` for schema.
+**Project** (`.cortex/cortex.yaml`): Self-contained config with agent type (`claude`, `opencode`), agent args, git worktrees, lifecycle hooks, `tickets.path`, `docs.path`. The `extend` field points to `~/.cortex/defaults/main` for prompt resolution only (no config merging). Ticket and doc paths default to `{projectRoot}/tickets` and `{projectRoot}/docs`. See `internal/project/config/config.go` for schema.
 
 **Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, project registry. See `internal/daemon/config/config.go` for schema.
 

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mattn/go-isatty"
@@ -34,7 +35,7 @@ func init() {
 }
 
 // defaultConfigs lists all config directories to upgrade.
-var defaultConfigs = []string{"claude-code", "opencode"}
+var defaultConfigs = []string{"main"}
 
 func runDefaultsUpgradeCmd(cmd *cobra.Command, args []string) error {
 	homeDir, err := os.UserHomeDir()
@@ -181,6 +182,24 @@ func runDefaultsUpgradeApplyAll(homeDir string) error {
 	}
 
 	fmt.Printf("Upgraded %d files.\n", totalUpdates+totalCreates)
+
+	// Clean up legacy directories if they exist
+	legacyDirs := []string{
+		filepath.Join(homeDir, ".cortex", "defaults", "claude-code"),
+		filepath.Join(homeDir, ".cortex", "defaults", "opencode"),
+	}
+	for _, dir := range legacyDirs {
+		if _, err := os.Stat(dir); err == nil {
+			if err := os.RemoveAll(dir); err == nil {
+				fmt.Printf("Removed legacy directory: %s\n", defaultsFormatPath(dir))
+			}
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("Note: If you have existing projects with 'extend: ~/.cortex/defaults/claude-code'")
+	fmt.Println("or 'extend: ~/.cortex/defaults/opencode', update them to 'extend: ~/.cortex/defaults/main'.")
+
 	return nil
 }
 

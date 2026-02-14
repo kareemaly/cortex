@@ -3,7 +3,6 @@ package install
 import (
 	"bytes"
 	"embed"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -140,18 +139,6 @@ func compareEmbeddedDir(embedFS embed.FS, srcDir, dstDir string) ([]CompareItem,
 	}
 
 	return items, nil
-}
-
-// GetConfigDocs returns the embedded CONFIG_DOCS.md for the given config name.
-// The configName is the directory name under defaults/ (e.g., "claude-code").
-// Returns the file content or an error if not found.
-func GetConfigDocs(configName string) (string, error) {
-	path := filepath.Join("defaults", configName, "CONFIG_DOCS.md")
-	content, err := defaultsFS.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("CONFIG_DOCS.md not found for config %q", configName)
-	}
-	return string(content), nil
 }
 
 // copyEmbeddedDir recursively copies embedded directory to disk.

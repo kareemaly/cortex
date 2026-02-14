@@ -21,16 +21,6 @@ type Options struct {
 	Force bool
 }
 
-// DefaultsDirForAgent returns the defaults directory name for the given agent type.
-func DefaultsDirForAgent(agent string) string {
-	switch agent {
-	case "opencode":
-		return "opencode"
-	default:
-		return "claude-code"
-	}
-}
-
 // Run performs the installation with the given options.
 func Run(opts Options) (*Result, error) {
 	result := &Result{}
@@ -126,38 +116,25 @@ git_diff_tool: ` + gitDiffTool + `
 		return items, item.Error
 	}
 
-	// Create defaults/claude-code directory with full config and prompts
-	claudeItems, err := setupClaudeCodeDefaults(homeDir, force)
+	// Create defaults/main directory with prompts
+	mainItems, err := setupMainDefaults(homeDir, force)
 	if err != nil {
-		return append(items, claudeItems...), err
+		return append(items, mainItems...), err
 	}
-	items = append(items, claudeItems...)
-
-	// Create defaults/opencode directory with full config and prompts
-	opencodeItems, err := setupOpenCodeDefaults(homeDir, force)
-	if err != nil {
-		return append(items, opencodeItems...), err
-	}
-	items = append(items, opencodeItems...)
+	items = append(items, mainItems...)
 
 	return items, nil
 }
 
-// setupClaudeCodeDefaults copies embedded default config to ~/.cortex/defaults/claude-code/.
-func setupClaudeCodeDefaults(homeDir string, force bool) ([]SetupItem, error) {
-	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "claude-code")
-	return CopyEmbeddedDefaults("claude-code", targetDir, force)
-}
-
-// setupOpenCodeDefaults copies embedded default config to ~/.cortex/defaults/opencode/.
-func setupOpenCodeDefaults(homeDir string, force bool) ([]SetupItem, error) {
-	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "opencode")
-	return CopyEmbeddedDefaults("opencode", targetDir, force)
+// setupMainDefaults copies embedded default prompts to ~/.cortex/defaults/main/.
+func setupMainDefaults(homeDir string, force bool) ([]SetupItem, error) {
+	targetDir := filepath.Join(homeDir, ".cortex", "defaults", "main")
+	return CopyEmbeddedDefaults("main", targetDir, force)
 }
 
 // setupProject creates the project .cortex/ directory and config.
-// Creates a minimal config that extends the appropriate defaults directory.
-// Prompts are inherited from the base config, not copied to the project.
+// Generates a self-contained cortex.yaml with all agent settings inline.
+// The extend field points to ~/.cortex/defaults/main for prompt resolution only.
 func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, error) {
 	absPath, err := filepath.Abs(projectPath)
 	if err != nil {
@@ -176,12 +153,8 @@ func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, err
 		return items, item.Error
 	}
 
-	// Create minimal config file that extends the appropriate defaults
-	// Config must be written before resolving paths so Load() can read it.
-	defaultsDir := DefaultsDirForAgent(agent)
-	configContent := `name: ` + name + `
-extend: ~/.cortex/defaults/` + defaultsDir + `
-`
+	// Generate a self-contained config based on agent type
+	configContent := generateProjectConfig(name, agent)
 	item = ensureConfigFile(configPath, configContent, force)
 	items = append(items, item)
 	if item.Error != nil {
@@ -220,6 +193,78 @@ extend: ~/.cortex/defaults/` + defaultsDir + `
 	}
 
 	return items, nil
+}
+
+// generateProjectConfig returns a complete cortex.yaml for the given agent type.
+func generateProjectConfig(name, agent string) string {
+	switch agent {
+	case "opencode":
+		return `name: ` + name + `
+extend: ~/.cortex/defaults/main
+architect:
+  agent: opencode
+meta:
+  agent: opencode
+ticket:
+  work:
+    agent: opencode
+  debug:
+    agent: opencode
+  research:
+    agent: opencode
+  chore:
+    agent: opencode
+git:
+  worktrees: false
+`
+	default:
+		return `name: ` + name + `
+extend: ~/.cortex/defaults/main
+architect:
+  agent: claude
+  args:
+    - "--allow-dangerously-skip-permissions"
+    - "--allowedTools"
+    - "mcp__cortex__listTickets,mcp__cortex__readTicket"
+meta:
+  agent: claude
+  args:
+    - "--allow-dangerously-skip-permissions"
+    - "--allowedTools"
+    - "mcp__cortex__listProjects,mcp__cortex__readProjectConfig,mcp__cortex__readGlobalConfig,mcp__cortex__daemonStatus,mcp__cortex__readDaemonLogs,mcp__cortex__listTickets,mcp__cortex__readTicket,mcp__cortex__listDocs,mcp__cortex__readDoc,mcp__cortex__listSessions,mcp__cortex__readPrompt"
+ticket:
+  work:
+    agent: claude
+    args:
+      - "--permission-mode"
+      - "plan"
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readReference"
+  debug:
+    agent: claude
+    args:
+      - "--permission-mode"
+      - "plan"
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readReference,mcp__cortex__addComment"
+  research:
+    agent: claude
+    args:
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readReference,mcp__cortex__addComment,mcp__cortex__createDoc"
+  chore:
+    agent: claude
+    args:
+      - "--allow-dangerously-skip-permissions"
+      - "--allowedTools"
+      - "mcp__cortex__readReference"
+git:
+  worktrees: false
+`
+	}
 }
 
 // ensureDir creates a directory if it doesn't exist.
