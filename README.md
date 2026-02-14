@@ -88,8 +88,6 @@ ticket:
     agent: opencode  # Mix agents per workflow
   research: # Read-only exploration workflow
     agent: claude
-  chore:    # Quick maintenance workflow
-    agent: claude
 git:
   worktrees: false  # Enable git worktrees for ticket isolation
 ```

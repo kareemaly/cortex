@@ -1,7 +1,7 @@
 ---
 id: 95770b91-a280-407a-b449-caaf289ca112
 title: Remove notification system entirely
-type: chore
+type: work
 tags:
     - cleanup
     - notifications

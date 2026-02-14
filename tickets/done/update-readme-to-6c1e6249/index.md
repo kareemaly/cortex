@@ -1,7 +1,7 @@
 ---
 id: 6c1e6249-5774-43f0-b7c1-ac65a3d60bc7
 title: Update README to document Copilot agent type
-type: chore
+type: work
 created: 2026-02-05T10:36:46.849132Z
 updated: 2026-02-05T10:42:44.081756Z
 ---

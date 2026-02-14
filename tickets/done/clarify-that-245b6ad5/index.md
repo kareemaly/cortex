@@ -1,7 +1,7 @@
 ---
 id: 245b6ad5-4f48-4106-a270-2dd971197e73
 title: Clarify that concludeSession auto-creates session doc
-type: chore
+type: work
 tags:
     - architect
     - cleanup

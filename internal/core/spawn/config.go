@@ -25,7 +25,7 @@ type ClaudeMCPConfig struct {
 type MCPConfigParams struct {
 	CortexdPath string
 	TicketID    string // for ticket agents
-	TicketType  string // for ticket agents (work/debug/research/chore)
+	TicketType  string // for ticket agents (work/debug/research)
 	TicketsDir  string
 	ProjectPath string
 	TmuxSession string

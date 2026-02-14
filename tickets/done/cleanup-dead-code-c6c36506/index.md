@@ -1,7 +1,7 @@
 ---
 id: c6c36506-9b16-4913-90cd-67acaa154d57
 title: Cleanup dead code and update documentation
-type: chore
+type: work
 created: 2026-02-07T10:14:30.539438Z
 updated: 2026-02-07T10:22:39.812491Z
 ---

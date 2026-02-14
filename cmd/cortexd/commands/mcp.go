@@ -36,7 +36,7 @@ Examples:
 
 func init() {
 	mcpCmd.Flags().StringVar(&mcpTicketID, "ticket-id", "", "Ticket ID for ticket sessions")
-	mcpCmd.Flags().StringVar(&mcpTicketType, "ticket-type", "", "Ticket type for ticket sessions (work/debug/research/chore)")
+	mcpCmd.Flags().StringVar(&mcpTicketType, "ticket-type", "", "Ticket type for ticket sessions (work/debug/research)")
 	mcpCmd.Flags().BoolVar(&mcpMeta, "meta", false, "Start a meta session (global, above architects)")
 	rootCmd.AddCommand(mcpCmd)
 }

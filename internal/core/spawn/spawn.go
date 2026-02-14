@@ -127,7 +127,7 @@ type ResumeRequest struct {
 
 	// For ticket agents
 	TicketID   string
-	TicketType string // ticket type (work/debug/research/chore)
+	TicketType string // ticket type (work/debug/research)
 
 	// Extra CLI args appended to the agent command
 	AgentArgs []string

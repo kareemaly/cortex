@@ -1,7 +1,7 @@
 ---
 id: 6d0f04b5-9cd8-4002-a0fd-1728a7bbe432
 title: Upgrade OpenCode and test Cortex agent spawn with GPT 5.2
-type: chore
+type: work
 tags:
     - opencode
     - chore

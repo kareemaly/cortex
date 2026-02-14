@@ -1,7 +1,7 @@
 ---
 id: 8db2e2e1-a6b7-4abb-876a-e6d32de4739a
 title: Fix meta agent companion pane to use cortex dashboard
-type: chore
+type: work
 tags:
     - meta-agent
 created: 2026-02-09T15:42:22.983539Z

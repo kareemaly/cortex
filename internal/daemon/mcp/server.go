@@ -19,7 +19,7 @@ type Config struct {
 	// If empty, the session is an architect session with full access.
 	TicketID string
 
-	// TicketType is the ticket type (work/debug/research/chore).
+	// TicketType is the ticket type (work/debug/research).
 	// Only used for ticket sessions, to conditionally register tools.
 	TicketType string
 

@@ -110,9 +110,6 @@ var (
 	researchTypeBadgeStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("39")) // blue
 
-	choreTypeBadgeStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")) // gray
-
 	workTypeBadgeStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("35")) // cyan/teal
 
@@ -145,8 +142,6 @@ func typeBadgeColorCode(ticketType string) string {
 		return "196"
 	case "research":
 		return "39"
-	case "chore":
-		return "245"
 	case "work":
 		return "35"
 	default:
@@ -185,8 +180,6 @@ func typeBadgeStyle(ticketType string) lipgloss.Style {
 		return debugTypeBadgeStyle
 	case "research":
 		return researchTypeBadgeStyle
-	case "chore":
-		return choreTypeBadgeStyle
 	case "work":
 		return workTypeBadgeStyle
 	default:

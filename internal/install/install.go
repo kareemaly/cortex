@@ -212,8 +212,6 @@ ticket:
     agent: opencode
   research:
     agent: opencode
-  chore:
-    agent: opencode
 git:
   worktrees: false
 `
@@ -255,12 +253,6 @@ ticket:
       - "--allow-dangerously-skip-permissions"
       - "--allowedTools"
       - "mcp__cortex__readReference,mcp__cortex__addComment,mcp__cortex__createDoc"
-  chore:
-    agent: claude
-    args:
-      - "--allow-dangerously-skip-permissions"
-      - "--allowedTools"
-      - "mcp__cortex__readReference"
 git:
   worktrees: false
 `

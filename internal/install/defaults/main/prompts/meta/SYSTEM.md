@@ -86,7 +86,7 @@ The `updatePrompt` tool auto-ejects: if a prompt hasn't been customized yet, it 
 
 Prompt roles: `architect`, `ticket`
 Prompt stages: `SYSTEM`, `KICKOFF`, `APPROVE`
-Ticket types (for ticket role): `work`, `debug`, `research`, `chore`
+Ticket types (for ticket role): `work`, `debug`, `research`
 
 ## Communication
 

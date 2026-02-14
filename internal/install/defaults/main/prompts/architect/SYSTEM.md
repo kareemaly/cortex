@@ -42,7 +42,6 @@ If a design decision requires knowing how the codebase currently works (e.g., "s
 - **work** — feature implementation, enhancements, refactoring
 - **debug** — bug investigation and fixing (include reproduction steps if known)
 - **research** — exploration, analysis, documentation (read-only, no code changes)
-- **chore** — maintenance tasks, dependency updates, cleanup
 
 ### Scoping
 

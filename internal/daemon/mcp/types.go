@@ -19,7 +19,7 @@ const (
 type Session struct {
 	Type       SessionType
 	TicketID   string // Only set for ticket sessions
-	TicketType string // Only set for ticket sessions (work/debug/research/chore)
+	TicketType string // Only set for ticket sessions (work/debug/research)
 }
 
 // Input types for architect tools
@@ -43,7 +43,7 @@ type ReadTicketInput struct {
 type CreateTicketInput struct {
 	Title       string   `json:"title" jsonschema:"The ticket title (required)"`
 	Body        string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Type        string   `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration), 'chore' (quick maintenance). Defaults to 'work' if not specified."`
+	Type        string   `json:"type,omitempty" jsonschema:"The ticket type. Available types: 'work' (default implementation), 'debug' (root cause analysis), 'research' (read-only exploration). Defaults to 'work' if not specified."`
 	DueDate     string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
 	References  []string `json:"references,omitempty" jsonschema:"Cross-references (e.g., 'doc:abc123', 'ticket:xyz789')"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"Free-form tags for categorization"`
@@ -505,7 +505,7 @@ type ReadPromptInput struct {
 	ProjectPath string `json:"project_path" jsonschema:"Absolute path to the project (required)"`
 	Role        string `json:"role" jsonschema:"Prompt role: 'architect' or 'ticket' (required)"`
 	Stage       string `json:"stage" jsonschema:"Prompt stage: 'SYSTEM', 'KICKOFF', or 'APPROVE' (required)"`
-	TicketType  string `json:"ticket_type,omitempty" jsonschema:"Ticket type for ticket role prompts: 'work', 'debug', 'research', 'chore'"`
+	TicketType  string `json:"ticket_type,omitempty" jsonschema:"Ticket type for ticket role prompts: 'work', 'debug', 'research'"`
 }
 
 // UpdatePromptInput is the input for the updatePrompt tool.
@@ -513,7 +513,7 @@ type UpdatePromptInput struct {
 	ProjectPath string `json:"project_path" jsonschema:"Absolute path to the project (required)"`
 	Role        string `json:"role" jsonschema:"Prompt role: 'architect' or 'ticket' (required)"`
 	Stage       string `json:"stage" jsonschema:"Prompt stage: 'SYSTEM', 'KICKOFF', or 'APPROVE' (required)"`
-	TicketType  string `json:"ticket_type,omitempty" jsonschema:"Ticket type for ticket role prompts: 'work', 'debug', 'research', 'chore'"`
+	TicketType  string `json:"ticket_type,omitempty" jsonschema:"Ticket type for ticket role prompts: 'work', 'debug', 'research'"`
 	Content     string `json:"content" jsonschema:"New prompt content (required)"`
 }
 
