@@ -79,7 +79,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 |---------|-------|
 | Daemon not responding | `cortex daemon status`, verify port 4200, check `~/.cortex/logs/` |
 | Ticket not found | Verify `X-Cortex-Project` header matches project path |
-| Session won't spawn | Check `cortex ticket list` for state, use `mode=resume` for orphaned |
+| Session won't spawn | Check `cortex kanban` for state, use `mode=resume` for orphaned |
 | MCP tools not working | Verify `CORTEX_PROJECT_PATH` env, check daemon logs |
 
 ## Key Paths
@@ -111,7 +111,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 
 **Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, project registry. See `internal/daemon/config/config.go` for schema.
 
-**Project registry**: Global config tracks all projects (`projects` list). Auto-registered on `cortex init`. Used by `GET /projects` endpoint and `cortex projects` CLI.
+**Project registry**: Global config tracks all projects (`projects` list). Auto-registered on `cortex init`. Used by `GET /projects` endpoint.
 
 ## CLI Commands
 
@@ -121,14 +121,8 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | `cortex meta` | Start/attach global meta session (`--mode fresh\|resume` for orphaned) |
 | `cortex architect` | Start/attach architect session (`--mode fresh\|resume` for orphaned) |
 | `cortex kanban` | Kanban + Docs TUI with tab switching (`tab`/`[`/`]`) |
-| `cortex show [id]` | Ticket detail TUI |
-| `cortex ticket list` | List tickets |
-| `cortex ticket spawn <id>` | Spawn ticket agent session |
-| `cortex projects` | List all registered projects with ticket counts |
-| `cortex register [path]` | Register project in global config |
-| `cortex unregister [path]` | Remove project from global config |
+| `cortex ticket <id>` | Ticket detail TUI |
 | `cortex daemon status` | Check daemon status |
-| `cortex upgrade` | Self-update to latest version |
 | `cortex eject <path>` | Customize a default prompt |
 | `cortex defaults upgrade` | Refresh `~/.cortex/defaults/` with latest embedded defaults |
 
