@@ -63,6 +63,36 @@ func runDefaultsUpgradeDryRunAll(homeDir string) error {
 		fmt.Println()
 	}
 
+	// Show project migration preview
+	results, err := install.MigrateAllProjects()
+	if err == nil && len(results) > 0 {
+		needsMigration := false
+		for _, r := range results {
+			if !r.Skipped && r.Error == nil {
+				needsMigration = true
+				break
+			}
+		}
+		if needsMigration {
+			fmt.Println("=== Project Migration ===")
+			fmt.Println()
+			for _, r := range results {
+				name := r.ProjectName
+				if name == "" {
+					name = filepath.Base(r.ProjectPath)
+				}
+				if r.Error != nil {
+					fmt.Printf("  %s %s — error: %v\n", crossMark(), name, r.Error)
+				} else if r.Skipped {
+					fmt.Printf("  %s %s — %s\n", bullet(), name, r.SkipReason)
+				} else {
+					fmt.Printf("  %s %s — would migrate (agent: %s)\n", bullet(), name, r.DetectedAgent)
+				}
+			}
+			fmt.Println()
+		}
+	}
+
 	return nil
 }
 
@@ -183,6 +213,40 @@ func runDefaultsUpgradeApplyAll(homeDir string) error {
 
 	fmt.Printf("Upgraded %d files.\n", totalUpdates+totalCreates)
 
+	// Migrate project configs before removing legacy directories
+	migrationResults, migErr := install.MigrateAllProjects()
+	if migErr == nil && len(migrationResults) > 0 {
+		var migrated, skipped, errored int
+		for _, r := range migrationResults {
+			switch {
+			case r.Error != nil:
+				errored++
+			case r.Skipped:
+				skipped++
+			case r.Migrated:
+				migrated++
+			}
+		}
+		if migrated > 0 || errored > 0 {
+			fmt.Println()
+			fmt.Println("Project migration:")
+			for _, r := range migrationResults {
+				name := r.ProjectName
+				if name == "" {
+					name = filepath.Base(r.ProjectPath)
+				}
+				if r.Error != nil {
+					fmt.Printf("  %s %s — error: %v\n", crossMark(), name, r.Error)
+				} else if r.Migrated {
+					fmt.Printf("  %s %s — migrated (agent: %s)\n", checkMark(), name, r.DetectedAgent)
+				}
+			}
+			if skipped > 0 {
+				fmt.Printf("  %s %d project(s) already up to date\n", bullet(), skipped)
+			}
+		}
+	}
+
 	// Clean up legacy directories if they exist
 	legacyDirs := []string{
 		filepath.Join(homeDir, ".cortex", "defaults", "claude-code"),
@@ -195,10 +259,6 @@ func runDefaultsUpgradeApplyAll(homeDir string) error {
 			}
 		}
 	}
-
-	fmt.Println()
-	fmt.Println("Note: If you have existing projects with 'extend: ~/.cortex/defaults/claude-code'")
-	fmt.Println("or 'extend: ~/.cortex/defaults/opencode', update them to 'extend: ~/.cortex/defaults/main'.")
 
 	return nil
 }

@@ -1,10 +1,13 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/kareemaly/cortex/internal/daemon/autostart"
@@ -23,23 +26,57 @@ var initCmd = &cobra.Command{
 	Long: `Initialize Cortex for a project.
 
 Creates the global ~/.cortex/settings.yaml and sets up a project .cortex/
-directory in the current directory. Use --global-only to skip project setup.`,
+directory in the current directory. Use --global-only to skip project setup.
+
+The agent is auto-detected from your PATH. If both claude and opencode are
+available, you'll be prompted to choose. Use --agent to skip detection.`,
 	RunE: runInit,
 }
 
 func init() {
 	initCmd.Flags().BoolVarP(&initGlobalOnly, "global-only", "g", false, "Only set up global ~/.cortex/, skip project setup")
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing config files")
-	initCmd.Flags().StringVarP(&initAgent, "agent", "a", "claude", "Agent type: claude, opencode")
+	initCmd.Flags().StringVarP(&initAgent, "agent", "a", "", "Agent type: claude, opencode (auto-detected if not set)")
 	rootCmd.AddCommand(initCmd)
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	switch initAgent {
-	case "claude", "opencode":
-		// valid
-	default:
-		return fmt.Errorf("invalid agent type %q: must be claude or opencode", initAgent)
+	agentExplicit := cmd.Flags().Changed("agent")
+
+	// Resolve agent for project setup
+	if !initGlobalOnly {
+		if agentExplicit {
+			// Validate explicit agent flag
+			switch initAgent {
+			case "claude", "opencode":
+				// valid — verify binary exists
+				if _, err := exec.LookPath(initAgent); err != nil {
+					return fmt.Errorf("%s binary not found in PATH; install it first", initAgent)
+				}
+			default:
+				return fmt.Errorf("invalid agent type %q: must be claude or opencode", initAgent)
+			}
+		} else {
+			// Auto-detect
+			agents := install.DetectAgents()
+			switch agents.AgentCount() {
+			case 0:
+				return fmt.Errorf("no supported agent found in PATH\n\nInstall one of:\n  claude  — https://docs.anthropic.com/en/docs/claude-code\n  opencode — https://opencode.ai")
+			case 1:
+				initAgent = agents.OnlyAgent()
+				fmt.Printf("Detected agent: %s\n\n", initAgent)
+			case 2:
+				isTTY := isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd())
+				if !isTTY {
+					return fmt.Errorf("both claude and opencode found; use --agent to select one")
+				}
+				selected, err := promptAgentChoice()
+				if err != nil {
+					return err
+				}
+				initAgent = selected
+			}
+		}
 	}
 
 	opts := install.Options{
@@ -100,6 +137,32 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// promptAgentChoice presents an interactive numbered menu for agent selection.
+func promptAgentChoice() (string, error) {
+	fmt.Println("Multiple agents detected. Select one:")
+	fmt.Println("  1) claude")
+	fmt.Println("  2) opencode")
+	fmt.Print("Choice [1-2]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("failed to read input: %w", err)
+	}
+	input = strings.TrimSpace(input)
+
+	switch input {
+	case "1", "claude":
+		fmt.Println()
+		return "claude", nil
+	case "2", "opencode":
+		fmt.Println()
+		return "opencode", nil
+	default:
+		return "", fmt.Errorf("invalid choice %q: enter 1 or 2", input)
+	}
 }
 
 func printItems(items []install.SetupItem) {

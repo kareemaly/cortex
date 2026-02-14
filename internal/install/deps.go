@@ -3,7 +3,7 @@ package install
 import "os/exec"
 
 // requiredDeps lists the dependencies to check.
-var requiredDeps = []string{"tmux", "claude", "git"}
+var requiredDeps = []string{"tmux", "git"}
 
 // CheckDependencies checks for required external dependencies.
 func CheckDependencies() []DependencyResult {
