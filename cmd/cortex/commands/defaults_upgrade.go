@@ -18,6 +18,16 @@ var (
 	defaultsUpgradeYes    bool
 )
 
+// ANSI escape codes for colored diff output.
+const (
+	ansiReset  = "\033[0m"
+	ansiRed    = "\033[31m"
+	ansiGreen  = "\033[32m"
+	ansiYellow = "\033[33m"
+	ansiCyan   = "\033[36m"
+	ansiBold   = "\033[1m"
+)
+
 var defaultsUpgradeCmd = &cobra.Command{
 	Use:   "upgrade",
 	Short: "Upgrade default configurations",
@@ -181,7 +191,7 @@ func runDefaultsUpgradeApplyAll(homeDir string) error {
 					hasDiffs = true
 				}
 				diff := generateUnifiedDiff(item.DiskContent, item.EmbeddedContent, defaultsFormatPath(item.Path))
-				fmt.Println(diff)
+				fmt.Println(colorizeDiff(diff))
 			}
 		}
 	}
@@ -195,7 +205,7 @@ func runDefaultsUpgradeApplyAll(homeDir string) error {
 			return fmt.Errorf("stdin is not a terminal; use --yes to skip confirmation")
 		}
 
-		if !promptConfirmation("Proceed with upgrade? [y/N]: ") {
+		if !promptConfirmation("⚠  Proceed with upgrade? [y/N]: ") {
 			fmt.Println("Upgrade cancelled.")
 			return nil
 		}
@@ -314,9 +324,47 @@ func defaultsFormatPath(path string) string {
 	return path
 }
 
+// isColorEnabled returns true if stdout is a TTY and color output should be used.
+func isColorEnabled() bool {
+	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+}
+
+// colorizeDiffLine applies ANSI color to a single diff line based on its prefix.
+func colorizeDiffLine(line string) string {
+	switch {
+	case strings.HasPrefix(line, "---"), strings.HasPrefix(line, "+++"):
+		return ansiBold + line + ansiReset
+	case strings.HasPrefix(line, "@@"):
+		return ansiCyan + line + ansiReset
+	case strings.HasPrefix(line, "-"):
+		return ansiRed + line + ansiReset
+	case strings.HasPrefix(line, "+"):
+		return ansiGreen + line + ansiReset
+	default:
+		return line
+	}
+}
+
+// colorizeDiff colorizes a unified diff string if color is enabled.
+func colorizeDiff(diff string) string {
+	if !isColorEnabled() {
+		return diff
+	}
+	lines := strings.Split(diff, "\n")
+	for i, line := range lines {
+		lines[i] = colorizeDiffLine(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
 // promptConfirmation prompts the user for y/n confirmation.
 func promptConfirmation(message string) bool {
-	fmt.Print(message)
+	fmt.Println()
+	if isColorEnabled() {
+		fmt.Print(ansiBold + ansiYellow + message + ansiReset)
+	} else {
+		fmt.Print(message)
+	}
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil {
