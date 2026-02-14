@@ -526,11 +526,6 @@ type ReadDaemonLogsInput struct {
 // DaemonStatusInput is the input for the daemonStatus tool.
 type DaemonStatusInput struct{}
 
-// MetaConcludeSessionInput is the input for the meta concludeSession tool.
-type MetaConcludeSessionInput struct {
-	Content string `json:"content" jsonschema:"Complete summary of work done and decisions made"`
-}
-
 // Meta output types
 
 // ConfigOutput is the output for config read operations.
