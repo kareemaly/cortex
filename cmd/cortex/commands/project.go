@@ -12,9 +12,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var kanbanCmd = &cobra.Command{
-	Use:   "kanban",
-	Short: "Open kanban TUI",
+var projectCmd = &cobra.Command{
+	Use:   "project",
+	Short: "Open project TUI",
 	Run: func(cmd *cobra.Command, args []string) {
 		ensureDaemon()
 
@@ -38,7 +38,7 @@ var kanbanCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(kanbanCmd)
+	rootCmd.AddCommand(projectCmd)
 }
 
 // resolveProjectPath finds the project root from the current directory.

@@ -120,7 +120,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | `cortex init` | Initialize `.cortex/` in current directory, register in global config (`--agent claude\|opencode`) |
 | `cortex meta` | Start/attach global meta session (`--mode fresh\|resume` for orphaned) |
 | `cortex architect` | Start/attach architect session (`--mode fresh\|resume` for orphaned) |
-| `cortex kanban` | Kanban + Docs TUI with tab switching (`tab`/`[`/`]`) |
+| `cortex project` | Project TUI with tab switching (`tab`/`[`/`]`) |
 | `cortex show [id]` | Ticket detail TUI |
 | `cortex ticket list` | List tickets |
 | `cortex ticket spawn <id>` | Spawn ticket agent session |
@@ -128,9 +128,8 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | `cortex register [path]` | Register project in global config |
 | `cortex unregister [path]` | Remove project from global config |
 | `cortex daemon status` | Check daemon status |
-| `cortex upgrade` | Self-update to latest version |
+| `cortex upgrade` | Refresh `~/.cortex/defaults/` with latest embedded defaults |
 | `cortex eject <path>` | Customize a default prompt |
-| `cortex defaults upgrade` | Refresh `~/.cortex/defaults/` with latest embedded defaults |
 
 ## API Endpoints
 

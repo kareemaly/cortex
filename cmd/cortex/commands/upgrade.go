@@ -1,129 +1,493 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
-	"runtime"
+	"os"
+	"path/filepath"
+	"strings"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
-	"github.com/kareemaly/cortex/internal/upgrade"
+	"github.com/kareemaly/cortex/internal/install"
 )
 
 var (
-	upgradeCheck   bool
-	upgradeVersion string
+	upgradeDryRun bool
+	upgradeYes    bool
+)
+
+// ANSI escape codes for colored diff output.
+const (
+	ansiReset  = "\033[0m"
+	ansiRed    = "\033[31m"
+	ansiGreen  = "\033[32m"
+	ansiYellow = "\033[33m"
+	ansiCyan   = "\033[36m"
+	ansiBold   = "\033[1m"
 )
 
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
-	Short: "Upgrade cortex to the latest version",
-	Long: `Upgrade cortex and cortexd binaries to the latest release from GitHub.
+	Short: "Upgrade default configurations",
+	Long: `Refresh ~/.cortex/defaults/ with the latest embedded defaults from the binary.
 
-Examples:
-  cortex upgrade           # Upgrade to latest version
-  cortex upgrade --check   # Check if an update is available
-  cortex upgrade -v 1.0.0  # Upgrade to a specific version`,
+This command updates the default configuration files and prompts to match
+the version bundled with your current cortex binary. Use --dry-run to
+preview changes without applying them.`,
 	RunE: runUpgrade,
 }
 
 func init() {
-	upgradeCmd.Flags().BoolVarP(&upgradeCheck, "check", "c", false, "Only check if an update is available")
-	upgradeCmd.Flags().StringVarP(&upgradeVersion, "version", "v", "", "Upgrade to a specific version")
+	upgradeCmd.Flags().BoolVarP(&upgradeDryRun, "dry-run", "n", false, "Preview changes without applying them")
+	upgradeCmd.Flags().BoolVarP(&upgradeYes, "yes", "y", false, "Skip confirmation prompt")
 	rootCmd.AddCommand(upgradeCmd)
 }
 
+// defaultConfigs lists all config directories to upgrade.
+var defaultConfigs = []string{"main"}
+
 func runUpgrade(cmd *cobra.Command, args []string) error {
-	opts := upgrade.Options{
-		CheckOnly: upgradeCheck,
-		Version:   upgradeVersion,
-	}
-
-	// Print check header
-	fmt.Println("Checking for updates...")
-
-	// Create callback for progress reporting
-	callback := func(step string, success bool, message string) {
-		switch step {
-		case "checksums":
-			// Don't print anything for checksums - too noisy
-		case "download_cortex":
-			if !success {
-				fmt.Printf("\nDownloading %s...\n", upgrade.GetBinaryName("cortex"))
-			} else {
-				fmt.Printf("  %s Downloaded\n", checkMark())
-			}
-		case "verify_cortex":
-			if success {
-				fmt.Printf("  %s Verified checksum\n", checkMark())
-			}
-		case "download_cortexd":
-			if !success {
-				fmt.Printf("\nDownloading %s...\n", upgrade.GetBinaryName("cortexd"))
-			} else {
-				fmt.Printf("  %s Downloaded\n", checkMark())
-			}
-		case "verify_cortexd":
-			if success {
-				fmt.Printf("  %s Verified checksum\n", checkMark())
-			}
-		case "stop_daemon":
-			if !success {
-				fmt.Println("\nUpgrading:")
-			}
-			fmt.Printf("  %s %s\n", statusMark(success), message)
-		case "backup_cortex", "backup_cortexd":
-			fmt.Printf("  %s %s\n", statusMark(success), message)
-		case "install_cortex", "install_cortexd":
-			fmt.Printf("  %s %s\n", statusMark(success), message)
-		case "codesign":
-			if runtime.GOOS == "darwin" && success {
-				fmt.Printf("  %s %s\n", checkMark(), message)
-			}
-		case "start_daemon":
-			fmt.Printf("  %s %s\n", statusMark(success), message)
-		}
-	}
-
-	result, err := upgrade.Run(opts, callback)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	// Print version info
-	fmt.Printf("  Current: %s\n", result.CurrentVersion)
-	fmt.Printf("  Latest:  %s\n", result.LatestVersion)
+	if upgradeDryRun {
+		return runUpgradeDryRunAll(homeDir)
+	}
 
-	// Print final status
-	if opts.CheckOnly {
-		fmt.Println()
-		if result.CurrentVersion == result.LatestVersion || result.CurrentVersion == "dev" && result.LatestVersion != "" {
-			if result.CurrentVersion == "dev" {
-				fmt.Printf("Running dev build. Latest release is %s.\n", result.LatestVersion)
-				fmt.Println("Run 'cortex upgrade' to install the latest release.")
-			} else {
-				fmt.Println("Already up to date.")
-			}
-		} else {
-			fmt.Println("Update available! Run 'cortex upgrade' to install.")
+	return runUpgradeApplyAll(homeDir)
+}
+
+func runUpgradeDryRunAll(homeDir string) error {
+	fmt.Println("Dry run - no changes will be made")
+	fmt.Println()
+
+	for _, configName := range defaultConfigs {
+		targetDir := fmt.Sprintf("%s/.cortex/defaults/%s", homeDir, configName)
+		fmt.Printf("=== %s ===\n\n", configName)
+		if err := runUpgradeDryRun(configName, targetDir); err != nil {
+			return err
 		}
-		return nil
+		fmt.Println()
 	}
 
-	if result.AlreadyLatest {
-		fmt.Println("\nAlready up to date.")
-		return nil
-	}
-
-	if result.WasUpgraded {
-		fmt.Printf("\nUpgrade complete! %s → %s\n", result.CurrentVersion, result.LatestVersion)
+	// Show project migration preview
+	results, err := install.MigrateAllProjects()
+	if err == nil && len(results) > 0 {
+		needsMigration := false
+		for _, r := range results {
+			if !r.Skipped && r.Error == nil {
+				needsMigration = true
+				break
+			}
+		}
+		if needsMigration {
+			fmt.Println("=== Project Migration ===")
+			fmt.Println()
+			for _, r := range results {
+				name := r.ProjectName
+				if name == "" {
+					name = filepath.Base(r.ProjectPath)
+				}
+				if r.Error != nil {
+					fmt.Printf("  %s %s — error: %v\n", crossMark(), name, r.Error)
+				} else if r.Skipped {
+					fmt.Printf("  %s %s — %s\n", bullet(), name, r.SkipReason)
+				} else {
+					fmt.Printf("  %s %s — would migrate (agent: %s)\n", bullet(), name, r.DetectedAgent)
+				}
+			}
+			fmt.Println()
+		}
 	}
 
 	return nil
 }
 
-func statusMark(success bool) string {
-	if success {
-		return checkMark()
+func runUpgradeApplyAll(homeDir string) error {
+	// First, collect all changes across all configs
+	type configChanges struct {
+		name      string
+		targetDir string
+		items     []install.CompareItem
 	}
-	return crossMark()
+	var allChanges []configChanges
+	var totalUpdates, totalCreates, totalUnchanged int
+
+	fmt.Println("Checking for updates...")
+	fmt.Println()
+
+	for _, configName := range defaultConfigs {
+		targetDir := fmt.Sprintf("%s/.cortex/defaults/%s", homeDir, configName)
+		items, err := install.CompareEmbeddedDefaults(configName, targetDir)
+		if err != nil {
+			return fmt.Errorf("failed to compare defaults for %s: %w", configName, err)
+		}
+		allChanges = append(allChanges, configChanges{
+			name:      configName,
+			targetDir: targetDir,
+			items:     items,
+		})
+
+		for _, item := range items {
+			if item.IsDir {
+				continue
+			}
+			switch item.Status {
+			case install.CompareWillUpdate:
+				totalUpdates++
+			case install.CompareWillCreate:
+				totalCreates++
+			case install.CompareUnchanged:
+				totalUnchanged++
+			}
+		}
+	}
+
+	// If no changes, exit early
+	if totalUpdates == 0 && totalCreates == 0 {
+		fmt.Println("All defaults are already up to date.")
+		return nil
+	}
+
+	// Display changes for each config
+	for _, cc := range allChanges {
+		fmt.Printf("=== %s ===\n\n", cc.name)
+		fmt.Println("Files:")
+
+		for _, item := range cc.items {
+			if item.IsDir {
+				continue
+			}
+
+			path := upgradeFormatPath(item.Path)
+
+			switch item.Status {
+			case install.CompareWillUpdate:
+				fmt.Printf("  %s %s (will update)\n", bullet(), path)
+			case install.CompareWillCreate:
+				fmt.Printf("  + %s (will create)\n", path)
+			case install.CompareUnchanged:
+				fmt.Printf("  %s %s (unchanged)\n", checkMark(), path)
+			}
+
+			if item.Error != nil {
+				fmt.Printf("    Error: %v\n", item.Error)
+			}
+		}
+		fmt.Println()
+	}
+
+	// Show diffs for files that will be updated
+	hasDiffs := false
+	for _, cc := range allChanges {
+		for _, item := range cc.items {
+			if item.Status == install.CompareWillUpdate && !item.IsDir {
+				if !hasDiffs {
+					fmt.Println("Changes:")
+					fmt.Println()
+					hasDiffs = true
+				}
+				diff := generateUnifiedDiff(item.DiskContent, item.EmbeddedContent, upgradeFormatPath(item.Path))
+				fmt.Println(colorizeDiff(diff))
+			}
+		}
+	}
+
+	fmt.Printf("Summary: %d to update, %d to create, %d unchanged\n", totalUpdates, totalCreates, totalUnchanged)
+	fmt.Println()
+
+	// Prompt for confirmation unless --yes flag is set
+	if !upgradeYes {
+		if !isatty.IsTerminal(os.Stdin.Fd()) && !isatty.IsCygwinTerminal(os.Stdin.Fd()) {
+			return fmt.Errorf("stdin is not a terminal; use --yes to skip confirmation")
+		}
+
+		if !promptConfirmation("⚠  Proceed with upgrade? [y/N]: ") {
+			fmt.Println("Upgrade cancelled.")
+			return nil
+		}
+	}
+
+	// Apply changes
+	fmt.Println()
+	fmt.Println("Applying changes...")
+
+	for _, cc := range allChanges {
+		if _, err := install.CopyEmbeddedDefaults(cc.name, cc.targetDir, true); err != nil {
+			return fmt.Errorf("failed to upgrade defaults for %s: %w", cc.name, err)
+		}
+	}
+
+	fmt.Printf("Upgraded %d files.\n", totalUpdates+totalCreates)
+
+	// Migrate project configs before removing legacy directories
+	migrationResults, migErr := install.MigrateAllProjects()
+	if migErr == nil && len(migrationResults) > 0 {
+		var migrated, skipped, errored int
+		for _, r := range migrationResults {
+			switch {
+			case r.Error != nil:
+				errored++
+			case r.Skipped:
+				skipped++
+			case r.Migrated:
+				migrated++
+			}
+		}
+		if migrated > 0 || errored > 0 {
+			fmt.Println()
+			fmt.Println("Project migration:")
+			for _, r := range migrationResults {
+				name := r.ProjectName
+				if name == "" {
+					name = filepath.Base(r.ProjectPath)
+				}
+				if r.Error != nil {
+					fmt.Printf("  %s %s — error: %v\n", crossMark(), name, r.Error)
+				} else if r.Migrated {
+					fmt.Printf("  %s %s — migrated (agent: %s)\n", checkMark(), name, r.DetectedAgent)
+				}
+			}
+			if skipped > 0 {
+				fmt.Printf("  %s %d project(s) already up to date\n", bullet(), skipped)
+			}
+		}
+	}
+
+	// Clean up legacy directories if they exist
+	legacyDirs := []string{
+		filepath.Join(homeDir, ".cortex", "defaults", "claude-code"),
+		filepath.Join(homeDir, ".cortex", "defaults", "opencode"),
+	}
+	for _, dir := range legacyDirs {
+		if _, err := os.Stat(dir); err == nil {
+			if err := os.RemoveAll(dir); err == nil {
+				fmt.Printf("Removed legacy directory: %s\n", upgradeFormatPath(dir))
+			}
+		}
+	}
+
+	return nil
+}
+
+func runUpgradeDryRun(configName, targetDir string) error {
+	items, err := install.CompareEmbeddedDefaults(configName, targetDir)
+	if err != nil {
+		return fmt.Errorf("failed to compare defaults: %w", err)
+	}
+
+	var toUpdate, toCreate, unchanged int
+
+	fmt.Println("Files:")
+	for _, item := range items {
+		if item.IsDir {
+			continue // Skip directories in output
+		}
+
+		path := upgradeFormatPath(item.Path)
+
+		switch item.Status {
+		case install.CompareWillUpdate:
+			fmt.Printf("  %s %s (will update)\n", bullet(), path)
+			toUpdate++
+		case install.CompareWillCreate:
+			fmt.Printf("  + %s (will create)\n", path)
+			toCreate++
+		case install.CompareUnchanged:
+			fmt.Printf("  %s %s (unchanged)\n", checkMark(), path)
+			unchanged++
+		}
+
+		if item.Error != nil {
+			fmt.Printf("    Error: %v\n", item.Error)
+		}
+	}
+
+	fmt.Println()
+	fmt.Printf("Summary: %d to update, %d to create, %d unchanged\n", toUpdate, toCreate, unchanged)
+
+	return nil
+}
+
+// upgradeFormatPath replaces home directory with ~ for cleaner output.
+func upgradeFormatPath(path string) string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	if strings.HasPrefix(path, homeDir) {
+		return "~" + path[len(homeDir):]
+	}
+	return path
+}
+
+// isColorEnabled returns true if stdout is a TTY and color output should be used.
+func isColorEnabled() bool {
+	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+}
+
+// colorizeDiffLine applies ANSI color to a single diff line based on its prefix.
+func colorizeDiffLine(line string) string {
+	switch {
+	case strings.HasPrefix(line, "---"), strings.HasPrefix(line, "+++"):
+		return ansiBold + line + ansiReset
+	case strings.HasPrefix(line, "@@"):
+		return ansiCyan + line + ansiReset
+	case strings.HasPrefix(line, "-"):
+		return ansiRed + line + ansiReset
+	case strings.HasPrefix(line, "+"):
+		return ansiGreen + line + ansiReset
+	default:
+		return line
+	}
+}
+
+// colorizeDiff colorizes a unified diff string if color is enabled.
+func colorizeDiff(diff string) string {
+	if !isColorEnabled() {
+		return diff
+	}
+	lines := strings.Split(diff, "\n")
+	for i, line := range lines {
+		lines[i] = colorizeDiffLine(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// promptConfirmation prompts the user for y/n confirmation.
+func promptConfirmation(message string) bool {
+	fmt.Println()
+	if isColorEnabled() {
+		fmt.Print(ansiBold + ansiYellow + message + ansiReset)
+	} else {
+		fmt.Print(message)
+	}
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+	input = strings.TrimSpace(strings.ToLower(input))
+	return input == "y" || input == "yes"
+}
+
+// generateUnifiedDiff generates a unified diff between old and new content.
+func generateUnifiedDiff(oldContent, newContent []byte, path string) string {
+	oldLines := strings.Split(string(oldContent), "\n")
+	newLines := strings.Split(string(newContent), "\n")
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("--- %s\n", path))
+	sb.WriteString(fmt.Sprintf("+++ %s (embedded)\n", path))
+
+	// Simple diff: find contiguous regions of changes
+	// This is a basic implementation that shows context around changes
+	const contextLines = 3
+
+	type hunk struct {
+		oldStart, oldCount int
+		newStart, newCount int
+		lines              []string
+	}
+
+	var hunks []hunk
+	i, j := 0, 0
+
+	for i < len(oldLines) || j < len(newLines) {
+		// Find next difference
+		for i < len(oldLines) && j < len(newLines) && oldLines[i] == newLines[j] {
+			i++
+			j++
+		}
+
+		if i >= len(oldLines) && j >= len(newLines) {
+			break
+		}
+
+		// Found a difference, build a hunk
+		hunkOldStart := max(0, i-contextLines)
+		hunkNewStart := max(0, j-contextLines)
+
+		var hunkLines []string
+
+		// Add leading context
+		for k := hunkOldStart; k < i; k++ {
+			hunkLines = append(hunkLines, " "+oldLines[k])
+		}
+
+		// Find the extent of the difference
+		diffStartI, diffStartJ := i, j
+
+		// Consume differing lines until we find contextLines of matching lines
+		for {
+			// Skip differing lines in old
+			for i < len(oldLines) && (j >= len(newLines) || oldLines[i] != newLines[j]) {
+				hunkLines = append(hunkLines, "-"+oldLines[i])
+				i++
+			}
+			// Skip differing lines in new
+			for j < len(newLines) && (i >= len(oldLines) || oldLines[i] != newLines[j]) {
+				hunkLines = append(hunkLines, "+"+newLines[j])
+				j++
+			}
+
+			// Check if we have enough matching context to end this hunk
+			matchCount := 0
+			for i+matchCount < len(oldLines) && j+matchCount < len(newLines) &&
+				oldLines[i+matchCount] == newLines[j+matchCount] {
+				matchCount++
+				if matchCount >= contextLines*2 {
+					break
+				}
+			}
+
+			if matchCount >= contextLines*2 || (i >= len(oldLines) && j >= len(newLines)) {
+				// End of hunk - add trailing context
+				trailingContext := min(contextLines, matchCount)
+				for k := 0; k < trailingContext; k++ {
+					hunkLines = append(hunkLines, " "+oldLines[i+k])
+				}
+				i += trailingContext
+				j += trailingContext
+				break
+			}
+
+			// Not enough context, continue the hunk
+			for k := 0; k < matchCount; k++ {
+				hunkLines = append(hunkLines, " "+oldLines[i])
+				i++
+				j++
+			}
+		}
+
+		// Calculate hunk sizes
+		oldCount := i - hunkOldStart
+		newCount := j - hunkNewStart
+
+		// Only add non-empty hunks
+		if len(hunkLines) > 0 && (diffStartI != i || diffStartJ != j) {
+			hunks = append(hunks, hunk{
+				oldStart: hunkOldStart + 1, // 1-indexed
+				oldCount: oldCount,
+				newStart: hunkNewStart + 1, // 1-indexed
+				newCount: newCount,
+				lines:    hunkLines,
+			})
+		}
+	}
+
+	// Format hunks
+	for _, h := range hunks {
+		sb.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", h.oldStart, h.oldCount, h.newStart, h.newCount))
+		for _, line := range h.lines {
+			sb.WriteString(line)
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String()
 }
