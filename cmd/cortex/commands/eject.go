@@ -127,3 +127,15 @@ func copyFile(src, dst string) (err error) {
 	_, err = io.Copy(destFile, sourceFile)
 	return err
 }
+
+// formatPath replaces home directory with ~ for display.
+func formatPath(path string) string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	if strings.HasPrefix(path, homeDir) {
+		return "~" + path[len(homeDir):]
+	}
+	return path
+}
