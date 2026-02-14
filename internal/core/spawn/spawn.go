@@ -304,7 +304,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	// Generate OpenCode config content if needed
 	var openCodeConfigJSON string
 	if req.Agent == "opencode" {
-		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, pInfo.SystemPromptContent)
+		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, pInfo.SystemPromptContent, req.AgentType, systemPromptFilePath)
 		if err != nil {
 			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath), worktreePath, featureBranch, req.ProjectPath)
 			return nil, err
@@ -461,7 +461,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	// Generate OpenCode config content for resume (empty system prompt — resume has no prompts)
 	var openCodeConfigJSON string
 	if req.Agent == "opencode" {
-		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, "")
+		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, "", req.AgentType, "")
 		if err != nil {
 			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
 				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)

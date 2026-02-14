@@ -8,15 +8,16 @@ import (
 // OpenCodeConfigContent represents the top-level OpenCode config JSON structure.
 // This is passed via the OPENCODE_CONFIG_CONTENT environment variable.
 type OpenCodeConfigContent struct {
-	Agent map[string]OpenCodeAgentConfig `json:"agent"`
-	MCP   map[string]OpenCodeMCPConfig   `json:"mcp"`
+	Agent        map[string]OpenCodeAgentConfig `json:"agent"`
+	MCP          map[string]OpenCodeMCPConfig   `json:"mcp"`
+	Instructions []string                       `json:"instructions,omitempty"`
 }
 
 // OpenCodeAgentConfig represents an agent definition in OpenCode's config.
 type OpenCodeAgentConfig struct {
 	Description string            `json:"description"`
 	Mode        string            `json:"mode"`
-	Prompt      string            `json:"prompt"`
+	Prompt      string            `json:"prompt,omitempty"`
 	Permission  map[string]string `json:"permission"`
 }
 
@@ -29,17 +30,34 @@ type OpenCodeMCPConfig struct {
 
 // GenerateOpenCodeConfigContent transforms a ClaudeMCPConfig and system prompt
 // into the JSON string expected by OpenCode's OPENCODE_CONFIG_CONTENT env var.
-func GenerateOpenCodeConfigContent(claudeConfig *ClaudeMCPConfig, systemPrompt string) (string, error) {
+// For ticket agents, the system prompt is provided via instructions (file path)
+// instead of embedding in agent.prompt, so OpenCode's built-in provider prompt is preserved.
+func GenerateOpenCodeConfigContent(claudeConfig *ClaudeMCPConfig, systemPrompt string, agentType AgentType, systemPromptFilePath string) (string, error) {
 	config := OpenCodeConfigContent{
 		Agent: map[string]OpenCodeAgentConfig{
 			"cortex": {
 				Description: "Cortex ticket agent",
 				Mode:        "bypassPermissions",
-				Prompt:      systemPrompt,
 				Permission:  map[string]string{"*": "allow"},
 			},
 		},
 		MCP: make(map[string]OpenCodeMCPConfig),
+	}
+
+	if agentType == AgentTypeTicketAgent {
+		// Ticket agents use instructions (file paths appended to system prompt)
+		// so OpenCode's built-in provider prompt is preserved.
+		if systemPromptFilePath != "" {
+			config.Instructions = []string{systemPromptFilePath}
+		}
+	} else {
+		// Architect/meta agents replace the system prompt entirely.
+		config.Agent["cortex"] = OpenCodeAgentConfig{
+			Description: "Cortex ticket agent",
+			Mode:        "bypassPermissions",
+			Prompt:      systemPrompt,
+			Permission:  map[string]string{"*": "allow"},
+		}
 	}
 
 	// Transform each MCP server from Claude format to OpenCode format

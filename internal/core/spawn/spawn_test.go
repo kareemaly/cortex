@@ -1784,7 +1784,7 @@ func TestGenerateOpenCodeConfigContent(t *testing.T) {
 		},
 	}
 
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, "You are a helpful agent.")
+	result, err := GenerateOpenCodeConfigContent(claudeConfig, "You are a helpful agent.", AgentTypeArchitect, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1861,7 +1861,7 @@ func TestGenerateOpenCodeConfigContent_EmptySystemPrompt(t *testing.T) {
 		},
 	}
 
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, "")
+	result, err := GenerateOpenCodeConfigContent(claudeConfig, "", AgentTypeArchitect, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2150,8 +2150,20 @@ func TestSpawn_OpenCode_ConfigContent(t *testing.T) {
 	if agent.Permission["*"] != "allow" {
 		t.Errorf("expected permission '*' = 'allow', got: %v", agent.Permission)
 	}
-	if !containsSubstr(agent.Prompt, "You are a helpful agent.") {
-		t.Errorf("expected system prompt from SYSTEM.md, got: %s", agent.Prompt)
+	// Ticket agents use instructions (file path) instead of agent.prompt
+	if agent.Prompt != "" {
+		t.Errorf("expected empty agent prompt for ticket agent, got: %s", agent.Prompt)
+	}
+	if len(config.Instructions) != 1 {
+		t.Fatalf("expected 1 instruction for ticket agent, got: %d", len(config.Instructions))
+	}
+	// Verify the instructions file contains the system prompt content
+	instrContent, err := os.ReadFile(config.Instructions[0])
+	if err != nil {
+		t.Fatalf("failed to read instructions file %s: %v", config.Instructions[0], err)
+	}
+	if !containsSubstr(string(instrContent), "You are a helpful agent.") {
+		t.Errorf("expected instructions file to contain system prompt, got: %s", string(instrContent))
 	}
 
 	// Verify MCP config
@@ -2373,7 +2385,7 @@ func TestGenerateOpenCodeConfigContent_MultipleServers(t *testing.T) {
 		},
 	}
 
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, "system prompt text")
+	result, err := GenerateOpenCodeConfigContent(claudeConfig, "system prompt text", AgentTypeArchitect, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2451,7 +2463,7 @@ func TestGenerateOpenCodeConfigContent_SpecialCharsInPrompt(t *testing.T) {
 		},
 	}
 
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, systemPrompt)
+	result, err := GenerateOpenCodeConfigContent(claudeConfig, systemPrompt, AgentTypeArchitect, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2465,6 +2477,82 @@ func TestGenerateOpenCodeConfigContent_SpecialCharsInPrompt(t *testing.T) {
 	agent := config.Agent["cortex"]
 	if agent.Prompt != systemPrompt {
 		t.Errorf("prompt round-trip failed.\nexpected: %q\ngot:      %q", systemPrompt, agent.Prompt)
+	}
+}
+
+func TestGenerateOpenCodeConfigContent_TicketAgent(t *testing.T) {
+	claudeConfig := &ClaudeMCPConfig{
+		MCPServers: map[string]MCPServerConfig{
+			"cortex": {
+				Command: "/usr/bin/cortexd",
+				Args:    []string{"mcp", "--ticket-id", "ticket-123"},
+				Env: map[string]string{
+					"CORTEX_PROJECT_PATH": "/path/to/project",
+				},
+			},
+		},
+	}
+
+	filePath := "/tmp/cortex-sysprompt-ticket-123.txt"
+	result, err := GenerateOpenCodeConfigContent(claudeConfig, "ignored system prompt", AgentTypeTicketAgent, filePath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var config OpenCodeConfigContent
+	if err := json.Unmarshal([]byte(result), &config); err != nil {
+		t.Fatalf("failed to parse result JSON: %v", err)
+	}
+
+	// Ticket agents should NOT have agent.prompt set
+	agent := config.Agent["cortex"]
+	if agent.Prompt != "" {
+		t.Errorf("expected empty agent prompt for ticket agent, got: %s", agent.Prompt)
+	}
+
+	// Should have instructions with the file path
+	if len(config.Instructions) != 1 {
+		t.Fatalf("expected 1 instruction, got: %d", len(config.Instructions))
+	}
+	if config.Instructions[0] != filePath {
+		t.Errorf("expected instruction %s, got: %s", filePath, config.Instructions[0])
+	}
+
+	// MCP config should still be present
+	if _, ok := config.MCP["cortex"]; !ok {
+		t.Fatal("expected 'cortex' MCP server in config")
+	}
+}
+
+func TestGenerateOpenCodeConfigContent_TicketAgentNoFile(t *testing.T) {
+	claudeConfig := &ClaudeMCPConfig{
+		MCPServers: map[string]MCPServerConfig{
+			"cortex": {
+				Command: "/usr/bin/cortexd",
+				Args:    []string{"mcp", "--ticket-id", "ticket-123"},
+			},
+		},
+	}
+
+	result, err := GenerateOpenCodeConfigContent(claudeConfig, "", AgentTypeTicketAgent, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var config OpenCodeConfigContent
+	if err := json.Unmarshal([]byte(result), &config); err != nil {
+		t.Fatalf("failed to parse result JSON: %v", err)
+	}
+
+	// No agent.prompt
+	agent := config.Agent["cortex"]
+	if agent.Prompt != "" {
+		t.Errorf("expected empty agent prompt, got: %s", agent.Prompt)
+	}
+
+	// No instructions when file path is empty
+	if len(config.Instructions) != 0 {
+		t.Errorf("expected no instructions, got: %v", config.Instructions)
 	}
 }
 
