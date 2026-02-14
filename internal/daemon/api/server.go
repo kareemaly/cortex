@@ -40,7 +40,6 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		r.Get("/", metaHandlers.GetState)
 		r.Post("/spawn", metaHandlers.Spawn)
 		r.Post("/focus", metaHandlers.Focus)
-		r.Post("/conclude", metaHandlers.Conclude)
 	})
 
 	// Global config routes (no project header required)

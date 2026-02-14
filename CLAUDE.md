@@ -118,7 +118,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | Command | Description |
 |---------|-------------|
 | `cortex init` | Initialize `.cortex/` in current directory, register in global config (`--agent claude\|opencode`) |
-| `cortex meta` | Start/attach global meta session (`--mode fresh\|resume` for orphaned) |
+| `cortex meta` | Start/attach global meta session (auto-cleans orphaned sessions) |
 | `cortex architect` | Start/attach architect session (`--mode fresh\|resume` for orphaned) |
 | `cortex project` | Project TUI with tab switching (`tab`/`[`/`]`) |
 | `cortex show [id]` | Ticket detail TUI |
@@ -160,7 +160,6 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 | `updatePrompt` | Update/eject a prompt template |
 | `readDaemonLogs` | Read recent daemon logs |
 | `daemonStatus` | Get daemon uptime, version, project count |
-| `concludeSession` | Conclude the meta session |
 
 **Architect** (`tools_architect.go`):
 

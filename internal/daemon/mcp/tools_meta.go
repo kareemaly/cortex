@@ -81,11 +81,6 @@ func (s *Server) registerMetaTools() {
 		Description: "Get daemon status including uptime, version, and project count.",
 	}, s.handleDaemonStatus)
 
-	// Session management
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "concludeSession",
-		Description: "Conclude the meta session and clean up.",
-	}, s.handleMetaConcludeSession)
 }
 
 // handleRegisterProject registers a project with the daemon.
@@ -603,53 +598,6 @@ func (s *Server) handleDaemonStatus(
 	}
 
 	return nil, result, nil
-}
-
-// handleMetaConcludeSession concludes the meta session.
-func (s *Server) handleMetaConcludeSession(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	input MetaConcludeSessionInput,
-) (*mcp.CallToolResult, ArchitectConcludeOutput, error) {
-	if input.Content == "" {
-		return nil, ArchitectConcludeOutput{}, NewValidationError("content", "cannot be empty")
-	}
-
-	// Call POST /meta/conclude
-	body := map[string]string{"content": input.Content}
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, ArchitectConcludeOutput{}, NewInternalError("failed to encode request: " + err.Error())
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.config.DaemonURL+"/meta/conclude", bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, ArchitectConcludeOutput{}, NewInternalError("failed to create request: " + err.Error())
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return nil, ArchitectConcludeOutput{}, NewInternalError("failed to contact daemon: " + err.Error())
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, ArchitectConcludeOutput{}, wrapHTTPError(resp)
-	}
-
-	var result struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, ArchitectConcludeOutput{}, NewInternalError("failed to decode response: " + err.Error())
-	}
-
-	return nil, ArchitectConcludeOutput{
-		Success: result.Success,
-		Message: result.Message,
-	}, nil
 }
 
 // wrapHTTPError converts an HTTP error response to a ToolError.

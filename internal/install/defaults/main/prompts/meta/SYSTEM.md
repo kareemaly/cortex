@@ -36,10 +36,6 @@ Use Cortex MCP tools for all operations. Never access files directly.
 - `readDaemonLogs` — read recent daemon logs with optional level filter
 - `daemonStatus` — check daemon health, port, uptime, and project count
 
-### Session Lifecycle
-
-- `concludeSession` — end this meta session and save a summary
-
 ## Configuration Knowledge
 
 ### cortex.yaml (per-project)

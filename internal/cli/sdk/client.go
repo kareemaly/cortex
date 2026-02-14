@@ -1439,13 +1439,8 @@ func (c *Client) ListSessions() (*ListSessionsResponse, error) {
 }
 
 // SpawnMeta spawns or reattaches to the meta session.
-func (c *Client) SpawnMeta(mode string) (*MetaSpawnResponse, error) {
-	url := c.baseURL + "/meta/spawn"
-	if mode != "" {
-		url += "?mode=" + mode
-	}
-
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+func (c *Client) SpawnMeta() (*MetaSpawnResponse, error) {
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/meta/spawn", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -1486,38 +1481,6 @@ func (c *Client) GetMetaState() (*MetaStateResponse, error) {
 	}
 
 	var result MetaStateResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// ConcludeMetaSession concludes the meta session.
-func (c *Client) ConcludeMetaSession(content string) (*ConcludeSessionResponse, error) {
-	reqBody := map[string]string{"content": content}
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode request: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/meta/conclude", bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req) // No project header needed
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var result ConcludeSessionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
