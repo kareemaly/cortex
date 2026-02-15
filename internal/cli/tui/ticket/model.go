@@ -15,7 +15,14 @@ import (
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
-const wideLayoutMinWidth = 100
+const (
+	wideLayoutMinWidth = 100
+
+	// SSE reconnection constants.
+	sseInitialBackoff = 2 * time.Second
+	sseMaxBackoff     = 30 * time.Second
+	pollInterval      = 60 * time.Second
+)
 
 // Model is the main Bubbletea model for the ticket detail view.
 type Model struct {
@@ -49,6 +56,8 @@ type Model struct {
 	// SSE subscription state
 	eventCh      <-chan sdk.Event
 	cancelEvents context.CancelFunc
+	sseBackoff   time.Duration
+	sseConnected bool
 }
 
 // Message types for async operations.
@@ -130,6 +139,15 @@ type sseConnectedMsg struct {
 // EventMsg is sent when an SSE event is received for this ticket.
 type EventMsg struct{}
 
+// sseDisconnectedMsg is sent when the SSE connection is lost.
+type sseDisconnectedMsg struct{}
+
+// sseReconnectTickMsg is sent when it's time to attempt SSE reconnection.
+type sseReconnectTickMsg struct{}
+
+// pollTickMsg is sent periodically as a safety-net data refresh.
+type pollTickMsg struct{}
+
 // New creates a new ticket detail model.
 func New(client *sdk.Client, ticketID string) Model {
 	renderer, _ := glamour.NewTermRenderer(
@@ -159,9 +177,9 @@ func (m Model) TicketID() string {
 // Init initializes the model and starts loading the ticket.
 func (m Model) Init() tea.Cmd {
 	if m.embedded {
-		return m.loadTicket()
+		return tea.Batch(m.loadTicket(), m.startPollTicker())
 	}
-	return tea.Batch(m.loadTicket(), m.subscribeEvents())
+	return tea.Batch(m.loadTicket(), m.subscribeEvents(), m.startPollTicker())
 }
 
 // Update handles messages and updates the model.
@@ -293,13 +311,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.loadTicket()
 
 	case sseConnectedMsg:
+		// Cancel old connection if replacing.
+		if m.cancelEvents != nil {
+			m.cancelEvents()
+		}
 		m.eventCh = msg.ch
 		m.cancelEvents = msg.cancel
-		return m, m.waitForEvent()
+		m.sseConnected = true
+		m.sseBackoff = 0
+		return m, tea.Batch(m.loadTicket(), m.waitForEvent())
 
 	case EventMsg:
 		m.loading = true
 		return m, tea.Batch(m.loadTicket(), m.waitForEvent())
+
+	case sseDisconnectedMsg:
+		// Guard: if sseConnected is true, this is from a replaced connection; ignore.
+		if m.sseConnected {
+			m.sseConnected = false
+			return m, nil
+		}
+		m.eventCh = nil
+		if m.cancelEvents != nil {
+			m.cancelEvents()
+			m.cancelEvents = nil
+		}
+		m.sseBackoff = nextBackoff(m.sseBackoff)
+		return m, m.scheduleSSEReconnect()
+
+	case sseReconnectTickMsg:
+		return m, m.subscribeEvents()
+
+	case pollTickMsg:
+		return m, tea.Batch(m.loadTicket(), m.startPollTicker())
 
 	case DiffExecutedMsg:
 		m.executingDiff = false
@@ -1557,7 +1601,7 @@ func (m Model) subscribeEvents() tea.Cmd {
 		ch, err := m.client.SubscribeEvents(ctx)
 		if err != nil {
 			cancel()
-			return nil // graceful degradation
+			return sseDisconnectedMsg{}
 		}
 		return sseConnectedMsg{ch: ch, cancel: cancel}
 	}
@@ -1576,8 +1620,34 @@ func (m Model) waitForEvent() tea.Cmd {
 				return EventMsg{}
 			}
 		}
-		return nil // channel closed
+		return sseDisconnectedMsg{}
 	}
+}
+
+// nextBackoff doubles the current backoff duration, capped at sseMaxBackoff.
+func nextBackoff(current time.Duration) time.Duration {
+	if current == 0 {
+		return sseInitialBackoff
+	}
+	next := current * 2
+	if next > sseMaxBackoff {
+		return sseMaxBackoff
+	}
+	return next
+}
+
+// scheduleSSEReconnect returns a command that fires after the current backoff delay.
+func (m Model) scheduleSSEReconnect() tea.Cmd {
+	return tea.Tick(m.sseBackoff, func(time.Time) tea.Msg {
+		return sseReconnectTickMsg{}
+	})
+}
+
+// startPollTicker returns a command that fires after the poll interval.
+func (m Model) startPollTicker() tea.Cmd {
+	return tea.Tick(pollInterval, func(time.Time) tea.Msg {
+		return pollTickMsg{}
+	})
 }
 
 // formatTimeAgo formats a time as a human-readable relative string.
