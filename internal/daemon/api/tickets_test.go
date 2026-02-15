@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -104,6 +105,7 @@ func setupUnitServer(t *testing.T) *unitServer {
 		StoreManager:   storeManager,
 		SessionManager: sessionManager,
 		TmuxManager:    nil,
+		Bus:            events.NewBus(),
 		Logger:         logger,
 	}
 
@@ -610,6 +612,7 @@ func TestFocus_NoSessionManager(t *testing.T) {
 	deps := &Dependencies{
 		StoreManager:   storeManager,
 		SessionManager: nil,
+		Bus:            events.NewBus(),
 		Logger:         logger,
 	}
 

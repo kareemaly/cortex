@@ -54,7 +54,7 @@ func ProjectRequired() func(http.Handler) http.Handler {
 			}
 
 			// Add project path to context
-			ctx := context.WithValue(r.Context(), projectPathKey, projectPath)
+			ctx := context.WithValue(r.Context(), projectPathKey, filepath.Clean(projectPath))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

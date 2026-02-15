@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kareemaly/cortex/internal/core/spawn"
+	"github.com/kareemaly/cortex/internal/events"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/tmux"
@@ -240,6 +241,11 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 		return
 	}
 
+	h.deps.Bus.Emit(events.Event{
+		Type:        events.SessionStarted,
+		ProjectPath: projectPath,
+	})
+
 	writeJSON(w, http.StatusCreated, ArchitectSpawnResponse{
 		State: "active",
 		Session: ArchitectSessionResponse{
@@ -279,6 +285,11 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 			h.deps.Logger.Warn("failed to end architect session", "error", endErr)
 		}
 	}
+
+	h.deps.Bus.Emit(events.Event{
+		Type:        events.SessionEnded,
+		ProjectPath: projectPath,
+	})
 
 	// Persist session summary as a doc (best-effort)
 	if h.deps.DocsStoreManager != nil {

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/kareemaly/cortex/internal/docs"
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -53,6 +54,7 @@ func setupUnitServerWithDocs(t *testing.T) (*unitServer, *docs.Store) {
 		DocsStoreManager: docsStoreManager,
 		SessionManager:   sessionManager,
 		TmuxManager:      nil,
+		Bus:              events.NewBus(),
 		Logger:           logger,
 	}
 

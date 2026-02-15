@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -42,6 +43,7 @@ func setupTestServer(t *testing.T) *testServer {
 	deps := &Dependencies{
 		StoreManager: storeManager,
 		TmuxManager:  nil, // tmux not used in tests
+		Bus:          events.NewBus(),
 		Logger:       logger,
 	}
 

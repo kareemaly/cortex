@@ -10,6 +10,7 @@ import (
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/daemon/api"
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
@@ -63,6 +64,7 @@ func setupArchitectWithDaemon(t *testing.T, windowExists bool) (*Server, *ticket
 		StoreManager:   storeManager,
 		SessionManager: sessionManager,
 		TmuxManager:    tmuxMgr,
+		Bus:            events.NewBus(),
 		Logger:         logger,
 		CortexdPath:    "/mock/cortexd",
 	}
@@ -601,6 +603,7 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	deps := &api.Dependencies{
 		StoreManager:   storeManager,
 		SessionManager: sessionManager,
+		Bus:            events.NewBus(),
 		Logger:         logger,
 		CortexdPath:    "/mock/cortexd",
 	}

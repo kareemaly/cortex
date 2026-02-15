@@ -1,6 +1,9 @@
 package events
 
-import "sync"
+import (
+	"log/slog"
+	"sync"
+)
 
 // EventType represents the type of event emitted by the system.
 type EventType string
@@ -60,6 +63,10 @@ func (b *Bus) Emit(e Event) {
 		select {
 		case sub.ch <- e:
 		default:
+			slog.Warn("event dropped: subscriber buffer full",
+				"type", string(e.Type),
+				"project", e.ProjectPath,
+			)
 		}
 	}
 }

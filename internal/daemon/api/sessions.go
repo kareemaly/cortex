@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kareemaly/cortex/internal/events"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/session"
@@ -124,6 +125,12 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to end session")
 		return
 	}
+
+	h.deps.Bus.Emit(events.Event{
+		Type:        events.SessionEnded,
+		ProjectPath: projectPath,
+		TicketID:    shortID,
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }

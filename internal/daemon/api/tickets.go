@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
+	"github.com/kareemaly/cortex/internal/events"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
@@ -536,6 +537,11 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	if sess != nil {
 		resp.Session = types.ToSessionResponse(sess)
 	}
+	h.deps.Bus.Emit(events.Event{
+		Type:        events.SessionStarted,
+		ProjectPath: projectPath,
+		TicketID:    id,
+	})
 	writeJSON(w, http.StatusCreated, resp)
 }
 
@@ -690,6 +696,12 @@ func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.deps.Bus.Emit(events.Event{
+		Type:        events.ReviewRequested,
+		ProjectPath: projectPath,
+		TicketID:    id,
+	})
+
 	resp := RequestReviewResponse{
 		Success: true,
 		Message: "Review request added. Wait for human approval.",
@@ -803,6 +815,12 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 			h.deps.Logger.Warn("failed to end session", "error", endErr)
 		}
 	}
+
+	h.deps.Bus.Emit(events.Event{
+		Type:        events.SessionEnded,
+		ProjectPath: projectPath,
+		TicketID:    id,
+	})
 
 	// Move the ticket to done
 	if err := store.Move(id, ticket.StatusDone); err != nil {
