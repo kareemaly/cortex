@@ -15,7 +15,7 @@ import (
 var ticketShowJSONFlag bool
 
 var ticketShowCmd = &cobra.Command{
-	Use:   "<id>",
+	Use:   "show <id>",
 	Short: "Show ticket details",
 	Long:  `Show detailed information about a ticket, including its session and comments.`,
 	Args:  cobra.ExactArgs(1),

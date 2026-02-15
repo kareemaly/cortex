@@ -550,7 +550,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	case AgentTypeArchitect:
 		err = s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, req.WindowName, launchCmd, "cortex project", req.ProjectPath, req.ProjectPath)
 	case AgentTypeTicketAgent:
-		companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
+		companionCmd := fmt.Sprintf("cortex ticket show %s", req.TicketID)
 		windowIndex, err = s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, companionCmd, req.ProjectPath, req.ProjectPath)
 	case AgentTypeMeta:
 		workDir := req.ProjectPath
@@ -1009,7 +1009,7 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDi
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
 		// Companion command shows ticket details
-		companionCmd := fmt.Sprintf("CORTEX_TICKET_ID=%s cortex show", req.TicketID)
+		companionCmd := fmt.Sprintf("cortex ticket show %s", req.TicketID)
 		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, req.ProjectPath)
 	case AgentTypeArchitect:
 		// Companion command shows kanban board

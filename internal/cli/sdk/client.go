@@ -956,7 +956,7 @@ func (c *Client) EditTicket(ticketID string) error {
 	return nil
 }
 
-// ShowTicketPopup opens cortex show for a ticket in a tmux popup.
+// ShowTicketPopup opens cortex ticket for a ticket in a tmux popup.
 func (c *Client) ShowTicketPopup(ticketID string) error {
 	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+ticketID+"/show-popup", nil)
 	if err != nil {

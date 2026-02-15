@@ -1012,7 +1012,7 @@ func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ShowPopup handles POST /tickets/{id}/show-popup - opens cortex show in a tmux popup.
+// ShowPopup handles POST /tickets/{id}/show-popup - opens cortex ticket in a tmux popup.
 func (h *TicketHandlers) ShowPopup(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -1037,7 +1037,7 @@ func (h *TicketHandlers) ShowPopup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build command
-	command := fmt.Sprintf("cortex show %s", ticketID)
+	command := fmt.Sprintf("cortex ticket %s", ticketID)
 
 	// Get tmux session name
 	projectCfg, cfgErr := projectconfig.Load(projectPath)
