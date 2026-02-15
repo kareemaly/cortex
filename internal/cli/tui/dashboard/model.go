@@ -14,6 +14,13 @@ import (
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
 )
 
+// SSE reconnection constants.
+const (
+	sseInitialBackoff = 2 * time.Second
+	sseMaxBackoff     = 30 * time.Second
+	pollInterval      = 60 * time.Second
+)
+
 // rowKind identifies what a tree row represents.
 type rowKind int
 
@@ -69,6 +76,7 @@ type Model struct {
 	// SSE subscriptions per project path.
 	sseContexts map[string]context.CancelFunc
 	sseChannels map[string]<-chan sdk.Event
+	sseBackoffs map[string]time.Duration
 
 	width, height int
 	ready         bool
@@ -148,6 +156,19 @@ type UnlinkProjectMsg struct {
 	Err         error
 }
 
+// SSEDisconnectedMsg is sent when a project's SSE connection is lost.
+type SSEDisconnectedMsg struct {
+	ProjectPath string
+}
+
+// SSEReconnectTickMsg is sent when it's time to attempt SSE reconnection for a project.
+type SSEReconnectTickMsg struct {
+	ProjectPath string
+}
+
+// PollTickMsg is sent periodically as a safety-net data refresh.
+type PollTickMsg struct{}
+
 // ClearStatusMsg clears the status bar.
 type ClearStatusMsg struct{}
 
@@ -161,6 +182,7 @@ func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 		loading:      true,
 		sseContexts:  make(map[string]context.CancelFunc),
 		sseChannels:  make(map[string]<-chan sdk.Event),
+		sseBackoffs:  make(map[string]time.Duration),
 		logBuf:       logBuf,
 		logViewer:    tuilog.NewViewer(logBuf),
 	}
@@ -168,7 +190,7 @@ func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 
 // Init starts loading data.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadProjects(), m.tickDuration())
+	return tea.Batch(m.loadProjects(), m.tickDuration(), m.startPollTicker())
 }
 
 // Update handles messages.
@@ -243,10 +265,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case SSEConnectedMsg:
+		// Cancel old connection for same project if replacing.
+		if oldCancel, ok := m.sseContexts[msg.ProjectPath]; ok {
+			oldCancel()
+		}
 		m.sseContexts[msg.ProjectPath] = msg.Cancel
 		m.sseChannels[msg.ProjectPath] = msg.Ch
+		delete(m.sseBackoffs, msg.ProjectPath)
 		m.logBuf.Infof("sse", "connected: %s", filepath.Base(msg.ProjectPath))
-		return m, m.waitForProjectEvent(msg.ProjectPath)
+		idx := m.findProject(msg.ProjectPath)
+		cmds := []tea.Cmd{m.waitForProjectEvent(msg.ProjectPath)}
+		if idx >= 0 {
+			cmds = append(cmds, m.loadProjectDetail(msg.ProjectPath))
+		}
+		return m, tea.Batch(cmds...)
 
 	case SSEEventMsg:
 		m.logBuf.Debugf("sse", "event: %s", filepath.Base(msg.ProjectPath))
@@ -256,6 +288,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if idx >= 0 {
 			cmds = append(cmds, m.loadProjectDetail(msg.ProjectPath))
 		}
+		return m, tea.Batch(cmds...)
+
+	case SSEDisconnectedMsg:
+		// Guard: if a channel already exists for this project, the disconnect is stale; ignore.
+		if ch, ok := m.sseChannels[msg.ProjectPath]; ok && ch != nil {
+			return m, nil
+		}
+		if cancel, ok := m.sseContexts[msg.ProjectPath]; ok {
+			cancel()
+			delete(m.sseContexts, msg.ProjectPath)
+		}
+		delete(m.sseChannels, msg.ProjectPath)
+		m.sseBackoffs[msg.ProjectPath] = nextBackoff(m.sseBackoffs[msg.ProjectPath])
+		m.logBuf.Warnf("sse", "disconnected: %s, reconnecting in %s", filepath.Base(msg.ProjectPath), m.sseBackoffs[msg.ProjectPath])
+		return m, m.scheduleSSEReconnect(msg.ProjectPath)
+
+	case SSEReconnectTickMsg:
+		// Only reconnect if the project still exists.
+		if m.findProject(msg.ProjectPath) >= 0 {
+			m.logBuf.Debugf("sse", "attempting reconnect: %s", filepath.Base(msg.ProjectPath))
+			return m, m.subscribeProjectEvents(msg.ProjectPath)
+		}
+		return m, nil
+
+	case PollTickMsg:
+		var cmds []tea.Cmd
+		for _, pd := range m.projects {
+			if pd.project.Exists {
+				cmds = append(cmds, m.loadProjectDetail(pd.project.Path))
+			}
+		}
+		cmds = append(cmds, m.startPollTicker())
 		return m, tea.Batch(cmds...)
 
 	case SpawnArchitectMsg:
@@ -458,6 +522,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			delete(m.sseContexts, path)
 			delete(m.sseChannels, path)
 		}
+		// Reset backoffs.
+		m.sseBackoffs = make(map[string]time.Duration)
 		// Reset project state.
 		for i := range m.projects {
 			m.projects[i].tickets = nil
@@ -1100,7 +1166,7 @@ func (m Model) subscribeProjectEvents(projectPath string) tea.Cmd {
 		ch, err := client.SubscribeEvents(ctx)
 		if err != nil {
 			cancel()
-			return nil // graceful degradation
+			return SSEDisconnectedMsg{ProjectPath: projectPath}
 		}
 		return SSEConnectedMsg{ProjectPath: projectPath, Ch: ch, Cancel: cancel}
 	}
@@ -1115,10 +1181,37 @@ func (m Model) waitForProjectEvent(projectPath string) tea.Cmd {
 	return func() tea.Msg {
 		_, ok := <-ch
 		if !ok {
-			return nil
+			return SSEDisconnectedMsg{ProjectPath: projectPath}
 		}
 		return SSEEventMsg{ProjectPath: projectPath}
 	}
+}
+
+// nextBackoff doubles the current backoff duration, capped at sseMaxBackoff.
+func nextBackoff(current time.Duration) time.Duration {
+	if current == 0 {
+		return sseInitialBackoff
+	}
+	next := current * 2
+	if next > sseMaxBackoff {
+		return sseMaxBackoff
+	}
+	return next
+}
+
+// scheduleSSEReconnect returns a command that fires after the backoff delay for a project.
+func (m Model) scheduleSSEReconnect(projectPath string) tea.Cmd {
+	backoff := m.sseBackoffs[projectPath]
+	return tea.Tick(backoff, func(time.Time) tea.Msg {
+		return SSEReconnectTickMsg{ProjectPath: projectPath}
+	})
+}
+
+// startPollTicker returns a command that fires after the poll interval.
+func (m Model) startPollTicker() tea.Cmd {
+	return tea.Tick(pollInterval, func(time.Time) tea.Msg {
+		return PollTickMsg{}
+	})
 }
 
 // spawnArchitect spawns an architect for a project.
