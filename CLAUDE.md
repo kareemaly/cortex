@@ -192,7 +192,7 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 | `addBlocker` | Report blocker on assigned ticket |
 | `requestReview` | Request human review, moves ticket to review status |
 | `concludeSession` | Complete work, move to done, trigger cleanup |
-| `createDoc` | Create a doc for research findings (research type only) |
+| `createDoc` | Create a documentation file |
 
 ## Agent Workflow
 

@@ -169,26 +169,22 @@ func statusStyle(status string) lipgloss.Style {
 		Padding(0, 1)
 }
 
-// Type badge styles for ticket types (matching kanban).
-var (
-	debugTypeBadgeStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196")) // red
-
-	researchTypeBadgeStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")) // blue
-
-)
+// typeBadgePalette is a fixed palette of visually distinct ANSI 256-colors
+// used for hash-based ticket type badge coloring.
+var typeBadgePalette = []string{"196", "39", "35", "214", "141", "208", "49", "220"}
 
 // typeBadgeStyle returns the appropriate style for a ticket type badge.
+// "work" gets no special styling; other types get a hash-based color.
 func typeBadgeStyle(ticketType string) lipgloss.Style {
-	switch ticketType {
-	case "debug":
-		return debugTypeBadgeStyle
-	case "research":
-		return researchTypeBadgeStyle
-	default:
+	if ticketType == "work" {
 		return lipgloss.NewStyle()
 	}
+	var sum int
+	for _, b := range ticketType {
+		sum += int(b)
+	}
+	colorCode := typeBadgePalette[sum%len(typeBadgePalette)]
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(colorCode))
 }
 
 // commentTypeStyle returns the appropriate style for a comment type.

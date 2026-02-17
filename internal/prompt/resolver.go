@@ -83,6 +83,7 @@ func (r *PromptResolver) ResolveTicketPrompt(ticketType, stage string) (string, 
 
 // ResolveTicketPromptWithPath finds and loads a ticket prompt file,
 // returning both content and source path. Checks project first, then falls back to base.
+// If the requested type is not found and is not "work", falls back to "work" type.
 func (r *PromptResolver) ResolveTicketPromptWithPath(ticketType, stage string) (*ResolvedPrompt, error) {
 	var searchPaths []string
 
@@ -110,7 +111,32 @@ func (r *PromptResolver) ResolveTicketPromptWithPath(ticketType, stage string) (
 		}
 	}
 
-	// Not found in either location
+	// Fall back to "work" type if the requested type was not found
+	if ticketType != "work" {
+		workProjectPath := TicketPromptPath(r.ProjectRoot, "work", stage)
+		searchPaths = append(searchPaths, workProjectPath)
+		content, err = r.loadIfExists(workProjectPath)
+		if err != nil {
+			return nil, err
+		}
+		if content != "" {
+			return &ResolvedPrompt{Content: content, SourcePath: workProjectPath}, nil
+		}
+
+		if r.BaseRoot != "" {
+			workBasePath := BaseTicketPromptPath(r.BaseRoot, "work", stage)
+			searchPaths = append(searchPaths, workBasePath)
+			content, err = r.loadIfExists(workBasePath)
+			if err != nil {
+				return nil, err
+			}
+			if content != "" {
+				return &ResolvedPrompt{Content: content, SourcePath: workBasePath}, nil
+			}
+		}
+	}
+
+	// Not found in any location
 	return nil, &NotFoundError{
 		Role:        "ticket",
 		TicketType:  ticketType,

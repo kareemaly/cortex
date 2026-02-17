@@ -103,16 +103,6 @@ var (
 	warnBadgeStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214"))
 
-	// Type badge styles for ticket types.
-	debugTypeBadgeStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196")) // red
-
-	researchTypeBadgeStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")) // blue
-
-	workTypeBadgeStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("35")) // cyan/teal
-
 	// Due date styles
 	dueSoonStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")) // yellow/orange
@@ -135,18 +125,21 @@ func inlineFgColorChange(colorCode string) string {
 	return "\x1b[38;5;" + colorCode + "m"
 }
 
+// typeBadgePalette is a fixed palette of visually distinct ANSI 256-colors
+// used for hash-based ticket type badge coloring.
+var typeBadgePalette = []string{"196", "39", "35", "214", "141", "208", "49", "220"}
+
 // typeBadgeColorCode returns the 256-color code for a ticket type badge.
+// "work" gets the default foreground; other types are hashed into a color palette.
 func typeBadgeColorCode(ticketType string) string {
-	switch ticketType {
-	case "debug":
-		return "196"
-	case "research":
-		return "39"
-	case "work":
-		return "35"
-	default:
+	if ticketType == "work" {
 		return selectedFgColor
 	}
+	var sum int
+	for _, b := range ticketType {
+		sum += int(b)
+	}
+	return typeBadgePalette[sum%len(typeBadgePalette)]
 }
 
 // dueDateColorCode returns the 256-color code for a due date indicator.
@@ -174,15 +167,11 @@ func columnHeaderStyle(status string) lipgloss.Style {
 }
 
 // typeBadgeStyle returns the appropriate style for a ticket type badge.
+// "work" gets no special styling; other types get a hash-based color.
 func typeBadgeStyle(ticketType string) lipgloss.Style {
-	switch ticketType {
-	case "debug":
-		return debugTypeBadgeStyle
-	case "research":
-		return researchTypeBadgeStyle
-	case "work":
-		return workTypeBadgeStyle
-	default:
+	if ticketType == "work" {
 		return lipgloss.NewStyle()
 	}
+	colorCode := typeBadgeColorCode(ticketType)
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(colorCode))
 }

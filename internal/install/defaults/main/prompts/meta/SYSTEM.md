@@ -50,9 +50,6 @@ ticket:
   work:
     agent: claude
     args: ["--permission-mode", "plan"]
-  debug:
-    agent: claude
-    args: []
 git:
   worktrees: false                       # enable git worktrees for isolation
 docs:
@@ -82,7 +79,7 @@ The `updatePrompt` tool auto-ejects: if a prompt hasn't been customized yet, it 
 
 Prompt roles: `architect`, `ticket`
 Prompt stages: `SYSTEM`, `KICKOFF`, `APPROVE`
-Ticket types (for ticket role): `work`, `debug`, `research`
+Ticket types (for ticket role): user-defined in cortex.yaml (default: `work`)
 
 ## Communication
 

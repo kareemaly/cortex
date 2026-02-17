@@ -19,8 +19,8 @@ type Config struct {
 	// If empty, the session is an architect session with full access.
 	TicketID string
 
-	// TicketType is the ticket type (work/debug/research).
-	// Only used for ticket sessions, to conditionally register tools.
+	// TicketType is the ticket type.
+	// Only used for ticket sessions.
 	TicketType string
 
 	// ProjectPath is the project root for hook execution.

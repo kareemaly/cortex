@@ -208,10 +208,6 @@ meta:
 ticket:
   work:
     agent: opencode
-  debug:
-    agent: opencode
-  research:
-    agent: opencode
 git:
   worktrees: false
 `
@@ -239,20 +235,6 @@ ticket:
       - "--allow-dangerously-skip-permissions"
       - "--allowedTools"
       - "mcp__cortex__readReference"
-  debug:
-    agent: claude
-    args:
-      - "--permission-mode"
-      - "plan"
-      - "--allow-dangerously-skip-permissions"
-      - "--allowedTools"
-      - "mcp__cortex__readReference,mcp__cortex__addComment"
-  research:
-    agent: claude
-    args:
-      - "--allow-dangerously-skip-permissions"
-      - "--allowedTools"
-      - "mcp__cortex__readReference,mcp__cortex__addComment,mcp__cortex__createDoc"
 git:
   worktrees: false
 `

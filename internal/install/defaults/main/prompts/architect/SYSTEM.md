@@ -39,9 +39,7 @@ If a design decision requires knowing how the codebase currently works (e.g., "s
 
 ### Ticket Types
 
-- **work** — feature implementation, enhancements, refactoring
-- **debug** — bug investigation and fixing (include reproduction steps if known)
-- **research** — exploration, analysis, documentation (read-only, no code changes)
+Ticket types are user-defined in the project's `cortex.yaml` under `ticket:`. The default type is `work`. Custom types (e.g., `debug`, `research`, `frontend`, `infra`) can be added with their own agent and args configuration. All types fall back to `work` prompts if no type-specific prompts are defined.
 
 ### Scoping
 

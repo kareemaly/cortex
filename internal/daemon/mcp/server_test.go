@@ -148,7 +148,7 @@ func TestNewServerTicketWithType(t *testing.T) {
 
 	server, err := NewServer(&Config{
 		TicketID:    "test-ticket-123",
-		TicketType:  "research",
+		TicketType:  "custom",
 		DaemonURL:   daemonconfig.DefaultDaemonURL,
 		ProjectPath: tmpDir,
 	})
@@ -156,8 +156,8 @@ func TestNewServerTicketWithType(t *testing.T) {
 		t.Fatalf("NewServer failed: %v", err)
 	}
 
-	if server.Session().TicketType != "research" {
-		t.Errorf("ticket type = %q, want %q", server.Session().TicketType, "research")
+	if server.Session().TicketType != "custom" {
+		t.Errorf("ticket type = %q, want %q", server.Session().TicketType, "custom")
 	}
 }
 

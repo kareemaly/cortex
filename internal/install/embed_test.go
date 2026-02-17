@@ -30,12 +30,6 @@ func TestCopyEmbeddedDefaults(t *testing.T) {
 		"prompts/ticket/work/SYSTEM.md",
 		"prompts/ticket/work/KICKOFF.md",
 		"prompts/ticket/work/APPROVE.md",
-		"prompts/ticket/debug/SYSTEM.md",
-		"prompts/ticket/debug/KICKOFF.md",
-		"prompts/ticket/debug/APPROVE.md",
-		"prompts/ticket/research/SYSTEM.md",
-		"prompts/ticket/research/KICKOFF.md",
-		"prompts/ticket/research/APPROVE.md",
 	}
 
 	for _, file := range expectedFiles {

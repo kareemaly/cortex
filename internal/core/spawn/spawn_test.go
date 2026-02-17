@@ -785,7 +785,7 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 	config := GenerateMCPConfig(MCPConfigParams{
 		CortexdPath: "/usr/bin/cortexd",
 		TicketID:    "ticket-123",
-		TicketType:  "research",
+		TicketType:  "work",
 		TicketsDir:  "/path/to/tickets",
 		ProjectPath: "/path/to/project",
 		TmuxSession: "dev-session",
@@ -800,7 +800,7 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 		t.Errorf("expected command '/usr/bin/cortexd', got: %s", server.Command)
 	}
 
-	expectedArgs := []string{"mcp", "--ticket-id", "ticket-123", "--ticket-type", "research"}
+	expectedArgs := []string{"mcp", "--ticket-id", "ticket-123", "--ticket-type", "work"}
 	if len(server.Args) != len(expectedArgs) {
 		t.Fatalf("expected %d args, got: %d (%v)", len(expectedArgs), len(server.Args), server.Args)
 	}

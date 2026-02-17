@@ -40,13 +40,11 @@ func (s *Server) registerTicketTools() {
 		Description: "Conclude the session and mark the ticket as done. Call this after all reviews are approved.",
 	}, s.handleConcludeSession)
 
-	// createDoc — research tickets only
-	if s.session.TicketType == "research" {
-		mcp.AddTool(s.mcpServer, &mcp.Tool{
-			Name:        "createDoc",
-			Description: "Create a documentation file for research findings",
-		}, s.handleTicketCreateDoc)
-	}
+	// createDoc — available to all ticket agents
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "createDoc",
+		Description: "Create a documentation file",
+	}, s.handleTicketCreateDoc)
 }
 
 // handleReadReference reads a referenced ticket or doc by ID via the daemon API.
@@ -84,7 +82,7 @@ func (s *Server) handleReadReference(
 	}
 }
 
-// handleTicketCreateDoc creates a doc for research ticket agents via the daemon API.
+// handleTicketCreateDoc creates a doc for ticket agents via the daemon API.
 func (s *Server) handleTicketCreateDoc(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
