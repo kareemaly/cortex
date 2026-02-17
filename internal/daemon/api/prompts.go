@@ -166,18 +166,6 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 		addPrompt("architect", "", stage, relPath, resolved.Content, statErr == nil)
 	}
 
-	// Meta prompts: SYSTEM, KICKOFF
-	for _, stage := range []string{prompt.StageSystem, prompt.StageKickoff} {
-		resolved, resolveErr := resolver.ResolveMetaPromptWithPath(stage)
-		if resolveErr != nil {
-			continue
-		}
-		relPath := "meta/" + stage + ".md"
-		ejectedPath := filepath.Join(projectPromptsDir, relPath)
-		_, statErr := os.Stat(ejectedPath)
-		addPrompt("meta", "", stage, relPath, resolved.Content, statErr == nil)
-	}
-
 	// Ticket prompts: config-driven, sorted alphabetically
 	ticketTypes := make([]string, 0, len(cfg.Ticket))
 	for typeName := range cfg.Ticket {
@@ -444,18 +432,10 @@ func resolvePromptByPath(resolver *prompt.PromptResolver, promptPath string) (st
 
 	switch {
 	case len(parts) == 2:
-		// architect/SYSTEM.md or meta/SYSTEM.md
-		role := parts[0]
+		// architect/SYSTEM.md
 		stage := strings.TrimSuffix(parts[1], ".md")
-		switch role {
-		case "architect":
+		if parts[0] == "architect" {
 			resolved, err := resolver.ResolveArchitectPromptWithPath(stage)
-			if err != nil {
-				return "", err
-			}
-			return resolved.Content, nil
-		case "meta":
-			resolved, err := resolver.ResolveMetaPromptWithPath(stage)
 			if err != nil {
 				return "", err
 			}

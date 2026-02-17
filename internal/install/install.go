@@ -203,8 +203,6 @@ func generateProjectConfig(name, agent string) string {
 extend: ~/.cortex/defaults/main
 architect:
   agent: opencode
-meta:
-  agent: opencode
 ticket:
   work:
     agent: opencode
@@ -220,12 +218,6 @@ architect:
     - "--allow-dangerously-skip-permissions"
     - "--allowedTools"
     - "mcp__cortex__listTickets,mcp__cortex__readTicket"
-meta:
-  agent: claude
-  args:
-    - "--allow-dangerously-skip-permissions"
-    - "--allowedTools"
-    - "mcp__cortex__listProjects,mcp__cortex__readProjectConfig,mcp__cortex__readGlobalConfig,mcp__cortex__daemonStatus,mcp__cortex__readDaemonLogs,mcp__cortex__listTickets,mcp__cortex__readTicket,mcp__cortex__listDocs,mcp__cortex__readDoc,mcp__cortex__listSessions,mcp__cortex__readPrompt"
 ticket:
   work:
     agent: claude

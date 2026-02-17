@@ -27,13 +27,6 @@ type ArchitectKickoffVars struct {
 	DocsList    string // formatted recent docs list
 }
 
-// MetaKickoffVars contains variables for the meta kickoff template.
-type MetaKickoffVars struct {
-	CurrentDate string
-	ProjectList string
-	SessionList string
-}
-
 // RenderTemplate renders a template string with the given variables.
 func RenderTemplate(content string, vars any) (string, error) {
 	tmpl, err := template.New("prompt").Parse(content)

@@ -23,8 +23,6 @@ func TestCopyEmbeddedDefaults(t *testing.T) {
 
 	// Expected files that should exist (prompts only, no cortex.yaml)
 	expectedFiles := []string{
-		"prompts/meta/SYSTEM.md",
-		"prompts/meta/KICKOFF.md",
 		"prompts/architect/SYSTEM.md",
 		"prompts/architect/KICKOFF.md",
 		"prompts/ticket/work/SYSTEM.md",

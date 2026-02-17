@@ -14,7 +14,6 @@ import (
 var (
 	mcpTicketID   string
 	mcpTicketType string
-	mcpMeta       bool
 )
 
 var mcpCmd = &cobra.Command{
@@ -26,18 +25,13 @@ The server exposes ticket management tools over stdio transport.
 
 Session types:
   Architect session (default): Full access to all tools
-  Ticket session (--ticket-id): Limited to assigned ticket
-
-Examples:
-  cortexd mcp                    # Start architect session
-  cortexd mcp --ticket-id abc    # Start ticket session for ticket abc`,
+  Ticket session (--ticket-id): Limited to assigned ticket`,
 	RunE: runMCP,
 }
 
 func init() {
 	mcpCmd.Flags().StringVar(&mcpTicketID, "ticket-id", "", "Ticket ID for ticket sessions")
 	mcpCmd.Flags().StringVar(&mcpTicketType, "ticket-type", "", "Ticket type for ticket sessions")
-	mcpCmd.Flags().BoolVar(&mcpMeta, "meta", false, "Start a meta session (global, above architects)")
 	rootCmd.AddCommand(mcpCmd)
 }
 
@@ -58,7 +52,6 @@ func runMCP(cmd *cobra.Command, args []string) error {
 	cfg := &mcp.Config{
 		TicketID:    ticketID,
 		TicketType:  mcpTicketType,
-		IsMeta:      mcpMeta,
 		ProjectPath: projectPath,
 		TmuxSession: tmuxSession,
 		DaemonURL:   daemonURL,

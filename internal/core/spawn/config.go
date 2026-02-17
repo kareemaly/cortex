@@ -30,15 +30,12 @@ type MCPConfigParams struct {
 	ProjectPath string
 	TmuxSession string
 	DaemonURL   string // optional; defaults to daemonconfig.DefaultDaemonURL
-	IsMeta      bool   // if true, pass --meta flag instead of --ticket-id
 }
 
 // GenerateMCPConfig creates an MCP configuration for a claude agent.
 func GenerateMCPConfig(params MCPConfigParams) *ClaudeMCPConfig {
 	args := []string{"mcp"}
-	if params.IsMeta {
-		args = append(args, "--meta")
-	} else if params.TicketID != "" {
+	if params.TicketID != "" {
 		args = append(args, "--ticket-id", params.TicketID)
 		if params.TicketType != "" {
 			args = append(args, "--ticket-type", params.TicketType)

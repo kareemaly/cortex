@@ -51,7 +51,7 @@ func GenerateOpenCodeConfigContent(claudeConfig *ClaudeMCPConfig, systemPrompt s
 			config.Instructions = []string{systemPromptFilePath}
 		}
 	} else {
-		// Architect/meta agents replace the system prompt entirely.
+		// Architect agents replace the system prompt entirely.
 		config.Agent["cortex"] = OpenCodeAgentConfig{
 			Description: "Cortex ticket agent",
 			Mode:        "bypassPermissions",

@@ -42,10 +42,6 @@ type Config struct {
 	// This is primarily used for testing.
 	CortexdPath string
 
-	// IsMeta indicates this is a meta session (global, above architects).
-	// When true, TicketID and ProjectPath are not required.
-	IsMeta bool
-
 	// DaemonURL is the URL of the cortexd HTTP API.
 	// When set for ticket sessions, the MCP server routes mutations through the daemon
 	// instead of creating its own ticket store.
@@ -74,11 +70,7 @@ func NewServer(cfg *Config) (*Server, error) {
 
 	// Determine session type
 	var session *Session
-	if cfg.IsMeta {
-		session = &Session{
-			Type: SessionTypeMeta,
-		}
-	} else if cfg.TicketID != "" {
+	if cfg.TicketID != "" {
 		session = &Session{
 			Type:       SessionTypeTicket,
 			TicketID:   cfg.TicketID,
@@ -94,13 +86,6 @@ func NewServer(cfg *Config) (*Server, error) {
 	var projectCfg *config.Config
 
 	switch session.Type {
-	case SessionTypeMeta:
-		// Meta sessions are global — no project path required
-		if cfg.DaemonURL == "" {
-			cfg.DaemonURL = daemonconfig.DefaultDaemonURL
-		}
-		sdkClient = sdk.NewClient(cfg.DaemonURL, "")
-
 	case SessionTypeTicket:
 		// Ticket sessions always route through the daemon HTTP API
 		if cfg.DaemonURL == "" {
@@ -144,8 +129,6 @@ func NewServer(cfg *Config) (*Server, error) {
 
 	// Register tools based on session type
 	switch session.Type {
-	case SessionTypeMeta:
-		s.registerMetaTools()
 	case SessionTypeArchitect:
 		s.registerArchitectTools()
 	default:

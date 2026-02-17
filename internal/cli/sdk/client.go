@@ -93,8 +93,6 @@ type (
 	ResolvePromptResponse    = types.ResolvePromptResponse
 	ListTagsResponse         = types.ListTagsResponse
 	TagCount                 = types.TagCount
-	MetaSpawnResponse        = types.MetaSpawnResponse
-	MetaStateResponse        = types.MetaStateResponse
 	PromptFileInfo           = types.PromptFileInfo
 	PromptGroupInfo          = types.PromptGroupInfo
 	ListPromptsResponse      = types.ListPromptsResponse
@@ -1436,76 +1434,6 @@ func (c *Client) ListSessions() (*ListSessionsResponse, error) {
 	}
 
 	return &result, nil
-}
-
-// SpawnMeta spawns or reattaches to the meta session.
-func (c *Client) SpawnMeta() (*MetaSpawnResponse, error) {
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/meta/spawn", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req) // No project header needed
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, c.parseError(resp)
-	}
-
-	var result MetaSpawnResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// GetMetaState returns the current meta session state.
-func (c *Client) GetMetaState() (*MetaStateResponse, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/meta", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req) // No project header needed
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var result MetaStateResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// FocusMeta focuses the meta tmux window.
-func (c *Client) FocusMeta() error {
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/meta/focus", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req) // No project header needed
-	if err != nil {
-		return fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return c.parseError(resp)
-	}
-
-	return nil
 }
 
 // ListPrompts returns all prompt files with ejection status.

@@ -34,8 +34,6 @@ const (
 	AgentTypeArchitect AgentType = "architect"
 	// AgentTypeTicketAgent is the ticket agent type.
 	AgentTypeTicketAgent AgentType = "ticket_agent"
-	// AgentTypeMeta is the meta agent type (global, above architects).
-	AgentTypeMeta AgentType = "meta"
 )
 
 // StoreInterface defines the ticket store operations needed for spawning.
@@ -51,9 +49,6 @@ type SessionStoreInterface interface {
 	CreateArchitect(agent, tmuxWindow string) (*session.Session, error)
 	GetArchitect() (*session.Session, error)
 	EndArchitect() error
-	CreateMeta(agent, tmuxWindow string) (*session.Session, error)
-	GetMeta() (*session.Session, error)
-	EndMeta() error
 }
 
 // TmuxManagerInterface defines the tmux operations needed for spawning.
@@ -219,11 +214,6 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 			if err != nil {
 				return nil, err
 			}
-		case AgentTypeMeta:
-			_, err := s.deps.SessionStore.CreateMeta(req.Agent, windowName)
-			if err != nil {
-				return nil, err
-			}
 		}
 	}
 
@@ -240,16 +230,11 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		TicketsDir:  req.TicketsDir,
 		ProjectPath: req.ProjectPath,
 		TmuxSession: req.TmuxSession,
-		IsMeta:      req.AgentType == AgentTypeMeta,
 	})
 
 	identifier := req.TicketID
 	if identifier == "" {
-		if req.AgentType == AgentTypeMeta {
-			identifier = "meta"
-		} else {
-			identifier = "architect-" + req.TmuxSession
-		}
+		identifier = "architect-" + req.TmuxSession
 	}
 
 	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
@@ -335,11 +320,6 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 			"CORTEX_TICKET_ID": req.TicketID,
 			"CORTEX_PROJECT":   req.ProjectPath,
 		}
-	case AgentTypeMeta:
-		launcherParams.ReplaceSystemPrompt = true
-		launcherParams.EnvVars = map[string]string{
-			"CORTEX_TICKET_ID": session.MetaSessionKey,
-		}
 	}
 
 	if openCodeConfigJSON != "" {
@@ -403,11 +383,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	// Determine identifier for file naming
 	identifier := req.TicketID
 	if identifier == "" {
-		if req.AgentType == AgentTypeMeta {
-			identifier = "meta"
-		} else {
-			identifier = "architect-" + req.TmuxSession
-		}
+		identifier = "architect-" + req.TmuxSession
 	}
 
 	// Generate MCP config
@@ -418,7 +394,6 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		TicketsDir:  req.TicketsDir,
 		ProjectPath: req.ProjectPath,
 		TmuxSession: req.TmuxSession,
-		IsMeta:      req.AgentType == AgentTypeMeta,
 	})
 
 	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
@@ -436,8 +411,6 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		envVars["CORTEX_TICKET_ID"] = req.TicketID
 	case AgentTypeArchitect:
 		envVars["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
-	case AgentTypeMeta:
-		envVars["CORTEX_TICKET_ID"] = session.MetaSessionKey
 	}
 
 	// Generate and write settings config (hooks) - skip for OpenCode (it doesn't support --settings)
@@ -483,7 +456,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		CleanupFiles:  tempFiles,
 	}
 
-	if req.AgentType == AgentTypeArchitect || req.AgentType == AgentTypeMeta {
+	if req.AgentType == AgentTypeArchitect {
 		launcherParams.ReplaceSystemPrompt = true
 	}
 
@@ -523,16 +496,11 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	}
 	allTempFiles := append(tempFiles, launcherPath)
 
-	// Create session in store for architect/meta resume
+	// Create session in store for architect resume
 	if s.deps.SessionStore != nil {
-		switch req.AgentType {
-		case AgentTypeArchitect:
+		if req.AgentType == AgentTypeArchitect {
 			if _, createErr := s.deps.SessionStore.CreateArchitect(req.Agent, req.WindowName); createErr != nil {
 				s.logWarn("resume: failed to create architect session", "error", createErr)
-			}
-		case AgentTypeMeta:
-			if _, createErr := s.deps.SessionStore.CreateMeta(req.Agent, req.WindowName); createErr != nil {
-				s.logWarn("resume: failed to create meta session", "error", createErr)
 			}
 		}
 	}
@@ -541,23 +509,12 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	launchCmd := "bash " + launcherPath
 	var windowIndex int
 
-	homeDir, _ := os.UserHomeDir()
-	if homeDir == "" {
-		homeDir = os.TempDir()
-	}
-
 	switch req.AgentType {
 	case AgentTypeArchitect:
 		err = s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, req.WindowName, launchCmd, "cortex project", req.ProjectPath, req.ProjectPath)
 	case AgentTypeTicketAgent:
 		companionCmd := fmt.Sprintf("cortex ticket show %s", req.TicketID)
 		windowIndex, err = s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, companionCmd, req.ProjectPath, req.ProjectPath)
-	case AgentTypeMeta:
-		workDir := req.ProjectPath
-		if workDir == "" {
-			workDir = homeDir
-		}
-		err = s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, req.WindowName, launchCmd, "cortex dashboard", workDir, workDir)
 	}
 	if err != nil {
 		for _, path := range allTempFiles {
@@ -603,10 +560,6 @@ func (s *Spawner) Fresh(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 			if err := s.deps.SessionStore.EndArchitect(); err != nil {
 				s.logWarn("fresh: failed to end existing architect session", "error", err)
 			}
-		case AgentTypeMeta:
-			if err := s.deps.SessionStore.EndMeta(); err != nil {
-				s.logWarn("fresh: failed to end existing meta session", "error", err)
-			}
 		}
 	}
 
@@ -627,11 +580,6 @@ func (s *Spawner) validateSpawnRequest(req SpawnRequest) error {
 		if _, err := os.Stat(req.ProjectPath); os.IsNotExist(err) {
 			return &ConfigError{Field: "ProjectPath", Message: "directory does not exist"}
 		}
-	}
-
-	// Meta agent doesn't require ProjectPath or ProjectName
-	if req.AgentType == AgentTypeMeta {
-		return nil
 	}
 
 	if req.AgentType == AgentTypeTicketAgent {
@@ -690,9 +638,6 @@ func (s *Spawner) generateWindowName(req SpawnRequest) string {
 	if req.AgentType == AgentTypeTicketAgent && req.Ticket != nil {
 		return GenerateWindowName(req.Ticket.Title)
 	}
-	if req.AgentType == AgentTypeMeta {
-		return "meta"
-	}
 	return "architect"
 }
 
@@ -712,8 +657,6 @@ func (s *Spawner) buildPrompt(req SpawnRequest, worktreePath, featureBranch *str
 		return s.buildTicketAgentPrompt(req, worktreePath, featureBranch)
 	case AgentTypeArchitect:
 		return s.buildArchitectPrompt(req)
-	case AgentTypeMeta:
-		return s.buildMetaPrompt(req)
 	default:
 		return nil, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
 	}
@@ -923,87 +866,6 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	}, nil
 }
 
-// buildMetaPrompt creates the dynamic meta prompt with project and session listing.
-func (s *Spawner) buildMetaPrompt(req SpawnRequest) (*promptInfo, error) {
-	// Create prompt resolver — meta prompts live in defaults (base config path)
-	resolver := prompt.NewPromptResolver("", req.BaseConfigPath)
-
-	// Load system prompt
-	var systemPromptContent string
-	{
-		var err error
-		systemPromptContent, err = resolver.ResolveMetaPrompt(prompt.StageSystem)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Query daemon API to get all projects
-	client := sdk.DefaultClient("")
-	projectsResp, err := client.ListProjects()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list projects: %w", err)
-	}
-
-	// Build project list
-	var projSB strings.Builder
-	for _, p := range projectsResp.Projects {
-		status := "exists"
-		if !p.Exists {
-			status = "missing"
-		}
-		projSB.WriteString(fmt.Sprintf("## %s (%s)\n", p.Title, p.Path))
-		projSB.WriteString(fmt.Sprintf("  - status: %s\n", status))
-		if p.Counts != nil {
-			projSB.WriteString(fmt.Sprintf("  - backlog: %d, progress: %d, review: %d, done: %d\n",
-				p.Counts.Backlog, p.Counts.Progress, p.Counts.Review, p.Counts.Done))
-		}
-		projSB.WriteString("\n")
-	}
-
-	// Build session list across all projects (best-effort)
-	var sessSB strings.Builder
-	for _, p := range projectsResp.Projects {
-		if !p.Exists {
-			continue
-		}
-		sessResp, sessErr := client.WithProject(p.Path).ListSessions()
-		if sessErr != nil || len(sessResp.Sessions) == 0 {
-			continue
-		}
-		sessSB.WriteString(fmt.Sprintf("### %s\n", p.Title))
-		for _, sess := range sessResp.Sessions {
-			sessSB.WriteString(fmt.Sprintf("- [%s] %s (%s) — %s\n", sess.SessionType, sess.TicketTitle, sess.Agent, sess.Status))
-		}
-		sessSB.WriteString("\n")
-	}
-
-	// Try to load and render KICKOFF template
-	kickoffTemplate, kickoffErr := resolver.ResolveMetaPrompt(prompt.StageKickoff)
-	if kickoffErr == nil {
-		vars := prompt.MetaKickoffVars{
-			CurrentDate: time.Now().Format("2006-01-02 15:04 MST"),
-			ProjectList: projSB.String(),
-			SessionList: sessSB.String(),
-		}
-		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
-		if renderErr == nil {
-			return &promptInfo{
-				PromptText:          rendered,
-				SystemPromptContent: systemPromptContent,
-			}, nil
-		}
-	}
-
-	// Fallback: inline format
-	promptText := fmt.Sprintf("# Cortex Meta Session\n\n# Projects\n\n%s", projSB.String())
-
-	return &promptInfo{
-		PromptText:          promptText,
-		SystemPromptContent: systemPromptContent,
-	}, nil
-}
-
 // spawnInTmux spawns the agent in a tmux window.
 func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDir string) (int, error) {
 	switch req.AgentType {
@@ -1014,10 +876,6 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDi
 	case AgentTypeArchitect:
 		// Companion command shows kanban board
 		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, "cortex project", workingDir, req.ProjectPath)
-		return 0, err
-	case AgentTypeMeta:
-		// Companion command shows project dashboard
-		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, "cortex dashboard", workingDir, workingDir)
 		return 0, err
 	default:
 		return 0, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
@@ -1038,10 +896,6 @@ func (s *Spawner) cleanupOnFailure(ctx context.Context, agentType AgentType, tic
 		case AgentTypeArchitect:
 			if err := s.deps.SessionStore.EndArchitect(); err != nil {
 				s.logWarn("cleanup: failed to end architect session", "error", err)
-			}
-		case AgentTypeMeta:
-			if err := s.deps.SessionStore.EndMeta(); err != nil {
-				s.logWarn("cleanup: failed to end meta session", "error", err)
 			}
 		}
 	}

@@ -197,18 +197,6 @@ type ListTagsResponse struct {
 	Tags []TagCount `json:"tags"`
 }
 
-// MetaSpawnResponse is the response for POST /meta/spawn.
-type MetaSpawnResponse struct {
-	State       string `json:"state"`
-	TmuxSession string `json:"tmux_session"`
-	TmuxWindow  string `json:"tmux_window"`
-}
-
-// MetaStateResponse is the response for GET /meta.
-type MetaStateResponse struct {
-	State string `json:"state"`
-}
-
 // PromptFileInfo describes a single prompt file with its ejection status.
 type PromptFileInfo struct {
 	Path     string `json:"path"`
