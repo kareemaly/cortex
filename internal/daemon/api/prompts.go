@@ -103,6 +103,9 @@ func (h *PromptHandlers) Resolve(w http.ResponseWriter, r *http.Request) {
 }
 
 // List handles GET /prompts - lists all prompt files with ejection status.
+// Uses the prompt resolver to enumerate prompts, driven by the project config's
+// ticket types. This ensures custom ticket types (e.g., "research") appear even
+// when no physical files exist for them in the defaults directory.
 func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())
 
@@ -118,63 +121,12 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	baseDir := prompt.BasePromptsDir(extendPath)
+	resolver := prompt.NewPromptResolver(projectPath, extendPath)
 	projectPromptsDir := prompt.PromptsDir(projectPath)
 
-	// Walk base prompts directory to discover all .md files
 	groupMap := make(map[string]*types.PromptGroupInfo)
 
-	err = filepath.WalkDir(baseDir, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if !strings.HasSuffix(d.Name(), ".md") {
-			return nil
-		}
-
-		relPath, _ := filepath.Rel(baseDir, path)
-		relPath = filepath.ToSlash(relPath)
-
-		parts := strings.Split(relPath, "/")
-		if len(parts) < 2 {
-			return nil
-		}
-
-		group := parts[0]
-		var subgroup string
-		var stage string
-
-		if len(parts) == 2 {
-			stage = strings.TrimSuffix(parts[1], ".md")
-		} else if len(parts) == 3 {
-			subgroup = parts[1]
-			stage = strings.TrimSuffix(parts[2], ".md")
-		} else {
-			return nil
-		}
-
-		// Check if ejected
-		ejectedPath := filepath.Join(projectPromptsDir, relPath)
-		_, ejectedErr := os.Stat(ejectedPath)
-		ejected := ejectedErr == nil
-
-		// Read content from ejected path if ejected, else from base
-		var content string
-		if ejected {
-			data, readErr := os.ReadFile(ejectedPath)
-			if readErr == nil {
-				content = string(data)
-			}
-		} else {
-			data, readErr := os.ReadFile(path)
-			if readErr == nil {
-				content = string(data)
-			}
-		}
-
+	addPrompt := func(group, subgroup, stage, relPath string, content string, ejected bool) {
 		fileInfo := types.PromptFileInfo{
 			Path:     relPath,
 			Group:    group,
@@ -184,7 +136,6 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 			Content:  content,
 		}
 
-		// Build group key and display name
 		var groupKey, groupName string
 		if subgroup != "" {
 			groupKey = group + "/" + subgroup
@@ -201,12 +152,50 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		groupMap[groupKey].Files = append(groupMap[groupKey].Files, fileInfo)
+	}
 
-		return nil
-	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "walk_error", fmt.Sprintf("failed to walk prompts directory: %s", err.Error()))
-		return
+	// Architect prompts: SYSTEM, KICKOFF
+	for _, stage := range []string{prompt.StageSystem, prompt.StageKickoff} {
+		resolved, resolveErr := resolver.ResolveArchitectPromptWithPath(stage)
+		if resolveErr != nil {
+			continue
+		}
+		relPath := "architect/" + stage + ".md"
+		ejectedPath := filepath.Join(projectPromptsDir, relPath)
+		_, statErr := os.Stat(ejectedPath)
+		addPrompt("architect", "", stage, relPath, resolved.Content, statErr == nil)
+	}
+
+	// Meta prompts: SYSTEM, KICKOFF
+	for _, stage := range []string{prompt.StageSystem, prompt.StageKickoff} {
+		resolved, resolveErr := resolver.ResolveMetaPromptWithPath(stage)
+		if resolveErr != nil {
+			continue
+		}
+		relPath := "meta/" + stage + ".md"
+		ejectedPath := filepath.Join(projectPromptsDir, relPath)
+		_, statErr := os.Stat(ejectedPath)
+		addPrompt("meta", "", stage, relPath, resolved.Content, statErr == nil)
+	}
+
+	// Ticket prompts: config-driven, sorted alphabetically
+	ticketTypes := make([]string, 0, len(cfg.Ticket))
+	for typeName := range cfg.Ticket {
+		ticketTypes = append(ticketTypes, typeName)
+	}
+	sort.Strings(ticketTypes)
+
+	for _, typeName := range ticketTypes {
+		for _, stage := range []string{prompt.StageSystem, prompt.StageKickoff, prompt.StageApprove} {
+			resolved, resolveErr := resolver.ResolveTicketPromptWithPath(typeName, stage)
+			if resolveErr != nil {
+				continue
+			}
+			relPath := "ticket/" + typeName + "/" + stage + ".md"
+			ejectedPath := filepath.Join(projectPromptsDir, relPath)
+			_, statErr := os.Stat(ejectedPath)
+			addPrompt("ticket", typeName, stage, relPath, resolved.Content, statErr == nil)
+		}
 	}
 
 	// Sort groups by key
@@ -269,18 +258,10 @@ func (h *PromptHandlers) Eject(w http.ResponseWriter, r *http.Request) {
 	sourcePath := filepath.Join(prompt.BasePromptsDir(extendPath), promptPath)
 	destPath := filepath.Join(prompt.PromptsDir(projectPath), promptPath)
 
-	// Validate source exists
+	// Try direct source first; fall back to resolver for custom types
 	sourceInfo, err := os.Stat(sourcePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			writeError(w, http.StatusNotFound, "not_found", fmt.Sprintf("source prompt not found: %s", promptPath))
-			return
-		}
+	if err != nil && !os.IsNotExist(err) {
 		writeError(w, http.StatusInternalServerError, "stat_error", err.Error())
-		return
-	}
-	if sourceInfo.IsDir() {
-		writeError(w, http.StatusBadRequest, "validation_error", "cannot eject a directory")
 		return
 	}
 
@@ -291,10 +272,25 @@ func (h *PromptHandlers) Eject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Copy file
-	if err := copyPromptFile(sourcePath, destPath); err != nil {
-		writeError(w, http.StatusInternalServerError, "copy_error", err.Error())
-		return
+	if err == nil && !sourceInfo.IsDir() {
+		// Source file exists on disk - copy it directly
+		if cpErr := copyPromptFile(sourcePath, destPath); cpErr != nil {
+			writeError(w, http.StatusInternalServerError, "copy_error", cpErr.Error())
+			return
+		}
+	} else {
+		// Source doesn't exist (custom type like ticket/research/SYSTEM.md)
+		// Use resolver to get fallback content
+		resolver := prompt.NewPromptResolver(projectPath, extendPath)
+		content, resolveErr := resolvePromptByPath(resolver, promptPath)
+		if resolveErr != nil {
+			writeError(w, http.StatusNotFound, "not_found", fmt.Sprintf("source prompt not found: %s", promptPath))
+			return
+		}
+		if writeErr := os.WriteFile(destPath, []byte(content), 0644); writeErr != nil {
+			writeError(w, http.StatusInternalServerError, "write_error", writeErr.Error())
+			return
+		}
 	}
 
 	// Read the ejected content
@@ -439,6 +435,44 @@ func removeEmptyParents(dir, root string) {
 		}
 		dir = filepath.Dir(dir)
 	}
+}
+
+// resolvePromptByPath parses a prompt path (e.g. "ticket/research/SYSTEM.md")
+// and uses the resolver to get the content with fallback.
+func resolvePromptByPath(resolver *prompt.PromptResolver, promptPath string) (string, error) {
+	parts := strings.Split(filepath.ToSlash(promptPath), "/")
+
+	switch {
+	case len(parts) == 2:
+		// architect/SYSTEM.md or meta/SYSTEM.md
+		role := parts[0]
+		stage := strings.TrimSuffix(parts[1], ".md")
+		switch role {
+		case "architect":
+			resolved, err := resolver.ResolveArchitectPromptWithPath(stage)
+			if err != nil {
+				return "", err
+			}
+			return resolved.Content, nil
+		case "meta":
+			resolved, err := resolver.ResolveMetaPromptWithPath(stage)
+			if err != nil {
+				return "", err
+			}
+			return resolved.Content, nil
+		}
+	case len(parts) == 3 && parts[0] == "ticket":
+		// ticket/{type}/SYSTEM.md
+		typeName := parts[1]
+		stage := strings.TrimSuffix(parts[2], ".md")
+		resolved, err := resolver.ResolveTicketPromptWithPath(typeName, stage)
+		if err != nil {
+			return "", err
+		}
+		return resolved.Content, nil
+	}
+
+	return "", fmt.Errorf("unrecognized prompt path: %s", promptPath)
 }
 
 // copyPromptFile copies a file from src to dst.
