@@ -54,6 +54,7 @@ type UpdateTicketInput struct {
 	ID          string    `json:"id" jsonschema:"The ticket ID to update"`
 	Title       *string   `json:"title,omitempty" jsonschema:"New title (optional)"`
 	Body        *string   `json:"body,omitempty" jsonschema:"New body (optional)"`
+	Type        *string   `json:"type,omitempty" jsonschema:"New ticket type (optional). Must match a type defined in project config."`
 	References  *[]string `json:"references,omitempty" jsonschema:"New references (optional, full replacement)"`
 	Tags        *[]string `json:"tags,omitempty" jsonschema:"New tags (optional, full replacement)"`
 	ProjectPath string    `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`

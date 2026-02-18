@@ -142,7 +142,7 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 | `listTickets` | List tickets by status (backlog/progress/review/done), optional search query, tag, and due_before filter |
 | `readTicket` | Read full ticket details by ID |
 | `createTicket` | Create ticket with title, body, type, optional due_date, references, and tags |
-| `updateTicket` | Update ticket title, body, references, and/or tags |
+| `updateTicket` | Update ticket title, body, type, references, and/or tags |
 | `deleteTicket` | Delete ticket by ID (current project only) |
 | `moveTicket` | Move ticket to different status |
 | `updateDueDate` | Set or update ticket due date |

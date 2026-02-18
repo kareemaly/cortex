@@ -52,6 +52,7 @@ type CreateTicketRequest struct {
 type UpdateTicketRequest struct {
 	Title      *string   `json:"title,omitempty"`
 	Body       *string   `json:"body,omitempty"`
+	Type       *string   `json:"type,omitempty"`
 	References *[]string `json:"references,omitempty"`
 	Tags       *[]string `json:"tags,omitempty"`
 }

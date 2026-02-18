@@ -190,7 +190,7 @@ func TestStoreUpdate(t *testing.T) {
 
 	newTitle := "Updated Title"
 	newBody := "Updated body"
-	updated, err := store.Update(ticket.ID, &newTitle, &newBody, nil, nil)
+	updated, err := store.Update(ticket.ID, &newTitle, &newBody, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestStoreUpdatePartial(t *testing.T) {
 	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, nil)
 
 	newTitle := "Updated Title"
-	updated, err := store.Update(ticket.ID, &newTitle, nil, nil, nil)
+	updated, err := store.Update(ticket.ID, &newTitle, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -220,6 +220,35 @@ func TestStoreUpdatePartial(t *testing.T) {
 	}
 	if updated.Body != "Original body" {
 		t.Errorf("body should remain unchanged")
+	}
+}
+
+func TestStoreUpdateType(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Test Ticket", "body", "work", nil, nil, nil)
+	if ticket.Type != "work" {
+		t.Fatalf("type = %q, want %q", ticket.Type, "work")
+	}
+
+	newType := "bug"
+	updated, err := store.Update(ticket.ID, nil, nil, &newType, nil, nil)
+	if err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	if updated.Type != "bug" {
+		t.Errorf("type = %q, want %q", updated.Type, "bug")
+	}
+
+	// Verify persistence
+	retrieved, _, err := store.Get(ticket.ID)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if retrieved.Type != "bug" {
+		t.Errorf("persisted type = %q, want %q", retrieved.Type, "bug")
 	}
 }
 
@@ -237,7 +266,7 @@ func TestStoreUpdateTitleRename(t *testing.T) {
 	}
 
 	newTitle := "New Title"
-	_, err := store.Update(ticket.ID, &newTitle, nil, nil, nil)
+	_, err := store.Update(ticket.ID, &newTitle, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -471,7 +500,7 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 			for i := 0; i < updatesPerGoroutine; i++ {
 				title := fmt.Sprintf("Title-%d-%d", g, i)
 				body := fmt.Sprintf("Body-%d-%d", g, i)
-				_, err := store.Update(tk.ID, &title, &body, nil, nil)
+				_, err := store.Update(tk.ID, &title, &body, nil, nil, nil)
 				if err != nil {
 					t.Errorf("Update goroutine %d iter %d failed: %v", g, i, err)
 					return

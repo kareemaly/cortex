@@ -79,7 +79,7 @@ func (s *Server) registerArchitectTools() {
 	// Update ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
-		Description: "Update ticket title and/or body",
+		Description: "Update ticket title, body, type, references, and/or tags",
 	}, s.handleUpdateTicket)
 
 	// Delete ticket
@@ -323,7 +323,7 @@ func (s *Server) handleUpdateTicket(
 		return nil, UpdateTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := client.UpdateTicket(input.ID, input.Title, input.Body, input.References, input.Tags)
+	resp, err := client.UpdateTicket(input.ID, input.Title, input.Body, input.Type, input.References, input.Tags)
 	if err != nil {
 		return nil, UpdateTicketOutput{}, wrapSDKError(err)
 	}

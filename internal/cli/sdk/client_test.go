@@ -483,7 +483,7 @@ func TestUpdateTicket_Success(t *testing.T) {
 
 	c := NewClient(srv.URL, "/p")
 	title := "Updated"
-	resp, err := c.UpdateTicket("abc123", &title, nil, nil, nil)
+	resp, err := c.UpdateTicket("abc123", &title, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -119,8 +119,8 @@ func (s *Store) Get(id string) (*Ticket, Status, error) {
 	return nil, "", &NotFoundError{Resource: "ticket", ID: id}
 }
 
-// Update modifies a ticket's title, body, references, and/or tags.
-func (s *Store) Update(id string, title, body *string, references, tags *[]string) (*Ticket, error) {
+// Update modifies a ticket's title, body, type, references, and/or tags.
+func (s *Store) Update(id string, title, body, ticketType *string, references, tags *[]string) (*Ticket, error) {
 	mu := s.ticketMu(id)
 	mu.Lock()
 	defer mu.Unlock()
@@ -147,6 +147,9 @@ func (s *Store) Update(id string, title, body *string, references, tags *[]strin
 	}
 	if body != nil {
 		ticket.Body = *body
+	}
+	if ticketType != nil {
+		ticket.Type = *ticketType
 	}
 	if references != nil {
 		ticket.References = *references

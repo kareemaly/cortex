@@ -523,8 +523,8 @@ func (c *Client) UnlinkProject(projectPath string) error {
 	return nil
 }
 
-// UpdateTicket updates a ticket's title, body, references, and/or tags by ID (status-agnostic).
-func (c *Client) UpdateTicket(id string, title, body *string, references, tags *[]string) (*TicketResponse, error) {
+// UpdateTicket updates a ticket's title, body, type, references, and/or tags by ID (status-agnostic).
+func (c *Client) UpdateTicket(id string, title, body, ticketType *string, references, tags *[]string) (*TicketResponse, error) {
 	// Discover current status
 	current, err := c.GetTicketByID(id)
 	if err != nil {
@@ -537,6 +537,9 @@ func (c *Client) UpdateTicket(id string, title, body *string, references, tags *
 	}
 	if body != nil {
 		reqBody["body"] = *body
+	}
+	if ticketType != nil {
+		reqBody["type"] = *ticketType
 	}
 	if references != nil {
 		reqBody["references"] = *references
