@@ -92,6 +92,13 @@ type Model struct {
 	showUnlinkConfirm bool
 	unlinkProjectPath string
 
+	// Kill session confirmation state.
+	showKillConfirm bool
+	killProjectPath string
+	killSessionID   string // ticket short ID (first 8 chars) or "architect"
+	killSessionName string // display name for the confirmation prompt
+	killing         bool
+
 	// Architect mode selection state (for orphaned sessions).
 	showArchitectModeModal   bool
 	architectModeProjectPath string
@@ -154,6 +161,16 @@ type FocusErrorMsg struct {
 type UnlinkProjectMsg struct {
 	ProjectPath string
 	Err         error
+}
+
+// SessionKilledMsg is sent when a session kill completes.
+type SessionKilledMsg struct {
+	ProjectPath string
+}
+
+// SessionKillErrorMsg is sent when a session kill fails.
+type SessionKillErrorMsg struct {
+	Err error
 }
 
 // SSEDisconnectedMsg is sent when a project's SSE connection is lost.
@@ -372,6 +389,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.clearStatusAfterDelay()
 
+	case SessionKilledMsg:
+		m.killing = false
+		m.showKillConfirm = false
+		m.statusMsg = "Session killed"
+		m.statusIsError = false
+		m.logBuf.Infof("kill", "session killed: %s", filepath.Base(msg.ProjectPath))
+		idx := m.findProject(msg.ProjectPath)
+		if idx >= 0 {
+			return m, tea.Batch(m.loadProjectDetail(msg.ProjectPath), m.clearStatusAfterDelay())
+		}
+		return m, m.clearStatusAfterDelay()
+
+	case SessionKillErrorMsg:
+		m.killing = false
+		m.showKillConfirm = false
+		m.statusMsg = fmt.Sprintf("Kill error: %s", msg.Err)
+		m.statusIsError = true
+		m.logBuf.Errorf("kill", "session kill failed: %s", msg.Err)
+		return m, m.clearStatusAfterDelay()
+
 	case ClearStatusMsg:
 		m.statusMsg = ""
 		m.statusIsError = false
@@ -406,6 +443,27 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Handle kill confirmation mode.
+	if m.showKillConfirm {
+		switch {
+		case isKey(msg, KeyYes):
+			m.showKillConfirm = false
+			m.killing = true
+			m.statusMsg = "Killing session..."
+			m.statusIsError = false
+			return m, m.killSession(m.killProjectPath, m.killSessionID)
+		case isKey(msg, KeyNo, KeyEscape):
+			m.showKillConfirm = false
+			m.killProjectPath = ""
+			m.killSessionID = ""
+			m.killSessionName = ""
+			m.statusMsg = "Kill cancelled"
+			m.statusIsError = false
+			return m, m.clearStatusAfterDelay()
+		}
+		return m, nil
+	}
+
 	// Handle architect mode selection modal.
 	if m.showArchitectModeModal {
 		return m.handleArchitectModeKey(msg)
@@ -429,8 +487,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Don't process other keys while loading.
-	if m.loading {
+	// Don't process other keys while loading or killing.
+	if m.loading || m.killing {
 		return m, nil
 	}
 
@@ -506,6 +564,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Spawn architect.
 	if isKey(msg, KeySpawn) {
 		return m.handleSpawnArchitect()
+	}
+
+	// Kill session.
+	if isKey(msg, KeyKill) {
+		return m.handleKillSession()
 	}
 
 	// Unlink project.
@@ -616,6 +679,65 @@ func (m Model) handleUnlinkProject() (tea.Model, tea.Cmd) {
 	pd := m.projects[r.projectIndex]
 	m.showUnlinkConfirm = true
 	m.unlinkProjectPath = pd.project.Path
+	return m, nil
+}
+
+// handleKillSession initiates kill for the selected session.
+func (m Model) handleKillSession() (tea.Model, tea.Cmd) {
+	if m.cursor < 0 || m.cursor >= len(m.rows) {
+		return m, nil
+	}
+	r := m.rows[m.cursor]
+	pd := m.projects[r.projectIndex]
+
+	if !pd.project.Exists {
+		return m, nil
+	}
+
+	if r.kind == rowSession {
+		ticket := m.findTicket(pd, r.ticketID)
+		if ticket == nil {
+			return m, nil
+		}
+		sessionID := ticket.ID[:8]
+		if ticket.IsOrphaned {
+			// Orphaned — kill immediately, no confirmation.
+			m.killing = true
+			m.statusMsg = "Killing orphaned session..."
+			m.statusIsError = false
+			return m, m.killSession(pd.project.Path, sessionID)
+		}
+		// Active — show confirmation.
+		m.showKillConfirm = true
+		m.killProjectPath = pd.project.Path
+		m.killSessionID = sessionID
+		m.killSessionName = ticket.Title
+		return m, nil
+	}
+
+	if r.kind == rowProject {
+		if pd.architect == nil || (pd.architect.State != "active" && pd.architect.State != "orphaned") {
+			return m, nil
+		}
+		if pd.architect.State == "orphaned" {
+			// Orphaned architect — kill immediately.
+			m.killing = true
+			m.statusMsg = "Killing orphaned architect..."
+			m.statusIsError = false
+			return m, m.killSession(pd.project.Path, "architect")
+		}
+		// Active architect — show confirmation.
+		m.showKillConfirm = true
+		m.killProjectPath = pd.project.Path
+		m.killSessionID = "architect"
+		title := pd.project.Title
+		if title == "" {
+			title = filepath.Base(pd.project.Path)
+		}
+		m.killSessionName = title + " architect"
+		return m, nil
+	}
+
 	return m, nil
 }
 
@@ -743,6 +865,17 @@ func (m Model) View() string {
 		b.WriteString(warnBadgeStyle.Render(confirmMsg))
 		b.WriteString("\n")
 		b.WriteString(mutedStyleRender.Render(m.unlinkProjectPath))
+		return b.String()
+	}
+
+	// Kill confirmation dialog.
+	if m.showKillConfirm {
+		name := m.killSessionName
+		if len(name) > 30 {
+			name = name[:27] + "..."
+		}
+		confirmMsg := fmt.Sprintf("Kill active session '%s'? [y]es [n]o", name)
+		b.WriteString(warnBadgeStyle.Render(confirmMsg))
 		return b.String()
 	}
 
@@ -1248,6 +1381,18 @@ func (m Model) unlinkProject(projectPath string) tea.Cmd {
 	return func() tea.Msg {
 		err := m.globalClient.UnlinkProject(projectPath)
 		return UnlinkProjectMsg{ProjectPath: projectPath, Err: err}
+	}
+}
+
+// killSession kills a session by ID for a project.
+func (m Model) killSession(projectPath, sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		client := sdk.DefaultClient(projectPath)
+		err := client.KillSession(sessionID)
+		if err != nil {
+			return SessionKillErrorMsg{Err: err}
+		}
+		return SessionKilledMsg{ProjectPath: projectPath}
 	}
 }
 
