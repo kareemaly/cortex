@@ -1,12 +1,12 @@
 ---
-id: d52a8163-fccf-4aaa-b67a-d5581c5e48ce
+id: 9be9bdc6-22a7-4a8d-9d22-474598735774
 title: 'Add OSS standard files: LICENSE, CODE_OF_CONDUCT, .gitignore improvements'
-type: work
+type: chore
 tags:
     - oss-readiness
     - docs
-created: 2026-02-08T13:11:06.088443Z
-updated: 2026-02-08T13:32:32.934346Z
+created: 2026-02-18T08:02:38.303517Z
+updated: 2026-02-18T08:07:14.642146Z
 ---
 Add standard open-source files and polish existing ones.
 

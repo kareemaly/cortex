@@ -15,5 +15,8 @@ ticket:
       - "--allow-dangerously-skip-permissions"
       - "--allowedTools"
       - "mcp__cortex__readReference"
+  chore:
+    agent: opencode
+    args: ["--model", "opencode/glm-5-free"]
 git:
   worktrees: false

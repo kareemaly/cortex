@@ -25,3 +25,15 @@ Thumbs.db
 
 # Go
 vendor/
+
+# Environment files (potential secrets)
+.env*
+
+# Daemon PID files
+*.pid
+
+# Local log files
+.cortex/logs/
+
+# Session state
+.cortex/sessions.json
