@@ -322,7 +322,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.loadTicket(), m.waitForEvent())
 
 	case EventMsg:
-		m.loading = true
 		return m, tea.Batch(m.loadTicket(), m.waitForEvent())
 
 	case sseDisconnectedMsg:
