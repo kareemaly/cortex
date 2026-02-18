@@ -311,6 +311,10 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	switch req.AgentType {
 	case AgentTypeArchitect:
 		launcherParams.ReplaceSystemPrompt = true
+		// For opencode architects, explicitly select the cortex agent
+		if req.Agent == "opencode" {
+			launcherParams.AgentArgs = append([]string{"--agent", "cortex"}, launcherParams.AgentArgs...)
+		}
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": session.ArchitectSessionKey,
 			"CORTEX_PROJECT":   req.ProjectPath,
@@ -458,6 +462,10 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 	if req.AgentType == AgentTypeArchitect {
 		launcherParams.ReplaceSystemPrompt = true
+		// For opencode architects, explicitly select the cortex agent
+		if req.Agent == "opencode" {
+			launcherParams.AgentArgs = append([]string{"--agent", "cortex"}, launcherParams.AgentArgs...)
+		}
 	}
 
 	if openCodeConfigJSON != "" {

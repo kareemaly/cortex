@@ -34,26 +34,22 @@ type OpenCodeMCPConfig struct {
 // instead of embedding in agent.prompt, so OpenCode's built-in provider prompt is preserved.
 func GenerateOpenCodeConfigContent(claudeConfig *ClaudeMCPConfig, systemPrompt string, agentType AgentType, systemPromptFilePath string) (string, error) {
 	config := OpenCodeConfigContent{
-		Agent: map[string]OpenCodeAgentConfig{
-			"cortex": {
-				Description: "Cortex ticket agent",
-				Mode:        "bypassPermissions",
-				Permission:  map[string]string{"*": "allow"},
-			},
-		},
-		MCP: make(map[string]OpenCodeMCPConfig),
+		Agent: map[string]OpenCodeAgentConfig{},
+		MCP:   make(map[string]OpenCodeMCPConfig),
 	}
 
 	if agentType == AgentTypeTicketAgent {
 		// Ticket agents use instructions (file paths appended to system prompt)
 		// so OpenCode's built-in provider prompt is preserved.
+		// No custom agent entry needed — users can select agents via cortex.yaml args.
 		if systemPromptFilePath != "" {
 			config.Instructions = []string{systemPromptFilePath}
 		}
 	} else {
-		// Architect agents replace the system prompt entirely.
+		// Architect agents need the cortex agent definition with the system prompt
+		// embedded in agent.prompt (replacing OpenCode's built-in provider prompt).
 		config.Agent["cortex"] = OpenCodeAgentConfig{
-			Description: "Cortex ticket agent",
+			Description: "Cortex architect agent",
 			Mode:        "bypassPermissions",
 			Prompt:      systemPrompt,
 			Permission:  map[string]string{"*": "allow"},

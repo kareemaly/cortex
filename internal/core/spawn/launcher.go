@@ -169,9 +169,6 @@ func buildOpenCodeCommand(params LauncherParams) string {
 	var parts []string
 	parts = append(parts, "opencode")
 
-	// Select the cortex agent (defined in OPENCODE_CONFIG_CONTENT)
-	parts = append(parts, "--agent", "cortex")
-
 	// Add prompt via $(cat file)
 	if params.PromptFilePath != "" {
 		parts = append(parts, "--prompt", fmt.Sprintf("\"$(cat %s)\"", shellQuote(params.PromptFilePath)))

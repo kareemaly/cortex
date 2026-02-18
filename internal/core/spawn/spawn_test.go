@@ -1888,9 +1888,12 @@ func TestWriteLauncherScript_OpenCode(t *testing.T) {
 		t.Error("expected shebang line")
 	}
 
-	// Verify command starts with opencode
-	if !containsSubstr(script, "opencode --agent cortex") {
-		t.Error("expected 'opencode --agent cortex' in script")
+	// Verify command starts with opencode (no hardcoded --agent for ticket agents)
+	if !containsSubstr(script, "opencode") {
+		t.Error("expected 'opencode' in script")
+	}
+	if containsSubstr(script, "--agent") {
+		t.Error("ticket agent should not have --agent flag (user chooses via cortex.yaml args)")
 	}
 
 	// Verify prompt via $(cat)
@@ -2025,9 +2028,12 @@ func TestSpawn_OpenCode_Success(t *testing.T) {
 	}
 	script := string(data)
 
-	// Verify opencode command
-	if !containsSubstr(script, "opencode --agent cortex") {
-		t.Error("expected 'opencode --agent cortex' in script")
+	// Verify opencode command (no hardcoded --agent for ticket agents)
+	if !containsSubstr(script, "opencode") {
+		t.Error("expected 'opencode' in script")
+	}
+	if containsSubstr(script, "--agent") {
+		t.Error("ticket agent should not have --agent flag")
 	}
 
 	// Verify OPENCODE_CONFIG_CONTENT is exported
@@ -2106,20 +2112,9 @@ func TestSpawn_OpenCode_ConfigContent(t *testing.T) {
 		t.Fatalf("failed to parse OPENCODE_CONFIG_CONTENT JSON: %v\nraw: %s", err, configJSON)
 	}
 
-	// Verify agent config
-	agent, ok := config.Agent["cortex"]
-	if !ok {
-		t.Fatal("expected 'cortex' agent in config")
-	}
-	if agent.Mode != "bypassPermissions" {
-		t.Errorf("expected mode 'bypassPermissions', got: %s", agent.Mode)
-	}
-	if agent.Permission["*"] != "allow" {
-		t.Errorf("expected permission '*' = 'allow', got: %v", agent.Permission)
-	}
-	// Ticket agents use instructions (file path) instead of agent.prompt
-	if agent.Prompt != "" {
-		t.Errorf("expected empty agent prompt for ticket agent, got: %s", agent.Prompt)
+	// Verify no agent config for ticket agents (users choose via cortex.yaml args)
+	if len(config.Agent) != 0 {
+		t.Errorf("expected no agent entries for ticket agent, got: %d", len(config.Agent))
 	}
 	if len(config.Instructions) != 1 {
 		t.Fatalf("expected 1 instruction for ticket agent, got: %d", len(config.Instructions))
@@ -2201,15 +2196,18 @@ func TestOrchestrate_OpenCode_Normal(t *testing.T) {
 		t.Errorf("expected move to progress, got: %s", store.moveCalls[0].Status)
 	}
 
-	// Verify launcher uses opencode command
+	// Verify launcher uses opencode command (no hardcoded --agent for ticket agents)
 	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
 	data, err := os.ReadFile(launcherPath)
 	if err != nil {
 		t.Fatalf("failed to read launcher script: %v", err)
 	}
 	script := string(data)
-	if !containsSubstr(script, "opencode --agent cortex") {
-		t.Error("expected 'opencode --agent cortex' in launcher script")
+	if !containsSubstr(script, "opencode") {
+		t.Error("expected 'opencode' in launcher script")
+	}
+	if containsSubstr(script, "--agent") {
+		t.Error("ticket agent should not have --agent flag")
 	}
 	if containsSubstr(script, "claude") {
 		t.Error("expected no 'claude' command in opencode launcher")
@@ -2263,15 +2261,14 @@ func TestOrchestrate_OpenCode_Resume_Orphaned(t *testing.T) {
 		t.Error("expected OPENCODE_CONFIG_CONTENT export in resume launcher")
 	}
 
-	// Extract and verify empty system prompt (resume case)
+	// Extract and verify no agent entries (ticket resume case)
 	configJSON := extractExportedEnvVar(t, script, "OPENCODE_CONFIG_CONTENT")
 	var config OpenCodeConfigContent
 	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
 		t.Fatalf("failed to parse OPENCODE_CONFIG_CONTENT: %v", err)
 	}
-	agent := config.Agent["cortex"]
-	if agent.Prompt != "" {
-		t.Errorf("expected empty prompt for resume, got: %s", agent.Prompt)
+	if len(config.Agent) != 0 {
+		t.Errorf("expected no agent entries for ticket resume, got: %d", len(config.Agent))
 	}
 
 	// No --resume flag (OpenCode doesn't support it)
@@ -2324,15 +2321,18 @@ ticket:
 		t.Errorf("expected session agent 'opencode' from config, got: %s", sessStore.lastCreateAgent)
 	}
 
-	// Verify launcher uses opencode command
+	// Verify launcher uses opencode command (no hardcoded --agent for ticket agents)
 	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
 	data, err := os.ReadFile(launcherPath)
 	if err != nil {
 		t.Fatalf("failed to read launcher script: %v", err)
 	}
 	script := string(data)
-	if !containsSubstr(script, "opencode --agent cortex") {
-		t.Error("expected 'opencode --agent cortex' in launcher script")
+	if !containsSubstr(script, "opencode") {
+		t.Error("expected 'opencode' in launcher script")
+	}
+	if containsSubstr(script, "--agent") {
+		t.Error("ticket agent should not have --agent flag")
 	}
 }
 
@@ -2471,10 +2471,9 @@ func TestGenerateOpenCodeConfigContent_TicketAgent(t *testing.T) {
 		t.Fatalf("failed to parse result JSON: %v", err)
 	}
 
-	// Ticket agents should NOT have agent.prompt set
-	agent := config.Agent["cortex"]
-	if agent.Prompt != "" {
-		t.Errorf("expected empty agent prompt for ticket agent, got: %s", agent.Prompt)
+	// Ticket agents should NOT have any agent entries
+	if len(config.Agent) != 0 {
+		t.Errorf("expected no agent entries for ticket agent, got: %d", len(config.Agent))
 	}
 
 	// Should have instructions with the file path
@@ -2511,10 +2510,9 @@ func TestGenerateOpenCodeConfigContent_TicketAgentNoFile(t *testing.T) {
 		t.Fatalf("failed to parse result JSON: %v", err)
 	}
 
-	// No agent.prompt
-	agent := config.Agent["cortex"]
-	if agent.Prompt != "" {
-		t.Errorf("expected empty agent prompt, got: %s", agent.Prompt)
+	// Ticket agents should NOT have any agent entries
+	if len(config.Agent) != 0 {
+		t.Errorf("expected no agent entries for ticket agent, got: %d", len(config.Agent))
 	}
 
 	// No instructions when file path is empty
@@ -2546,9 +2544,12 @@ func TestWriteLauncherScript_OpenCode_NoPrompt(t *testing.T) {
 	}
 	script := string(data)
 
-	// Should have opencode command
-	if !containsSubstr(script, "opencode --agent cortex") {
-		t.Error("expected 'opencode --agent cortex' in script")
+	// Should have opencode command (no hardcoded --agent for ticket agents)
+	if !containsSubstr(script, "opencode") {
+		t.Error("expected 'opencode' in script")
+	}
+	if containsSubstr(script, "--agent") {
+		t.Error("ticket agent should not have --agent flag")
 	}
 
 	// No --prompt flag when PromptFilePath is empty
@@ -2580,9 +2581,12 @@ func TestWriteLauncherScript_OpenCode_Resume(t *testing.T) {
 	}
 	script := string(data)
 
-	// Should have opencode command
-	if !containsSubstr(script, "opencode --agent cortex") {
-		t.Error("expected 'opencode --agent cortex' in script")
+	// Should have opencode command (no hardcoded --agent for ticket agents)
+	if !containsSubstr(script, "opencode") {
+		t.Error("expected 'opencode' in script")
+	}
+	if containsSubstr(script, "--agent") {
+		t.Error("ticket agent should not have --agent flag")
 	}
 
 	// --resume should NOT be in the script (OpenCode doesn't support it)
