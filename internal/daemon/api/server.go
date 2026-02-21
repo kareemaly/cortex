@@ -88,6 +88,15 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Post("/{id}/comments", docHandlers.AddComment)
 		})
 
+		// Note routes
+		noteHandlers := NewNoteHandlers(deps)
+		r.Route("/notes", func(r chi.Router) {
+			r.Get("/", noteHandlers.List)
+			r.Post("/", noteHandlers.Create)
+			r.Put("/{id}", noteHandlers.Update)
+			r.Delete("/{id}", noteHandlers.Delete)
+		})
+
 		// Architect routes
 		architectHandlers := NewArchitectHandlers(deps)
 		r.Route("/architect", func(r chi.Router) {

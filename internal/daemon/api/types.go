@@ -24,6 +24,8 @@ type (
 	DocResponse              = types.DocResponse
 	DocSummary               = types.DocSummary
 	ListDocsResponse         = types.ListDocsResponse
+	NoteResponse             = types.NoteResponse
+	ListNotesResponse        = types.ListNotesResponse
 	HealthResponse           = types.HealthResponse
 	ProjectTicketCounts      = types.ProjectTicketCounts
 	ProjectResponse          = types.ProjectResponse
@@ -147,6 +149,18 @@ type EditPromptRequest struct {
 // ResetPromptRequest is the request body for resetting an ejected prompt to default.
 type ResetPromptRequest struct {
 	Path string `json:"path"`
+}
+
+// CreateNoteRequest is the request body for creating a note.
+type CreateNoteRequest struct {
+	Text string  `json:"text"`
+	Due  *string `json:"due,omitempty"`
+}
+
+// UpdateNoteRequest is the request body for updating a note.
+type UpdateNoteRequest struct {
+	Text *string `json:"text,omitempty"`
+	Due  *string `json:"due,omitempty"`
 }
 
 // filterSummaryList converts tickets to summaries with optional query, dueBefore, and tag filters.

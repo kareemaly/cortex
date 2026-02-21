@@ -420,6 +420,79 @@ type ListDocsOutput struct {
 	Total int                `json:"total"`
 }
 
+// Note input types
+
+// ListNotesInput is the input for the listNotes tool.
+type ListNotesInput struct {
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+}
+
+// CreateNoteInput is the input for the createNote tool.
+type CreateNoteInput struct {
+	Text        string `json:"text" jsonschema:"The note/reminder text (required)"`
+	Due         string `json:"due,omitempty" jsonschema:"Optional due date in YYYY-MM-DD format"`
+	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+}
+
+// UpdateNoteInput is the input for the updateNote tool.
+type UpdateNoteInput struct {
+	ID          string  `json:"id" jsonschema:"The note ID to update"`
+	Text        *string `json:"text,omitempty" jsonschema:"New text (optional)"`
+	Due         *string `json:"due,omitempty" jsonschema:"New due date in YYYY-MM-DD format (optional, empty string to clear)"`
+	ProjectPath string  `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+}
+
+// DeleteNoteInput is the input for the deleteNote tool.
+type DeleteNoteInput struct {
+	ID string `json:"id" jsonschema:"The note ID to delete"`
+}
+
+// Note output types
+
+// NoteOutput is a note representation for MCP.
+type NoteOutput struct {
+	ID      string `json:"id"`
+	Text    string `json:"text"`
+	Due     string `json:"due,omitempty"`
+	Created string `json:"created"`
+}
+
+// ListNotesOutput is the output for the listNotes tool.
+type ListNotesOutput struct {
+	Notes []NoteOutput `json:"notes"`
+	Total int          `json:"total"`
+}
+
+// CreateNoteOutput is the output for the createNote tool.
+type CreateNoteOutput struct {
+	Note NoteOutput `json:"note"`
+}
+
+// UpdateNoteOutput is the output for the updateNote tool.
+type UpdateNoteOutput struct {
+	Note NoteOutput `json:"note"`
+}
+
+// DeleteNoteOutput is the output for the deleteNote tool.
+type DeleteNoteOutput struct {
+	Success bool   `json:"success"`
+	ID      string `json:"id"`
+}
+
+// noteResponseToOutput converts an SDK NoteResponse to an MCP NoteOutput.
+func noteResponseToOutput(r *types.NoteResponse) NoteOutput {
+	dueStr := ""
+	if r.Due != nil {
+		dueStr = r.Due.Format(time.DateOnly)
+	}
+	return NoteOutput{
+		ID:      r.ID,
+		Text:    r.Text,
+		Due:     dueStr,
+		Created: r.Created.Format(time.RFC3339),
+	}
+}
+
 // Conversion functions
 
 // docResponseToOutput converts an SDK DocResponse to an MCP DocOutput.

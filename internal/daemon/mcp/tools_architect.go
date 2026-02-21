@@ -155,6 +155,27 @@ func (s *Server) registerArchitectTools() {
 		Description: "Add a comment to a documentation file (types: review_requested, done, blocker, comment)",
 	}, s.handleAddDocComment)
 
+	// Note tools
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "listNotes",
+		Description: "List all active project notes/reminders",
+	}, s.handleListNotes)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "createNote",
+		Description: "Create a new note/reminder with optional due date (YYYY-MM-DD)",
+	}, s.handleCreateNote)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "updateNote",
+		Description: "Update a note's text and/or due date",
+	}, s.handleUpdateNote)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "deleteNote",
+		Description: "Delete a note by ID",
+	}, s.handleDeleteNote)
+
 	// List sessions
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "listSessions",

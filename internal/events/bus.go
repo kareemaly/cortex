@@ -21,6 +21,9 @@ const (
 	DocCreated      EventType = "doc_created"
 	DocUpdated      EventType = "doc_updated"
 	DocDeleted      EventType = "doc_deleted"
+	NoteCreated     EventType = "note_created"
+	NoteUpdated     EventType = "note_updated"
+	NoteDeleted     EventType = "note_deleted"
 )
 
 // Event represents a change in the system.

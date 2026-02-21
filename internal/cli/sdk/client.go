@@ -84,6 +84,8 @@ type (
 	DocResponse              = types.DocResponse
 	DocSummary               = types.DocSummary
 	ListDocsResponse         = types.ListDocsResponse
+	NoteResponse             = types.NoteResponse
+	ListNotesResponse        = types.ListNotesResponse
 	HealthResponse           = types.HealthResponse
 	ProjectTicketCounts      = types.ProjectTicketCounts
 	ProjectResponse          = types.ProjectResponse
@@ -1333,6 +1335,124 @@ func (c *Client) ListDocs(category, tag, query string) (*ListDocsResponse, error
 	}
 
 	return &listResult, nil
+}
+
+// ListNotes returns all notes for the project.
+func (c *Client) ListNotes() (*ListNotesResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/notes", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result ListNotesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// CreateNote creates a new note with optional due date.
+func (c *Client) CreateNote(text string, due *string) (*NoteResponse, error) {
+	reqBody := map[string]any{"text": text}
+	if due != nil {
+		reqBody["due"] = *due
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/notes", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusCreated {
+		return nil, c.parseError(resp)
+	}
+
+	var result NoteResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateNote updates a note's text and/or due date.
+func (c *Client) UpdateNote(id string, text *string, due *string) (*NoteResponse, error) {
+	reqBody := map[string]any{}
+	if text != nil {
+		reqBody["text"] = *text
+	}
+	if due != nil {
+		reqBody["due"] = *due
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPut, c.baseURL+"/notes/"+id, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result NoteResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteNote deletes a note by ID.
+func (c *Client) DeleteNote(id string) error {
+	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/notes/"+id, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusNoContent {
+		return c.parseError(resp)
+	}
+
+	return nil
 }
 
 // ListTags returns aggregated tags from tickets and docs, sorted by count descending.

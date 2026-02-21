@@ -13,6 +13,12 @@ If there are session docs below, start by reading the most recent one with `read
 
 {{.DocsList}}
 {{- end}}
+{{- if .Notes}}
+
+# Notes
+
+{{.Notes}}
+{{- end}}
 {{- if .TopTags}}
 
 # Tags

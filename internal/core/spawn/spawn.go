@@ -846,6 +846,29 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 		docsList = docSB.String()
 	}
 
+	// Fetch notes (graceful degradation)
+	var notesList string
+	notesResp, notesErr := client.ListNotes()
+	if notesErr == nil && len(notesResp.Notes) > 0 {
+		limit := min(50, len(notesResp.Notes))
+		today := time.Now().Truncate(24 * time.Hour)
+		var notesSB strings.Builder
+		for i := range limit {
+			n := notesResp.Notes[i]
+			prefix := "-"
+			dueStr := ""
+			if n.Due != nil {
+				dueDate := n.Due.Truncate(24 * time.Hour)
+				dueStr = fmt.Sprintf(" (due: %s)", n.Due.Format(time.DateOnly))
+				if !dueDate.After(today) {
+					prefix = "- ⚠️"
+				}
+			}
+			notesSB.WriteString(fmt.Sprintf("%s [%s] %s%s\n", prefix, n.ID, n.Text, dueStr))
+		}
+		notesList = notesSB.String()
+	}
+
 	// Try to load and render KICKOFF template
 	kickoffTemplate, kickoffErr := resolver.ResolveArchitectPrompt(prompt.StageKickoff)
 	if kickoffErr == nil {
@@ -855,6 +878,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 			CurrentDate: time.Now().Format("2006-01-02 15:04 MST"),
 			TopTags:     topTags,
 			DocsList:    docsList,
+			Notes:       notesList,
 		}
 		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
 		if renderErr == nil {

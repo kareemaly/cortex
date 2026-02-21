@@ -197,6 +197,19 @@ type ListTagsResponse struct {
 	Tags []TagCount `json:"tags"`
 }
 
+// NoteResponse is the response for a single note.
+type NoteResponse struct {
+	ID      string     `json:"id"`
+	Text    string     `json:"text"`
+	Due     *time.Time `json:"due,omitempty"`
+	Created time.Time  `json:"created"`
+}
+
+// ListNotesResponse is a list of notes.
+type ListNotesResponse struct {
+	Notes []NoteResponse `json:"notes"`
+}
+
 // PromptFileInfo describes a single prompt file with its ejection status.
 type PromptFileInfo struct {
 	Path     string `json:"path"`

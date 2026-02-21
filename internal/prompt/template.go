@@ -25,6 +25,7 @@ type ArchitectKickoffVars struct {
 	CurrentDate string
 	TopTags     string // comma-separated top tags
 	DocsList    string // formatted recent docs list
+	Notes       string // formatted notes/reminders list
 }
 
 // RenderTemplate renders a template string with the given variables.

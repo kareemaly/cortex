@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/kareemaly/cortex/internal/docs"
+	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -46,6 +47,19 @@ func handleDocError(w http.ResponseWriter, err error, logger *slog.Logger) {
 		writeError(w, http.StatusBadRequest, "validation_error", e.Error())
 	default:
 		logger.Error("internal docs store error", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
+	}
+}
+
+// handleNoteError converts notes store errors to HTTP responses.
+func handleNoteError(w http.ResponseWriter, err error, logger *slog.Logger) {
+	switch e := err.(type) {
+	case *storage.NotFoundError:
+		writeError(w, http.StatusNotFound, "not_found", e.Error())
+	case *storage.ValidationError:
+		writeError(w, http.StatusBadRequest, "validation_error", e.Error())
+	default:
+		logger.Error("internal notes store error", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
 	}
 }
