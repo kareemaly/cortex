@@ -51,12 +51,15 @@ Tickets and docs use **YAML frontmatter + markdown body** stored as `index.md` w
 
 Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurable via `tickets.path` and `docs.path` in `.cortex/cortex.yaml`). Sessions are ephemeral and stored in `.cortex/sessions.json`.
 
+Notes use a **single YAML file** (`{projectRoot}/notes.yaml`) — lightweight reminders surfaced in the architect kickoff prompt.
+
 ## Critical Implementation Notes
 
 - **HTTP-only communication**: All clients (CLI, TUI, MCP) communicate via HTTP to daemon. No direct filesystem access to ticket store.
 - **Project context**: Always use `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
 - **StoreManager**: Single source of truth for ticket state. Located in `internal/daemon/api/store_manager.go`.
 - **DocsStoreManager**: Manages doc stores per project. Located in `internal/daemon/api/docs_store_manager.go`.
+- **NotesStoreManager**: Manages note stores per project. Located in `internal/daemon/api/notes_store_manager.go`.
 - **SessionManager**: Manages ephemeral session stores per project. Located in `internal/daemon/api/session_manager.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 
@@ -89,6 +92,7 @@ Default paths are `{projectRoot}/tickets/` and `{projectRoot}/docs/` (configurab
 | MCP tools | `internal/daemon/mcp/` |
 | Ticket store | `internal/ticket/` |
 | Docs store | `internal/docs/` |
+| Notes store | `internal/notes/` |
 | SDK client | `internal/cli/sdk/client.go` |
 | Spawn orchestration | `internal/core/spawn/` |
 | Project config | `internal/project/config/` |
@@ -128,7 +132,7 @@ Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/s
 
 **Global** (no project header): `GET /health`, `GET /projects`, `POST /projects`, global config (`/config/global`), daemon logs/status (`/daemon/logs`, `/daemon/status`).
 
-**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn/conclude, session kill/approve, SSE events, docs CRUD, tags aggregation, project config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`, `/prompts/reset`).
+**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, comments, reviews, conclude, architect spawn/conclude, session kill/approve, SSE events, docs CRUD, notes CRUD (`/notes`), tags aggregation, project config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`, `/prompts/reset`).
 
 ## MCP Tools
 
@@ -156,6 +160,10 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 | `moveDoc` | Move a doc to a different category |
 | `listDocs` | List docs with optional category, tag, and search filters |
 | `addDocComment` | Add a comment to a documentation file |
+| `listNotes` | List all project notes/reminders |
+| `createNote` | Create a note with optional due date (YYYY-MM-DD) |
+| `updateNote` | Update a note's text and/or due date |
+| `deleteNote` | Delete a note by ID |
 | `listSessions` | List all active agent sessions |
 | `concludeSession` | Conclude the architect session and clean up |
 
