@@ -859,26 +859,6 @@ func (c *Client) ConcludeArchitectSession(content string) (*ConcludeSessionRespo
 	return &result, nil
 }
 
-// FocusDaemonDashboard focuses the CortexDaemon dashboard window.
-func (c *Client) FocusDaemonDashboard() error {
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/daemon/focus", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req) // No project header needed
-	if err != nil {
-		return fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return c.parseError(resp)
-	}
-
-	return nil
-}
-
 // FocusArchitect focuses the architect tmux window (window 0) for the project.
 func (c *Client) FocusArchitect() error {
 	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/architect/focus", nil)

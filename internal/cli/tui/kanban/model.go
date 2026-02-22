@@ -368,14 +368,6 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle 'gd' - focus daemon dashboard
-	if m.pendingG && isKey(msg, KeyD) {
-		m.pendingG = false
-		m.statusMsg = "Focusing daemon dashboard..."
-		m.statusIsError = false
-		return m, m.focusDaemonDashboard()
-	}
-
 	// Clear pending g on any other key
 	m.pendingG = false
 
@@ -697,16 +689,6 @@ func (m Model) focusTicket(ticket *sdk.TicketSummary) tea.Cmd {
 			return FocusErrorMsg{Err: err}
 		}
 		return FocusSuccessMsg{Window: ticket.Title}
-	}
-}
-
-// focusDaemonDashboard returns a command to focus the CortexDaemon dashboard window.
-func (m Model) focusDaemonDashboard() tea.Cmd {
-	return func() tea.Msg {
-		if err := m.client.FocusDaemonDashboard(); err != nil {
-			return FocusErrorMsg{Err: err}
-		}
-		return FocusSuccessMsg{Window: "daemon dashboard"}
 	}
 }
 

@@ -29,7 +29,6 @@ const (
 	KeyShiftG       Key = "G"
 	KeyOpen         Key = "o"
 	KeyFocus        Key = "f"
-	KeyD            Key = "d"
 	KeyExclaim      Key = "!"
 	KeyDeleteOrphan Key = "D"
 	KeyYes          Key = "y"
@@ -48,5 +47,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the kanban board.
 func helpText() string {
-	return "[o/enter] open  [s]pawn  [f]ocus  [r]efresh  [h/l] columns  [j/k/gg/G/gd] navigate  [!] logs  [q]uit"
+	return "[o/enter] open  [s]pawn  [f]ocus  [r]efresh  [h/l] columns  [j/k/gg/G] navigate  [!] logs  [q]uit"
 }

@@ -32,8 +32,6 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 	r.Get("/projects", ProjectsHandler(deps.StoreManager))
 	r.Post("/projects", RegisterProjectHandler())
 	r.Delete("/projects", UnlinkProjectHandler())
-	r.Post("/daemon/focus", DaemonFocusHandler(deps.TmuxManager))
-
 	// Global config routes (no project header required)
 	configHandlers := NewConfigHandlers(deps)
 	r.Get("/config/global", configHandlers.ReadGlobalConfig)

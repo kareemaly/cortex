@@ -274,19 +274,6 @@ func TestUnlinkProject_Success(t *testing.T) {
 	}
 }
 
-// --- FocusDaemonDashboard ---
-
-func TestFocusDaemonDashboard_Success(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("POST", "/daemon/focus", http.StatusOK, map[string]bool{"success": true})
-
-	c := NewClient(srv.URL, "/p")
-	err := c.FocusDaemonDashboard()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 // --- Ticket CRUD ---
 
 func TestListAllTickets_NoFilters(t *testing.T) {
