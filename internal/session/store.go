@@ -24,7 +24,7 @@ func NewStore(path string) *Store {
 
 // Create adds a new session for the given ticket.
 // Returns the key (ticket short ID) and the created session.
-func (s *Store) Create(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (string, *Session, error) {
+func (s *Store) Create(ticketID, agent, tmuxWindow string) (string, *Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -35,14 +35,12 @@ func (s *Store) Create(ticketID, agent, tmuxWindow string, worktreePath, feature
 
 	key := storage.ShortID(ticketID)
 	session := &Session{
-		Type:          SessionTypeTicket,
-		TicketID:      ticketID,
-		Agent:         agent,
-		TmuxWindow:    tmuxWindow,
-		WorktreePath:  worktreePath,
-		FeatureBranch: featureBranch,
-		StartedAt:     time.Now().UTC(),
-		Status:        AgentStatusStarting,
+		Type:       SessionTypeTicket,
+		TicketID:   ticketID,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now().UTC(),
+		Status:     AgentStatusStarting,
 	}
 
 	sessions[key] = session

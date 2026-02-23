@@ -32,10 +32,8 @@ type Session struct {
 	Type          SessionType `json:"type"`
 	TicketID      string      `json:"ticket_id,omitempty"`
 	Agent         string      `json:"agent"`
-	TmuxWindow    string      `json:"tmux_window"`
-	WorktreePath  *string     `json:"worktree_path,omitempty"`
-	FeatureBranch *string     `json:"feature_branch,omitempty"`
-	StartedAt     time.Time   `json:"started_at"`
+	TmuxWindow string      `json:"tmux_window"`
+	StartedAt  time.Time   `json:"started_at"`
 	Status        AgentStatus `json:"status"`
 	Tool          *string     `json:"tool,omitempty"`
 	Work          *string     `json:"work,omitempty"`

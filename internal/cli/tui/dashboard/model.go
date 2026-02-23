@@ -1046,9 +1046,7 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 		badge = "orphaned"
 	}
 	badgeStyled := progressBadgeStyle.Render(badge)
-	if ticket.Status == "review" && !ticket.IsOrphaned {
-		badgeStyled = reviewBadgeStyle.Render(badge)
-	} else if ticket.IsOrphaned {
+	if ticket.IsOrphaned {
 		badgeStyled = orphanedIconStyle.Render(badge)
 	}
 

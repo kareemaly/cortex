@@ -35,7 +35,7 @@ type StoreInterface interface {
 
 // SessionStoreInterface defines the session store operations needed for spawning.
 type SessionStoreInterface interface {
-	Create(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (string, *session.Session, error)
+	Create(ticketID, agent, tmuxWindow string) (string, *session.Session, error)
 	End(ticketShortID string) error
 	GetByTicketID(ticketID string) (*session.Session, error)
 	CreateArchitect(agent, tmuxWindow string) (*session.Session, error)
@@ -170,7 +170,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	if s.deps.SessionStore != nil {
 		switch req.AgentType {
 		case AgentTypeTicketAgent:
-			_, _, err := s.deps.SessionStore.Create(req.TicketID, req.Agent, windowName, nil, nil)
+			_, _, err := s.deps.SessionStore.Create(req.TicketID, req.Agent, windowName)
 			if err != nil {
 				return nil, err
 			}

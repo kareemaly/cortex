@@ -18,7 +18,7 @@ func (s *Server) registerTicketTools() {
 }
 
 // handleConcludeSession concludes the session via the daemon API.
-// All cleanup (worktree removal, tmux window kill) is handled by the daemon.
+// All cleanup (tmux window kill) is handled by the daemon.
 func (s *Server) handleConcludeSession(
 	ctx context.Context,
 	req *mcp.CallToolRequest,

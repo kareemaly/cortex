@@ -13,15 +13,13 @@ type TmuxChecker interface {
 // ToSessionResponse converts a session.Session to SessionResponse.
 func ToSessionResponse(s *session.Session) SessionResponse {
 	return SessionResponse{
-		Type:          string(s.Type),
-		TicketID:      s.TicketID,
-		Agent:         s.Agent,
-		TmuxWindow:    s.TmuxWindow,
-		WorktreePath:  s.WorktreePath,
-		FeatureBranch: s.FeatureBranch,
-		StartedAt:     s.StartedAt,
-		Status:        string(s.Status),
-		Tool:          s.Tool,
+		Type:       string(s.Type),
+		TicketID:   s.TicketID,
+		Agent:      s.Agent,
+		TmuxWindow: s.TmuxWindow,
+		StartedAt:  s.StartedAt,
+		Status:     string(s.Status),
+		Tool:       s.Tool,
 	}
 }
 

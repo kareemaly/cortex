@@ -26,7 +26,7 @@ func TestCreate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	key, session, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "fix-auth-bug", nil, nil)
+	key, session, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "fix-auth-bug")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -51,30 +51,11 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-func TestCreateWithOptionalFields(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	wt := "/path/to/worktree"
-	fb := "ticket/fix-auth"
-	_, session, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window", &wt, &fb)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-
-	if session.WorktreePath == nil || *session.WorktreePath != wt {
-		t.Error("worktree_path not set correctly")
-	}
-	if session.FeatureBranch == nil || *session.FeatureBranch != fb {
-		t.Error("feature_branch not set correctly")
-	}
-}
-
 func TestGet(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	key, _, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window", nil, nil)
+	key, _, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -94,7 +75,7 @@ func TestGetByTicketID(t *testing.T) {
 	defer cleanup()
 
 	ticketID := "a1b2c3d4-e5f6-7890-abcd-ef0123456789"
-	_, _, err := store.Create(ticketID, "claude", "window", nil, nil)
+	_, _, err := store.Create(ticketID, "claude", "window")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -126,7 +107,7 @@ func TestUpdateStatus(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window", nil, nil)
+	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 
 	tool := "Edit"
 	err := store.UpdateStatus(key, AgentStatusInProgress, &tool, nil)
@@ -157,7 +138,7 @@ func TestEnd(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window", nil, nil)
+	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 
 	err := store.End(key)
 	if err != nil {
@@ -184,8 +165,8 @@ func TestList(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, _, _ = store.Create("a1b2c3d4-0000-0000-0000-000000000001", "claude", "window1", nil, nil)
-	_, _, _ = store.Create("b2c3d4e5-0000-0000-0000-000000000002", "opencode", "window2", nil, nil)
+	_, _, _ = store.Create("a1b2c3d4-0000-0000-0000-000000000001", "claude", "window1")
+	_, _, _ = store.Create("b2c3d4e5-0000-0000-0000-000000000002", "opencode", "window2")
 
 	sessions, err := store.List()
 	if err != nil {
@@ -233,7 +214,7 @@ func TestCreateSetsTicketType(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, sess, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window", nil, nil)
+	_, sess, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -329,7 +310,7 @@ func TestConcurrentAccess(t *testing.T) {
 	defer cleanup()
 
 	// Create a session to operate on
-	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window", nil, nil)
+	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 
 	const goroutines = 10
 	var wg sync.WaitGroup

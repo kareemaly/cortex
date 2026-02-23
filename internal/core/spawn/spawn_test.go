@@ -55,21 +55,19 @@ func newMockSessionStore() *mockSessionStore {
 	}
 }
 
-func (m *mockSessionStore) Create(ticketID, agent, tmuxWindow string, worktreePath, featureBranch *string) (string, *session.Session, error) {
+func (m *mockSessionStore) Create(ticketID, agent, tmuxWindow string) (string, *session.Session, error) {
 	if m.createErr != nil {
 		return "", nil, m.createErr
 	}
 	m.lastCreateAgent = agent
 	shortID := storage.ShortID(ticketID)
 	sess := &session.Session{
-		Type:          session.SessionTypeTicket,
-		TicketID:      ticketID,
-		Agent:         agent,
-		TmuxWindow:    tmuxWindow,
-		WorktreePath:  worktreePath,
-		FeatureBranch: featureBranch,
-		StartedAt:     time.Now(),
-		Status:        session.AgentStatusStarting,
+		Type:       session.SessionTypeTicket,
+		TicketID:   ticketID,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now(),
+		Status:     session.AgentStatusStarting,
 	}
 	m.sessions[shortID] = sess
 	return shortID, sess, nil

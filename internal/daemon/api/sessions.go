@@ -216,13 +216,6 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		TicketID:    t.ID,
 		TicketTitle: t.Title,
 		TicketBody:  t.Body,
-		IsWorktree:  sess.WorktreePath != nil,
-	}
-	if sess.WorktreePath != nil {
-		vars.WorktreePath = *sess.WorktreePath
-	}
-	if sess.FeatureBranch != nil {
-		vars.WorktreeBranch = *sess.FeatureBranch
 	}
 	rendered, err := prompt.RenderTemplate(approveContent, vars)
 	if err != nil {

@@ -5,7 +5,6 @@ import "github.com/charmbracelet/lipgloss"
 // Colors for the dashboard.
 var (
 	progressColor = lipgloss.Color("214") // yellow/orange
-	reviewColor   = lipgloss.Color("39")  // blue
 	activeColor   = lipgloss.Color("212") // pink/magenta for active selection
 	errorColor    = lipgloss.Color("196") // red for errors
 	mutedColor    = lipgloss.Color("240") // muted gray
@@ -42,9 +41,6 @@ var (
 	// Status badge styles.
 	progressBadgeStyle = lipgloss.NewStyle().
 				Foreground(progressColor)
-
-	reviewBadgeStyle = lipgloss.NewStyle().
-				Foreground(reviewColor)
 
 	// Duration style (muted).
 	durationStyle = lipgloss.NewStyle().
