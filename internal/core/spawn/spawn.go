@@ -850,7 +850,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	var notesList string
 	notesResp, notesErr := client.ListNotes()
 	if notesErr == nil && len(notesResp.Notes) > 0 {
-		limit := min(50, len(notesResp.Notes))
+		limit := min(20, len(notesResp.Notes))
 		today := time.Now().Truncate(24 * time.Hour)
 		var notesSB strings.Builder
 		for i := range limit {
