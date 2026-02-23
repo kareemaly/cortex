@@ -790,8 +790,6 @@ func (m Model) deleteNote(id string) tea.Cmd {
 	}
 }
 
-// --- SSE commands (copied from docs pattern) ---
-
 func (m Model) subscribeEvents() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithCancel(context.Background())

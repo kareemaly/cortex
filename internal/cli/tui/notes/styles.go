@@ -2,7 +2,6 @@ package notes
 
 import "github.com/charmbracelet/lipgloss"
 
-// Colors matching the kanban/docs palette.
 var (
 	errorColor  = lipgloss.Color("196") // red
 	mutedColor  = lipgloss.Color("240") // muted gray

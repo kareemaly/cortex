@@ -97,7 +97,7 @@ Notes use a **single YAML file** (`{projectRoot}/notes.yaml`) — lightweight re
 | Project config | `internal/project/config/` |
 | Daemon config | `internal/daemon/config/` |
 | Tmux manager | `internal/tmux/` |
-| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `notes/`, `config/`, `ticket/`) |
+| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `sessions/`, `notes/`, `config/`, `ticket/`) |
 | Install/init logic | `internal/install/` |
 | Agent defaults | `internal/install/defaults/main/` (shared prompts for all agents) |
 | Shared storage | `internal/storage/` |
