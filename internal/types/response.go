@@ -11,13 +11,13 @@ type ErrorResponse struct {
 
 // SessionResponse is a standalone session representation.
 type SessionResponse struct {
-	Type          string    `json:"type"`
-	TicketID      string    `json:"ticket_id,omitempty"`
-	Agent         string    `json:"agent"`
+	Type       string    `json:"type"`
+	TicketID   string    `json:"ticket_id,omitempty"`
+	Agent      string    `json:"agent"`
 	TmuxWindow string    `json:"tmux_window"`
 	StartedAt  time.Time `json:"started_at"`
-	Status        string    `json:"status"`
-	Tool          *string   `json:"tool,omitempty"`
+	Status     string    `json:"status"`
+	Tool       *string   `json:"tool,omitempty"`
 }
 
 // TicketResponse is the full ticket response with status.

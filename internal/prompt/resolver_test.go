@@ -122,21 +122,6 @@ func TestPromptResolver_ResolveTicketPrompt(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to base when not in project", func(t *testing.T) {
-		projectRoot := t.TempDir()
-		baseRoot := t.TempDir()
-		createBaseTicketPromptFile(t, baseRoot, "work", "APPROVE.md", "base approve")
-
-		resolver := NewPromptResolver(projectRoot, baseRoot)
-		content, err := resolver.ResolveTicketPrompt("work", StageApprove)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if content != "base approve" {
-			t.Errorf("expected 'base approve', got %q", content)
-		}
-	})
-
 	t.Run("project overrides base for same ticket type", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
@@ -196,7 +181,7 @@ func createPromptFile(t *testing.T, root, role, filename, content string) {
 // Project roots use the .cortex/prompts/ structure.
 func createTicketPromptFile(t *testing.T, root, ticketType, filename, content string) {
 	t.Helper()
-	dir := filepath.Join(root, ".cortex", "prompts", "ticket", ticketType)
+	dir := filepath.Join(root, ".cortex", "prompts", ticketType)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("failed to create prompt dir: %v", err)
 	}
@@ -222,7 +207,7 @@ func createBasePromptFile(t *testing.T, baseRoot, role, filename, content string
 // Base config directories (like extend targets) use prompts/ directly without .cortex/.
 func createBaseTicketPromptFile(t *testing.T, baseRoot, ticketType, filename, content string) {
 	t.Helper()
-	dir := filepath.Join(baseRoot, "prompts", "ticket", ticketType)
+	dir := filepath.Join(baseRoot, "prompts", ticketType)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("failed to create prompt dir: %v", err)
 	}
@@ -320,7 +305,7 @@ func TestPromptResolver_ResolveTicketPromptWithPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		expectedPath := filepath.Join(projectRoot, ".cortex", "prompts", "ticket", "work", "KICKOFF.md")
+		expectedPath := filepath.Join(projectRoot, ".cortex", "prompts", "work", "KICKOFF.md")
 		if resolved.SourcePath != expectedPath {
 			t.Errorf("expected source path %q, got %q", expectedPath, resolved.SourcePath)
 		}
@@ -340,8 +325,8 @@ func TestPromptResolver_ResolveTicketPromptWithPath(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected *NotFoundError, got %T", err)
 		}
-		if notFoundErr.Role != "ticket" {
-			t.Errorf("expected role 'ticket', got %q", notFoundErr.Role)
+		if notFoundErr.Role != "work" {
+			t.Errorf("expected role 'work', got %q", notFoundErr.Role)
 		}
 		if notFoundErr.TicketType != "work" {
 			t.Errorf("expected ticket type 'work', got %q", notFoundErr.TicketType)

@@ -157,6 +157,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 			TicketsDir:  ticketsDir,
 			TicketID:    req.TicketID,
 			Ticket:      t,
+			Companion:   ticketRoleCfg.Companion,
 			AgentArgs:   ticketRoleCfg.Args,
 		}
 	}
@@ -217,6 +218,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				WindowName:  stateInfo.Session.TmuxWindow,
 				TicketID:    req.TicketID,
 				TicketType:  ticketType,
+				Companion:   ticketRoleCfg.Companion,
 				AgentArgs:   ticketRoleCfg.Args,
 			})
 			outcome = OutcomeResumed

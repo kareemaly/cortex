@@ -214,6 +214,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 			ProjectPath: projectPath,
 			TicketsDir:  ticketsDir,
 			WindowName:  "architect",
+			Companion:   projectCfg.Architect.Companion,
 			AgentArgs:   projectCfg.Architect.Args,
 		})
 	} else {
@@ -224,6 +225,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 			ProjectPath: projectPath,
 			TicketsDir:  ticketsDir,
 			ProjectName: sessionName,
+			Companion:   projectCfg.Architect.Companion,
 			AgentArgs:   projectCfg.Architect.Args,
 		})
 	}

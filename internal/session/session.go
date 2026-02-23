@@ -29,12 +29,12 @@ const ArchitectSessionKey = "architect"
 // Session represents an active work session for a ticket.
 // Sessions are ephemeral — deleted when ended.
 type Session struct {
-	Type          SessionType `json:"type"`
-	TicketID      string      `json:"ticket_id,omitempty"`
-	Agent         string      `json:"agent"`
+	Type       SessionType `json:"type"`
+	TicketID   string      `json:"ticket_id,omitempty"`
+	Agent      string      `json:"agent"`
 	TmuxWindow string      `json:"tmux_window"`
 	StartedAt  time.Time   `json:"started_at"`
-	Status        AgentStatus `json:"status"`
-	Tool          *string     `json:"tool,omitempty"`
-	Work          *string     `json:"work,omitempty"`
+	Status     AgentStatus `json:"status"`
+	Tool       *string     `json:"tool,omitempty"`
+	Work       *string     `json:"work,omitempty"`
 }

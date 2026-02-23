@@ -32,7 +32,7 @@ func setupArchitectWithDaemon(t *testing.T, windowExists bool) (*Server, *ticket
 	}
 
 	// Create the prompts directory and default templates for the project
-	ticketPromptDir := filepath.Join(tmpDir, ".cortex", "prompts", "ticket", "work")
+	ticketPromptDir := filepath.Join(tmpDir, ".cortex", "prompts", "work")
 	if err := os.MkdirAll(ticketPromptDir, 0755); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create prompts dir: %v", err)

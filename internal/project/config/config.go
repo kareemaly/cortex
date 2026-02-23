@@ -18,8 +18,9 @@ const (
 
 // RoleConfig holds configuration for a specific role (architect or ticket type).
 type RoleConfig struct {
-	Agent AgentType `yaml:"agent"`
-	Args  []string  `yaml:"args"`
+	Agent     AgentType `yaml:"agent"`
+	Args      []string  `yaml:"args"`
+	Companion string    `yaml:"companion,omitempty"`
 }
 
 // TicketsConfig holds configuration for the ticket storage.
@@ -86,9 +87,17 @@ func (c *Config) ValidateRepo(repo string) error {
 // DefaultConfig returns a Config with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		Architect: RoleConfig{Agent: AgentClaude},
-		Work:      RoleConfig{Agent: AgentClaude},
-		Research:  RoleConfig{Agent: AgentClaude},
+		Architect: RoleConfig{
+			Agent:     AgentClaude,
+			Companion: "cortex project",
+		},
+		Work: RoleConfig{
+			Agent:     AgentClaude,
+			Companion: "cortex ticket show",
+		},
+		Research: RoleConfig{
+			Agent: AgentClaude,
+		},
 	}
 }
 

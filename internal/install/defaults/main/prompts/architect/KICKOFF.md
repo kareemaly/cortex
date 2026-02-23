@@ -11,6 +11,18 @@
 
 {{.Notes}}
 {{- end}}
+{{- if .Sessions}}
+
+# Recent Conclusions
+
+{{.Sessions}}
+{{- end}}
+{{- if .Repos}}
+
+# Configured Repos
+
+{{.Repos}}
+{{- end}}
 {{- if .TopTags}}
 
 # Tags

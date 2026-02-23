@@ -56,10 +56,10 @@ func (h *PromptHandlers) Resolve(w http.ResponseWriter, r *http.Request) {
 
 	// Validate stage
 	switch stage {
-	case prompt.StageSystem, prompt.StageKickoff, prompt.StageApprove:
+	case prompt.StageSystem, prompt.StageKickoff:
 		// Valid
 	default:
-		writeError(w, http.StatusBadRequest, "invalid_parameter", "stage must be 'SYSTEM', 'KICKOFF', or 'APPROVE'")
+		writeError(w, http.StatusBadRequest, "invalid_parameter", "stage must be 'SYSTEM' or 'KICKOFF'")
 		return
 	}
 
@@ -152,12 +152,12 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 	ticketTypes := []string{"research", "work"}
 
 	for _, typeName := range ticketTypes {
-		for _, stage := range []string{prompt.StageSystem, prompt.StageKickoff, prompt.StageApprove} {
+		for _, stage := range []string{prompt.StageSystem, prompt.StageKickoff} {
 			resolved, resolveErr := resolver.ResolveTicketPromptWithPath(typeName, stage)
 			if resolveErr != nil {
 				continue
 			}
-			relPath := "ticket/" + typeName + "/" + stage + ".md"
+			relPath := typeName + "/" + stage + ".md"
 			ejectedPath := filepath.Join(projectPromptsDir, relPath)
 			_, statErr := os.Stat(ejectedPath)
 			addPrompt("ticket", typeName, stage, relPath, resolved.Content, statErr == nil)

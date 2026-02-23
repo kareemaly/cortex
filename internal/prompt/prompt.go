@@ -9,7 +9,6 @@ import (
 const (
 	StageSystem  = "SYSTEM"
 	StageKickoff = "KICKOFF"
-	StageApprove = "APPROVE"
 )
 
 // PromptsDir returns the path to the prompts directory.
@@ -24,9 +23,9 @@ func ArchitectPromptPath(projectRoot, stage string) string {
 }
 
 // TicketPromptPath returns the path to a ticket prompt file by type and stage.
-// e.g. .cortex/prompts/ticket/work/KICKOFF.md
+// e.g. .cortex/prompts/work/KICKOFF.md
 func TicketPromptPath(projectRoot, ticketType, stage string) string {
-	return filepath.Join(PromptsDir(projectRoot), "ticket", ticketType, stage+".md")
+	return filepath.Join(PromptsDir(projectRoot), ticketType, stage+".md")
 }
 
 // BasePromptsDir returns the prompts directory for a cortex config directory.
@@ -43,7 +42,7 @@ func BaseArchitectPromptPath(cortexConfigDir, stage string) string {
 
 // BaseTicketPromptPath returns the path to a ticket prompt in a cortex config directory.
 func BaseTicketPromptPath(cortexConfigDir, ticketType, stage string) string {
-	return filepath.Join(BasePromptsDir(cortexConfigDir), "ticket", ticketType, stage+".md")
+	return filepath.Join(BasePromptsDir(cortexConfigDir), ticketType, stage+".md")
 }
 
 // ValidatePromptFile checks that a prompt file exists.

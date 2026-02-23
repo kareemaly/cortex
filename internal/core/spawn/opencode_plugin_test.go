@@ -121,7 +121,7 @@ func TestOpenCodeSpawnIncludesPluginDir(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -202,7 +202,7 @@ func TestClaudeSpawnDoesNotIncludePluginDir(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,

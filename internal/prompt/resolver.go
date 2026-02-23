@@ -138,7 +138,7 @@ func (r *PromptResolver) ResolveTicketPromptWithPath(ticketType, stage string) (
 
 	// Not found in any location
 	return nil, &NotFoundError{
-		Role:        "ticket",
+		Role:        ticketType,
 		TicketType:  ticketType,
 		Stage:       stage,
 		SearchPaths: searchPaths,

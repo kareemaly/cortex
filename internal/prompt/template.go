@@ -13,6 +13,7 @@ type TicketVars struct {
 	TicketBody  string
 	Comments    string // pre-formatted comments block
 	References  string // pre-formatted references block
+	Repo        string // repo path for work tickets, empty for research
 }
 
 // ArchitectKickoffVars contains variables for the architect kickoff template.
@@ -22,6 +23,15 @@ type ArchitectKickoffVars struct {
 	CurrentDate string
 	TopTags     string // comma-separated top tags
 	Notes       string // formatted notes/reminders list
+	Sessions    string // recent conclusions list
+	Repos       string // configured repo list
+}
+
+// TicketsVars contains status-specific ticket lists for architect templates.
+type TicketsVars struct {
+	Backlog  string
+	Progress string
+	Done     string
 }
 
 // RenderTemplate renders a template string with the given variables.

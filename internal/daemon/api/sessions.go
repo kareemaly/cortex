@@ -198,17 +198,9 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		tmuxSession = projectCfg.Name
 	}
 
-	// Load and render approve prompt with fallback support
-	ticketType := t.Type
-	if ticketType == "" {
-		ticketType = ticket.DefaultTicketType
-	}
-	resolver := prompt.NewPromptResolver(projectPath, "")
-	approveContent, err := resolver.ResolveTicketPrompt(ticketType, prompt.StageApprove)
-	if err != nil {
-		// Use a default message if file doesn't exist
-		approveContent = "Your changes have been approved. Please call `mcp__cortex__concludeSession` with a full report to complete this ticket."
-	}
+	// In V2, agents call concludeSession directly - no approve stage
+	// Send a generic message to remind agent to conclude
+	approveContent := "Please call `concludeSession` with a summary of your work when you are done."
 
 	// Render template variables
 	vars := prompt.TicketVars{

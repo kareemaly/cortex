@@ -25,7 +25,7 @@ func TestArchitectPromptPath(t *testing.T) {
 
 func TestTicketPromptPath(t *testing.T) {
 	got := TicketPromptPath("/project/root", "work", StageKickoff)
-	want := "/project/root/.cortex/prompts/ticket/work/KICKOFF.md"
+	want := "/project/root/.cortex/prompts/work/KICKOFF.md"
 	if got != want {
 		t.Errorf("TicketPromptPath() = %q, want %q", got, want)
 	}

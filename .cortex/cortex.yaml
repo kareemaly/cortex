@@ -8,13 +8,12 @@ architect:
     - "mcp__cortex__listTickets,mcp__cortex__readTicket"
 ticket:
   work:
-    agent: claude
+    agent: opencode
     args:
-      - "--permission-mode"
+      - "--agent"
       - "plan"
-      - "--allow-dangerously-skip-permissions"
-      - "--allowedTools"
-      - "mcp__cortex__readReference"
+      - "--model"
+      - "zai-coding-plan/glm-4.7"
   chore:
     agent: opencode
     args: ["--model", "opencode/glm-5-free"]

@@ -205,7 +205,7 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -328,7 +328,7 @@ func TestSpawn_CleanupOnFailure(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -461,7 +461,7 @@ func TestFresh_ClearsExisting(t *testing.T) {
 		StartedAt:  time.Now(),
 	}
 
-	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -1146,7 +1146,7 @@ func orchestrateTestSetup(t *testing.T) (string, *mockOrchestrateStore, *mockSes
 	store.tickets["ticket-1"] = testTicket
 
 	// Create prompt files needed for spawn
-	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
 
 	return tmpDir, store, sessStore, tmuxMgr
 }
@@ -1779,7 +1779,7 @@ func TestSpawn_OpenCode_Success(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "## Test Instructions")
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -1859,7 +1859,7 @@ func TestSpawn_OpenCode_ConfigContent(t *testing.T) {
 	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
 	store.tickets["ticket-1"] = testTicket
 
-	createTestPromptFile(t, tmpDir, "ticket/work/SYSTEM.md", "You are a helpful agent.")
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "You are a helpful agent.")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
