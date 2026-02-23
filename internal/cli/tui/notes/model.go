@@ -585,50 +585,76 @@ func (m Model) View() string {
 }
 
 // renderNoteList renders the scrollable note list using a viewport.
+// Notes are word-wrapped across multiple lines with metadata on a dedicated line.
 func (m Model) renderNoteList(height int) string {
 	var content strings.Builder
 	now := time.Now()
 
+	prefix := "  "       // indent for continuation and metadata lines
+	cursorPrefix := "▸ " // first line of selected note
+	contentWidth := max(m.width-lipgloss.Width(prefix), 10)
+
+	noteStartLines := make([]int, len(m.notes))
+	currentLine := 0
+
 	for i, note := range m.notes {
-		var line strings.Builder
+		noteStartLines[i] = currentLine
 
-		// Cursor indicator.
-		if i == m.cursor {
-			line.WriteString("▸ ")
-		} else {
-			line.WriteString("  ")
+		// Separate notes with a blank line (after the first).
+		if i > 0 {
+			content.WriteString("\n")
+			currentLine++
 		}
 
-		// Note text.
-		text := truncateToWidth(note.Text, max(m.width-40, 20))
-		if i == m.cursor {
-			line.WriteString(selectedNoteStyle.Render(text))
-		} else {
-			line.WriteString(text)
-		}
+		// Word-wrap note text to full available width.
+		wrapped := wrapToWidth(note.Text, contentWidth)
 
-		// Due badge.
-		if note.Due != nil {
-			due := *note.Due
-			dueStr := due.Format("2006-01-02")
-			badge := " [" + dueStr + "]"
-			if due.Before(now) {
-				line.WriteString(overdueStyle.Render(badge))
-			} else if due.Sub(now) <= 48*time.Hour {
-				line.WriteString(dueSoonStyle.Render(badge))
+		for j, wline := range wrapped {
+			if j == 0 {
+				// First line gets cursor indicator.
+				if i == m.cursor {
+					content.WriteString(cursorPrefix)
+					content.WriteString(selectedNoteStyle.Render(wline))
+				} else {
+					content.WriteString(prefix)
+					content.WriteString(wline)
+				}
 			} else {
-				line.WriteString(dueBadgeStyle.Render(badge))
+				// Continuation lines indented to align with text.
+				content.WriteString("\n")
+				currentLine++
+				if i == m.cursor {
+					content.WriteString(prefix)
+					content.WriteString(selectedNoteStyle.Render(wline))
+				} else {
+					content.WriteString(prefix)
+					content.WriteString(wline)
+				}
 			}
 		}
 
-		// Created date.
-		created := note.Created.Format("Jan 2")
-		line.WriteString(createdStyle.Render("  " + created))
+		// Metadata line: due badge + created date.
+		content.WriteString("\n")
+		currentLine++
 
-		content.WriteString(line.String())
-		if i < len(m.notes)-1 {
-			content.WriteString("\n")
+		var meta strings.Builder
+		if note.Due != nil {
+			due := *note.Due
+			dueStr := due.Format("2006-01-02")
+			badge := "[" + dueStr + "]"
+			if due.Before(now) {
+				meta.WriteString(overdueStyle.Render(badge))
+			} else if due.Sub(now) <= 48*time.Hour {
+				meta.WriteString(dueSoonStyle.Render(badge))
+			} else {
+				meta.WriteString(dueBadgeStyle.Render(badge))
+			}
+			meta.WriteString("  ")
 		}
+		meta.WriteString(createdStyle.Render(note.Created.Format("Jan 2")))
+		content.WriteString(prefix + meta.String())
+
+		currentLine++ // account for the metadata line itself
 	}
 
 	// Use viewport for scrolling.
@@ -639,12 +665,22 @@ func (m Model) renderNoteList(height int) string {
 	m.listVP.SetContent(content.String())
 	m.listVP.SetYOffset(savedOffset)
 
-	// Ensure cursor is visible.
-	if m.cursor < m.listVP.YOffset {
-		m.listVP.SetYOffset(m.cursor)
-	}
-	if m.cursor >= m.listVP.YOffset+height {
-		m.listVP.SetYOffset(m.cursor - height + 1)
+	// Ensure cursor is visible using line offsets.
+	if m.cursor >= 0 && m.cursor < len(noteStartLines) {
+		cursorLine := noteStartLines[m.cursor]
+		var cursorHeight int
+		if m.cursor+1 < len(noteStartLines) {
+			cursorHeight = noteStartLines[m.cursor+1] - cursorLine
+		} else {
+			// Last note: height = total lines - start line.
+			cursorHeight = currentLine - cursorLine
+		}
+		if cursorLine < m.listVP.YOffset {
+			m.listVP.SetYOffset(cursorLine)
+		}
+		if cursorLine+cursorHeight > m.listVP.YOffset+height {
+			m.listVP.SetYOffset(cursorLine + cursorHeight - height)
+		}
 	}
 
 	return m.listVP.View()
@@ -683,26 +719,42 @@ func sortNotes(notes []sdk.NoteResponse) []sdk.NoteResponse {
 	return notes
 }
 
-// truncateToWidth truncates a string to fit within maxWidth, appending "…" if truncated.
-func truncateToWidth(s string, maxWidth int) string {
+// wrapToWidth word-wraps text to fit within maxWidth using lipgloss.Width for
+// accurate character width measurement. Returns one string per wrapped line.
+func wrapToWidth(text string, maxWidth int) []string {
 	if maxWidth <= 0 {
-		return ""
+		return []string{text}
 	}
-	if lipgloss.Width(s) <= maxWidth {
-		return s
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{""}
 	}
-	var result strings.Builder
+
+	var lines []string
+	var current strings.Builder
 	currentWidth := 0
-	for _, r := range s {
-		charWidth := lipgloss.Width(string(r))
-		if currentWidth+charWidth+1 > maxWidth {
-			result.WriteString("…")
-			return result.String()
+
+	for _, word := range words {
+		wordWidth := lipgloss.Width(word)
+		if currentWidth == 0 {
+			// First word on the line — always accept it.
+			current.WriteString(word)
+			currentWidth = wordWidth
+		} else if currentWidth+1+wordWidth <= maxWidth {
+			// Fits on current line with a space.
+			current.WriteString(" ")
+			current.WriteString(word)
+			currentWidth += 1 + wordWidth
+		} else {
+			// Doesn't fit — start a new line.
+			lines = append(lines, current.String())
+			current.Reset()
+			current.WriteString(word)
+			currentWidth = wordWidth
 		}
-		result.WriteRune(r)
-		currentWidth += charWidth
 	}
-	return result.String()
+	lines = append(lines, current.String())
+	return lines
 }
 
 // --- API commands ---
