@@ -110,8 +110,8 @@ func TestHandleListTickets(t *testing.T) {
 	defer cleanup()
 
 	// Create some tickets
-	_, _ = store.Create("Ticket 1", "body 1", "", nil, nil, nil)
-	_, _ = store.Create("Ticket 2", "body 2", "", nil, nil, nil)
+	_, _ = store.Create("Ticket 1", "body 1", "", nil, nil, nil, "")
+	_, _ = store.Create("Ticket 2", "body 2", "", nil, nil, nil, "")
 
 	// List backlog tickets (status is required)
 	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
@@ -134,8 +134,8 @@ func TestHandleListTicketsWithStatus(t *testing.T) {
 	defer cleanup()
 
 	// Create tickets in different statuses
-	t1, _ := store.Create("Backlog Ticket", "", "", nil, nil, nil)
-	t2, _ := store.Create("Progress Ticket", "", "", nil, nil, nil)
+	t1, _ := store.Create("Backlog Ticket", "", "", nil, nil, nil, "")
+	t2, _ := store.Create("Progress Ticket", "", "", nil, nil, nil, "")
 	_ = store.Move(t2.ID, ticket.StatusProgress)
 
 	// List only backlog
@@ -159,8 +159,8 @@ func TestHandleListTicketsWithQuery(t *testing.T) {
 	defer cleanup()
 
 	// Create tickets
-	_, _ = store.Create("Fix login bug", "Authentication issue", "", nil, nil, nil)
-	_, _ = store.Create("Add feature", "New feature", "", nil, nil, nil)
+	_, _ = store.Create("Fix login bug", "Authentication issue", "", nil, nil, nil, "")
+	_, _ = store.Create("Add feature", "New feature", "", nil, nil, nil, "")
 
 	// Search for "login" in backlog (status is required)
 	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
@@ -181,8 +181,8 @@ func TestHandleListTicketsWithStatusAndQuery(t *testing.T) {
 	defer cleanup()
 
 	// Create tickets
-	t1, _ := store.Create("Fix login bug", "Authentication issue", "", nil, nil, nil)
-	t2, _ := store.Create("Fix login feature", "Another login issue", "", nil, nil, nil)
+	t1, _ := store.Create("Fix login bug", "Authentication issue", "", nil, nil, nil, "")
+	t2, _ := store.Create("Fix login feature", "Another login issue", "", nil, nil, nil, "")
 	_ = store.Move(t2.ID, ticket.StatusProgress)
 
 	// Search for "login" in backlog only
@@ -207,8 +207,8 @@ func TestHandleListTicketsEmptyQuery(t *testing.T) {
 	defer cleanup()
 
 	// Create tickets
-	_, _ = store.Create("Ticket 1", "body 1", "", nil, nil, nil)
-	_, _ = store.Create("Ticket 2", "body 2", "", nil, nil, nil)
+	_, _ = store.Create("Ticket 1", "body 1", "", nil, nil, nil, "")
+	_, _ = store.Create("Ticket 2", "body 2", "", nil, nil, nil, "")
 
 	// Empty query should return all tickets in the specified status (status is required)
 	_, output, err := server.handleListTickets(context.Background(), nil, ListTicketsInput{
@@ -268,7 +268,7 @@ func TestHandleReadTicket(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	_, output, err := server.handleReadTicket(context.Background(), nil, ReadTicketInput{
 		ID: created.ID,
@@ -345,7 +345,7 @@ func TestHandleUpdateTicket(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Original", "body", "", nil, nil, nil)
+	created, _ := store.Create("Original", "body", "", nil, nil, nil, "")
 	newTitle := "Updated"
 
 	_, output, err := server.handleUpdateTicket(context.Background(), nil, UpdateTicketInput{
@@ -365,7 +365,7 @@ func TestHandleDeleteTicket(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("To Delete", "", "", nil, nil, nil)
+	created, _ := store.Create("To Delete", "", "", nil, nil, nil, "")
 
 	_, output, err := server.handleDeleteTicket(context.Background(), nil, DeleteTicketInput{
 		ID: created.ID,
@@ -389,7 +389,7 @@ func TestHandleMoveTicket(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test", "", "", nil, nil, nil)
+	created, _ := store.Create("Test", "", "", nil, nil, nil, "")
 
 	_, output, err := server.handleMoveTicket(context.Background(), nil, MoveTicketInput{
 		ID:     created.ID,
@@ -411,7 +411,7 @@ func TestHandleMoveTicketInvalidStatus(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test", "", "", nil, nil, nil)
+	created, _ := store.Create("Test", "", "", nil, nil, nil, "")
 
 	_, _, err := server.handleMoveTicket(context.Background(), nil, MoveTicketInput{
 		ID:     created.ID,
@@ -428,7 +428,7 @@ func TestHandleSpawnSession(t *testing.T) {
 	defer cleanup()
 
 	// Create a ticket first
-	created, err := store.Create("Test Spawn Session", "Test body", "", nil, nil, nil)
+	created, err := store.Create("Test Spawn Session", "Test body", "", nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -485,7 +485,7 @@ func TestHandleSpawnSessionActiveSession(t *testing.T) {
 	defer cleanup()
 
 	// Create a ticket with an active session
-	created, err := store.Create("Test Active Session", "Test body", "", nil, nil, nil)
+	created, err := store.Create("Test Active Session", "Test body", "", nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -519,7 +519,7 @@ func TestHandleSpawnSessionAutoMovesToProgress(t *testing.T) {
 	defer cleanup()
 
 	// Create a ticket in backlog
-	created, err := store.Create("Test Auto Move", "Test body", "", nil, nil, nil)
+	created, err := store.Create("Test Auto Move", "Test body", "", nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
@@ -581,7 +581,7 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	}
 
 	// Create a ticket
-	tk, err := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	tk, err := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create ticket: %v", err)
@@ -638,104 +638,22 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	return mcpServer, tk.ID, cleanup
 }
 
-func TestHandleReadReference_Ticket(t *testing.T) {
+func TestHandleConcludeSession(t *testing.T) {
 	server, ticketID, cleanup := setupTicketSession(t)
 	defer cleanup()
 
-	_, output, err := server.handleReadReference(context.Background(), nil, ReadReferenceInput{
-		ID:   ticketID,
-		Type: "ticket",
+	_, output, err := server.handleConcludeSession(context.Background(), nil, ConcludeSessionInput{
+		Content: "Work completed successfully",
 	})
 	if err != nil {
-		t.Fatalf("handleReadReference ticket failed: %v", err)
-	}
-
-	if output.Ticket == nil {
-		t.Fatal("expected ticket in output")
-	}
-	if output.Ticket.ID != ticketID {
-		t.Errorf("ID = %q, want %q", output.Ticket.ID, ticketID)
-	}
-	if output.Doc != nil {
-		t.Error("expected doc to be nil for ticket reference")
-	}
-}
-
-func TestHandleReadReference_InvalidType(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	_, _, err := server.handleReadReference(context.Background(), nil, ReadReferenceInput{
-		ID:   "some-id",
-		Type: "invalid",
-	})
-	if err == nil {
-		t.Fatal("expected validation error for invalid type")
-	}
-	if !IsToolError(err) {
-		t.Errorf("expected ToolError, got: %T", err)
-	}
-}
-
-func TestHandleReadReference_EmptyID(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	_, _, err := server.handleReadReference(context.Background(), nil, ReadReferenceInput{
-		ID:   "",
-		Type: "ticket",
-	})
-	if err == nil {
-		t.Fatal("expected validation error for empty ID")
-	}
-	if !IsToolError(err) {
-		t.Errorf("expected ToolError, got: %T", err)
-	}
-}
-
-// New tool tests
-
-func TestHandleAddComment(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	_, output, err := server.handleAddComment(context.Background(), nil, AddCommentInput{
-		Content: "Decided to use new API",
-	})
-	if err != nil {
-		t.Fatalf("handleAddComment failed: %v", err)
+		t.Fatalf("handleConcludeSession failed: %v", err)
 	}
 
 	if !output.Success {
-		t.Error("add comment should succeed")
+		t.Errorf("expected success, got: %+v", output)
 	}
-	if output.Comment.ID == "" {
-		t.Error("comment ID should not be empty")
-	}
-	if output.Comment.Type != "comment" {
-		t.Errorf("comment type = %q, want 'comment'", output.Comment.Type)
-	}
-	if output.Comment.Content != "Decided to use new API" {
-		t.Errorf("comment content = %q, want 'Decided to use new API'", output.Comment.Content)
-	}
-}
-
-func TestHandleAddBlocker(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	_, output, err := server.handleAddBlocker(context.Background(), nil, AddBlockerInput{
-		Content: "Blocked by dependency issue",
-	})
-	if err != nil {
-		t.Fatalf("handleAddBlocker failed: %v", err)
-	}
-
-	if !output.Success {
-		t.Error("add blocker should succeed")
-	}
-	if output.Comment.Type != "blocker" {
-		t.Errorf("comment type = %q, want 'blocker'", output.Comment.Type)
+	if output.TicketID != ticketID {
+		t.Errorf("ticket ID = %q, want %q", output.TicketID, ticketID)
 	}
 }
 
@@ -745,7 +663,7 @@ func TestHandleSpawnSession_StateNormal_ModeNormal(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -764,7 +682,7 @@ func TestHandleSpawnSession_StateNormal_ModeResume(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -790,7 +708,7 @@ func TestHandleSpawnSession_StateNormal_ModeFresh(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -821,7 +739,7 @@ func TestHandleSpawnSession_StateActive_AllModes(t *testing.T) {
 			defer cleanup()
 
 			// Create ticket with active session (window exists because mock defaults to true)
-			created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+			created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 			_, _, _ = sessStore.Create(created.ID, "claude", "window", nil, nil)
 
 			_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -850,7 +768,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeNormal(t *testing.T) {
 	server, store, sessStore, cleanup := setupArchitectWithDaemon(t, false)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 	_, _, _ = sessStore.Create(created.ID, "claude", "window", nil, nil)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -877,7 +795,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeResume(t *testing.T) {
 	server, store, sessStore, cleanup := setupArchitectWithDaemon(t, false)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 	_, _, _ = sessStore.Create(created.ID, "claude", "window", nil, nil)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -897,7 +815,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeFresh(t *testing.T) {
 	server, store, sessStore, cleanup := setupArchitectWithDaemon(t, false)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 	_, _, _ = sessStore.Create(created.ID, "claude", "window", nil, nil)
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -920,7 +838,7 @@ func TestHandleSpawnSession_InvalidMode(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
@@ -943,7 +861,7 @@ func TestHandleSpawnSession_DefaultMode(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
 
-	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	// Empty mode should default to "normal" and succeed
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
@@ -956,103 +874,5 @@ func TestHandleSpawnSession_DefaultMode(t *testing.T) {
 
 	if !output.Success {
 		t.Errorf("expected success, got message: %s", output.Message)
-	}
-}
-
-func TestHandleConcludeSession(t *testing.T) {
-	server, ticketID, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	_, output, err := server.handleConcludeSession(context.Background(), nil, ConcludeSessionInput{
-		Content: "Work completed successfully",
-	})
-	if err != nil {
-		t.Fatalf("handleConcludeSession failed: %v", err)
-	}
-
-	if !output.Success {
-		t.Errorf("expected success, got: %+v", output)
-	}
-	if output.TicketID != ticketID {
-		t.Errorf("ticket ID = %q, want %q", output.TicketID, ticketID)
-	}
-}
-
-func TestHandleAddCommentMissingContent(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	_, _, err := server.handleAddComment(context.Background(), nil, AddCommentInput{
-		Content: "",
-	})
-	if err == nil {
-		t.Error("expected error for missing content")
-	}
-	toolErr, ok := err.(*ToolError)
-	if !ok {
-		t.Fatalf("expected ToolError, got %T", err)
-	}
-	if toolErr.Code != ErrorCodeValidation {
-		t.Errorf("error code = %q, want %q", toolErr.Code, ErrorCodeValidation)
-	}
-}
-
-func TestHandleRequestReview(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	_, output, err := server.handleRequestReview(context.Background(), nil, RequestReviewInput{
-		RepoPath: ".",
-		Content:  "Please review the implementation",
-	})
-	if err != nil {
-		t.Fatalf("handleRequestReview failed: %v", err)
-	}
-
-	if !output.Success {
-		t.Error("request review should succeed")
-	}
-	if output.Comment.ID == "" {
-		t.Error("comment ID should not be empty")
-	}
-	if output.Comment.Type != "review_requested" {
-		t.Errorf("comment type = %q, want 'review_requested'", output.Comment.Type)
-	}
-}
-
-func TestHandleRequestReviewValidation(t *testing.T) {
-	server, _, cleanup := setupTicketSession(t)
-	defer cleanup()
-
-	// Missing repo_path
-	_, _, err := server.handleRequestReview(context.Background(), nil, RequestReviewInput{
-		RepoPath: "",
-		Content:  "Some content",
-	})
-	if err == nil {
-		t.Error("expected error for missing repo_path")
-	}
-	toolErr, ok := err.(*ToolError)
-	if !ok {
-		t.Fatalf("expected ToolError, got %T", err)
-	}
-	if toolErr.Code != ErrorCodeValidation {
-		t.Errorf("error code = %q, want %q", toolErr.Code, ErrorCodeValidation)
-	}
-
-	// Missing content
-	_, _, err = server.handleRequestReview(context.Background(), nil, RequestReviewInput{
-		RepoPath: ".",
-		Content:  "",
-	})
-	if err == nil {
-		t.Error("expected error for missing content")
-	}
-	toolErr, ok = err.(*ToolError)
-	if !ok {
-		t.Fatalf("expected ToolError, got %T", err)
-	}
-	if toolErr.Code != ErrorCodeValidation {
-		t.Errorf("error code = %q, want %q", toolErr.Code, ErrorCodeValidation)
 	}
 }

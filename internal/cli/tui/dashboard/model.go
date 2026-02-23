@@ -56,11 +56,6 @@ func (pd projectData) isActive() bool {
 				return true
 			}
 		}
-		for _, t := range pd.tickets.Review {
-			if t.HasActiveSession {
-				return true
-			}
-		}
 	}
 	return false
 }
@@ -962,7 +957,7 @@ func (m Model) renderProjectRow(projectIdx int, selected bool) string {
 	counts := ""
 	if pd.project.Counts != nil {
 		c := pd.project.Counts
-		counts = fmt.Sprintf("(%d backlog · %d prog · %d review)", c.Backlog, c.Progress, c.Review)
+		counts = fmt.Sprintf("(%d backlog · %d prog · %d done)", c.Backlog, c.Progress, c.Done)
 	}
 
 	// Loading indicator.
@@ -1100,15 +1095,10 @@ func (m *Model) rebuildRows() {
 	for i, pd := range m.projects {
 		rows = append(rows, row{kind: rowProject, projectIndex: i})
 
-		// Collect all tickets with active sessions from progress and review.
+		// Collect all tickets with active sessions from progress.
 		if pd.tickets != nil {
 			var sessionTickets []sdk.TicketSummary
 			for _, t := range pd.tickets.Progress {
-				if t.HasActiveSession {
-					sessionTickets = append(sessionTickets, t)
-				}
-			}
-			for _, t := range pd.tickets.Review {
 				if t.HasActiveSession {
 					sessionTickets = append(sessionTickets, t)
 				}
@@ -1170,11 +1160,6 @@ func (m Model) findTicket(pd projectData, ticketID string) *sdk.TicketSummary {
 			return &pd.tickets.Progress[i]
 		}
 	}
-	for i := range pd.tickets.Review {
-		if pd.tickets.Review[i].ID == ticketID {
-			return &pd.tickets.Review[i]
-		}
-	}
 	return nil
 }
 
@@ -1187,11 +1172,6 @@ func newestSessionTime(pd projectData) time.Time {
 	}
 	if pd.tickets != nil {
 		for _, t := range pd.tickets.Progress {
-			if t.SessionStartedAt != nil && t.SessionStartedAt.After(newest) {
-				newest = *t.SessionStartedAt
-			}
-		}
-		for _, t := range pd.tickets.Review {
 			if t.SessionStartedAt != nil && t.SessionStartedAt.After(newest) {
 				newest = *t.SessionStartedAt
 			}

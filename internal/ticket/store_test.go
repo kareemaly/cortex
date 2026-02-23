@@ -34,7 +34,7 @@ func TestNewStore(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
 		dir := filepath.Join(store.ticketsDir, string(status))
 		info, err := os.Stat(dir)
 		if err != nil {
@@ -50,7 +50,7 @@ func TestStoreCreate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, err := store.Create("Test Ticket", "Test body", "", nil, nil, nil)
+	ticket, err := store.Create("Test Ticket", "Test body", "", nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestStoreCreateEmptyTitle(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, err := store.Create("", "body", "", nil, nil, nil)
+	_, err := store.Create("", "body", "", nil, nil, nil, "")
 	if err == nil {
 		t.Error("expected error for empty title")
 	}
@@ -93,7 +93,7 @@ func TestStoreCreateWithReferences(t *testing.T) {
 	defer cleanup()
 
 	refs := []string{"doc:abc123"}
-	ticket, err := store.Create("Test", "body", "", nil, refs, nil)
+	ticket, err := store.Create("Test", "body", "", nil, refs, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestStoreGet(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	created, err := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, err := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -131,44 +131,6 @@ func TestStoreGet(t *testing.T) {
 	}
 }
 
-func TestStoreGetLoadsComments(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
-	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "comment 1", nil)
-	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "comment 2", nil)
-
-	retrieved, _, err := store.Get(ticket.ID)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-
-	if len(retrieved.Comments) != 2 {
-		t.Errorf("comments count = %d, want 2", len(retrieved.Comments))
-	}
-}
-
-func TestStoreListDoesNotLoadComments(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
-	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "comment", nil)
-
-	tickets, err := store.List(StatusBacklog)
-	if err != nil {
-		t.Fatalf("List failed: %v", err)
-	}
-
-	if len(tickets) != 1 {
-		t.Fatalf("len(tickets) = %d, want 1", len(tickets))
-	}
-	if len(tickets[0].Comments) != 0 {
-		t.Errorf("List should not load comments, got %d", len(tickets[0].Comments))
-	}
-}
-
 func TestStoreGetNotFound(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
@@ -186,7 +148,7 @@ func TestStoreUpdate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, nil)
+	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, nil, "")
 
 	newTitle := "Updated Title"
 	newBody := "Updated body"
@@ -207,7 +169,7 @@ func TestStoreUpdatePartial(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, nil)
+	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, nil, "")
 
 	newTitle := "Updated Title"
 	updated, err := store.Update(ticket.ID, &newTitle, nil, nil, nil, nil)
@@ -227,7 +189,7 @@ func TestStoreUpdateType(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "work", nil, nil, nil)
+	ticket, _ := store.Create("Test Ticket", "body", "work", nil, nil, nil, "")
 	if ticket.Type != "work" {
 		t.Fatalf("type = %q, want %q", ticket.Type, "work")
 	}
@@ -256,7 +218,7 @@ func TestStoreUpdateTitleRename(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Old Title", "body", "", nil, nil, nil)
+	ticket, _ := store.Create("Old Title", "body", "", nil, nil, nil, "")
 	shortID := storage.ShortID(ticket.ID)
 
 	// Verify old directory exists
@@ -296,7 +258,7 @@ func TestStoreDelete(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	if err := store.Delete(ticket.ID); err != nil {
 		t.Fatalf("Delete failed: %v", err)
@@ -312,8 +274,8 @@ func TestStoreList(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, _ = store.Create("Ticket 1", "", "", nil, nil, nil)
-	_, _ = store.Create("Ticket 2", "", "", nil, nil, nil)
+	_, _ = store.Create("Ticket 1", "", "", nil, nil, nil, "")
+	_, _ = store.Create("Ticket 2", "", "", nil, nil, nil, "")
 
 	tickets, err := store.List(StatusBacklog)
 	if err != nil {
@@ -329,8 +291,8 @@ func TestStoreListAll(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	t1, _ := store.Create("Backlog Ticket", "", "", nil, nil, nil)
-	t2, _ := store.Create("Progress Ticket", "", "", nil, nil, nil)
+	t1, _ := store.Create("Backlog Ticket", "", "", nil, nil, nil, "")
+	t2, _ := store.Create("Progress Ticket", "", "", nil, nil, nil, "")
 	_ = store.Move(t2.ID, StatusProgress)
 
 	all, err := store.ListAll()
@@ -353,7 +315,7 @@ func TestStoreMove(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	if err := store.Move(ticket.ID, StatusProgress); err != nil {
 		t.Fatalf("Move failed: %v", err)
@@ -373,7 +335,7 @@ func TestStoreMoveSameStatus(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	if err := store.Move(ticket.ID, StatusBacklog); err != nil {
 		t.Fatalf("Move to same status failed: %v", err)
@@ -388,102 +350,11 @@ func TestStoreMoveSameStatus(t *testing.T) {
 	}
 }
 
-func TestStoreAddComment(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
-
-	comment, err := store.AddComment(ticket.ID, "claude", CommentGeneral, "Test comment", nil)
-	if err != nil {
-		t.Fatalf("AddComment failed: %v", err)
-	}
-
-	if comment.ID == "" {
-		t.Error("comment ID should not be empty")
-	}
-	if comment.Type != CommentGeneral {
-		t.Errorf("type = %q, want %q", comment.Type, CommentGeneral)
-	}
-	if comment.Content != "Test comment" {
-		t.Errorf("content = %q, want %q", comment.Content, "Test comment")
-	}
-	if comment.Author != "claude" {
-		t.Errorf("author = %q, want %q", comment.Author, "claude")
-	}
-
-	retrieved, _, _ := store.Get(ticket.ID)
-	if len(retrieved.Comments) != 1 {
-		t.Errorf("comments count = %d, want 1", len(retrieved.Comments))
-	}
-}
-
-func TestStoreAddCommentWithAction(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
-
-	action := &storage.CommentAction{
-		Type: "git_diff",
-		Args: storage.GitDiffArgs{RepoPath: "/path/to/repo", Commit: "abc123"},
-	}
-	comment, err := store.AddComment(ticket.ID, "claude", CommentReviewRequested, "Review changes", action)
-	if err != nil {
-		t.Fatalf("AddComment failed: %v", err)
-	}
-
-	if comment.Action == nil {
-		t.Fatal("action should not be nil")
-	}
-	if comment.Action.Type != "git_diff" {
-		t.Errorf("action type = %q, want %q", comment.Action.Type, "git_diff")
-	}
-}
-
-func TestStoreAddCommentValidation(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	tk, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
-
-	_, err := store.AddComment(tk.ID, "claude", CommentGeneral, "", nil)
-	if err == nil {
-		t.Error("expected error for empty content")
-	}
-	if _, ok := err.(*ValidationError); !ok {
-		t.Errorf("expected ValidationError, got %T", err)
-	}
-}
-
-func TestStoreListComments(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil)
-	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "First", nil)
-	_, _ = store.AddComment(ticket.ID, "claude", CommentGeneral, "Second", nil)
-
-	comments, err := store.ListComments(ticket.ID)
-	if err != nil {
-		t.Fatalf("ListComments failed: %v", err)
-	}
-
-	if len(comments) != 2 {
-		t.Fatalf("len(comments) = %d, want 2", len(comments))
-	}
-
-	// Should be sorted by created time
-	if comments[0].Content != "First" {
-		t.Errorf("first comment = %q, want %q", comments[0].Content, "First")
-	}
-}
-
 func TestStoreConcurrentUpdates(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	tk, err := store.Create("Concurrent Ticket", "initial body", "", nil, nil, nil)
+	tk, err := store.Create("Concurrent Ticket", "initial body", "", nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -523,48 +394,11 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 	}
 }
 
-func TestStoreConcurrentAddComments(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	tk, err := store.Create("Comment Ticket", "body", "", nil, nil, nil)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-
-	const goroutines = 10
-
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
-
-	for g := 0; g < goroutines; g++ {
-		go func(g int) {
-			defer wg.Done()
-			content := fmt.Sprintf("Comment from goroutine %d", g)
-			_, err := store.AddComment(tk.ID, "claude", CommentGeneral, content, nil)
-			if err != nil {
-				t.Errorf("AddComment goroutine %d failed: %v", g, err)
-			}
-		}(g)
-	}
-
-	wg.Wait()
-
-	// With file-per-comment, concurrent adds should not lose comments
-	retrieved, _, err := store.Get(tk.ID)
-	if err != nil {
-		t.Fatalf("Get after concurrent comments failed: %v", err)
-	}
-	if len(retrieved.Comments) != goroutines {
-		t.Errorf("comments count = %d, want %d", len(retrieved.Comments), goroutines)
-	}
-}
-
 func TestStoreDirLayout(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Fix Auth Bug", "body", "", nil, nil, nil)
+	ticket, _ := store.Create("Fix Auth Bug", "body", "", nil, nil, nil, "")
 	shortID := storage.ShortID(ticket.ID)
 
 	// Verify directory structure
@@ -583,7 +417,7 @@ func TestStoreSetDueDate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test", "body", "", nil, nil, nil)
+	ticket, _ := store.Create("Test", "body", "", nil, nil, nil, "")
 
 	due := ticket.Created.AddDate(0, 0, 7)
 	updated, err := store.SetDueDate(ticket.ID, &due)
@@ -602,7 +436,7 @@ func TestStoreClearDueDate(t *testing.T) {
 
 	due := store.ticketsDir // irrelevant, just need a time
 	_ = due
-	ticket, _ := store.Create("Test", "body", "", nil, nil, nil)
+	ticket, _ := store.Create("Test", "body", "", nil, nil, nil, "")
 
 	d := ticket.Created.AddDate(0, 0, 7)
 	_, _ = store.SetDueDate(ticket.ID, &d)
@@ -614,20 +448,5 @@ func TestStoreClearDueDate(t *testing.T) {
 
 	if updated.Due != nil {
 		t.Error("due date should be cleared")
-	}
-}
-
-func TestStoreStatusConstants(t *testing.T) {
-	if StatusBacklog != "backlog" {
-		t.Error("StatusBacklog should be 'backlog'")
-	}
-	if StatusProgress != "progress" {
-		t.Error("StatusProgress should be 'progress'")
-	}
-	if StatusReview != "review" {
-		t.Error("StatusReview should be 'review'")
-	}
-	if StatusDone != "done" {
-		t.Error("StatusDone should be 'done'")
 	}
 }

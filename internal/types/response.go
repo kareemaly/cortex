@@ -9,22 +9,6 @@ type ErrorResponse struct {
 	Details string `json:"details,omitempty"`
 }
 
-// CommentResponse is a comment in a ticket response.
-type CommentResponse struct {
-	ID      string                 `json:"id"`
-	Author  string                 `json:"author"`
-	Type    string                 `json:"type"`
-	Content string                 `json:"content"`
-	Action  *CommentActionResponse `json:"action,omitempty"`
-	Created time.Time              `json:"created"`
-}
-
-// CommentActionResponse is the action attached to a comment.
-type CommentActionResponse struct {
-	Type string `json:"type"`
-	Args any    `json:"args"`
-}
-
 // SessionResponse is a standalone session representation.
 type SessionResponse struct {
 	Type          string    `json:"type"`
@@ -40,17 +24,18 @@ type SessionResponse struct {
 
 // TicketResponse is the full ticket response with status.
 type TicketResponse struct {
-	ID         string            `json:"id"`
-	Type       string            `json:"type"`
-	Title      string            `json:"title"`
-	Body       string            `json:"body"`
-	Tags       []string          `json:"tags,omitempty"`
-	References []string          `json:"references,omitempty"`
-	Status     string            `json:"status"`
-	Created    time.Time         `json:"created"`
-	Updated    time.Time         `json:"updated"`
-	Due        *time.Time        `json:"due,omitempty"`
-	Comments   []CommentResponse `json:"comments"`
+	ID         string     `json:"id"`
+	Type       string     `json:"type"`
+	Title      string     `json:"title"`
+	Body       string     `json:"body"`
+	Repo       string     `json:"repo,omitempty"`
+	Session    string     `json:"session,omitempty"`
+	Tags       []string   `json:"tags,omitempty"`
+	References []string   `json:"references,omitempty"`
+	Status     string     `json:"status"`
+	Created    time.Time  `json:"created"`
+	Updated    time.Time  `json:"updated"`
+	Due        *time.Time `json:"due,omitempty"`
 }
 
 // TicketSummary is a brief view of a ticket for lists.
@@ -79,37 +64,22 @@ type ListTicketsResponse struct {
 type ListAllTicketsResponse struct {
 	Backlog  []TicketSummary `json:"backlog"`
 	Progress []TicketSummary `json:"progress"`
-	Review   []TicketSummary `json:"review"`
 	Done     []TicketSummary `json:"done"`
 }
 
-// DocResponse is the full doc response.
-type DocResponse struct {
-	ID         string            `json:"id"`
-	Title      string            `json:"title"`
-	Category   string            `json:"category"`
-	Tags       []string          `json:"tags"`
-	References []string          `json:"references"`
-	Body       string            `json:"body"`
-	Created    string            `json:"created"`
-	Updated    string            `json:"updated"`
-	Comments   []CommentResponse `json:"comments,omitempty"`
+// ConclusionResponse is the full conclusion response.
+type ConclusionResponse struct {
+	ID      string    `json:"id"`
+	Type    string    `json:"type"`
+	Ticket  string    `json:"ticket,omitempty"`
+	Repo    string    `json:"repo,omitempty"`
+	Body    string    `json:"body"`
+	Created time.Time `json:"created"`
 }
 
-// DocSummary is a brief view of a doc for lists.
-type DocSummary struct {
-	ID       string   `json:"id"`
-	Title    string   `json:"title"`
-	Category string   `json:"category"`
-	Tags     []string `json:"tags"`
-	Snippet  string   `json:"snippet,omitempty"`
-	Created  string   `json:"created"`
-	Updated  string   `json:"updated"`
-}
-
-// ListDocsResponse is a list of docs.
-type ListDocsResponse struct {
-	Docs []DocSummary `json:"docs"`
+// ListConclusionsResponse is a list of conclusions.
+type ListConclusionsResponse struct {
+	Conclusions []ConclusionResponse `json:"conclusions"`
 }
 
 // ArchitectSessionResponse is the session details in an architect response.
@@ -148,7 +118,6 @@ type HealthResponse struct {
 type ProjectTicketCounts struct {
 	Backlog  int `json:"backlog"`
 	Progress int `json:"progress"`
-	Review   int `json:"review"`
 	Done     int `json:"done"`
 }
 
@@ -158,19 +127,6 @@ type ProjectResponse struct {
 	Title  string               `json:"title"`
 	Exists bool                 `json:"exists"`
 	Counts *ProjectTicketCounts `json:"counts,omitempty"`
-}
-
-// AddCommentResponse is the response for adding a comment.
-type AddCommentResponse struct {
-	Success bool            `json:"success"`
-	Comment CommentResponse `json:"comment"`
-}
-
-// RequestReviewResponse is the response for requesting a review.
-type RequestReviewResponse struct {
-	Success bool            `json:"success"`
-	Message string          `json:"message"`
-	Comment CommentResponse `json:"comment"`
 }
 
 // ConcludeSessionResponse is the response for concluding a session.
@@ -186,7 +142,7 @@ type ResolvePromptResponse struct {
 	SourcePath string `json:"source_path"`
 }
 
-// TagCount represents a tag and how many times it appears across tickets and docs.
+// TagCount represents a tag and how many times it appears across tickets.
 type TagCount struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`

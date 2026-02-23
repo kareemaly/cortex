@@ -69,17 +69,11 @@ func (h *PromptHandlers) Resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load project config to get extend path
-	cfg, err := projectconfig.Load(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
-		return
-	}
-
 	// Create resolver with fallback to extended base
-	resolver := prompt.NewPromptResolver(projectPath, cfg.ResolvedExtendPath())
+	resolver := prompt.NewPromptResolver(projectPath, "")
 
 	var resolved *prompt.ResolvedPrompt
+	var err error
 	if role == "architect" {
 		resolved, err = resolver.ResolveArchitectPromptWithPath(stage)
 	} else {
@@ -109,19 +103,7 @@ func (h *PromptHandlers) Resolve(w http.ResponseWriter, r *http.Request) {
 func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())
 
-	cfg, err := projectconfig.Load(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
-		return
-	}
-
-	extendPath := cfg.ResolvedExtendPath()
-	if extendPath == "" {
-		writeError(w, http.StatusBadRequest, "no_extend", "project has no 'extend' configured")
-		return
-	}
-
-	resolver := prompt.NewPromptResolver(projectPath, extendPath)
+	resolver := prompt.NewPromptResolver(projectPath, "")
 	projectPromptsDir := prompt.PromptsDir(projectPath)
 
 	groupMap := make(map[string]*types.PromptGroupInfo)
@@ -166,12 +148,8 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 		addPrompt("architect", "", stage, relPath, resolved.Content, statErr == nil)
 	}
 
-	// Ticket prompts: config-driven, sorted alphabetically
-	ticketTypes := make([]string, 0, len(cfg.Ticket))
-	for typeName := range cfg.Ticket {
-		ticketTypes = append(ticketTypes, typeName)
-	}
-	sort.Strings(ticketTypes)
+	// Ticket prompts: known types
+	ticketTypes := []string{"research", "work"}
 
 	for _, typeName := range ticketTypes {
 		for _, stage := range []string{prompt.StageSystem, prompt.StageKickoff, prompt.StageApprove} {
@@ -231,17 +209,7 @@ func (h *PromptHandlers) Eject(w http.ResponseWriter, r *http.Request) {
 	promptPath := strings.TrimPrefix(req.Path, "/")
 	promptPath = filepath.Clean(promptPath)
 
-	cfg, err := projectconfig.Load(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
-		return
-	}
-
-	extendPath := cfg.ResolvedExtendPath()
-	if extendPath == "" {
-		writeError(w, http.StatusBadRequest, "no_extend", "project has no 'extend' configured")
-		return
-	}
+	extendPath := ""
 
 	sourcePath := filepath.Join(prompt.BasePromptsDir(extendPath), promptPath)
 	destPath := filepath.Join(prompt.PromptsDir(projectPath), promptPath)

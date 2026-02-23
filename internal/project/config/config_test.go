@@ -91,17 +91,14 @@ architect:
   agent: opencode
   args:
     - "--verbose"
-ticket:
-  work:
-    agent: opencode
-    args:
-      - "--budget=50000"
-  investigation:
-    agent: claude
-    args:
-      - "--fast"
-git:
-  worktrees: true
+work:
+  agent: opencode
+  args:
+    - "--budget=50000"
+research:
+  agent: claude
+  args:
+    - "--fast"
 `)
 
 	cfg, err := Load(projectRoot)
@@ -118,7 +115,7 @@ git:
 	if len(cfg.Architect.Args) != 1 || cfg.Architect.Args[0] != "--verbose" {
 		t.Errorf("expected architect args [--verbose], got %v", cfg.Architect.Args)
 	}
-	workRole, err := cfg.TicketRoleConfig("work")
+	workRole, err := cfg.RoleConfigForType("work")
 	if err != nil {
 		t.Fatalf("unexpected error getting work role: %v", err)
 	}
@@ -128,15 +125,12 @@ git:
 	if len(workRole.Args) != 1 || workRole.Args[0] != "--budget=50000" {
 		t.Errorf("expected work args [--budget=50000], got %v", workRole.Args)
 	}
-	invRole, err := cfg.TicketRoleConfig("investigation")
+	researchRole, err := cfg.RoleConfigForType("research")
 	if err != nil {
-		t.Fatalf("unexpected error getting investigation role: %v", err)
+		t.Fatalf("unexpected error getting research role: %v", err)
 	}
-	if invRole.Agent != AgentClaude {
-		t.Errorf("expected investigation agent 'claude', got %q", invRole.Agent)
-	}
-	if !cfg.Git.Worktrees {
-		t.Errorf("expected worktrees true, got %v", cfg.Git.Worktrees)
+	if researchRole.Agent != AgentClaude {
+		t.Errorf("expected research agent 'claude', got %q", researchRole.Agent)
 	}
 }
 
@@ -158,7 +152,7 @@ name: minimal
 	if cfg.Architect.Agent != AgentClaude {
 		t.Errorf("expected default architect agent 'claude', got %q", cfg.Architect.Agent)
 	}
-	workRole, err := cfg.TicketRoleConfig("work")
+	workRole, err := cfg.RoleConfigForType("work")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -217,11 +211,9 @@ func TestValidate_InvalidArchitectAgent(t *testing.T) {
 	}
 }
 
-func TestValidate_InvalidTicketAgent(t *testing.T) {
+func TestValidate_InvalidWorkAgent(t *testing.T) {
 	cfg := &Config{
-		Ticket: TicketConfig{
-			"work": RoleConfig{Agent: "bad-agent"},
-		},
+		Work: RoleConfig{Agent: "bad-agent"},
 	}
 
 	err := cfg.Validate()
@@ -233,8 +225,27 @@ func TestValidate_InvalidTicketAgent(t *testing.T) {
 	}
 
 	valErr := err.(*ValidationError)
-	if valErr.Field != "ticket.work.agent" {
-		t.Errorf("expected field 'ticket.work.agent', got %q", valErr.Field)
+	if valErr.Field != "work.agent" {
+		t.Errorf("expected field 'work.agent', got %q", valErr.Field)
+	}
+}
+
+func TestValidate_InvalidResearchAgent(t *testing.T) {
+	cfg := &Config{
+		Research: RoleConfig{Agent: "bad-agent"},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !IsValidationError(err) {
+		t.Errorf("expected ValidationError, got %T", err)
+	}
+
+	valErr := err.(*ValidationError)
+	if valErr.Field != "research.agent" {
+		t.Errorf("expected field 'research.agent', got %q", valErr.Field)
 	}
 }
 
@@ -274,7 +285,7 @@ func TestLoadFromPath_NotFound(t *testing.T) {
 	}
 }
 
-func TestNestedConfig_ArchitectAndTicket(t *testing.T) {
+func TestNestedConfig_ArchitectAndWork(t *testing.T) {
 	projectRoot := setupTestProject(t)
 	writeConfig(t, projectRoot, `
 name: test
@@ -283,11 +294,10 @@ architect:
   args:
     - "--budget=150000"
     - "--verbose"
-ticket:
-  work:
-    agent: claude
-    args:
-      - "--budget=50000"
+work:
+  agent: claude
+  args:
+    - "--budget=50000"
 `)
 
 	cfg, err := Load(projectRoot)
@@ -305,7 +315,7 @@ ticket:
 		t.Errorf("expected --verbose, got %q", cfg.Architect.Args[1])
 	}
 
-	workRole, err := cfg.TicketRoleConfig("work")
+	workRole, err := cfg.RoleConfigForType("work")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -333,19 +343,18 @@ name: test
 	}
 }
 
-func TestNestedConfig_MultipleTicketTypes(t *testing.T) {
+func TestNestedConfig_WorkAndResearch(t *testing.T) {
 	projectRoot := setupTestProject(t)
 	writeConfig(t, projectRoot, `
 name: test
-ticket:
-  work:
-    agent: claude
-    args:
-      - "--budget=50000"
-  investigation:
-    agent: opencode
-    args:
-      - "--fast"
+work:
+  agent: claude
+  args:
+    - "--budget=50000"
+research:
+  agent: opencode
+  args:
+    - "--fast"
 `)
 
 	cfg, err := Load(projectRoot)
@@ -353,7 +362,7 @@ ticket:
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	workRole, err := cfg.TicketRoleConfig("work")
+	workRole, err := cfg.RoleConfigForType("work")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -361,120 +370,31 @@ ticket:
 		t.Errorf("expected work agent 'claude', got %q", workRole.Agent)
 	}
 
-	invRole, err := cfg.TicketRoleConfig("investigation")
+	researchRole, err := cfg.RoleConfigForType("research")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if invRole.Agent != AgentOpenCode {
-		t.Errorf("expected investigation agent 'opencode', got %q", invRole.Agent)
+	if researchRole.Agent != AgentOpenCode {
+		t.Errorf("expected research agent 'opencode', got %q", researchRole.Agent)
 	}
 }
 
-func TestTicketRoleConfig_MissingType(t *testing.T) {
+func TestRoleConfigForType_InvalidType(t *testing.T) {
 	cfg := &Config{
-		Ticket: TicketConfig{
-			"work": RoleConfig{Agent: AgentClaude},
-		},
+		Work:     RoleConfig{Agent: AgentClaude},
+		Research: RoleConfig{Agent: AgentClaude},
 	}
 
-	_, err := cfg.TicketRoleConfig("nonexistent")
+	_, err := cfg.RoleConfigForType("nonexistent")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }
 
-func TestTicketRoleConfig_NilTicketConfig(t *testing.T) {
-	cfg := &Config{}
+func TestRoleConfigForType_DefaultConfig(t *testing.T) {
+	cfg := DefaultConfig()
 
-	_, err := cfg.TicketRoleConfig("work")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestLoad_WithExtend(t *testing.T) {
-	// Create an extend directory (for prompt resolution)
-	extendDir := t.TempDir()
-
-	// Create a self-contained project config with extend
-	projectRoot := setupTestProject(t)
-	writeConfig(t, projectRoot, `
-name: my-project
-extend: `+extendDir+`
-architect:
-  agent: opencode
-  args:
-    - "--base-arg"
-ticket:
-  work:
-    agent: claude
-    args:
-      - "--work-arg"
-git:
-  worktrees: true
-`)
-
-	cfg, err := Load(projectRoot)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Config values come directly from the project file (no merging)
-	if cfg.Name != "my-project" {
-		t.Errorf("expected name 'my-project', got %q", cfg.Name)
-	}
-	if cfg.Architect.Agent != AgentOpenCode {
-		t.Errorf("expected architect agent 'opencode', got %q", cfg.Architect.Agent)
-	}
-	if len(cfg.Architect.Args) != 1 || cfg.Architect.Args[0] != "--base-arg" {
-		t.Errorf("expected architect args ['--base-arg'], got %v", cfg.Architect.Args)
-	}
-
-	// Check resolved extend path is set correctly
-	if cfg.ResolvedExtendPath() != extendDir {
-		t.Errorf("expected resolved extend path %q, got %q", extendDir, cfg.ResolvedExtendPath())
-	}
-}
-
-func TestLoad_ExtendPathNotFound(t *testing.T) {
-	projectRoot := setupTestProject(t)
-	writeConfig(t, projectRoot, `
-name: broken-project
-extend: /does/not/exist
-`)
-
-	_, err := Load(projectRoot)
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !IsExtendPathNotFound(err) {
-		t.Errorf("expected ExtendPathNotFoundError, got %T: %v", err, err)
-	}
-}
-
-func TestLoad_NoExtendBackwardCompatible(t *testing.T) {
-	// Test that configs without extend still work as before
-	projectRoot := setupTestProject(t)
-	writeConfig(t, projectRoot, `
-name: no-extend-project
-architect:
-  agent: opencode
-`)
-
-	cfg, err := Load(projectRoot)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cfg.Name != "no-extend-project" {
-		t.Errorf("expected name 'no-extend-project', got %q", cfg.Name)
-	}
-	if cfg.Architect.Agent != AgentOpenCode {
-		t.Errorf("expected architect agent 'opencode', got %q", cfg.Architect.Agent)
-	}
-
-	// Should still get defaults for missing fields
-	workRole, err := cfg.TicketRoleConfig("work")
+	workRole, err := cfg.RoleConfigForType("work")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -482,8 +402,71 @@ architect:
 		t.Errorf("expected default work agent 'claude', got %q", workRole.Agent)
 	}
 
-	// No extend path should be set
-	if cfg.ResolvedExtendPath() != "" {
-		t.Errorf("expected empty resolved extend path, got %q", cfg.ResolvedExtendPath())
+	researchRole, err := cfg.RoleConfigForType("research")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if researchRole.Agent != AgentClaude {
+		t.Errorf("expected default research agent 'claude', got %q", researchRole.Agent)
+	}
+}
+
+func TestValidateRepo(t *testing.T) {
+	t.Run("empty repos allows any", func(t *testing.T) {
+		cfg := &Config{}
+		if err := cfg.ValidateRepo("any-repo"); err != nil {
+			t.Fatalf("expected no error for empty repos list, got: %v", err)
+		}
+	})
+
+	t.Run("repo in list is allowed", func(t *testing.T) {
+		cfg := &Config{
+			Repos: []string{"repo-a", "repo-b", "repo-c"},
+		}
+		if err := cfg.ValidateRepo("repo-b"); err != nil {
+			t.Fatalf("expected no error for valid repo, got: %v", err)
+		}
+	})
+
+	t.Run("repo not in list is rejected", func(t *testing.T) {
+		cfg := &Config{
+			Repos: []string{"repo-a", "repo-b"},
+		}
+		err := cfg.ValidateRepo("repo-c")
+		if err == nil {
+			t.Fatal("expected error for repo not in list, got nil")
+		}
+	})
+}
+
+func TestLoad_WithRepos(t *testing.T) {
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: multi-repo
+repos:
+  - frontend
+  - backend
+  - shared
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Name != "multi-repo" {
+		t.Errorf("expected name 'multi-repo', got %q", cfg.Name)
+	}
+	if len(cfg.Repos) != 3 {
+		t.Fatalf("expected 3 repos, got %d", len(cfg.Repos))
+	}
+	if cfg.Repos[0] != "frontend" {
+		t.Errorf("expected first repo 'frontend', got %q", cfg.Repos[0])
+	}
+	if err := cfg.ValidateRepo("backend"); err != nil {
+		t.Errorf("expected 'backend' to be valid, got: %v", err)
+	}
+	if err := cfg.ValidateRepo("unknown"); err == nil {
+		t.Error("expected error for unknown repo, got nil")
 	}
 }

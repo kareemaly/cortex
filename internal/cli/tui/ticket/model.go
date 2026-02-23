@@ -3,7 +3,6 @@ package ticket
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 )
 
@@ -44,12 +42,6 @@ type Model struct {
 	embedded        bool // if true, send CloseDetailMsg instead of tea.Quit
 	pendingG        bool // tracking 'g' key for 'gg' sequence
 	mdRenderer      *glamour.TermRenderer
-	focusedRow      int // 0=Row1 (body), 1=Row2 (comments)
-	commentCursor   int // cursor index in ticket.Comments
-	showDetailModal bool
-	modalViewport   viewport.Model
-	modalCommentIdx int // index into ticket.Comments
-	executingDiff   bool
 	executingEdit   bool
 	sessions        []sdk.SessionListItem // cached sessions for this project
 
@@ -113,14 +105,6 @@ type CloseDetailMsg struct{}
 
 // RefreshMsg triggers a ticket data reload (used by SSE).
 type RefreshMsg struct{}
-
-// DiffExecutedMsg is sent when a diff action is successfully executed.
-type DiffExecutedMsg struct{}
-
-// DiffErrorMsg is sent when executing a diff action fails.
-type DiffErrorMsg struct {
-	Err error
-}
 
 // EditExecutedMsg is sent when the editor is successfully opened.
 type EditExecutedMsg struct{}
@@ -189,7 +173,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		row1H, _ := m.rowHeights()
+		bodyH := m.bodyHeight()
 
 		// Viewport width depends on wide mode.
 		vpWidth := m.width
@@ -205,7 +189,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mdRenderer = renderer
 
 		if !m.ready {
-			m.bodyViewport = viewport.New(vpWidth, row1H)
+			m.bodyViewport = viewport.New(vpWidth, bodyH)
 			m.bodyViewport.YPosition = 2 // Below header.
 			m.ready = true
 			if m.ticket != nil {
@@ -213,19 +197,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			m.bodyViewport.Width = vpWidth
-			m.bodyViewport.Height = row1H
+			m.bodyViewport.Height = bodyH
 			if m.ticket != nil {
 				m.bodyViewport.SetContent(m.renderBodyContent())
 			}
-		}
-
-		// Resize modal viewport if open.
-		if m.showDetailModal {
-			modalInnerWidth := max(m.width*60/100-6, 20)
-			modalInnerHeight := max(m.height*70/100-7, 5)
-			m.modalViewport.Width = modalInnerWidth
-			m.modalViewport.Height = modalInnerHeight
-			m.modalViewport.SetContent(m.renderModalContent(modalInnerWidth))
 		}
 
 		return m, nil
@@ -243,12 +218,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			savedOffset := m.bodyViewport.YOffset
 			m.bodyViewport.SetContent(m.renderBodyContent())
 			m.bodyViewport.SetYOffset(savedOffset)
-		}
-		// Clamp comment cursor to valid range.
-		if count := len(m.ticket.Comments); count > 0 {
-			m.commentCursor = min(m.commentCursor, count-1)
-		} else {
-			m.commentCursor = 0
 		}
 		return m, nil
 
@@ -344,15 +313,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pollTickMsg:
 		return m, tea.Batch(m.loadTicket(), m.startPollTicker())
 
-	case DiffExecutedMsg:
-		m.executingDiff = false
-		return m, nil
-
-	case DiffErrorMsg:
-		m.executingDiff = false
-		m.err = msg.Err
-		return m, nil
-
 	case EditExecutedMsg:
 		m.executingEdit = false
 		m.loading = true
@@ -373,9 +333,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKeyMsg handles keyboard input.
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Modals take priority when visible.
-	if m.showDetailModal {
-		return m.handleDetailModalKey(msg)
-	}
 	if m.showDeleteModal {
 		return m.handleDeleteModalKey(msg)
 	}
@@ -402,8 +359,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseDetailMsg{} }
 	}
 
-	// If loading, killing, approving, spawning, or executing diff/edit, don't process other keys.
-	if m.loading || m.killing || m.approving || m.spawning || m.executingDiff || m.executingEdit {
+	// If loading, killing, approving, spawning, or executing edit, don't process other keys.
+	if m.loading || m.killing || m.approving || m.spawning || m.executingEdit {
 		return m, nil
 	}
 
@@ -417,25 +374,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Tab/Shift+Tab/[/] to switch row focus.
-	if isKey(msg, KeyTab, KeyShiftTab, KeyLeftBracket, KeyRightBracket) {
-		m.focusedRow = 1 - m.focusedRow // toggle 0↔1
-		m.updateRowSizes()
-		return m, nil
-	}
-
 	// Refresh.
 	if isKey(msg, KeyRefresh) {
 		m.loading = true
 		return m, m.loadTicket()
 	}
-
-	// Comment list navigation (Row 2 focused).
-	if m.focusedRow == 1 {
-		return m.handleCommentListKey(msg)
-	}
-
-	// Body viewport navigation (Row 1 focused).
 
 	// Kill session.
 	if isKey(msg, KeyKillSession) {
@@ -445,9 +388,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Approve session (guarded: don't trigger on 'a' when 'g' is pending for 'ga').
+	// Approve session.
 	if !m.pendingG && isKey(msg, KeyApprove) {
-		if m.hasActiveSession() && m.hasReviewRequests() {
+		if m.hasActiveSession() {
 			m.approving = true
 			return m, m.approveSession()
 		}
@@ -540,95 +483,6 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// handleCommentListKey handles keyboard input when Row 2 (comment list) is focused.
-func (m Model) handleCommentListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	itemCount := 0
-	if m.ticket != nil {
-		itemCount = len(m.ticket.Comments)
-	}
-
-	// Open detail modal.
-	if isKey(msg, KeyO, KeyEnter) {
-		if itemCount > 0 {
-			m.openDetailModal()
-		}
-		return m, nil
-	}
-
-	// Cursor movement.
-	if isKey(msg, KeyDown, KeyJ) {
-		if itemCount > 0 {
-			m.commentCursor = min(m.commentCursor+1, itemCount-1)
-		}
-		return m, nil
-	}
-	if isKey(msg, KeyUp, KeyK) {
-		if itemCount > 0 {
-			m.commentCursor = max(m.commentCursor-1, 0)
-		}
-		return m, nil
-	}
-
-	// Handle 'G' - jump to last item.
-	if isKey(msg, KeyShiftG) {
-		m.pendingG = false
-		if itemCount > 0 {
-			m.commentCursor = itemCount - 1
-		}
-		return m, nil
-	}
-
-	// Handle 'g' key for 'gg' sequence.
-	if isKey(msg, KeyG) {
-		if m.pendingG {
-			m.pendingG = false
-			m.commentCursor = 0
-		} else {
-			m.pendingG = true
-		}
-		return m, nil
-	}
-
-	// Handle 'ga' - focus architect window.
-	if m.pendingG && isKey(msg, KeyApprove) {
-		m.pendingG = false
-		return m, m.focusArchitect()
-	}
-
-	// Clear pending g on any other key.
-	m.pendingG = false
-
-	// Global shortcuts available from comment list.
-	if isKey(msg, KeyKillSession) {
-		if m.hasActiveSession() {
-			m.showKillModal = true
-		}
-		return m, nil
-	}
-	if isKey(msg, KeySpawn) {
-		if m.canSpawn() {
-			m.spawning = true
-			return m, m.spawnSession()
-		}
-		return m, nil
-	}
-	if isKey(msg, KeyApprove) {
-		if m.hasActiveSession() && m.hasReviewRequests() {
-			m.approving = true
-			return m, m.approveSession()
-		}
-		return m, nil
-	}
-
-	// Edit ticket in $EDITOR.
-	if isKey(msg, KeyEdit) {
-		m.executingEdit = true
-		return m, m.editTicket()
-	}
-
-	return m, nil
-}
-
 // handleKillModalKey handles keyboard input when the kill confirmation modal is shown.
 func (m Model) handleKillModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if isKey(msg, KeyYes) {
@@ -642,71 +496,14 @@ func (m Model) handleKillModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleDetailModalKey handles keyboard input when the detail modal is open.
-func (m Model) handleDetailModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Close modal.
-	if isKey(msg, KeyEscape, KeyQuit) {
-		m.showDetailModal = false
-		return m, nil
-	}
-
-	// Scroll modal content.
-	if isKey(msg, KeyDown, KeyJ) {
-		m.modalViewport.ScrollDown(1)
-		return m, nil
-	}
-	if isKey(msg, KeyUp, KeyK) {
-		m.modalViewport.ScrollUp(1)
-		return m, nil
-	}
-
-	// Review-specific actions.
-	if m.ticket != nil && m.modalCommentIdx < len(m.ticket.Comments) &&
-		m.ticket.Comments[m.modalCommentIdx].Type == "review_requested" {
-		if isKey(msg, KeyApprove) {
-			if m.hasActiveSession() && m.hasReviewRequests() {
-				m.showDetailModal = false
-				m.approving = true
-				return m, m.approveSession()
-			}
-			return m, nil
-		}
-		// 'd' for diff - execute git_diff action if available
-		if isKey(msg, KeyDiff) {
-			comment := m.ticket.Comments[m.modalCommentIdx]
-			if comment.Action != nil && comment.Action.Type == "git_diff" {
-				m.showDetailModal = false
-				m.executingDiff = true
-				return m, m.executeDiffAction(comment.ID)
-			}
-			return m, nil
-		}
-	}
-
-	return m, nil
-}
-
 // hasActiveSession returns true if there's an active session.
 // Sessions are no longer on TicketResponse; we use ticket status as a heuristic.
-// The ticket is in "progress" or "review" status when an agent is working.
+// The ticket is in "progress" status when an agent is working.
 func (m Model) hasActiveSession() bool {
 	if m.ticket == nil {
 		return false
 	}
-	return m.ticket.Status == "progress" || m.ticket.Status == "review"
-}
-
-// hasReviewRequests returns true if there are review_requested comments.
-func (m Model) hasReviewRequests() bool {
-	if m.ticket == nil {
-		return false
-	}
-	for _, c := range m.ticket.Comments {
-		if c.Type == "review_requested" {
-			return true
-		}
-	}
-	return false
+	return m.ticket.Status == "progress"
 }
 
 // killSession returns a command to kill the current session.
@@ -750,20 +547,6 @@ func (m Model) canSpawn() bool {
 		return false
 	}
 	return !m.hasActiveSession()
-}
-
-// executeDiffAction returns a command to execute a git_diff action on a comment.
-func (m Model) executeDiffAction(commentID string) tea.Cmd {
-	return func() tea.Msg {
-		if m.ticket == nil {
-			return DiffErrorMsg{Err: fmt.Errorf("no ticket")}
-		}
-		err := m.client.ExecuteCommentAction(m.ticket.ID, commentID)
-		if err != nil {
-			return DiffErrorMsg{Err: err}
-		}
-		return DiffExecutedMsg{}
-	}
 }
 
 // editTicket returns a command to open the ticket in $EDITOR via tmux popup.
@@ -870,101 +653,6 @@ func (m Model) deleteOrphanedSession() tea.Cmd {
 	}
 }
 
-// openDetailModal opens the detail modal for the currently selected comment.
-func (m *Model) openDetailModal() {
-	m.showDetailModal = true
-	m.modalCommentIdx = m.commentCursor
-
-	// Size: ~60% width, ~70% height minus chrome (border + padding + header + separator + help).
-	modalInnerWidth := max(m.width*60/100-6, 20)  // 6 = border(2) + padding(4)
-	modalInnerHeight := max(m.height*70/100-7, 5) // 7 = border(2) + padding(2) + header(1) + separator(1) + help(1)
-
-	m.modalViewport = viewport.New(modalInnerWidth, modalInnerHeight)
-	m.modalViewport.SetContent(m.renderModalContent(modalInnerWidth))
-}
-
-// renderDetailModal renders the centered detail modal overlay.
-func (m Model) renderDetailModal() string {
-	modalInnerWidth := max(m.width*60/100-6, 20)
-
-	header := m.renderModalHeader()
-	separator := modalSeparatorStyle.Render(strings.Repeat("─", modalInnerWidth))
-	body := m.modalViewport.View()
-
-	isReview := false
-	hasAction := false
-	if m.ticket != nil && m.modalCommentIdx < len(m.ticket.Comments) {
-		comment := m.ticket.Comments[m.modalCommentIdx]
-		isReview = comment.Type == "review_requested"
-		hasAction = comment.Action != nil && comment.Action.Type == "git_diff"
-	}
-	help := modalHelpStyle.Render(modalHelpText(isReview, hasAction))
-
-	content := header + "\n" + separator + "\n" + body + "\n" + help
-
-	modal := modalStyle.Render(content)
-
-	return lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, modal)
-}
-
-// renderModalHeader renders the header line for the detail modal.
-func (m Model) renderModalHeader() string {
-	if m.ticket == nil || m.modalCommentIdx >= len(m.ticket.Comments) {
-		return modalHeaderStyle.Render("Comment")
-	}
-	comment := m.ticket.Comments[m.modalCommentIdx]
-	badge := commentBadge(comment.Type)
-	date := attributeLabelStyle.Render(formatTimeAgo(comment.Created))
-	return badge + "  " + date
-}
-
-// renderModalContent renders the scrollable content for the detail modal.
-func (m Model) renderModalContent(width int) string {
-	if m.ticket == nil || m.modalCommentIdx >= len(m.ticket.Comments) {
-		return ""
-	}
-	comment := m.ticket.Comments[m.modalCommentIdx]
-
-	var b strings.Builder
-
-	// Show repo path for review requests.
-	if comment.Type == "review_requested" {
-		repoPath := extractRepoPath(comment)
-		if repoPath != "" && repoPath != "." {
-			b.WriteString(modalRepoStyle.Render("Repo: " + repoPath))
-			b.WriteString("\n\n")
-		}
-	}
-
-	// Render content as markdown with modal-appropriate width.
-	renderer, _ := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width),
-	)
-	if renderer != nil {
-		rendered, err := renderer.Render(comment.Content)
-		if err == nil {
-			b.WriteString(strings.TrimSpace(rendered))
-			return b.String()
-		}
-	}
-	b.WriteString(comment.Content)
-	return b.String()
-}
-
-// extractRepoPath extracts repo_path from a review comment's Action.Args.
-func extractRepoPath(comment sdk.CommentResponse) string {
-	if comment.Action == nil {
-		return ""
-	}
-	argsMap, ok := comment.Action.Args.(map[string]any)
-	if !ok {
-		return ""
-	}
-	repoPath, _ := argsMap["repo_path"].(string)
-	return repoPath
-}
-
 // renderOrphanModal renders the orphaned session modal.
 func (m Model) renderOrphanModal() string {
 	var b strings.Builder
@@ -1040,12 +728,6 @@ func (m Model) View() string {
 		return b.String()
 	}
 
-	// Handle executing diff state.
-	if m.executingDiff {
-		b.WriteString(loadingStyle.Render("Opening diff..."))
-		return b.String()
-	}
-
 	// Handle executing edit state.
 	if m.executingEdit {
 		b.WriteString(loadingStyle.Render("Opening editor..."))
@@ -1070,29 +752,16 @@ func (m Model) View() string {
 		return b.String()
 	}
 
-	// Detail modal (overlay).
-	if m.showDetailModal {
-		return m.renderDetailModal()
-	}
-
-	// Row 1 (body + attributes).
-	row1H, row2H := m.rowHeights()
-	b.WriteString(m.renderRow1(row1H))
-
-	// Row separator.
-	b.WriteString("\n")
-	b.WriteString(m.renderRowSeparator())
-
-	// Row 2 (comment list).
-	b.WriteString("\n")
-	b.WriteString(m.renderCommentList(m.width, row2H))
+	// Body + attributes.
+	bodyH := m.bodyHeight()
+	b.WriteString(m.renderRow1(bodyH))
 
 	// Help bar.
 	b.WriteString("\n")
 	b.WriteString(helpBarStyle.Render(helpText(
 		int(m.bodyViewport.ScrollPercent()*100),
-		m.hasActiveSession(), m.hasReviewRequests(), m.canSpawn(),
-		m.embedded, m.focusedRow,
+		m.hasActiveSession(), m.canSpawn(),
+		m.embedded,
 	)))
 
 	return b.String()
@@ -1141,23 +810,14 @@ func (m Model) renderHeader() string {
 	return left + strings.Repeat(" ", padding) + right
 }
 
-// rowHeights computes the vertical split between Row 1 and Row 2.
-// When body (Row 1) is focused, comments collapse to ~15%.
-// When comments (Row 2) are focused, they expand to ~70%.
-func (m Model) rowHeights() (row1H, row2H int) {
-	// available = height - 4 (header with padding + row separator + help bar)
-	available := max(m.height-4, 2)
-	if m.focusedRow == 0 {
-		row1H = available * 85 / 100 // Body: 85%, Comments: 15% (collapsed)
-	} else {
-		row1H = available * 30 / 100 // Body: 30%, Comments: 70% (expanded)
-	}
-	row1H = max(row1H, 1)
-	row2H = max(available-row1H, 1)
-	return
+// bodyHeight computes the available height for the body viewport.
+func (m Model) bodyHeight() int {
+	// available = height - 3 (header with padding + help bar)
+	available := max(m.height-3, 2)
+	return available
 }
 
-// renderRow1 renders Row 1: body viewport + attributes panel (wide) or body only (narrow).
+// renderRow1 renders the body viewport + attributes panel (wide) or body only (narrow).
 func (m Model) renderRow1(height int) string {
 	if m.width >= wideLayoutMinWidth {
 		// Wide: body viewport | divider | attributes panel.
@@ -1253,270 +913,6 @@ func (m Model) renderAttributes(width, height int) string {
 		Height(height).
 		PaddingLeft(1).
 		Render(b.String())
-}
-
-// renderCommentList renders the unified comment list for Row 2.
-func (m Model) renderCommentList(width, height int) string {
-	if m.ticket == nil || len(m.ticket.Comments) == 0 {
-		content := attributeLabelStyle.Render("No comments")
-		if m.focusedRow == 1 {
-			return row2FocusedStyle.Width(width).Height(height).Render(content)
-		}
-		return row2Style.Width(width).Height(height).Render(content)
-	}
-
-	// Header line takes 1 row.
-	headerLine := attributeHeaderStyle.Render(fmt.Sprintf("COMMENTS (%d)", len(m.ticket.Comments)))
-	availableHeight := max(height-1, 1) // 1 for header
-
-	// Determine visible range.
-	start, end := m.commentVisibleRange(availableHeight)
-
-	// Content width: account for border/padding (~2 chars).
-	contentWidth := max(width-2, 10)
-
-	var b strings.Builder
-	b.WriteString(headerLine)
-
-	for i := start; i < end; i++ {
-		b.WriteString("\n")
-		selected := m.focusedRow == 1 && i == m.commentCursor
-		b.WriteString(m.renderCommentRow(m.ticket.Comments[i], contentWidth, selected))
-		// Add padding between rows (except after last).
-		if i < end-1 {
-			for j := 0; j < CommentRowPadding; j++ {
-				b.WriteString("\n")
-			}
-		}
-	}
-
-	content := b.String()
-	if m.focusedRow == 1 {
-		return row2FocusedStyle.Width(width).Height(height).Render(content)
-	}
-	return row2Style.Width(width).Height(height).Render(content)
-}
-
-// renderCommentRow renders a single comment as a multi-line row (4 lines: header + 3 preview lines).
-func (m Model) renderCommentRow(comment sdk.CommentResponse, width int, selected bool) string {
-	badge := commentBadge(comment.Type)
-	timeAgo := formatTimeAgo(comment.Created)
-
-	// Build header line: [badge]  author  repo-prefix (if review)  ────  time-ago
-	var headerParts []string
-	headerParts = append(headerParts, badge)
-
-	if comment.Author != "" {
-		headerParts = append(headerParts, attributeValueStyle.Render(comment.Author))
-	}
-
-	// For review requests, show repo name.
-	if comment.Type == "review_requested" {
-		repoPath := extractRepoPath(comment)
-		repo := filepath.Base(repoPath)
-		if repo != "" && repo != "." && repo != "/" {
-			headerParts = append(headerParts, attributeLabelStyle.Render(repo))
-		}
-	}
-
-	headerLeft := strings.Join(headerParts, "  ")
-	headerLeftWidth := lipgloss.Width(headerLeft)
-	timeWidth := lipgloss.Width(timeAgo)
-
-	// Fill with separator dashes between header and time.
-	separatorWidth := max(width-headerLeftWidth-timeWidth-4, 1) // 4 = 2 spaces on each side
-	separator := attributeLabelStyle.Render(strings.Repeat("─", separatorWidth))
-
-	headerLine := headerLeft + "  " + separator + "  " + attributeLabelStyle.Render(timeAgo)
-
-	// Render markdown content and get up to 3 lines.
-	previewLines := m.renderCommentPreview(comment.Content, width, 3)
-
-	// Build the full row (4 lines total).
-	var lines []string
-	lines = append(lines, headerLine)
-	lines = append(lines, previewLines...)
-	// Pad to exactly CommentRowLines lines.
-	for len(lines) < CommentRowLines {
-		lines = append(lines, "")
-	}
-
-	// Apply background to entire block if selected.
-	if selected {
-		return m.applyBackgroundToBlock(lines, width, commentSelectedStyle.GetBackground())
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// renderCommentPreview renders markdown and returns up to maxLines lines.
-func (m Model) renderCommentPreview(content string, width, maxLines int) []string {
-	if content == "" {
-		return []string{attributeLabelStyle.Render("(empty)")}
-	}
-
-	// Create a renderer for the preview width.
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width),
-	)
-	if err != nil || renderer == nil {
-		// Fallback to plain text.
-		return m.plainTextPreview(content, width, maxLines)
-	}
-
-	rendered, err := renderer.Render(content)
-	if err != nil {
-		return m.plainTextPreview(content, width, maxLines)
-	}
-
-	// Split rendered output into lines and take up to maxLines.
-	rendered = strings.TrimSpace(rendered)
-	allLines := strings.Split(rendered, "\n")
-
-	var result []string
-	for _, line := range allLines {
-		if len(result) >= maxLines {
-			break
-		}
-		// Skip empty lines.
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		// Truncate line to width, preserving ANSI codes.
-		truncated := ansi.Truncate(line, width, "…")
-		result = append(result, truncated)
-	}
-
-	if len(result) == 0 {
-		return []string{attributeLabelStyle.Render("(empty)")}
-	}
-
-	return result
-}
-
-// plainTextPreview returns plain text lines as a fallback.
-func (m Model) plainTextPreview(content string, width, maxLines int) []string {
-	lines := strings.Split(content, "\n")
-	var result []string
-	for _, line := range lines {
-		if len(result) >= maxLines {
-			break
-		}
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" && len(result) == 0 {
-			continue // Skip leading empty lines.
-		}
-		// Strip markdown syntax.
-		trimmed = strings.TrimLeft(trimmed, "#*-> ")
-		trimmed = strings.TrimSpace(trimmed)
-		if trimmed != "" {
-			result = append(result, truncateToWidth(trimmed, width))
-		}
-	}
-	if len(result) == 0 {
-		return []string{attributeLabelStyle.Render("(empty)")}
-	}
-	return result
-}
-
-// applyBackgroundToBlock applies a background color to all lines of a block.
-func (m Model) applyBackgroundToBlock(lines []string, width int, bgColor lipgloss.TerminalColor) string {
-	// Don't use .Width() on the style - it can interfere with pre-styled content
-	// containing ANSI codes. Instead, we manually pad each line to full width.
-	style := lipgloss.NewStyle().Background(bgColor)
-	var result []string
-	for _, line := range lines {
-		lineWidth := lipgloss.Width(line)
-		if lineWidth < width {
-			line += strings.Repeat(" ", width-lineWidth)
-		}
-		result = append(result, style.Render(line))
-	}
-	return strings.Join(result, "\n")
-}
-
-// commentBadge returns a styled badge string for a comment type.
-func commentBadge(commentType string) string {
-	badgeText := commentType
-	switch commentType {
-	case "review_requested":
-		badgeText = "review"
-	}
-	return commentTypeStyle(commentType).Render("[" + badgeText + "]")
-}
-
-// truncateToWidth truncates a string to fit within maxWidth, appending "…" if truncated.
-func truncateToWidth(s string, maxWidth int) string {
-	if maxWidth <= 0 {
-		return ""
-	}
-	if lipgloss.Width(s) <= maxWidth {
-		return s
-	}
-	// Truncate rune by rune.
-	var result strings.Builder
-	currentWidth := 0
-	for _, r := range s {
-		charWidth := lipgloss.Width(string(r))
-		if currentWidth+charWidth+1 > maxWidth { // +1 for "…"
-			result.WriteString("…")
-			return result.String()
-		}
-		result.WriteRune(r)
-		currentWidth += charWidth
-	}
-	return result.String()
-}
-
-// commentVisibleRange computes the visible window of comments keeping the cursor visible.
-func (m Model) commentVisibleRange(visibleHeight int) (start, end int) {
-	total := len(m.ticket.Comments)
-	if total == 0 {
-		return 0, 0
-	}
-
-	// Each comment row takes CommentRowLines lines, with CommentRowPadding between rows.
-	// For n comments, total lines = n * CommentRowLines + (n-1) * CommentRowPadding
-	// Simplified: rowHeight per comment = CommentRowLines + CommentRowPadding (except last)
-	rowHeight := CommentRowLines + CommentRowPadding // 5 lines per comment
-	visibleCount := max(visibleHeight/rowHeight, 1)
-
-	start = 0
-	end = min(visibleCount, total)
-
-	if m.commentCursor >= end {
-		end = min(m.commentCursor+1, total)
-		start = max(end-visibleCount, 0)
-	}
-	if m.commentCursor < start {
-		start = m.commentCursor
-		end = min(start+visibleCount, total)
-	}
-
-	return start, end
-}
-
-// renderRowSeparator renders a thin horizontal line between rows.
-func (m Model) renderRowSeparator() string {
-	return rowSeparatorStyle.Render(strings.Repeat("─", m.width))
-}
-
-// updateRowSizes resizes the bodyViewport after a focus change.
-func (m *Model) updateRowSizes() {
-	if !m.ready {
-		return
-	}
-	row1H, _ := m.rowHeights()
-	vpWidth := m.width
-	if m.width >= wideLayoutMinWidth {
-		vpWidth = m.width * 70 / 100
-	}
-	m.bodyViewport.Width = vpWidth
-	m.bodyViewport.Height = row1H
-	if m.ticket != nil {
-		m.bodyViewport.SetContent(m.renderBodyContent())
-	}
 }
 
 // renderBodyContent returns the content for the body viewport.
@@ -1647,31 +1043,4 @@ func (m Model) startPollTicker() tea.Cmd {
 	return tea.Tick(pollInterval, func(time.Time) tea.Msg {
 		return pollTickMsg{}
 	})
-}
-
-// formatTimeAgo formats a time as a human-readable relative string.
-func formatTimeAgo(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		mins := int(d.Minutes())
-		if mins == 1 {
-			return "1 min ago"
-		}
-		return fmt.Sprintf("%d min ago", mins)
-	case d < 24*time.Hour:
-		hours := int(d.Hours())
-		if hours == 1 {
-			return "1 hour ago"
-		}
-		return fmt.Sprintf("%d hours ago", hours)
-	default:
-		days := int(d.Hours() / 24)
-		if days == 1 {
-			return "1 day ago"
-		}
-		return fmt.Sprintf("%d days ago", days)
-	}
 }

@@ -12,7 +12,6 @@ import (
 // Re-export shared types for API consumers
 type (
 	ErrorResponse            = types.ErrorResponse
-	CommentResponse          = types.CommentResponse
 	SessionResponse          = types.SessionResponse
 	TicketResponse           = types.TicketResponse
 	TicketSummary            = types.TicketSummary
@@ -21,16 +20,13 @@ type (
 	ArchitectSessionResponse = types.ArchitectSessionResponse
 	ArchitectStateResponse   = types.ArchitectStateResponse
 	ArchitectSpawnResponse   = types.ArchitectSpawnResponse
-	DocResponse              = types.DocResponse
-	DocSummary               = types.DocSummary
-	ListDocsResponse         = types.ListDocsResponse
+	ConclusionResponse       = types.ConclusionResponse
+	ListConclusionsResponse  = types.ListConclusionsResponse
 	NoteResponse             = types.NoteResponse
 	ListNotesResponse        = types.ListNotesResponse
 	HealthResponse           = types.HealthResponse
 	ProjectTicketCounts      = types.ProjectTicketCounts
 	ProjectResponse          = types.ProjectResponse
-	AddCommentResponse       = types.AddCommentResponse
-	RequestReviewResponse    = types.RequestReviewResponse
 	ConcludeSessionResponse  = types.ConcludeSessionResponse
 	ResolvePromptResponse    = types.ResolvePromptResponse
 	ListTagsResponse         = types.ListTagsResponse
@@ -45,6 +41,7 @@ type CreateTicketRequest struct {
 	Title      string   `json:"title"`
 	Body       string   `json:"body"`
 	Type       string   `json:"type,omitempty"`
+	Repo       string   `json:"repo,omitempty"`
 	DueDate    *string  `json:"due_date,omitempty"`
 	References []string `json:"references,omitempty"`
 	Tags       []string `json:"tags,omitempty"`
@@ -75,31 +72,11 @@ type SpawnResponse struct {
 	Ticket  TicketResponse  `json:"ticket"`
 }
 
-// AddCommentRequest is the request body for adding a comment to a ticket.
-type AddCommentRequest struct {
-	Type    string                       `json:"type"`
-	Content string                       `json:"content"`
-	Author  string                       `json:"author,omitempty"`
-	Action  *types.CommentActionResponse `json:"action,omitempty"`
-}
-
-// AddDocCommentRequest is the request body for adding a comment to a doc.
-type AddDocCommentRequest struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
-	Author  string `json:"author,omitempty"`
-}
-
-// RequestReviewRequest is the request body for requesting a review.
-type RequestReviewRequest struct {
-	RepoPath string `json:"repo_path"`
-	Content  string `json:"content"`
-	Commit   string `json:"commit,omitempty"`
-}
-
 // ConcludeSessionRequest is the request body for concluding a session.
 type ConcludeSessionRequest struct {
 	Content string `json:"content"`
+	Type    string `json:"type,omitempty"`
+	Repo    string `json:"repo,omitempty"`
 }
 
 // FocusResponse is the response for the focus endpoint.
@@ -112,28 +89,6 @@ type FocusResponse struct {
 type ExecuteActionResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
-}
-
-// CreateDocRequest is the request body for creating a doc.
-type CreateDocRequest struct {
-	Title      string   `json:"title"`
-	Category   string   `json:"category"`
-	Body       string   `json:"body,omitempty"`
-	Tags       []string `json:"tags,omitempty"`
-	References []string `json:"references,omitempty"`
-}
-
-// UpdateDocRequest is the request body for updating a doc.
-type UpdateDocRequest struct {
-	Title      *string   `json:"title,omitempty"`
-	Body       *string   `json:"body,omitempty"`
-	Tags       *[]string `json:"tags,omitempty"`
-	References *[]string `json:"references,omitempty"`
-}
-
-// MoveDocRequest is the request body for moving a doc.
-type MoveDocRequest struct {
-	Category string `json:"category"`
 }
 
 // EjectPromptRequest is the request body for ejecting a prompt.
@@ -161,6 +116,14 @@ type CreateNoteRequest struct {
 type UpdateNoteRequest struct {
 	Text *string `json:"text,omitempty"`
 	Due  *string `json:"due,omitempty"`
+}
+
+// CreateConclusionRequest is the request body for creating a conclusion.
+type CreateConclusionRequest struct {
+	Type   string `json:"type"`
+	Ticket string `json:"ticket,omitempty"`
+	Repo   string `json:"repo,omitempty"`
+	Body   string `json:"body"`
 }
 
 // filterSummaryList converts tickets to summaries with optional query, dueBefore, and tag filters.

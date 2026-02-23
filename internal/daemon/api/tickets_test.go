@@ -122,7 +122,7 @@ func TestSetDueDate_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Due Date Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Due Date Ticket", "body", "", nil, nil, nil, "")
 
 	body := SetDueDateRequest{DueDate: "2025-06-01T00:00:00Z"}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
@@ -140,7 +140,7 @@ func TestSetDueDate_InvalidJSON(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil, "")
 
 	req, _ := http.NewRequest(http.MethodPatch, ts.URL+"/tickets/"+created.ID+"/due-date", bytes.NewReader([]byte("bad json")))
 	req.Header.Set("Content-Type", "application/json")
@@ -164,7 +164,7 @@ func TestSetDueDate_EmptyDueDate(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil, "")
 
 	body := SetDueDateRequest{DueDate: ""}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
@@ -182,7 +182,7 @@ func TestSetDueDate_InvalidFormat(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil, "")
 
 	body := SetDueDateRequest{DueDate: "not-a-date"}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
@@ -213,7 +213,7 @@ func TestClearDueDate_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil, "")
 
 	resp := ts.makeRequest(t, http.MethodDelete, "/tickets/"+created.ID+"/due-date", nil)
 	defer func() { _ = resp.Body.Close() }()
@@ -242,7 +242,7 @@ func TestGetByID_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Test Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Test Ticket", "body", "", nil, nil, nil, "")
 
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/by-id/"+created.ID, nil)
 	defer func() { _ = resp.Body.Close() }()
@@ -268,258 +268,13 @@ func TestGetByID_NotFound(t *testing.T) {
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
-// --- AddComment ---
-
-func TestAddComment_Success(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	created, _ := ts.store.Create("Comment Ticket", "body", "", nil, nil, nil)
-
-	body := AddCommentRequest{
-		Type:    "comment",
-		Content: "test comment",
-		Author:  "test-agent",
-	}
-	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/comments", body)
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusOK)
-
-	result := decode[AddCommentResponse](t, resp)
-	if !result.Success {
-		t.Error("expected success")
-	}
-	if result.Comment.Content != "test comment" {
-		t.Errorf("expected content 'test comment', got %q", result.Comment.Content)
-	}
-	if result.Comment.Author != "test-agent" {
-		t.Errorf("expected author 'test-agent', got %q", result.Comment.Author)
-	}
-}
-
-func TestAddComment_InvalidJSON(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
-
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/tickets/"+created.ID+"/comments", bytes.NewReader([]byte("bad")))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(ProjectHeader, ts.projectRoot)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusBadRequest)
-}
-
-func TestAddComment_InvalidType(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
-
-	body := AddCommentRequest{
-		Type:    "invalid_type",
-		Content: "test",
-	}
-	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/comments", body)
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusBadRequest)
-
-	result := decode[ErrorResponse](t, resp)
-	if result.Code != "validation_error" {
-		t.Errorf("expected code 'validation_error', got %q", result.Code)
-	}
-}
-
-func TestAddComment_TicketNotFound(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	body := AddCommentRequest{
-		Type:    "comment",
-		Content: "test",
-	}
-	resp := ts.makeRequest(t, http.MethodPost, "/tickets/nonexistent/comments", body)
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusNotFound)
-}
-
-func TestAddComment_AllValidTypes(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	validTypes := []string{"comment", "review_requested", "done", "blocker"}
-
-	for _, ct := range validTypes {
-		t.Run(ct, func(t *testing.T) {
-			created, _ := ts.store.Create("Ticket for "+ct, "body", "", nil, nil, nil)
-
-			body := AddCommentRequest{
-				Type:    ct,
-				Content: "test " + ct,
-				Author:  "agent",
-			}
-			resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/comments", body)
-			defer func() { _ = resp.Body.Close() }()
-
-			assertStatus(t, resp, http.StatusOK)
-
-			result := decode[AddCommentResponse](t, resp)
-			if !result.Success {
-				t.Errorf("expected success for type %q", ct)
-			}
-			if result.Comment.Type != ct {
-				t.Errorf("expected type %q, got %q", ct, result.Comment.Type)
-			}
-		})
-	}
-}
-
-func TestAddComment_WithExplicitAuthor(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
-
-	body := AddCommentRequest{
-		Type:    "comment",
-		Content: "test",
-		Author:  "custom-author",
-	}
-	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/comments", body)
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusOK)
-
-	result := decode[AddCommentResponse](t, resp)
-	if result.Comment.Author != "custom-author" {
-		t.Errorf("expected author 'custom-author', got %q", result.Comment.Author)
-	}
-}
-
-// --- RequestReview ---
-
-func TestRequestReview_Success(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	created, _ := ts.store.Create("Review Ticket", "body", "", nil, nil, nil)
-	_ = ts.store.Move(created.ID, ticket.StatusProgress)
-
-	body := RequestReviewRequest{
-		RepoPath: ts.projectRoot,
-		Content:  "please review",
-	}
-	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/reviews", body)
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusOK)
-
-	result := decode[RequestReviewResponse](t, resp)
-	if !result.Success {
-		t.Error("expected success")
-	}
-}
-
-func TestRequestReview_InvalidJSON(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
-
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/tickets/"+created.ID+"/reviews", bytes.NewReader([]byte("bad")))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(ProjectHeader, ts.projectRoot)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusBadRequest)
-}
-
-func TestRequestReview_EmptyRepoPath(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
-
-	body := RequestReviewRequest{
-		RepoPath: "",
-		Content:  "review this",
-	}
-	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/reviews", body)
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusBadRequest)
-
-	result := decode[ErrorResponse](t, resp)
-	if result.Code != "validation_error" {
-		t.Errorf("expected code 'validation_error', got %q", result.Code)
-	}
-}
-
-func TestRequestReview_EmptyContent(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
-
-	body := RequestReviewRequest{
-		RepoPath: "/some/path",
-		Content:  "",
-	}
-	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/reviews", body)
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusBadRequest)
-
-	result := decode[ErrorResponse](t, resp)
-	if result.Code != "validation_error" {
-		t.Errorf("expected code 'validation_error', got %q", result.Code)
-	}
-}
-
-func TestRequestReview_MovesToReview(t *testing.T) {
-	ts := setupUnitServer(t)
-	defer ts.Close()
-
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
-	_ = ts.store.Move(created.ID, ticket.StatusProgress)
-
-	body := RequestReviewRequest{
-		RepoPath: ts.projectRoot,
-		Content:  "review please",
-	}
-	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/reviews", body)
-	defer func() { _ = resp.Body.Close() }()
-
-	assertStatus(t, resp, http.StatusOK)
-
-	// Verify ticket moved to review
-	_, status, _ := ts.store.Get(created.ID)
-	if status != ticket.StatusReview {
-		t.Errorf("expected status 'review', got %q", status)
-	}
-}
-
 // --- Conclude ---
 
 func TestConclude_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, nil, "")
 
 	body := ConcludeSessionRequest{Content: "done report"}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
@@ -546,7 +301,7 @@ func TestConclude_InvalidJSON(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil, "")
 
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/tickets/"+created.ID+"/conclude", bytes.NewReader([]byte("bad")))
 	req.Header.Set("Content-Type", "application/json")
@@ -565,7 +320,7 @@ func TestConclude_EmptyContent(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, nil, "")
 
 	body := ConcludeSessionRequest{Content: ""}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
@@ -619,7 +374,7 @@ func TestFocus_NoSessionManager(t *testing.T) {
 	srv := httptest.NewServer(NewRouter(deps, deps.Logger))
 	defer srv.Close()
 
-	created, _ := store.Create("Focus Ticket", "body", "", nil, nil, nil)
+	created, _ := store.Create("Focus Ticket", "body", "", nil, nil, nil, "")
 
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/tickets/"+created.ID+"/focus", nil)
 	req.Header.Set(ProjectHeader, tmpDir)
@@ -638,7 +393,7 @@ func TestFocus_NoActiveSession(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Focus Ticket", "body", "", nil, nil, nil)
+	created, _ := ts.store.Create("Focus Ticket", "body", "", nil, nil, nil, "")
 
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/focus", nil)
 	defer func() { _ = resp.Body.Close() }()
@@ -678,8 +433,8 @@ func TestListAll_WithQueryFilter(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	_, _ = ts.store.Create("Alpha Ticket", "body1", "", nil, nil, nil)
-	_, _ = ts.store.Create("Beta Ticket", "body2", "", nil, nil, nil)
+	_, _ = ts.store.Create("Alpha Ticket", "body1", "", nil, nil, nil, "")
+	_, _ = ts.store.Create("Beta Ticket", "body2", "", nil, nil, nil, "")
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/tickets?query=alpha", nil)
 	req.Header.Set(ProjectHeader, ts.projectRoot)
@@ -705,8 +460,8 @@ func TestListAll_WithTagFilter(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	_, _ = ts.store.Create("Tagged Ticket", "body", "", nil, nil, []string{"important"})
-	_, _ = ts.store.Create("Untagged Ticket", "body", "", nil, nil, nil)
+	_, _ = ts.store.Create("Tagged Ticket", "body", "", nil, nil, []string{"important"}, "")
+	_, _ = ts.store.Create("Untagged Ticket", "body", "", nil, nil, nil, "")
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/tickets?tag=important", nil)
 	req.Header.Set(ProjectHeader, ts.projectRoot)
@@ -801,7 +556,7 @@ func TestValidStatus(t *testing.T) {
 	}{
 		{"backlog", true},
 		{"progress", true},
-		{"review", true},
+		{"review", false},
 		{"done", true},
 		{"invalid", false},
 		{"", false},

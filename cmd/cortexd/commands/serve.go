@@ -83,20 +83,20 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create session manager, docs store manager, and notes store manager
+	// Create session manager, conclusion store manager, and notes store manager
 	sessionManager := api.NewSessionManager(logger)
-	docsStoreManager := api.NewDocsStoreManager(logger, bus)
+	conclusionStoreManager := api.NewConclusionStoreManager(logger, bus)
 	notesStoreManager := api.NewNotesStoreManager(logger, bus)
 
 	// Build dependencies
 	deps := &api.Dependencies{
-		StoreManager:      storeManager,
-		DocsStoreManager:  docsStoreManager,
-		NotesStoreManager: notesStoreManager,
-		SessionManager:    sessionManager,
-		TmuxManager:       tmuxManager,
-		Bus:               bus,
-		Logger:            logger,
+		StoreManager:           storeManager,
+		ConclusionStoreManager: conclusionStoreManager,
+		NotesStoreManager:      notesStoreManager,
+		SessionManager:         sessionManager,
+		TmuxManager:            tmuxManager,
+		Bus:                    bus,
+		Logger:                 logger,
 	}
 
 	// Create and run server

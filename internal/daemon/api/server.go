@@ -62,28 +62,12 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Delete("/{status}/{id}", ticketHandlers.Delete)
 			r.Post("/{status}/{id}/move", ticketHandlers.Move)
 			r.Post("/{status}/{id}/spawn", ticketHandlers.Spawn)
-			r.Post("/{id}/comments", ticketHandlers.AddComment)
-			r.Post("/{id}/reviews", ticketHandlers.RequestReview)
 			r.Post("/{id}/focus", ticketHandlers.Focus)
 			r.Post("/{id}/conclude", ticketHandlers.Conclude)
-			r.Post("/{id}/comments/{comment_id}/execute", ticketHandlers.ExecuteAction)
 			r.Post("/{id}/edit", ticketHandlers.Edit)
 			r.Post("/{id}/show-popup", ticketHandlers.ShowPopup)
 			r.Patch("/{id}/due-date", ticketHandlers.SetDueDate)
 			r.Delete("/{id}/due-date", ticketHandlers.ClearDueDate)
-		})
-
-		// Doc routes
-		docHandlers := NewDocHandlers(deps)
-		r.Route("/docs", func(r chi.Router) {
-			r.Get("/", docHandlers.List)
-			r.Post("/", docHandlers.Create)
-			r.Get("/{id}", docHandlers.Get)
-			r.Put("/{id}", docHandlers.Update)
-			r.Delete("/{id}", docHandlers.Delete)
-			r.Post("/{id}/move", docHandlers.Move)
-			r.Post("/{id}/edit", docHandlers.Edit)
-			r.Post("/{id}/comments", docHandlers.AddComment)
 		})
 
 		// Note routes
@@ -93,6 +77,14 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Post("/", noteHandlers.Create)
 			r.Put("/{id}", noteHandlers.Update)
 			r.Delete("/{id}", noteHandlers.Delete)
+		})
+
+		// Conclusion routes
+		conclusionHandlers := NewConclusionHandlers(deps)
+		r.Route("/conclusions", func(r chi.Router) {
+			r.Get("/", conclusionHandlers.List)
+			r.Post("/", conclusionHandlers.Create)
+			r.Get("/{id}", conclusionHandlers.Get)
 		})
 
 		// Architect routes
@@ -119,7 +111,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		})
 
 		// Tags route
-		r.Get("/tags", TagsHandler(deps.StoreManager, deps.DocsStoreManager))
+		r.Get("/tags", TagsHandler(deps.StoreManager))
 
 		// Prompt routes
 		promptHandlers := NewPromptHandlers(deps)

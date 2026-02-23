@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
-	"time"
 
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
@@ -219,14 +218,13 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 		})
 	} else {
 		result, err = spawner.Spawn(r.Context(), spawn.SpawnRequest{
-			AgentType:      spawn.AgentTypeArchitect,
-			Agent:          architectAgent,
-			TmuxSession:    sessionName,
-			ProjectPath:    projectPath,
-			TicketsDir:     ticketsDir,
-			ProjectName:    sessionName,
-			AgentArgs:      projectCfg.Architect.Args,
-			BaseConfigPath: projectCfg.ResolvedExtendPath(),
+			AgentType:   spawn.AgentTypeArchitect,
+			Agent:       architectAgent,
+			TmuxSession: sessionName,
+			ProjectPath: projectPath,
+			TicketsDir:  ticketsDir,
+			ProjectName: sessionName,
+			AgentArgs:   projectCfg.Architect.Args,
 		})
 	}
 
@@ -291,16 +289,14 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		ProjectPath: projectPath,
 	})
 
-	// Persist session summary as a doc (best-effort)
-	if h.deps.DocsStoreManager != nil {
-		docStore, err := h.deps.DocsStoreManager.GetStore(projectPath)
+	// Persist session summary as a conclusion (best-effort)
+	if h.deps.ConclusionStoreManager != nil {
+		conclusionStore, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
 		if err != nil {
-			h.deps.Logger.Warn("failed to get docs store for session summary", "error", err)
+			h.deps.Logger.Warn("failed to get conclusion store for architect session", "error", err)
 		} else {
-			title := "Architect Session — " + time.Now().UTC().Format("2006-01-02T15:04Z")
-			tags := []string{"architect", "session-summary"}
-			if _, err := docStore.Create(title, "sessions", req.Content, tags, nil); err != nil {
-				h.deps.Logger.Warn("failed to persist architect session summary", "error", err)
+			if _, err := conclusionStore.Create("architect", "", "", req.Content); err != nil {
+				h.deps.Logger.Warn("failed to persist architect session conclusion", "error", err)
 			}
 		}
 	}

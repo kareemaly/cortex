@@ -134,7 +134,6 @@ func setupMainDefaults(homeDir string, force bool) ([]SetupItem, error) {
 
 // setupProject creates the project .cortex/ directory and config.
 // Generates a self-contained cortex.yaml with all agent settings inline.
-// The extend field points to ~/.cortex/defaults/main for prompt resolution only.
 func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, error) {
 	absPath, err := filepath.Abs(projectPath)
 	if err != nil {
@@ -161,7 +160,7 @@ func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, err
 		return items, item.Error
 	}
 
-	// Load config to resolve tickets/docs paths (respects custom paths from cortex.yaml)
+	// Load config to resolve tickets path (respects custom paths from cortex.yaml)
 	cfg, err := projectconfig.Load(absPath)
 	if err != nil {
 		cfg = projectconfig.DefaultConfig()
@@ -173,7 +172,6 @@ func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, err
 		ticketsDir,
 		filepath.Join(ticketsDir, "backlog"),
 		filepath.Join(ticketsDir, "progress"),
-		filepath.Join(ticketsDir, "review"),
 		filepath.Join(ticketsDir, "done"),
 	}
 	for _, dir := range ticketDirs {
@@ -184,14 +182,6 @@ func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, err
 		}
 	}
 
-	// Create docs directory at config-resolved path
-	docsDir := cfg.DocsPath(absPath)
-	item = ensureDir(docsDir)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
 	return items, nil
 }
 
@@ -200,35 +190,21 @@ func generateProjectConfig(name, agent string) string {
 	switch agent {
 	case "opencode":
 		return `name: ` + name + `
-extend: ~/.cortex/defaults/main
 architect:
   agent: opencode
-ticket:
-  work:
-    agent: opencode
-git:
-  worktrees: false
+work:
+  agent: opencode
+research:
+  agent: opencode
 `
 	default:
 		return `name: ` + name + `
-extend: ~/.cortex/defaults/main
 architect:
   agent: claude
-  args:
-    - "--allow-dangerously-skip-permissions"
-    - "--allowedTools"
-    - "mcp__cortex__listTickets,mcp__cortex__readTicket"
-ticket:
-  work:
-    agent: claude
-    args:
-      - "--permission-mode"
-      - "plan"
-      - "--allow-dangerously-skip-permissions"
-      - "--allowedTools"
-      - "mcp__cortex__readReference"
-git:
-  worktrees: false
+work:
+  agent: claude
+research:
+  agent: claude
 `
 	}
 }

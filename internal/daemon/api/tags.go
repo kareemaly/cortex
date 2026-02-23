@@ -8,8 +8,8 @@ import (
 )
 
 // TagsHandler returns a handler for GET /tags.
-// It aggregates tags from both tickets and docs, returning them sorted by count descending.
-func TagsHandler(storeManager *StoreManager, docsStoreManager *DocsStoreManager) http.HandlerFunc {
+// It aggregates tags from tickets, returning them sorted by count descending.
+func TagsHandler(storeManager *StoreManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		projectPath := GetProjectPath(r.Context())
 
@@ -26,21 +26,6 @@ func TagsHandler(storeManager *StoreManager, docsStoreManager *DocsStoreManager)
 							for _, tag := range t.Tags {
 								counts[strings.ToLower(tag)]++
 							}
-						}
-					}
-				}
-			}
-		}
-
-		// Aggregate doc tags
-		if docsStoreManager != nil {
-			docsStore, err := docsStoreManager.GetStore(projectPath)
-			if err == nil {
-				allDocs, err := docsStore.List("", "", "")
-				if err == nil {
-					for _, d := range allDocs {
-						for _, tag := range d.Tags {
-							counts[strings.ToLower(tag)]++
 						}
 					}
 				}

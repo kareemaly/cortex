@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,14 +11,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kareemaly/cortex/internal/core/spawn"
-	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/events"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/internal/types"
-	"github.com/kareemaly/cortex/internal/worktree"
 )
 
 // TicketHandlers provides HTTP handlers for ticket operations.
@@ -74,7 +71,6 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	resp := ListAllTicketsResponse{
 		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
 		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Review:   filterSummaryList(all[ticket.StatusReview], ticket.StatusReview, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
 		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
 	}
 
@@ -84,7 +80,6 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	}
 	slices.SortFunc(resp.Backlog, sortByCreated)
 	slices.SortFunc(resp.Progress, sortByCreated)
-	slices.SortFunc(resp.Review, sortByCreated)
 	slices.SortFunc(resp.Done, sortByCreated)
 
 	writeJSON(w, http.StatusOK, resp)
@@ -157,22 +152,15 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	projectPath := GetProjectPath(r.Context())
 
-	// Validate ticket type against project config
-	if req.Type != "" {
-		projectCfg, err := projectconfig.Load(projectPath)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
-			return
-		}
-		if _, err := projectCfg.TicketRoleConfig(req.Type); err != nil {
-			validTypes := make([]string, 0, len(projectCfg.Ticket))
-			for t := range projectCfg.Ticket {
-				validTypes = append(validTypes, t)
-			}
-			writeError(w, http.StatusBadRequest, "invalid_type",
-				fmt.Sprintf("invalid ticket type %q, valid types: %s", req.Type, strings.Join(validTypes, ", ")))
-			return
-		}
+	// Validate ticket type
+	ticketType := req.Type
+	if ticketType == "" {
+		ticketType = "work"
+	}
+	if ticketType != "work" && ticketType != "research" {
+		writeError(w, http.StatusBadRequest, "invalid_type",
+			fmt.Sprintf("invalid ticket type %q, valid types: work, research", ticketType))
+		return
 	}
 
 	// Parse due date if provided (RFC3339 format)
@@ -192,7 +180,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := store.Create(req.Title, req.Body, req.Type, dueDate, req.References, req.Tags)
+	t, err := store.Create(req.Title, req.Body, ticketType, dueDate, req.References, req.Tags, req.Repo)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -268,20 +256,11 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate ticket type against project config
+	// Validate ticket type
 	if req.Type != nil && *req.Type != "" {
-		projectCfg, err := projectconfig.Load(projectPath)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
-			return
-		}
-		if _, err := projectCfg.TicketRoleConfig(*req.Type); err != nil {
-			validTypes := make([]string, 0, len(projectCfg.Ticket))
-			for t := range projectCfg.Ticket {
-				validTypes = append(validTypes, t)
-			}
+		if *req.Type != "work" && *req.Type != "research" {
 			writeError(w, http.StatusBadRequest, "invalid_type",
-				fmt.Sprintf("invalid ticket type %q, valid types: %s", *req.Type, strings.Join(validTypes, ", ")))
+				fmt.Sprintf("invalid ticket type %q, valid types: work, research", *req.Type))
 			return
 		}
 	}
@@ -583,151 +562,6 @@ func (h *TicketHandlers) GetByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// AddComment handles POST /tickets/{id}/comments - adds a comment to a ticket.
-func (h *TicketHandlers) AddComment(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
-	store, err := h.deps.StoreManager.GetStore(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
-	id := chi.URLParam(r, "id")
-	_, _, err = store.Get(id)
-	if err != nil {
-		handleTicketError(w, err, h.deps.Logger)
-		return
-	}
-
-	var req AddCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
-		return
-	}
-
-	// Validate comment type
-	commentType := ticket.CommentType(req.Type)
-	switch commentType {
-	case ticket.CommentReviewRequested, ticket.CommentDone, ticket.CommentBlocker,
-		ticket.CommentGeneral:
-		// Valid type
-	default:
-		writeError(w, http.StatusBadRequest, "validation_error", "invalid comment type: must be review_requested, done, blocker, or comment")
-		return
-	}
-
-	// Determine author: prefer explicit author from request, fall back to session lookup
-	author := req.Author
-	if author == "" {
-		author = "unknown"
-		if h.deps.SessionManager != nil {
-			sessStore := h.deps.SessionManager.GetStore(projectPath)
-			if sess, err := sessStore.GetByTicketID(id); err == nil && sess != nil {
-				author = sess.Agent
-			}
-		}
-	}
-
-	// Convert action from request
-	var action *ticket.CommentAction
-	if req.Action != nil {
-		action = &ticket.CommentAction{
-			Type: req.Action.Type,
-			Args: req.Action.Args,
-		}
-	}
-
-	comment, err := store.AddComment(id, author, commentType, req.Content, action)
-	if err != nil {
-		handleTicketError(w, err, h.deps.Logger)
-		return
-	}
-
-	resp := AddCommentResponse{
-		Success: true,
-		Comment: types.ToCommentResponse(comment),
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
-// RequestReview handles POST /tickets/{id}/reviews - requests a review for a ticket.
-func (h *TicketHandlers) RequestReview(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
-	store, err := h.deps.StoreManager.GetStore(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
-	id := chi.URLParam(r, "id")
-
-	var req RequestReviewRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
-		return
-	}
-
-	if req.RepoPath == "" {
-		writeError(w, http.StatusBadRequest, "validation_error", "repo_path cannot be empty")
-		return
-	}
-	if req.Content == "" {
-		writeError(w, http.StatusBadRequest, "validation_error", "content cannot be empty")
-		return
-	}
-
-	// Determine author from session lookup
-	author := "unknown"
-	if h.deps.SessionManager != nil {
-		sessStore := h.deps.SessionManager.GetStore(projectPath)
-		if sess, err := sessStore.GetByTicketID(id); err == nil && sess != nil {
-			author = sess.Agent
-		}
-	}
-
-	// Build git_diff action
-	args := ticket.GitDiffArgs{RepoPath: req.RepoPath}
-	if req.Commit != "" {
-		args.Commit = req.Commit
-	}
-	action := &ticket.CommentAction{
-		Type: "git_diff",
-		Args: args,
-	}
-
-	comment, err := store.AddComment(id, author, ticket.CommentReviewRequested, req.Content, action)
-	if err != nil {
-		handleTicketError(w, err, h.deps.Logger)
-		return
-	}
-
-	// Move ticket to review status (idempotent - no-op if already in review or done)
-	_, currentStatus, err := store.Get(id)
-	if err != nil {
-		handleTicketError(w, err, h.deps.Logger)
-		return
-	}
-	if currentStatus != ticket.StatusReview && currentStatus != ticket.StatusDone {
-		if err := store.Move(id, ticket.StatusReview); err != nil {
-			handleTicketError(w, err, h.deps.Logger)
-			return
-		}
-	}
-
-	h.deps.Bus.Emit(events.Event{
-		Type:        events.ReviewRequested,
-		ProjectPath: projectPath,
-		TicketID:    id,
-	})
-
-	resp := RequestReviewResponse{
-		Success: true,
-		Message: "Review request added. Wait for human approval.",
-		Comment: types.ToCommentResponse(comment),
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
 // Focus handles POST /tickets/{id}/focus - focuses the tmux window of a ticket's active session.
 func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())
@@ -783,7 +617,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	_, _, err = store.Get(id)
+	t, _, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -801,31 +635,16 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Capture session info before ending
-	var worktreePath, featureBranch *string
 	var tmuxWindow string
-	var author string
 
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
 		if sess, sessErr := sessStore.GetByTicketID(id); sessErr == nil && sess != nil {
-			worktreePath = sess.WorktreePath
-			featureBranch = sess.FeatureBranch
 			tmuxWindow = sess.TmuxWindow
-			author = sess.Agent
 		}
 	}
-	if author == "" {
-		author = "unknown"
-	}
 
-	// Add done comment with the report
-	_, err = store.AddComment(id, author, ticket.CommentDone, req.Content, nil)
-	if err != nil {
-		handleTicketError(w, err, h.deps.Logger)
-		return
-	}
-
-	// End the session
+	// End the ephemeral session
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
 		shortID := storage.ShortID(id)
@@ -840,18 +659,40 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		TicketID:    id,
 	})
 
+	// Create conclusion record
+	conclusionType := req.Type
+	if conclusionType == "" {
+		conclusionType = t.Type
+	}
+	repo := req.Repo
+	if repo == "" {
+		repo = t.Repo
+	}
+
+	var conclusionID string
+	if h.deps.ConclusionStoreManager != nil {
+		conclusionStore, csErr := h.deps.ConclusionStoreManager.GetStore(projectPath)
+		if csErr == nil {
+			conclusion, createErr := conclusionStore.Create(conclusionType, id, repo, req.Content)
+			if createErr != nil {
+				h.deps.Logger.Warn("failed to create conclusion", "error", createErr)
+			} else {
+				conclusionID = conclusion.ID
+			}
+		}
+	}
+
+	// Update ticket with session back-reference
+	if conclusionID != "" {
+		if _, setErr := store.SetSession(id, conclusionID); setErr != nil {
+			h.deps.Logger.Warn("failed to set session back-reference", "error", setErr)
+		}
+	}
+
 	// Move the ticket to done
 	if err := store.Move(id, ticket.StatusDone); err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
-	}
-
-	// Cleanup worktree if present (best-effort)
-	if worktreePath != nil && featureBranch != nil && projectPath != "" {
-		wm := worktree.NewManager(projectPath)
-		if err := wm.Remove(context.Background(), *worktreePath, *featureBranch); err != nil {
-			h.deps.Logger.Warn("failed to cleanup worktree", "error", err)
-		}
 	}
 
 	// Kill tmux window if associated (best-effort)
@@ -873,127 +714,6 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		Success:  true,
 		TicketID: id,
 		Message:  "Session concluded and ticket moved to done",
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
-// ExecuteAction handles POST /tickets/{id}/comments/{comment_id}/execute - executes a comment action.
-func (h *TicketHandlers) ExecuteAction(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
-	store, err := h.deps.StoreManager.GetStore(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
-	ticketID := chi.URLParam(r, "id")
-	commentID := chi.URLParam(r, "comment_id")
-
-	// Get ticket
-	t, _, err := store.Get(ticketID)
-	if err != nil {
-		handleTicketError(w, err, h.deps.Logger)
-		return
-	}
-
-	// Find comment by ID
-	var comment *ticket.Comment
-	for i := range t.Comments {
-		if t.Comments[i].ID == commentID {
-			comment = &t.Comments[i]
-			break
-		}
-	}
-	if comment == nil {
-		writeError(w, http.StatusNotFound, "comment_not_found", "comment not found")
-		return
-	}
-
-	// Verify comment has an action
-	if comment.Action == nil {
-		writeError(w, http.StatusBadRequest, "no_action", "comment has no action")
-		return
-	}
-
-	// Verify ticket has active session (via session manager)
-	if h.deps.SessionManager != nil {
-		sessStore := h.deps.SessionManager.GetStore(projectPath)
-		sess, sessErr := sessStore.GetByTicketID(ticketID)
-		if sessErr != nil || sess == nil {
-			writeError(w, http.StatusConflict, "no_active_session", "ticket has no active session")
-			return
-		}
-	}
-
-	// Check tmux is available
-	if h.deps.TmuxManager == nil {
-		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
-		return
-	}
-
-	// Only support git_diff action type
-	if comment.Action.Type != "git_diff" {
-		writeError(w, http.StatusBadRequest, "unsupported_action", fmt.Sprintf("unsupported action type: %s", comment.Action.Type))
-		return
-	}
-
-	// Parse git_diff args
-	argsMap, ok := comment.Action.Args.(map[string]any)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid_args", "invalid action args")
-		return
-	}
-	repoPath, _ := argsMap["repo_path"].(string)
-	commit, _ := argsMap["commit"].(string)
-
-	if repoPath == "" {
-		writeError(w, http.StatusBadRequest, "invalid_repo_path", "repo_path is required")
-		return
-	}
-
-	// Validate repo_path exists
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		writeError(w, http.StatusBadRequest, "invalid_repo_path", fmt.Sprintf("repo_path does not exist: %s", repoPath))
-		return
-	}
-
-	// Load global config for git_diff_tool setting
-	cfg, err := daemonconfig.Load()
-	if err != nil {
-		h.deps.Logger.Warn("failed to load daemon config, using default", "error", err)
-		cfg = daemonconfig.DefaultConfig()
-	}
-
-	// Build command based on tool
-	var command string
-	switch cfg.GitDiffTool {
-	case "lazygit":
-		command = "lazygit"
-	default:
-		// Use git diff
-		if commit != "" {
-			command = fmt.Sprintf("git diff %s", commit)
-		} else {
-			command = "git diff"
-		}
-	}
-
-	// Get tmux session name
-	projectCfg, cfgErr := projectconfig.Load(projectPath)
-	tmuxSession := "cortex"
-	if cfgErr == nil && projectCfg.Name != "" {
-		tmuxSession = projectCfg.Name
-	}
-
-	// Execute popup
-	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, repoPath, command); err != nil {
-		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
-		return
-	}
-
-	resp := ExecuteActionResponse{
-		Success: true,
-		Message: "Action executed",
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

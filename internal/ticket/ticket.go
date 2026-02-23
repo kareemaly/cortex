@@ -12,7 +12,6 @@ type Status string
 const (
 	StatusBacklog  Status = "backlog"
 	StatusProgress Status = "progress"
-	StatusReview   Status = "review"
 	StatusDone     Status = "done"
 )
 
@@ -21,32 +20,20 @@ const DefaultTicketType = "work"
 
 // Re-export shared types from storage.
 type (
-	CommentType     = storage.CommentType
-	Comment         = storage.Comment
-	CommentAction   = storage.CommentAction
 	NotFoundError   = storage.NotFoundError
 	ValidationError = storage.ValidationError
 )
 
-// Re-export shared comment type constants.
-var (
-	CommentReviewRequested = storage.CommentReviewRequested
-	CommentDone            = storage.CommentDone
-	CommentBlocker         = storage.CommentBlocker
-	CommentGeneral         = storage.CommentGeneral
-)
-
 // IsNotFound returns true if err is a NotFoundError.
 var IsNotFound = storage.IsNotFound
-
-// GitDiffArgs holds the arguments for a git_diff action.
-type GitDiffArgs = storage.GitDiffArgs
 
 // TicketMeta holds the YAML frontmatter fields for a ticket.
 type TicketMeta struct {
 	ID         string     `yaml:"id"`
 	Title      string     `yaml:"title"`
 	Type       string     `yaml:"type"`
+	Repo       string     `yaml:"repo,omitempty"`
+	Session    string     `yaml:"session,omitempty"`
 	Tags       []string   `yaml:"tags,omitempty"`
 	References []string   `yaml:"references,omitempty"`
 	Due        *time.Time `yaml:"due,omitempty"`
@@ -54,9 +41,8 @@ type TicketMeta struct {
 	Updated    time.Time  `yaml:"updated"`
 }
 
-// Ticket represents a work item with metadata, body, and comments.
+// Ticket represents a work item with metadata and body.
 type Ticket struct {
 	TicketMeta
-	Body     string
-	Comments []Comment
+	Body string
 }

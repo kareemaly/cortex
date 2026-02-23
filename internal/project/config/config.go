@@ -22,14 +22,6 @@ type RoleConfig struct {
 	Args  []string  `yaml:"args"`
 }
 
-// TicketConfig maps ticket type names to their role configurations.
-type TicketConfig map[string]RoleConfig
-
-// DocsConfig holds configuration for the documentation system.
-type DocsConfig struct {
-	Path string `yaml:"path,omitempty"`
-}
-
 // TicketsConfig holds configuration for the ticket storage.
 type TicketsConfig struct {
 	Path string `yaml:"path,omitempty"`
@@ -37,30 +29,12 @@ type TicketsConfig struct {
 
 // Config holds the project configuration.
 type Config struct {
-	Extend    string        `yaml:"extend,omitempty"`
 	Name      string        `yaml:"name"`
+	Repos     []string      `yaml:"repos,omitempty"`
 	Architect RoleConfig    `yaml:"architect"`
-	Ticket    TicketConfig  `yaml:"ticket"`
-	Git       GitConfig     `yaml:"git"`
-	Docs      DocsConfig    `yaml:"docs,omitempty"`
+	Work      RoleConfig    `yaml:"work"`
+	Research  RoleConfig    `yaml:"research"`
 	Tickets   TicketsConfig `yaml:"tickets,omitempty"`
-
-	// resolvedExtendPath is the absolute path of the resolved extend directory.
-	// Set during Load() if Extend is specified.
-	resolvedExtendPath string
-}
-
-// DocsPath returns the resolved docs directory path for the given project root.
-// If Docs.Path is set, resolves it relative to the project root (or absolute).
-// Otherwise defaults to {projectRoot}/docs.
-func (c *Config) DocsPath(projectRoot string) string {
-	if c.Docs.Path != "" {
-		if filepath.IsAbs(c.Docs.Path) {
-			return c.Docs.Path
-		}
-		return filepath.Join(projectRoot, c.Docs.Path)
-	}
-	return filepath.Join(projectRoot, "docs")
 }
 
 // TicketsPath returns the resolved tickets directory path for the given project root.
@@ -76,38 +50,46 @@ func (c *Config) TicketsPath(projectRoot string) string {
 	return filepath.Join(projectRoot, "tickets")
 }
 
-// ResolvedExtendPath returns the resolved absolute path of the extend directory,
-// or empty string if no extend is configured.
-func (c *Config) ResolvedExtendPath() string {
-	return c.resolvedExtendPath
+// SessionsPath returns the resolved sessions directory path for the given project root.
+// Defaults to {projectRoot}/sessions.
+func (c *Config) SessionsPath(projectRoot string) string {
+	return filepath.Join(projectRoot, "sessions")
 }
 
-// GitConfig holds git-related configuration.
-type GitConfig struct {
-	Worktrees bool `yaml:"worktrees"`
+// RoleConfigForType returns the RoleConfig for a given ticket type.
+// Returns an error if the ticket type is not "work" or "research".
+func (c *Config) RoleConfigForType(ticketType string) (RoleConfig, error) {
+	switch ticketType {
+	case "work":
+		return c.Work, nil
+	case "research":
+		return c.Research, nil
+	default:
+		return RoleConfig{}, fmt.Errorf("no configuration found for ticket type %q (valid types: work, research)", ticketType)
+	}
+}
+
+// ValidateRepo checks if a repo is in the project's repos list.
+// If Repos is empty, any repo is allowed.
+func (c *Config) ValidateRepo(repo string) error {
+	if len(c.Repos) == 0 {
+		return nil
+	}
+	for _, r := range c.Repos {
+		if r == repo {
+			return nil
+		}
+	}
+	return fmt.Errorf("repo %q not in project repos list", repo)
 }
 
 // DefaultConfig returns a Config with default values.
 func DefaultConfig() *Config {
 	return &Config{
 		Architect: RoleConfig{Agent: AgentClaude},
-		Ticket: TicketConfig{
-			"work": RoleConfig{Agent: AgentClaude},
-		},
+		Work:      RoleConfig{Agent: AgentClaude},
+		Research:  RoleConfig{Agent: AgentClaude},
 	}
-}
-
-// TicketRoleConfig returns the RoleConfig for a given ticket type.
-// Returns an error if the ticket type is not configured.
-func (c *Config) TicketRoleConfig(ticketType string) (RoleConfig, error) {
-	if c.Ticket == nil {
-		return RoleConfig{}, fmt.Errorf("no ticket configuration found for type %q", ticketType)
-	}
-	role, ok := c.Ticket[ticketType]
-	if !ok {
-		return RoleConfig{}, fmt.Errorf("no ticket configuration found for type %q", ticketType)
-	}
-	return role, nil
 }
 
 // FindProjectRoot walks up from startPath to find a .cortex/ directory.
@@ -135,36 +117,37 @@ func FindProjectRoot(startPath string) (string, error) {
 	}
 }
 
-// Load loads configuration from projectRoot/.cortex/cortex.yaml.
-// Returns default config if file doesn't exist.
-// The extend field is validated and stored for prompt resolution only (no config merging).
+// Load loads configuration from the project root.
+// Tries {projectRoot}/cortex.yaml first, falls back to {projectRoot}/.cortex/cortex.yaml.
+// Returns default config if neither file exists.
 func Load(projectRoot string) (*Config, error) {
 	absPath, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	configPath := filepath.Join(absPath, ".cortex", "cortex.yaml")
+	// Try cortex.yaml at project root first
+	configPath := filepath.Join(absPath, "cortex.yaml")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return DefaultConfig(), nil
+			// Fall back to .cortex/cortex.yaml
+			configPath = filepath.Join(absPath, ".cortex", "cortex.yaml")
+			data, err = os.ReadFile(configPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return DefaultConfig(), nil
+				}
+				return nil, err
+			}
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 
 	cfg := DefaultConfig()
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, &ConfigParseError{Path: configPath, Err: err}
-	}
-
-	// Validate extend path (for prompt resolution only, no config merging)
-	if cfg.Extend != "" {
-		resolved, err := ValidateExtendPath(cfg.Extend, absPath)
-		if err != nil {
-			return nil, err
-		}
-		cfg.resolvedExtendPath = resolved
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -200,13 +183,19 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Validate each ticket type's agent
-	for typeName, role := range c.Ticket {
-		if role.Agent != "" && role.Agent != AgentClaude && role.Agent != AgentOpenCode {
-			return &ValidationError{
-				Field:   fmt.Sprintf("ticket.%s.agent", typeName),
-				Message: "must be 'claude' or 'opencode'",
-			}
+	// Validate work agent type
+	if c.Work.Agent != "" && c.Work.Agent != AgentClaude && c.Work.Agent != AgentOpenCode {
+		return &ValidationError{
+			Field:   "work.agent",
+			Message: "must be 'claude' or 'opencode'",
+		}
+	}
+
+	// Validate research agent type
+	if c.Research.Agent != "" && c.Research.Agent != AgentClaude && c.Research.Agent != AgentOpenCode {
+		return &ValidationError{
+			Field:   "research.agent",
+			Message: "must be 'claude' or 'opencode'",
 		}
 	}
 

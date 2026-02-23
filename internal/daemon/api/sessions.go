@@ -203,7 +203,7 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	if ticketType == "" {
 		ticketType = ticket.DefaultTicketType
 	}
-	resolver := prompt.NewPromptResolver(projectPath, projectCfg.ResolvedExtendPath())
+	resolver := prompt.NewPromptResolver(projectPath, "")
 	approveContent, err := resolver.ResolveTicketPrompt(ticketType, prompt.StageApprove)
 	if err != nil {
 		// Use a default message if file doesn't exist

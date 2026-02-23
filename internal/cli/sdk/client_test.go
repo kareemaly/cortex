@@ -281,7 +281,6 @@ func TestListAllTickets_NoFilters(t *testing.T) {
 	rs.setRoute("GET", "/tickets", http.StatusOK, ListAllTicketsResponse{
 		Backlog:  []TicketSummary{{ID: "t1", Title: "T1", Status: "backlog"}},
 		Progress: []TicketSummary{},
-		Review:   []TicketSummary{},
 		Done:     []TicketSummary{},
 	})
 
@@ -664,54 +663,7 @@ func TestConcludeArchitectSession(t *testing.T) {
 	}
 }
 
-// --- Comments / Reviews ---
-
-func TestAddComment_Success(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("POST", "/tickets/abc123/comments", http.StatusOK, AddCommentResponse{
-		Success: true,
-		Comment: CommentResponse{ID: "c1", Type: "comment", Content: "test"},
-	})
-
-	c := NewClient(srv.URL, "/p")
-	resp, err := c.AddComment("abc123", "comment", "test", "agent")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !resp.Success {
-		t.Error("expected success")
-	}
-	if resp.Comment.ID != "c1" {
-		t.Errorf("expected comment ID c1, got %q", resp.Comment.ID)
-	}
-}
-
-func TestRequestReview_Success(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("POST", "/tickets/abc123/reviews", http.StatusOK, RequestReviewResponse{
-		Success: true,
-		Message: "review requested",
-	})
-
-	c := NewClient(srv.URL, "/p")
-	resp, err := c.RequestReview("abc123", "/repo", "review this", "abc")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !resp.Success {
-		t.Error("expected success")
-	}
-
-	last := rs.lastRequest()
-	var body map[string]string
-	_ = json.Unmarshal(last.Body, &body)
-	if body["repo_path"] != "/repo" {
-		t.Errorf("expected repo_path /repo, got %q", body["repo_path"])
-	}
-	if body["commit"] != "abc" {
-		t.Errorf("expected commit abc, got %q", body["commit"])
-	}
-}
+// --- Conclude ---
 
 func TestConcludeSession_Success(t *testing.T) {
 	srv, rs := newRoutedServer(t)
@@ -728,149 +680,6 @@ func TestConcludeSession_Success(t *testing.T) {
 	}
 	if resp.TicketID != "abc123" {
 		t.Errorf("expected ticket ID abc123, got %q", resp.TicketID)
-	}
-}
-
-func TestExecuteCommentAction(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("POST", "/tickets/t1/comments/c1/execute", http.StatusOK, map[string]bool{"success": true})
-
-	c := NewClient(srv.URL, "/p")
-	err := c.ExecuteCommentAction("t1", "c1")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	last := rs.lastRequest()
-	if last.Method != "POST" {
-		t.Errorf("expected POST, got %q", last.Method)
-	}
-}
-
-// --- Docs ---
-
-func TestCreateDoc(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("POST", "/docs", http.StatusCreated, DocResponse{
-		ID:       "d1",
-		Title:    "Doc",
-		Category: "guides",
-	})
-
-	c := NewClient(srv.URL, "/p")
-	resp, err := c.CreateDoc("Doc", "guides", "body", []string{"tag1"}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.ID != "d1" {
-		t.Errorf("expected ID d1, got %q", resp.ID)
-	}
-}
-
-func TestGetDoc(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("GET", "/docs/d1", http.StatusOK, DocResponse{
-		ID:    "d1",
-		Title: "Doc",
-	})
-
-	c := NewClient(srv.URL, "/p")
-	resp, err := c.GetDoc("d1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.Title != "Doc" {
-		t.Errorf("expected title Doc, got %q", resp.Title)
-	}
-}
-
-func TestUpdateDoc(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("PUT", "/docs/d1", http.StatusOK, DocResponse{
-		ID:    "d1",
-		Title: "Updated",
-	})
-
-	c := NewClient(srv.URL, "/p")
-	title := "Updated"
-	resp, err := c.UpdateDoc("d1", &title, nil, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.Title != "Updated" {
-		t.Errorf("expected title Updated, got %q", resp.Title)
-	}
-}
-
-func TestDeleteDoc(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("DELETE", "/docs/d1", http.StatusNoContent, nil)
-
-	c := NewClient(srv.URL, "/p")
-	err := c.DeleteDoc("d1")
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestMoveDoc(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("POST", "/docs/d1/move", http.StatusOK, DocResponse{
-		ID:       "d1",
-		Category: "archive",
-	})
-
-	c := NewClient(srv.URL, "/p")
-	resp, err := c.MoveDoc("d1", "archive")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.Category != "archive" {
-		t.Errorf("expected category archive, got %q", resp.Category)
-	}
-}
-
-func TestListDocs(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("GET", "/docs", http.StatusOK, ListDocsResponse{
-		Docs: []DocSummary{{ID: "d1", Title: "Doc"}},
-	})
-
-	c := NewClient(srv.URL, "/p")
-	resp, err := c.ListDocs("guides", "tag1", "search")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(resp.Docs) != 1 {
-		t.Errorf("expected 1 doc, got %d", len(resp.Docs))
-	}
-
-	last := rs.lastRequest()
-	if !strings.Contains(last.Path, "category=guides") {
-		t.Errorf("expected category param, got %q", last.Path)
-	}
-	if !strings.Contains(last.Path, "tag=tag1") {
-		t.Errorf("expected tag param, got %q", last.Path)
-	}
-	if !strings.Contains(last.Path, "query=search") {
-		t.Errorf("expected query param, got %q", last.Path)
-	}
-}
-
-func TestAddDocComment(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("POST", "/docs/d1/comments", http.StatusOK, AddCommentResponse{
-		Success: true,
-		Comment: CommentResponse{ID: "c1"},
-	})
-
-	c := NewClient(srv.URL, "/p")
-	resp, err := c.AddDocComment("d1", "comment", "content", "author")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !resp.Success {
-		t.Error("expected success")
 	}
 }
 

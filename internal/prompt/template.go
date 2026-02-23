@@ -24,7 +24,6 @@ type ArchitectKickoffVars struct {
 	TicketList  string
 	CurrentDate string
 	TopTags     string // comma-separated top tags
-	DocsList    string // formatted recent docs list
 	Notes       string // formatted notes/reminders list
 }
 

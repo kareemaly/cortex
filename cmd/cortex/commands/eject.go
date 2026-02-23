@@ -45,8 +45,8 @@ func runEject(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// Load project config
-	cfg, projectRoot, err := projectconfig.LoadFromPath(cwd)
+	// Find project root
+	_, projectRoot, err := projectconfig.LoadFromPath(cwd)
 	if err != nil {
 		if projectconfig.IsProjectNotFound(err) {
 			return fmt.Errorf("not in a cortex project (no .cortex directory found)")
@@ -54,11 +54,7 @@ func runEject(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Get extend path
-	extendPath := cfg.ResolvedExtendPath()
-	if extendPath == "" {
-		return fmt.Errorf("project has no 'extend' configured in .cortex/cortex.yaml")
-	}
+	extendPath := ""
 
 	// Resolve paths
 	sourcePath := filepath.Join(prompt.BasePromptsDir(extendPath), promptPath)

@@ -141,7 +141,6 @@ func ProjectsHandler(storeManager *StoreManager) http.HandlerFunc {
 						proj.Counts = &ProjectTicketCounts{
 							Backlog:  len(allTickets[ticket.StatusBacklog]),
 							Progress: len(allTickets[ticket.StatusProgress]),
-							Review:   len(allTickets[ticket.StatusReview]),
 							Done:     len(allTickets[ticket.StatusDone]),
 						}
 					}

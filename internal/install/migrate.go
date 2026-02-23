@@ -27,6 +27,9 @@ type legacyConfig struct {
 	Architect struct {
 		Agent string `yaml:"agent"`
 	} `yaml:"architect,omitempty"`
+	Work struct {
+		Agent string `yaml:"agent"`
+	} `yaml:"work,omitempty"`
 	Git struct {
 		Worktrees bool `yaml:"worktrees"`
 	} `yaml:"git,omitempty"`
@@ -52,7 +55,8 @@ func DetectAgentFromExtend(extendPath string) string {
 }
 
 // MigrateProjectConfig reads a project's .cortex/cortex.yaml and migrates it
-// to the new format with extend pointing to ~/.cortex/defaults/main.
+// from the legacy format (with extend, ticket, git fields) to the new format
+// with top-level architect, work, and research sections.
 func MigrateProjectConfig(projectPath string) *MigrationResult {
 	result := &MigrationResult{ProjectPath: projectPath}
 
@@ -79,10 +83,10 @@ func MigrateProjectConfig(projectPath string) *MigrationResult {
 		result.ProjectName = DetectProjectName(projectPath)
 	}
 
-	// Skip if already migrated
-	if old.Extend == "~/.cortex/defaults/main" {
+	// Skip if already migrated (new format has work section and no extend)
+	if old.Extend == "" && old.Work.Agent != "" {
 		result.Skipped = true
-		result.SkipReason = "already using defaults/main"
+		result.SkipReason = "already using new config format"
 		return result
 	}
 
@@ -101,21 +105,9 @@ func MigrateProjectConfig(projectPath string) *MigrationResult {
 	// Generate new config
 	newConfig := generateProjectConfig(result.ProjectName, agent)
 
-	// Preserve custom fields via string operations
-	if old.Git.Worktrees {
-		newConfig = strings.Replace(newConfig, "worktrees: false", "worktrees: true", 1)
-	}
-
-	// Preserve custom docs/tickets paths
-	var extras []string
-	if old.Docs.Path != "" {
-		extras = append(extras, "docs:\n  path: "+old.Docs.Path)
-	}
+	// Preserve custom tickets path
 	if old.Tickets.Path != "" {
-		extras = append(extras, "tickets:\n  path: "+old.Tickets.Path)
-	}
-	if len(extras) > 0 {
-		newConfig += strings.Join(extras, "\n") + "\n"
+		newConfig += "tickets:\n  path: " + old.Tickets.Path + "\n"
 	}
 
 	// Write the migrated config

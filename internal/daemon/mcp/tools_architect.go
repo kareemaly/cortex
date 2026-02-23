@@ -61,7 +61,7 @@ func (s *Server) registerArchitectTools() {
 	// List tickets
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "listTickets",
-		Description: "List tickets by status. Status parameter is required and must be one of: backlog, progress, review, done. Optionally specify project_path to list tickets from a different project.",
+		Description: "List tickets by status. Status parameter is required and must be one of: backlog, progress, done. Optionally specify project_path to list tickets from a different project.",
 	}, s.handleListTickets)
 
 	// Read ticket
@@ -94,12 +94,6 @@ func (s *Server) registerArchitectTools() {
 		Description: "Move a ticket to a different status",
 	}, s.handleMoveTicket)
 
-	// Add comment to a ticket
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "addTicketComment",
-		Description: "Add a comment to a ticket (types: review_requested, done, blocker, comment)",
-	}, s.handleArchitectAddComment)
-
 	// Spawn session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "spawnSession",
@@ -117,43 +111,6 @@ func (s *Server) registerArchitectTools() {
 		Name:        "clearDueDate",
 		Description: "Remove the due date from a ticket",
 	}, s.handleClearDueDate)
-
-	// Doc tools
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "createDoc",
-		Description: "Create a new documentation file with markdown content and YAML frontmatter",
-	}, s.handleCreateDoc)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "readDoc",
-		Description: "Read a documentation file by ID",
-	}, s.handleReadDoc)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "updateDoc",
-		Description: "Update a documentation file's title, body, tags, or references",
-	}, s.handleUpdateDoc)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "deleteDoc",
-		Description: "Delete a documentation file by ID (current project only)",
-	}, s.handleDeleteDoc)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "moveDoc",
-		Description: "Move a documentation file to a different category/subdirectory",
-	}, s.handleMoveDoc)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "listDocs",
-		Description: "List documentation files with optional category, tag, and search filters",
-	}, s.handleListDocs)
-
-	// Add doc comment
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "addDocComment",
-		Description: "Add a comment to a documentation file (types: review_requested, done, blocker, comment)",
-	}, s.handleAddDocComment)
 
 	// Note tools
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -176,16 +133,22 @@ func (s *Server) registerArchitectTools() {
 		Description: "Delete a note by ID",
 	}, s.handleDeleteNote)
 
-	// List sessions
+	// List sessions (persistent conclusions)
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "listSessions",
-		Description: "List all active agent sessions with ticket details",
+		Description: "List all persistent session conclusions",
 	}, s.handleListSessions)
+
+	// Read session (persistent conclusion)
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "readSession",
+		Description: "Read a persistent session/conclusion record by ID",
+	}, s.handleReadSession)
 
 	// Conclude architect session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
-		Description: "Conclude the architect session. Automatically creates a session summary doc and cleans up session state. Do not manually create a session doc before calling this.",
+		Description: "Conclude the architect session and clean up",
 	}, s.handleArchitectConcludeSession)
 }
 
@@ -233,8 +196,8 @@ func (s *Server) handleListTickets(
 	if input.Status == "" {
 		return nil, ListTicketsOutput{}, NewValidationError("status", "is required")
 	}
-	if input.Status != "backlog" && input.Status != "progress" && input.Status != "review" && input.Status != "done" {
-		return nil, ListTicketsOutput{}, NewValidationError("status", "must be one of: backlog, progress, review, done")
+	if input.Status != "backlog" && input.Status != "progress" && input.Status != "done" {
+		return nil, ListTicketsOutput{}, NewValidationError("status", "must be one of: backlog, progress, done")
 	}
 
 	// Parse dueBefore if provided
@@ -397,8 +360,8 @@ func (s *Server) handleMoveTicket(
 	}
 
 	// Validate status
-	if input.Status != "backlog" && input.Status != "progress" && input.Status != "review" && input.Status != "done" {
-		return nil, MoveTicketOutput{}, NewValidationError("status", "must be backlog, progress, review, or done")
+	if input.Status != "backlog" && input.Status != "progress" && input.Status != "done" {
+		return nil, MoveTicketOutput{}, NewValidationError("status", "must be backlog, progress, or done")
 	}
 
 	_, err := client.MoveTicket(input.ID, input.Status)
@@ -410,35 +373,6 @@ func (s *Server) handleMoveTicket(
 		Success: true,
 		ID:      input.ID,
 		Status:  input.Status,
-	}, nil
-}
-
-// handleArchitectAddComment adds a comment to a ticket by ID.
-func (s *Server) handleArchitectAddComment(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	input ArchitectAddCommentInput,
-) (*mcp.CallToolResult, AddCommentOutput, error) {
-	// Validate project path first
-	if err := s.validateProjectPath(input.ProjectPath); err != nil {
-		return nil, AddCommentOutput{}, err
-	}
-
-	// Get client for target project
-	client := s.getClientForProject(input.ProjectPath)
-
-	if input.ID == "" {
-		return nil, AddCommentOutput{}, NewValidationError("id", "cannot be empty")
-	}
-
-	resp, err := client.AddComment(input.ID, input.Type, input.Content, "architect")
-	if err != nil {
-		return nil, AddCommentOutput{}, wrapSDKError(err)
-	}
-
-	return nil, AddCommentOutput{
-		Success: resp.Success,
-		Comment: resp.Comment,
 	}, nil
 }
 
@@ -640,71 +574,71 @@ func (s *Server) handleClearDueDate(
 	}, nil
 }
 
-// handleAddDocComment adds a comment to a doc by ID.
-func (s *Server) handleAddDocComment(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	input AddDocCommentInput,
-) (*mcp.CallToolResult, AddCommentOutput, error) {
-	if err := s.validateProjectPath(input.ProjectPath); err != nil {
-		return nil, AddCommentOutput{}, err
-	}
-
-	client := s.getClientForProject(input.ProjectPath)
-
-	if input.ID == "" {
-		return nil, AddCommentOutput{}, NewValidationError("id", "cannot be empty")
-	}
-	if input.Content == "" {
-		return nil, AddCommentOutput{}, NewValidationError("content", "cannot be empty")
-	}
-
-	resp, err := client.AddDocComment(input.ID, input.Type, input.Content, "architect")
-	if err != nil {
-		return nil, AddCommentOutput{}, wrapSDKError(err)
-	}
-
-	return nil, AddCommentOutput{
-		Success: resp.Success,
-		Comment: resp.Comment,
-	}, nil
-}
-
-// handleListSessions lists all active sessions.
+// handleListSessions lists all persistent session conclusions.
 func (s *Server) handleListSessions(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
-	input ListSessionsInput,
-) (*mcp.CallToolResult, ListSessionsOutput, error) {
+	input ListConclusionsInput,
+) (*mcp.CallToolResult, ListConclusionsOutput, error) {
 	if err := s.validateProjectPath(input.ProjectPath); err != nil {
-		return nil, ListSessionsOutput{}, err
+		return nil, ListConclusionsOutput{}, err
 	}
 
 	client := s.getClientForProject(input.ProjectPath)
 
-	resp, err := client.ListSessions()
+	resp, err := client.ListConclusions()
 	if err != nil {
-		return nil, ListSessionsOutput{}, wrapSDKError(err)
+		return nil, ListConclusionsOutput{}, wrapSDKError(err)
 	}
 
-	items := make([]SessionListItem, len(resp.Sessions))
-	for i, s := range resp.Sessions {
-		items[i] = SessionListItem{
-			SessionID:   s.SessionID,
-			SessionType: s.SessionType,
-			TicketID:    s.TicketID,
-			TicketTitle: s.TicketTitle,
-			Agent:       s.Agent,
-			TmuxWindow:  s.TmuxWindow,
-			StartedAt:   s.StartedAt,
-			Status:      s.Status,
-			Tool:        s.Tool,
+	items := make([]ConclusionOutput, len(resp.Conclusions))
+	for i, c := range resp.Conclusions {
+		items[i] = ConclusionOutput{
+			ID:      c.ID,
+			Type:    c.Type,
+			Ticket:  c.Ticket,
+			Repo:    c.Repo,
+			Body:    c.Body,
+			Created: c.Created.Format(time.RFC3339),
 		}
 	}
 
-	return nil, ListSessionsOutput{
-		Sessions: items,
-		Total:    len(items),
+	return nil, ListConclusionsOutput{
+		Conclusions: items,
+		Total:       len(items),
+	}, nil
+}
+
+// handleReadSession reads a persistent session/conclusion record by ID.
+func (s *Server) handleReadSession(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input ReadConclusionInput,
+) (*mcp.CallToolResult, ReadConclusionOutput, error) {
+	if input.ID == "" {
+		return nil, ReadConclusionOutput{}, NewValidationError("id", "cannot be empty")
+	}
+
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, ReadConclusionOutput{}, err
+	}
+
+	client := s.getClientForProject(input.ProjectPath)
+
+	resp, err := client.GetConclusion(input.ID)
+	if err != nil {
+		return nil, ReadConclusionOutput{}, wrapSDKError(err)
+	}
+
+	return nil, ReadConclusionOutput{
+		Conclusion: ConclusionOutput{
+			ID:      resp.ID,
+			Type:    resp.Type,
+			Ticket:  resp.Ticket,
+			Repo:    resp.Repo,
+			Body:    resp.Body,
+			Created: resp.Created.Format(time.RFC3339),
+		},
 	}, nil
 }
 

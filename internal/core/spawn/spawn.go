@@ -6,11 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
@@ -18,13 +16,7 @@ import (
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
-	"github.com/kareemaly/cortex/internal/worktree"
 )
-
-// generateSessionID generates a unique session ID for worktrees.
-func generateSessionID() string {
-	return uuid.New().String()
-}
 
 // AgentType represents the type of agent being spawned.
 type AgentType string
@@ -95,19 +87,14 @@ type SpawnRequest struct {
 	TicketsDir  string
 
 	// For ticket agents
-	TicketID    string
-	Ticket      *ticket.Ticket
-	UseWorktree bool // if true, spawn in a git worktree
+	TicketID string
+	Ticket   *ticket.Ticket
 
 	// For architect agents
 	ProjectName string
 
 	// Extra CLI args appended to the agent command
 	AgentArgs []string
-
-	// BaseConfigPath is the resolved extend path from project config.
-	// Used for prompt fallback resolution.
-	BaseConfigPath string
 }
 
 // ResumeRequest contains parameters for resuming an orphaned session.
@@ -176,37 +163,15 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	// Generate window name
 	windowName := s.generateWindowName(req)
 
-	// Determine working directory and worktree info
+	// Working directory is always the project path
 	workingDir := req.ProjectPath
-	var worktreePath, featureBranch *string
-
-	if req.UseWorktree && req.AgentType == AgentTypeTicketAgent {
-		wm := worktree.NewManager(req.ProjectPath)
-		slug := storage.GenerateSlug(req.Ticket.Title, "ticket")
-
-		// Generate session ID for worktree path
-		sessionID := generateSessionID()
-
-		wtPath, branch, err := wm.Create(ctx, sessionID, slug)
-		if err != nil {
-			return nil, fmt.Errorf("create worktree: %w", err)
-		}
-
-		worktreePath = &wtPath
-		featureBranch = &branch
-		workingDir = wtPath
-	}
 
 	// Create session in store
 	if s.deps.SessionStore != nil {
 		switch req.AgentType {
 		case AgentTypeTicketAgent:
-			_, _, err := s.deps.SessionStore.Create(req.TicketID, req.Agent, windowName, worktreePath, featureBranch)
+			_, _, err := s.deps.SessionStore.Create(req.TicketID, req.Agent, windowName, nil, nil)
 			if err != nil {
-				if worktreePath != nil && featureBranch != nil {
-					wm := worktree.NewManager(req.ProjectPath)
-					_ = wm.Remove(ctx, *worktreePath, *featureBranch)
-				}
 				return nil, err
 			}
 		case AgentTypeArchitect:
@@ -239,7 +204,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 
 	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nil, worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nil)
 		return nil, err
 	}
 
@@ -254,15 +219,15 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 
 		settingsPath, err = WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
 		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath}, worktreePath, featureBranch, req.ProjectPath)
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath})
 			return nil, err
 		}
 	}
 
 	// Load and build prompt
-	pInfo, err := s.buildPrompt(req, worktreePath, featureBranch)
+	pInfo, err := s.buildPrompt(req)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath}, worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath})
 		return &SpawnResult{
 			Success: false,
 			Message: err.Error(),
@@ -272,7 +237,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	// Write prompt to temp file
 	promptFilePath, err := WritePromptFile(pInfo.PromptText, identifier, "prompt", s.deps.MCPConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath}, worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath})
 		return nil, err
 	}
 
@@ -281,7 +246,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	if pInfo.SystemPromptContent != "" {
 		systemPromptFilePath, err = WritePromptFile(pInfo.SystemPromptContent, identifier, "sysprompt", s.deps.MCPConfigDir)
 		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath, promptFilePath}, worktreePath, featureBranch, req.ProjectPath)
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath, promptFilePath})
 			return nil, err
 		}
 	}
@@ -291,7 +256,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	if req.Agent == "opencode" {
 		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, pInfo.SystemPromptContent, req.AgentType, systemPromptFilePath)
 		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath), worktreePath, featureBranch, req.ProjectPath)
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath))
 			return nil, err
 		}
 	}
@@ -323,6 +288,18 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": req.TicketID,
 			"CORTEX_PROJECT":   req.ProjectPath,
+			"CORTEX_TICKET_TYPE": func() string {
+				if req.Ticket != nil {
+					return req.Ticket.Type
+				}
+				return ""
+			}(),
+			"CORTEX_REPO": func() string {
+				if req.Ticket != nil {
+					return req.Ticket.Repo
+				}
+				return ""
+			}(),
 		}
 	}
 
@@ -339,7 +316,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		)
 		pluginDir, pluginErr := WriteOpenCodePluginDir(pluginContent, identifier)
 		if pluginErr != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles, worktreePath, featureBranch, req.ProjectPath)
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles)
 			return nil, pluginErr
 		}
 		launcherParams.CleanupDirs = []string{pluginDir}
@@ -348,7 +325,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 
 	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles, worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles)
 		return nil, err
 	}
 	allTempFiles := append(tempFiles, launcherPath)
@@ -357,7 +334,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	launchCmd := "bash " + launcherPath
 	windowIndex, err := s.spawnInTmux(req, windowName, launchCmd, workingDir)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, allTempFiles, worktreePath, featureBranch, req.ProjectPath)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, allTempFiles)
 		return &SpawnResult{
 			Success: false,
 			Message: "failed to spawn agent in tmux: " + err.Error(),
@@ -413,6 +390,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
 		envVars["CORTEX_TICKET_ID"] = req.TicketID
+		envVars["CORTEX_TICKET_TYPE"] = req.TicketType
 	case AgentTypeArchitect:
 		envVars["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
 	}
@@ -435,7 +413,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		}
 	}
 
-	// Generate OpenCode config content for resume (empty system prompt — resume has no prompts)
+	// Generate OpenCode config content for resume (empty system prompt -- resume has no prompts)
 	var openCodeConfigJSON string
 	if req.Agent == "opencode" {
 		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, "", req.AgentType, "")
@@ -555,14 +533,6 @@ func (s *Spawner) Fresh(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 				if err := s.deps.SessionStore.End(shortID); err != nil {
 					s.logWarn("fresh: failed to end existing session", "ticketID", req.TicketID, "error", err)
 				}
-
-				// Clean up existing worktree and branch so Spawn() can create fresh ones
-				if existingSess.WorktreePath != nil && existingSess.FeatureBranch != nil {
-					wm := worktree.NewManager(req.ProjectPath)
-					if err := wm.Remove(ctx, *existingSess.WorktreePath, *existingSess.FeatureBranch); err != nil {
-						s.logWarn("fresh: failed to clean up old worktree/branch", "error", err)
-					}
-				}
 			}
 		case AgentTypeArchitect:
 			if err := s.deps.SessionStore.EndArchitect(); err != nil {
@@ -659,10 +629,10 @@ type promptInfo struct {
 // Dynamic content (ticket details, ticket lists) is embedded in the prompt.
 // Static instructions are loaded from file via --system-prompt (architect, full replace)
 // or --append-system-prompt (ticket agent, appended to default).
-func (s *Spawner) buildPrompt(req SpawnRequest, worktreePath, featureBranch *string) (*promptInfo, error) {
+func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		return s.buildTicketAgentPrompt(req, worktreePath, featureBranch)
+		return s.buildTicketAgentPrompt(req)
 	case AgentTypeArchitect:
 		return s.buildArchitectPrompt(req)
 	default:
@@ -671,7 +641,7 @@ func (s *Spawner) buildPrompt(req SpawnRequest, worktreePath, featureBranch *str
 }
 
 // buildTicketAgentPrompt creates the dynamic ticket prompt.
-func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, featureBranch *string) (*promptInfo, error) {
+func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) {
 	// Determine ticket type
 	ticketType := req.Ticket.Type
 	if ticketType == "" {
@@ -679,7 +649,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 	}
 
 	// Create prompt resolver with fallback support
-	resolver := prompt.NewPromptResolver(req.ProjectPath, req.BaseConfigPath)
+	resolver := prompt.NewPromptResolver(req.ProjectPath, "")
 
 	// Load system prompt (MCP tool instructions and workflow)
 	var systemPromptContent string
@@ -708,15 +678,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 		TicketID:    req.TicketID,
 		TicketTitle: req.Ticket.Title,
 		TicketBody:  req.Ticket.Body,
-		Comments:    formatTicketComments(req.Ticket.Comments),
 		References:  formatTicketReferences(req.Ticket.References),
-		IsWorktree:  worktreePath != nil,
-	}
-	if worktreePath != nil {
-		vars.WorktreePath = *worktreePath
-	}
-	if featureBranch != nil {
-		vars.WorktreeBranch = *featureBranch
 	}
 
 	promptText, err := prompt.RenderTemplate(kickoffTemplate, vars)
@@ -728,23 +690,6 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, worktreePath, feature
 		PromptText:          promptText,
 		SystemPromptContent: systemPromptContent,
 	}, nil
-}
-
-// formatTicketComments formats ticket comments into a markdown string for prompt injection.
-func formatTicketComments(comments []ticket.Comment) string {
-	if len(comments) == 0 {
-		return ""
-	}
-	var sb strings.Builder
-	for i, c := range comments {
-		if i > 0 {
-			sb.WriteString("\n")
-		}
-		sb.WriteString(fmt.Sprintf("### [%s] — %s\n", c.Type, c.Created.UTC().Format("2006-01-02 15:04 UTC")))
-		sb.WriteString(c.Content)
-		sb.WriteString("\n")
-	}
-	return sb.String()
 }
 
 // formatTicketReferences formats ticket references into a bulleted markdown list.
@@ -766,7 +711,7 @@ func formatTicketReferences(refs []string) string {
 // buildArchitectPrompt creates the dynamic architect prompt with ticket list.
 func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	// Create prompt resolver with fallback support
-	resolver := prompt.NewPromptResolver(req.ProjectPath, req.BaseConfigPath)
+	resolver := prompt.NewPromptResolver(req.ProjectPath, "")
 
 	// Load system prompt (MCP tool instructions and workflow)
 	var systemPromptContent string
@@ -806,7 +751,6 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 
 	writeSection("Backlog", tickets.Backlog)
 	writeSection("In Progress", tickets.Progress)
-	writeSection("Review", tickets.Review)
 	doneTickets := tickets.Done
 	if len(doneTickets) > 10 {
 		doneTickets = doneTickets[:10]
@@ -827,25 +771,6 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 		topTags = strings.Join(tagNames, ", ")
 	}
 
-	// Fetch recent docs (graceful degradation)
-	var docsList string
-	docsResp, docsErr := client.ListDocs("", "", "")
-	if docsErr == nil && len(docsResp.Docs) > 0 {
-		// Sort by Created descending (RFC3339 strings sort correctly)
-		sorted := make([]sdk.DocSummary, len(docsResp.Docs))
-		copy(sorted, docsResp.Docs)
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].Created > sorted[j].Created
-		})
-		limit := min(20, len(sorted))
-		var docSB strings.Builder
-		for i := range limit {
-			d := sorted[i]
-			docSB.WriteString(fmt.Sprintf("- [%s] %s (%s, created: %s)\n", d.ID, d.Title, d.Category, d.Created))
-		}
-		docsList = docSB.String()
-	}
-
 	// Fetch notes (graceful degradation)
 	var notesList string
 	notesResp, notesErr := client.ListNotes()
@@ -861,7 +786,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 				dueDate := n.Due.Truncate(24 * time.Hour)
 				dueStr = fmt.Sprintf(" (due: %s)", n.Due.Format(time.DateOnly))
 				if !dueDate.After(today) {
-					prefix = "- ⚠️"
+					prefix = "- !!"
 				}
 			}
 			notesSB.WriteString(fmt.Sprintf("%s [%s] %s%s\n", prefix, n.ID, n.Text, dueStr))
@@ -877,7 +802,6 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 			TicketList:  ticketList,
 			CurrentDate: time.Now().Format("2006-01-02 15:04 MST"),
 			TopTags:     topTags,
-			DocsList:    docsList,
 			Notes:       notesList,
 		}
 		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
@@ -915,7 +839,7 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDi
 }
 
 // cleanupOnFailure cleans up resources when spawn fails.
-func (s *Spawner) cleanupOnFailure(ctx context.Context, agentType AgentType, ticketID string, tempFiles []string, worktreePath, featureBranch *string, projectPath string) {
+func (s *Spawner) cleanupOnFailure(_ context.Context, agentType AgentType, ticketID string, tempFiles []string) {
 	if s.deps.SessionStore != nil {
 		switch agentType {
 		case AgentTypeTicketAgent:
@@ -937,12 +861,6 @@ func (s *Spawner) cleanupOnFailure(ctx context.Context, agentType AgentType, tic
 		}
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			s.logWarn("cleanup: failed to remove temp file", "path", path, "error", err)
-		}
-	}
-	if worktreePath != nil && featureBranch != nil && projectPath != "" {
-		wm := worktree.NewManager(projectPath)
-		if err := wm.Remove(ctx, *worktreePath, *featureBranch); err != nil {
-			s.logWarn("cleanup: failed to remove worktree", "path", *worktreePath, "error", err)
 		}
 	}
 }

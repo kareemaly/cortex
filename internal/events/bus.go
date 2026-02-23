@@ -9,21 +9,17 @@ import (
 type EventType string
 
 const (
-	TicketCreated   EventType = "ticket_created"
-	TicketUpdated   EventType = "ticket_updated"
-	TicketDeleted   EventType = "ticket_deleted"
-	TicketMoved     EventType = "ticket_moved"
-	SessionStarted  EventType = "session_started"
-	SessionEnded    EventType = "session_ended"
-	SessionStatus   EventType = "session_status"
-	CommentAdded    EventType = "comment_added"
-	ReviewRequested EventType = "review_requested"
-	DocCreated      EventType = "doc_created"
-	DocUpdated      EventType = "doc_updated"
-	DocDeleted      EventType = "doc_deleted"
-	NoteCreated     EventType = "note_created"
-	NoteUpdated     EventType = "note_updated"
-	NoteDeleted     EventType = "note_deleted"
+	TicketCreated     EventType = "ticket_created"
+	TicketUpdated     EventType = "ticket_updated"
+	TicketDeleted     EventType = "ticket_deleted"
+	TicketMoved       EventType = "ticket_moved"
+	SessionStarted    EventType = "session_started"
+	SessionEnded      EventType = "session_ended"
+	SessionStatus     EventType = "session_status"
+	ConclusionCreated EventType = "conclusion_created"
+	NoteCreated       EventType = "note_created"
+	NoteUpdated       EventType = "note_updated"
+	NoteDeleted       EventType = "note_deleted"
 )
 
 // Event represents a change in the system.

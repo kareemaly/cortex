@@ -42,6 +42,10 @@ type Config struct {
 	// This is primarily used for testing.
 	CortexdPath string
 
+	// Repo is the repository path for this session.
+	// Set from CORTEX_REPO env var for ticket sessions.
+	Repo string
+
 	// DaemonURL is the URL of the cortexd HTTP API.
 	// When set for ticket sessions, the MCP server routes mutations through the daemon
 	// instead of creating its own ticket store.
@@ -75,6 +79,7 @@ func NewServer(cfg *Config) (*Server, error) {
 			Type:       SessionTypeTicket,
 			TicketID:   cfg.TicketID,
 			TicketType: cfg.TicketType,
+			Repo:       cfg.Repo,
 		}
 	} else {
 		session = &Session{

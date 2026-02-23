@@ -91,11 +91,4 @@ func printTicketPlainText(client *sdk.Client, ticketID string) {
 		fmt.Println()
 	}
 
-	// Print comments.
-	if len(t.Comments) > 0 {
-		fmt.Println("Comments:")
-		for _, c := range t.Comments {
-			fmt.Printf("  [%s] %s\n", c.Type, c.Content)
-		}
-	}
 }

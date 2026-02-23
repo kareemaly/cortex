@@ -44,7 +44,7 @@ func (s *Store) emit(eventType events.EventType, ticketID string, payload any) {
 func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, error) {
 	s := &Store{ticketsDir: ticketsDir, bus: bus, projectPath: projectPath}
 
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
 		dir := filepath.Join(ticketsDir, string(status))
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("create directory %s: %w", dir, err)
@@ -55,7 +55,7 @@ func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, e
 }
 
 // Create creates a new ticket in the backlog.
-func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, references, tags []string) (*Ticket, error) {
+func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, references, tags []string, repo string) (*Ticket, error) {
 	if title == "" {
 		return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
 	}
@@ -70,14 +70,14 @@ func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, refer
 			ID:         uuid.New().String(),
 			Title:      title,
 			Type:       ticketType,
+			Repo:       repo,
 			Tags:       tags,
 			References: references,
 			Due:        dueDate,
 			Created:    now,
 			Updated:    now,
 		},
-		Body:     body,
-		Comments: []Comment{},
+		Body: body,
 	}
 
 	mu := s.ticketMu(ticket.ID)
@@ -94,7 +94,7 @@ func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, refer
 
 // Get retrieves a ticket by ID, searching all status directories.
 func (s *Store) Get(id string) (*Ticket, Status, error) {
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
 		entityDir, err := s.findEntityDir(id, status)
 		if err != nil {
 			if storage.IsNotFound(err) {
@@ -107,12 +107,6 @@ func (s *Store) Get(id string) (*Ticket, Status, error) {
 		if err != nil {
 			return nil, "", err
 		}
-
-		comments, err := storage.ListComments(entityDir)
-		if err != nil {
-			return nil, "", fmt.Errorf("load comments: %w", err)
-		}
-		ticket.Comments = comments
 
 		return ticket, status, nil
 	}
@@ -178,6 +172,33 @@ func (s *Store) Update(id string, title, body, ticketType *string, references, t
 	return ticket, nil
 }
 
+// SetSession sets the session back-reference on a ticket.
+func (s *Store) SetSession(id string, sessionID string) (*Ticket, error) {
+	mu := s.ticketMu(id)
+	mu.Lock()
+	defer mu.Unlock()
+
+	entityDir, _, err := s.findEntityDirAllStatuses(id)
+	if err != nil {
+		return nil, err
+	}
+
+	ticket, err := s.loadIndex(entityDir)
+	if err != nil {
+		return nil, err
+	}
+
+	ticket.Session = sessionID
+	ticket.Updated = time.Now().UTC()
+
+	if err := s.writeIndex(entityDir, ticket); err != nil {
+		return nil, fmt.Errorf("save ticket: %w", err)
+	}
+
+	s.emit(events.TicketUpdated, ticket.ID, nil)
+	return ticket, nil
+}
+
 // SetDueDate sets or clears the due date for a ticket.
 func (s *Store) SetDueDate(id string, dueDate *time.Time) (*Ticket, error) {
 	mu := s.ticketMu(id)
@@ -230,7 +251,7 @@ func (s *Store) Delete(id string) error {
 	return nil
 }
 
-// List returns all tickets with the given status (without loading comments).
+// List returns all tickets with the given status.
 func (s *Store) List(status Status) ([]*Ticket, error) {
 	dir := filepath.Join(s.ticketsDir, string(status))
 	entries, err := os.ReadDir(dir)
@@ -258,11 +279,11 @@ func (s *Store) List(status Status) ([]*Ticket, error) {
 	return tickets, nil
 }
 
-// ListAll returns all tickets grouped by status (without loading comments).
+// ListAll returns all tickets grouped by status.
 func (s *Store) ListAll() (map[Status][]*Ticket, error) {
 	result := make(map[Status][]*Ticket)
 
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
 		tickets, err := s.List(status)
 		if err != nil {
 			return nil, err
@@ -314,45 +335,6 @@ func (s *Store) Move(id string, to Status) error {
 	return nil
 }
 
-// AddComment adds a comment to a ticket.
-func (s *Store) AddComment(ticketID, author string, commentType CommentType, content string, action *storage.CommentAction) (*Comment, error) {
-	mu := s.ticketMu(ticketID)
-	mu.Lock()
-	defer mu.Unlock()
-
-	entityDir, _, err := s.findEntityDirAllStatuses(ticketID)
-	if err != nil {
-		return nil, err
-	}
-
-	comment, err := storage.CreateComment(entityDir, author, commentType, content, action)
-	if err != nil {
-		return nil, err
-	}
-
-	// Update the ticket's updated timestamp
-	ticket, err := s.loadIndex(entityDir)
-	if err != nil {
-		return nil, err
-	}
-	ticket.Updated = time.Now().UTC()
-	if err := s.writeIndex(entityDir, ticket); err != nil {
-		return nil, fmt.Errorf("save ticket: %w", err)
-	}
-
-	s.emit(events.CommentAdded, ticketID, nil)
-	return comment, nil
-}
-
-// ListComments returns all comments for a ticket sorted by created time.
-func (s *Store) ListComments(ticketID string) ([]Comment, error) {
-	entityDir, _, err := s.findEntityDirAllStatuses(ticketID)
-	if err != nil {
-		return nil, err
-	}
-	return storage.ListComments(entityDir)
-}
-
 // saveTicket creates the entity directory and writes index.md.
 func (s *Store) saveTicket(ticket *Ticket, status Status) error {
 	dirName := storage.DirName(ticket.Title, ticket.ID, "ticket")
@@ -391,7 +373,6 @@ func (s *Store) loadIndex(entityDir string) (*Ticket, error) {
 	return &Ticket{
 		TicketMeta: *meta,
 		Body:       body,
-		Comments:   []Comment{},
 	}, nil
 }
 
@@ -423,7 +404,7 @@ func (s *Store) findEntityDir(id string, status Status) (string, error) {
 
 // findEntityDirAllStatuses searches all status directories for a ticket's entity directory.
 func (s *Store) findEntityDirAllStatuses(id string) (string, Status, error) {
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusReview, StatusDone} {
+	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
 		entityDir, err := s.findEntityDir(id, status)
 		if err == nil {
 			return entityDir, status, nil

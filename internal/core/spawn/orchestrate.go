@@ -99,7 +99,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 		ticketType = ticket.DefaultTicketType
 	}
 
-	ticketRoleCfg, ticketCfgErr := projectCfg.TicketRoleConfig(ticketType)
+	ticketRoleCfg, ticketCfgErr := projectCfg.RoleConfigForType(ticketType)
 	if ticketCfgErr != nil {
 		return nil, &ConfigError{Field: "ticket." + ticketType, Message: ticketCfgErr.Error()}
 	}
@@ -148,20 +148,16 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 		Logger:       deps.Logger,
 	})
 
-	useWorktree := projectCfg.Git.Worktrees
-
 	buildSpawnReq := func() SpawnRequest {
 		return SpawnRequest{
-			AgentType:      AgentTypeTicketAgent,
-			Agent:          agent,
-			TmuxSession:    tmuxSession,
-			ProjectPath:    req.ProjectPath,
-			TicketsDir:     ticketsDir,
-			TicketID:       req.TicketID,
-			Ticket:         t,
-			UseWorktree:    useWorktree,
-			AgentArgs:      ticketRoleCfg.Args,
-			BaseConfigPath: projectCfg.ResolvedExtendPath(),
+			AgentType:   AgentTypeTicketAgent,
+			Agent:       agent,
+			TmuxSession: tmuxSession,
+			ProjectPath: req.ProjectPath,
+			TicketsDir:  ticketsDir,
+			TicketID:    req.TicketID,
+			Ticket:      t,
+			AgentArgs:   ticketRoleCfg.Args,
 		}
 	}
 

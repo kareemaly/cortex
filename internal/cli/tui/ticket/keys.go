@@ -34,15 +34,6 @@ const (
 	KeySpawn        Key = "s"
 	KeyFresh        Key = "f"
 	KeyCancel       Key = "c"
-	KeyH            Key = "h"
-	KeyL            Key = "l"
-	KeyO            Key = "o"
-	KeyEnter        Key = "enter"
-	KeyTab          Key = "tab"
-	KeyShiftTab     Key = "shift+tab"
-	KeyLeftBracket  Key = "["
-	KeyRightBracket Key = "]"
-	KeyDiff         Key = "d"
 	KeyEdit         Key = "e"
 	KeyDeleteOrphan Key = "D"
 )
@@ -58,7 +49,7 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 }
 
 // helpText returns the help bar text for the ticket detail view.
-func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, embedded bool, focusedRow int) string {
+func helpText(scrollPercent int, hasActiveSession, canSpawn, embedded bool) string {
 	var quit string
 	if embedded {
 		quit = "[q/esc] back"
@@ -66,39 +57,17 @@ func helpText(scrollPercent int, hasActiveSession, hasReviewRequests, canSpawn, 
 		quit = "[q]uit"
 	}
 
-	var scroll string
-	if focusedRow == 1 {
-		scroll = "[Tab/[/]] body  [j/k] select  [gg/G] first/last  [o/Enter] open"
-	} else {
-		scroll = "[Tab/[/]] comments  [j/k/gg/G] scroll  [ctrl+u/d] page"
-	}
+	scroll := "[j/k/gg/G] scroll  [ctrl+u/d] page"
 
 	actions := "[r]efresh  [e]dit  [ga] architect"
 
 	if hasActiveSession {
-		sessionActions := "[x] kill"
-		if hasReviewRequests {
-			sessionActions += "  [a]pprove"
-		}
-		actions = "[r]efresh  [e]dit  " + sessionActions + "  [ga] architect"
+		actions = "[r]efresh  [e]dit  [x] kill  [a]pprove  [ga] architect"
 	} else if canSpawn {
 		actions = "[r]efresh  [e]dit  [s]pawn  [ga] architect"
 	}
 
 	return scroll + "  " + actions + "  " + quit + "  " + percentStr(scrollPercent)
-}
-
-// modalHelpText returns help text for the detail modal.
-func modalHelpText(isReview, hasAction bool) string {
-	base := "[Esc/q] close  [j/k] scroll"
-	if isReview {
-		actions := "  [a]pprove"
-		if hasAction {
-			actions += "  [d]iff"
-		}
-		return base + actions
-	}
-	return base
 }
 
 // percentStr formats a scroll percentage string.

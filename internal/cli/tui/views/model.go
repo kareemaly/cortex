@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/cli/tui/config"
-	"github.com/kareemaly/cortex/internal/cli/tui/docs"
 	"github.com/kareemaly/cortex/internal/cli/tui/kanban"
 	"github.com/kareemaly/cortex/internal/cli/tui/notes"
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
@@ -17,16 +16,14 @@ type viewID int
 
 const (
 	viewKanban viewID = iota
-	viewDocs
 	viewNotes
 	viewConfig
 	viewCount // sentinel for wrapping
 )
 
-// Model is the top-level wrapper that hosts kanban, docs, notes, and config views.
+// Model is the top-level wrapper that hosts kanban, notes, and config views.
 type Model struct {
 	kanban        kanban.Model
-	docs          docs.Model
 	notes         notes.Model
 	config        config.Model
 	active        viewID
@@ -53,7 +50,6 @@ var (
 func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 	return Model{
 		kanban: kanban.New(client, logBuf),
-		docs:   docs.New(client, logBuf),
 		notes:  notes.New(client, logBuf),
 		config: config.New(client, logBuf),
 		active: viewKanban,
@@ -62,7 +58,7 @@ func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 
 // Init initializes all child models.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.kanban.Init(), m.docs.Init(), m.notes.Init(), m.config.Init())
+	return tea.Batch(m.kanban.Init(), m.notes.Init(), m.config.Init())
 }
 
 // Update routes messages to child models.
@@ -79,24 +75,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Height: msg.Height - 1,
 		}
 
-		var cmd1, cmd2, cmd3, cmd4 tea.Cmd
+		var cmd1, cmd2, cmd3 tea.Cmd
 		var kanbanModel tea.Model
 		kanbanModel, cmd1 = m.kanban.Update(childSize)
 		m.kanban = kanbanModel.(kanban.Model)
 
-		var docsModel tea.Model
-		docsModel, cmd2 = m.docs.Update(childSize)
-		m.docs = docsModel.(docs.Model)
-
 		var notesModel tea.Model
-		notesModel, cmd3 = m.notes.Update(childSize)
+		notesModel, cmd2 = m.notes.Update(childSize)
 		m.notes = notesModel.(notes.Model)
 
 		var configModel tea.Model
-		configModel, cmd4 = m.config.Update(childSize)
+		configModel, cmd3 = m.config.Update(childSize)
 		m.config = configModel.(config.Model)
 
-		return m, tea.Batch(cmd1, cmd2, cmd3, cmd4)
+		return m, tea.Batch(cmd1, cmd2, cmd3)
 
 	case tea.KeyMsg:
 		// Check for view-switching keys first (suppressed when child captures input).
@@ -115,24 +107,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	default:
 		// Non-key, non-size messages go to all children.
 		// Each child only processes its own typed messages.
-		var cmd1, cmd2, cmd3, cmd4 tea.Cmd
+		var cmd1, cmd2, cmd3 tea.Cmd
 		var kanbanModel tea.Model
 		kanbanModel, cmd1 = m.kanban.Update(msg)
 		m.kanban = kanbanModel.(kanban.Model)
 
-		var docsModel tea.Model
-		docsModel, cmd2 = m.docs.Update(msg)
-		m.docs = docsModel.(docs.Model)
-
 		var notesModel tea.Model
-		notesModel, cmd3 = m.notes.Update(msg)
+		notesModel, cmd2 = m.notes.Update(msg)
 		m.notes = notesModel.(notes.Model)
 
 		var configModel tea.Model
-		configModel, cmd4 = m.config.Update(msg)
+		configModel, cmd3 = m.config.Update(msg)
 		m.config = configModel.(config.Model)
 
-		return m, tea.Batch(cmd1, cmd2, cmd3, cmd4)
+		return m, tea.Batch(cmd1, cmd2, cmd3)
 	}
 }
 
@@ -144,12 +132,6 @@ func (m Model) updateActiveChild(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var model tea.Model
 		model, cmd = m.kanban.Update(msg)
 		m.kanban = model.(kanban.Model)
-		return m, cmd
-	case viewDocs:
-		var cmd tea.Cmd
-		var model tea.Model
-		model, cmd = m.docs.Update(msg)
-		m.docs = model.(docs.Model)
 		return m, cmd
 	case viewNotes:
 		var cmd tea.Cmd
@@ -182,8 +164,6 @@ func (m Model) View() string {
 	switch m.active {
 	case viewKanban:
 		b.WriteString(m.kanban.View())
-	case viewDocs:
-		b.WriteString(m.docs.View())
 	case viewNotes:
 		b.WriteString(m.notes.View())
 	case viewConfig:
@@ -200,7 +180,6 @@ func (m Model) renderTabBar() string {
 		name string
 	}{
 		{viewKanban, "Kanban"},
-		{viewDocs, "Docs"},
 		{viewNotes, "Notes"},
 		{viewConfig, "Config"},
 	}
