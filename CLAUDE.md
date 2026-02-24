@@ -132,7 +132,6 @@ tickets:
 | `cortex architect start [name] [--mode fresh\|resume]` | Start/attach architect session |
 | `cortex architect show [name]` | Open architect project TUI |
 | `cortex architect delete <name>` | Unlink and optionally delete architect workspace |
-| `cortex ticket <id>` | Ticket detail TUI |
 | `cortex daemon status` | Check daemon status |
 | `cortex upgrade` | Refresh `~/.cortex/defaults/` with latest embedded defaults |
 | `cortex eject <path>` | Customize a default prompt |

@@ -60,7 +60,6 @@ The architect will guide you through creating and managing tickets.
 | `cortex init` | Initialize project with `.cortex/` directory |
 | `cortex architect` | Start or attach to architect session |
 | `cortex project` | Project TUI |
-| `cortex ticket <id>` | Ticket detail view |
 | `cortex daemon status` | Check daemon status |
 | `cortex upgrade` | Refresh embedded defaults |
 | `cortex eject <path>` | Customize a default prompt |

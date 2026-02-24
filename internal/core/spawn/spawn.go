@@ -522,8 +522,8 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		err = s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, req.WindowName, launchCmd, companionCmd, workingDir, workingDir)
 	case AgentTypeTicketAgent:
 		companionCmd := req.Companion
-		if companionCmd == "" {
-			companionCmd = fmt.Sprintf("cortex ticket show %s", req.TicketID)
+		if req.TicketType == "research" {
+			companionCmd = ""
 		}
 		windowIndex, err = s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, companionCmd, workingDir, workingDir)
 	}
@@ -915,10 +915,10 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDir string) (int, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		// Use companion command from config, or default to showing ticket details
+		// Use companion command from config; suppress companion for research tickets
 		companionCmd := req.Companion
-		if companionCmd == "" {
-			companionCmd = fmt.Sprintf("cortex ticket show %s", req.TicketID)
+		if req.Ticket != nil && req.Ticket.Type == "research" {
+			companionCmd = ""
 		}
 		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, workingDir)
 	case AgentTypeArchitect:

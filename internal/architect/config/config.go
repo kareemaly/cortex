@@ -139,8 +139,7 @@ func DefaultConfig() *Config {
 			Companion: "cortex architect show",
 		},
 		Work: RoleConfig{
-			Agent:     AgentClaude,
-			Companion: "cortex ticket show",
+			Agent: AgentClaude,
 		},
 		Research: ResearchRoleConfig{
 			RoleConfig: RoleConfig{
