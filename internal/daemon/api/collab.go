@@ -10,7 +10,6 @@ import (
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
-	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/internal/types"
 )
 
@@ -69,10 +68,7 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionName := projectCfg.Name
-	if sessionName == "" {
-		sessionName = "cortex"
-	}
+	sessionName := projectCfg.GetTmuxSessionName()
 
 	collabID := uuid.New().String()
 
@@ -178,30 +174,20 @@ func (h *CollabHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Create conclusion record
-	if h.deps.ConclusionStoreManager != nil {
-		conclusionStore, csErr := h.deps.ConclusionStoreManager.GetStore(projectPath)
-		if csErr == nil {
-			if _, createErr := conclusionStore.Create("collab", collabID, repo, req.Content, startedAt, prompt); createErr != nil {
-				h.deps.Logger.Warn("failed to create collab conclusion", "error", createErr)
-			}
-		}
-	}
-
-	// Kill tmux window if associated (best-effort)
-	if tmuxWindow != "" && h.deps.TmuxManager != nil {
-		projectCfg, cfgErr := architectconfig.Load(projectPath)
-		tmuxSession := "cortex"
-		if cfgErr == nil && projectCfg.Name != "" {
-			tmuxSession = projectCfg.Name
-		}
-
-		if killErr := h.deps.TmuxManager.KillWindow(tmuxSession, tmuxWindow); killErr != nil {
-			if !tmux.IsWindowNotFound(killErr) && !tmux.IsSessionNotFound(killErr) {
-				h.deps.Logger.Warn("failed to kill collab tmux window", "window", tmuxWindow, "error", killErr)
-			}
-		}
-	}
+	// Create conclusion record and kill tmux window
+	CreateConclusionAndKillWindow(ConcludeParams{
+		ProjectPath:   projectPath,
+		EntityType:    "collab",
+		EntityID:      collabID,
+		TmuxWindow:    tmuxWindow,
+		Content:       req.Content,
+		StartedAt:     startedAt,
+		Repo:          repo,
+		Prompt:        prompt,
+		Logger:        h.deps.Logger,
+		TmuxManager:   h.deps.TmuxManager,
+		ConclusionMgr: h.deps.ConclusionStoreManager,
+	})
 
 	writeJSON(w, http.StatusOK, ConcludeSessionResponse{
 		Success:  true,

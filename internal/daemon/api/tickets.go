@@ -15,7 +15,6 @@ import (
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
-	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/internal/types"
 )
 
@@ -60,10 +59,8 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 
 	// Load project config to get tmux session name for orphan detection.
 	tmuxSession := ""
-	projectCfg, cfgErr := architectconfig.Load(projectPath)
-	if cfgErr == nil && projectCfg.Name != "" {
-		tmuxSession = projectCfg.Name
-	}
+	projectCfg, _ := architectconfig.Load(projectPath)
+	tmuxSession = projectCfg.GetTmuxSessionName()
 
 	resp := ListAllTicketsResponse{
 		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
@@ -119,10 +116,8 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Load project config to get tmux session name for orphan detection.
 	tmuxSession := ""
-	projectCfg, cfgErr := architectconfig.Load(projectPath)
-	if cfgErr == nil && projectCfg.Name != "" {
-		tmuxSession = projectCfg.Name
-	}
+	projectCfg, _ := architectconfig.Load(projectPath)
+	tmuxSession = projectCfg.GetTmuxSessionName()
 
 	resp := ListTicketsResponse{
 		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
@@ -596,11 +591,8 @@ func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectCfg, cfgErr := architectconfig.Load(projectPath)
-	tmuxSession := "cortex"
-	if cfgErr == nil && projectCfg.Name != "" {
-		tmuxSession = projectCfg.Name
-	}
+	projectCfg, _ := architectconfig.Load(projectPath)
+	tmuxSession := projectCfg.GetTmuxSessionName()
 
 	if err := h.deps.TmuxManager.FocusWindow(tmuxSession, sess.TmuxWindow); err != nil {
 		writeError(w, http.StatusInternalServerError, "focus_error", err.Error())
@@ -655,7 +647,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// End the ephemeral session
+	// End ephemeral session
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
 		shortID := storage.ShortID(id)
@@ -670,7 +662,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		TicketID:      id,
 	})
 
-	// Create conclusion record
+	// Create conclusion record and kill tmux window
 	conclusionType := req.Type
 	if conclusionType == "" {
 		conclusionType = t.Type
@@ -687,18 +679,18 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var conclusionID string
-	if h.deps.ConclusionStoreManager != nil {
-		conclusionStore, csErr := h.deps.ConclusionStoreManager.GetStore(projectPath)
-		if csErr == nil {
-			conclusion, createErr := conclusionStore.Create(conclusionType, id, repo, req.Content, startedAt, "")
-			if createErr != nil {
-				h.deps.Logger.Warn("failed to create conclusion", "error", createErr)
-			} else {
-				conclusionID = conclusion.ID
-			}
-		}
-	}
+	conclusionID := CreateConclusionAndKillWindow(ConcludeParams{
+		ProjectPath:   projectPath,
+		EntityType:    conclusionType,
+		EntityID:      id,
+		TmuxWindow:    tmuxWindow,
+		Content:       req.Content,
+		StartedAt:     startedAt,
+		Repo:          repo,
+		Logger:        h.deps.Logger,
+		TmuxManager:   h.deps.TmuxManager,
+		ConclusionMgr: h.deps.ConclusionStoreManager,
+	})
 
 	// Update ticket with session back-reference
 	if conclusionID != "" {
@@ -711,21 +703,6 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	if err := store.Move(id, ticket.StatusDone); err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
-	}
-
-	// Kill tmux window if associated (best-effort)
-	if tmuxWindow != "" && h.deps.TmuxManager != nil {
-		projectCfg, cfgErr := architectconfig.Load(projectPath)
-		tmuxSession := "cortex"
-		if cfgErr == nil && projectCfg.Name != "" {
-			tmuxSession = projectCfg.Name
-		}
-
-		if killErr := h.deps.TmuxManager.KillWindow(tmuxSession, tmuxWindow); killErr != nil {
-			if !tmux.IsWindowNotFound(killErr) && !tmux.IsSessionNotFound(killErr) {
-				h.deps.Logger.Warn("failed to kill tmux window", "window", tmuxWindow, "error", killErr)
-			}
-		}
 	}
 
 	resp := ConcludeSessionResponse{
@@ -768,11 +745,8 @@ func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	command := fmt.Sprintf("%s %q", editor, indexPath)
 
 	// Get tmux session name
-	projectCfg, cfgErr := architectconfig.Load(projectPath)
-	tmuxSession := "cortex"
-	if cfgErr == nil && projectCfg.Name != "" {
-		tmuxSession = projectCfg.Name
-	}
+	projectCfg, _ := architectconfig.Load(projectPath)
+	tmuxSession := projectCfg.GetTmuxSessionName()
 
 	// Execute popup
 	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, "", command); err != nil {

@@ -9,7 +9,6 @@ import (
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/session"
-	"github.com/kareemaly/cortex/internal/tmux"
 )
 
 // ArchitectHandlers provides HTTP handlers for architect session operations.
@@ -29,10 +28,7 @@ func (h *ArchitectHandlers) getSessionAndConfig(projectPath string) (sessionName
 		return "", nil, nil, err
 	}
 
-	sessionName = projectCfg.Name
-	if sessionName == "" {
-		sessionName = "cortex"
-	}
+	sessionName = projectCfg.GetTmuxSessionName()
 
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
@@ -292,38 +288,26 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		ArchitectPath: projectPath,
 	})
 
-	// Persist session summary as a conclusion (best-effort)
-	if h.deps.ConclusionStoreManager != nil {
-		conclusionStore, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
-		if err != nil {
-			h.deps.Logger.Warn("failed to get conclusion store for architect session", "error", err)
-		} else {
-			var startedAt time.Time
-			if req.StartedAt != "" {
-				if parsed, parseErr := time.Parse(time.RFC3339, req.StartedAt); parseErr == nil {
-					startedAt = parsed
-				}
-			}
-			if _, err := conclusionStore.Create("architect", "", "", req.Content, startedAt, ""); err != nil {
-				h.deps.Logger.Warn("failed to persist architect session conclusion", "error", err)
-			}
+	// Parse startedAt
+	var startedAt time.Time
+	if req.StartedAt != "" {
+		if parsed, parseErr := time.Parse(time.RFC3339, req.StartedAt); parseErr == nil {
+			startedAt = parsed
 		}
 	}
 
-	// Kill tmux window if associated (best-effort)
-	if tmuxWindow != "" && h.deps.TmuxManager != nil {
-		projectCfg, cfgErr := architectconfig.Load(projectPath)
-		tmuxSession := "cortex"
-		if cfgErr == nil && projectCfg.Name != "" {
-			tmuxSession = projectCfg.Name
-		}
-
-		if err := h.deps.TmuxManager.KillWindow(tmuxSession, tmuxWindow); err != nil {
-			if !tmux.IsWindowNotFound(err) && !tmux.IsSessionNotFound(err) {
-				h.deps.Logger.Warn("failed to kill architect tmux window", "error", err)
-			}
-		}
-	}
+	// Create conclusion record and kill tmux window
+	CreateConclusionAndKillWindow(ConcludeParams{
+		ProjectPath:   projectPath,
+		EntityType:    "architect",
+		EntityID:      "",
+		TmuxWindow:    tmuxWindow,
+		Content:       req.Content,
+		StartedAt:     startedAt,
+		Logger:        h.deps.Logger,
+		TmuxManager:   h.deps.TmuxManager,
+		ConclusionMgr: h.deps.ConclusionStoreManager,
+	})
 
 	writeJSON(w, http.StatusOK, ConcludeSessionResponse{
 		Success:  true,
@@ -342,10 +326,7 @@ func (h *ArchitectHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionName := projectCfg.Name
-	if sessionName == "" {
-		sessionName = "cortex"
-	}
+	sessionName := projectCfg.GetTmuxSessionName()
 
 	if h.deps.TmuxManager == nil {
 		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")

@@ -104,13 +104,10 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	// If session is active and tmux is available, kill the window
 	if h.deps.TmuxManager != nil && sess.TmuxWindow != "" {
 		// Load project config for session name
-		projectCfg, err := architectconfig.Load(projectPath)
-		sessionName := "cortex"
-		if err == nil && projectCfg.Name != "" {
-			sessionName = projectCfg.Name
-		}
+		projectCfg, _ := architectconfig.Load(projectPath)
+		sessionName := projectCfg.GetTmuxSessionName()
 
-		err = h.deps.TmuxManager.KillWindow(sessionName, sess.TmuxWindow)
+		err := h.deps.TmuxManager.KillWindow(sessionName, sess.TmuxWindow)
 		if err != nil {
 			// Log but don't fail - window might already be closed
 			if !tmux.IsWindowNotFound(err) && !tmux.IsSessionNotFound(err) {

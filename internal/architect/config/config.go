@@ -65,6 +65,15 @@ func (c *Config) SessionsPath(architectRoot string) string {
 	return filepath.Join(architectRoot, "sessions")
 }
 
+// GetTmuxSessionName returns the tmux session name for this architect.
+// Uses Config.Name if set, otherwise defaults to "cortex".
+func (c *Config) GetTmuxSessionName() string {
+	if c.Name != "" {
+		return c.Name
+	}
+	return "cortex"
+}
+
 // RoleConfigForType returns the RoleConfig for a given ticket type.
 // Returns an error if the ticket type is not "work" or "research".
 func (c *Config) RoleConfigForType(ticketType string) (RoleConfig, error) {
