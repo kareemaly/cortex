@@ -163,14 +163,3 @@ func WriteSettingsConfig(config *ClaudeSettingsConfig, identifier, configDir str
 
 	return path, nil
 }
-
-// RemoveSettingsConfig removes a settings config file.
-func RemoveSettingsConfig(path string) error {
-	if path == "" {
-		return nil
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove settings config: %w", err)
-	}
-	return nil
-}

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
-	"github.com/kareemaly/cortex/internal/types"
 )
 
 // --- Test helpers ---
@@ -56,7 +55,7 @@ func newRoutedServer(t *testing.T) (*httptest.Server, *routedServer) {
 		rs.mu.Unlock()
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
-			_ = json.NewEncoder(w).Encode(types.ErrorResponse{Error: "not found", Code: "not_found"})
+			_ = json.NewEncoder(w).Encode(ErrorResponse{Error: "not found", Code: "not_found"})
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -327,7 +326,7 @@ func TestGetTicket_Success(t *testing.T) {
 
 func TestGetTicket_NotFound(t *testing.T) {
 	srv, rs := newRoutedServer(t)
-	rs.setRoute("GET", "/tickets/backlog/missing", http.StatusNotFound, types.ErrorResponse{
+	rs.setRoute("GET", "/tickets/backlog/missing", http.StatusNotFound, ErrorResponse{
 		Error: "not found",
 		Code:  "not_found",
 	})
@@ -411,7 +410,7 @@ func TestCreateTicket_WithAllFields(t *testing.T) {
 
 func TestCreateTicket_Error(t *testing.T) {
 	srv, rs := newRoutedServer(t)
-	rs.setRoute("POST", "/tickets", http.StatusBadRequest, types.ErrorResponse{
+	rs.setRoute("POST", "/tickets", http.StatusBadRequest, ErrorResponse{
 		Error: "title required",
 		Code:  "validation_error",
 	})
@@ -715,7 +714,7 @@ func TestConcludeSession_Success(t *testing.T) {
 func TestParseError_WithDetails(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(types.ErrorResponse{
+		_ = json.NewEncoder(w).Encode(ErrorResponse{
 			Error:   "bad request",
 			Code:    "validation_error",
 			Details: "title is required",
@@ -828,28 +827,5 @@ func TestResolvePrompt_Success(t *testing.T) {
 	}
 	if !strings.Contains(last.Path, "stage=SYSTEM") {
 		t.Errorf("expected stage param, got %q", last.Path)
-	}
-}
-
-// --- hasPrefix helper ---
-
-func TestHasPrefix(t *testing.T) {
-	tests := []struct {
-		id     string
-		prefix string
-		want   bool
-	}{
-		{"abc123", "abc", true},
-		{"abc123", "abc123", true},
-		{"abc123", "xyz", false},
-		{"abc", "abcdef", false},
-		{"abc", "", false},
-		{"", "abc", false},
-	}
-	for _, tt := range tests {
-		got := hasPrefix(tt.id, tt.prefix)
-		if got != tt.want {
-			t.Errorf("hasPrefix(%q, %q) = %v, want %v", tt.id, tt.prefix, got, tt.want)
-		}
 	}
 }

@@ -651,7 +651,7 @@ func TestWritePromptFile(t *testing.T) {
 	}
 
 	// Test remove
-	if err := RemovePromptFile(path); err != nil {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		t.Errorf("unexpected error removing prompt file: %v", err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -861,45 +861,6 @@ func TestWriteLauncherScript_Architect(t *testing.T) {
 	// Should NOT have --permission-mode (architect doesn't use plan mode)
 	if containsSubstr(script, "--permission-mode") {
 		t.Error("architect should not have --permission-mode")
-	}
-}
-
-func TestStateInfo_CanSpawn(t *testing.T) {
-	tests := []struct {
-		state    SessionState
-		expected bool
-	}{
-		{StateNormal, true},
-		{StateActive, false},
-		{StateOrphaned, true},
-	}
-
-	for _, tc := range tests {
-		info := &StateInfo{State: tc.state}
-		if info.CanSpawn() != tc.expected {
-			t.Errorf("CanSpawn() for %s: expected %v", tc.state, tc.expected)
-		}
-	}
-}
-
-func TestStateInfo_CanResume(t *testing.T) {
-	tests := []struct {
-		name     string
-		info     StateInfo
-		expected bool
-	}{
-		{"orphaned with session", StateInfo{State: StateOrphaned, Session: &session.Session{TicketID: "abc"}}, true},
-		{"orphaned without session", StateInfo{State: StateOrphaned}, false},
-		{"active", StateInfo{State: StateActive, Session: &session.Session{TicketID: "abc"}}, false},
-		{"normal", StateInfo{State: StateNormal}, false},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if tc.info.CanResume() != tc.expected {
-				t.Errorf("expected %v", tc.expected)
-			}
-		})
 	}
 }
 

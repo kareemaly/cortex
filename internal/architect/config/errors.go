@@ -40,15 +40,3 @@ func IsArchitectNotFound(err error) bool {
 	_, ok := err.(*ArchitectNotFoundError)
 	return ok
 }
-
-// IsConfigParseError returns true if err is a ConfigParseError.
-func IsConfigParseError(err error) bool {
-	_, ok := err.(*ConfigParseError)
-	return ok
-}
-
-// IsValidationError returns true if err is a ValidationError.
-func IsValidationError(err error) bool {
-	_, ok := err.(*ValidationError)
-	return ok
-}

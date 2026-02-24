@@ -183,7 +183,8 @@ name: [invalid yaml
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !IsConfigParseError(err) {
+	_, ok := err.(*ConfigParseError)
+	if !ok {
 		t.Errorf("expected ConfigParseError, got %T: %v", err, err)
 	}
 }
@@ -197,11 +198,11 @@ func TestValidate_InvalidArchitectAgent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !IsValidationError(err) {
+	valErr, ok := err.(*ValidationError)
+	if !ok {
 		t.Errorf("expected ValidationError, got %T", err)
 	}
 
-	valErr := err.(*ValidationError)
 	if valErr.Field != "architect.agent" {
 		t.Errorf("expected field 'architect.agent', got %q", valErr.Field)
 	}
@@ -216,11 +217,11 @@ func TestValidate_InvalidWorkAgent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !IsValidationError(err) {
+	valErr, ok := err.(*ValidationError)
+	if !ok {
 		t.Errorf("expected ValidationError, got %T", err)
 	}
 
-	valErr := err.(*ValidationError)
 	if valErr.Field != "work.agent" {
 		t.Errorf("expected field 'work.agent', got %q", valErr.Field)
 	}
@@ -235,11 +236,11 @@ func TestValidate_InvalidResearchAgent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !IsValidationError(err) {
+	valErr, ok := err.(*ValidationError)
+	if !ok {
 		t.Errorf("expected ValidationError, got %T", err)
 	}
 
-	valErr := err.(*ValidationError)
 	if valErr.Field != "research.agent" {
 		t.Errorf("expected field 'research.agent', got %q", valErr.Field)
 	}

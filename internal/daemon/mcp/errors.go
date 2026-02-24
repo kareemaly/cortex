@@ -40,14 +40,6 @@ func NewValidationError(field, message string) *ToolError {
 	}
 }
 
-// NewUnauthorizedError creates an UNAUTHORIZED error.
-func NewUnauthorizedError(message string) *ToolError {
-	return &ToolError{
-		Code:    ErrorCodeUnauthorized,
-		Message: message,
-	}
-}
-
 // NewInternalError creates an INTERNAL_ERROR.
 func NewInternalError(message string) *ToolError {
 	return &ToolError{
@@ -62,10 +54,4 @@ func NewStateConflictError(state, mode, message string) *ToolError {
 		Code:    ErrorCodeStateConflict,
 		Message: fmt.Sprintf("state=%s mode=%s: %s", state, mode, message),
 	}
-}
-
-// IsToolError checks if err is a ToolError.
-func IsToolError(err error) bool {
-	_, ok := err.(*ToolError)
-	return ok
 }

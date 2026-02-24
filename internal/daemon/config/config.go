@@ -16,11 +16,6 @@ const (
 	DefaultDaemonURL = "http://localhost:4200"
 )
 
-// DaemonURL returns the daemon URL for the given port.
-func DaemonURL(port int) string {
-	return fmt.Sprintf("http://localhost:%d", port)
-}
-
 // ArchitectEntry represents a registered architect in the global config.
 type ArchitectEntry struct {
 	Path  string `yaml:"path"`

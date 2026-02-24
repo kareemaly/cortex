@@ -114,7 +114,3 @@ func (c *Client) parseError(resp *http.Response) error {
 		Status:  resp.StatusCode,
 	}
 }
-
-func hasPrefix(id, prefix string) bool {
-	return len(prefix) > 0 && len(id) >= len(prefix) && id[:len(prefix)] == prefix
-}

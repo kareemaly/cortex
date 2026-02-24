@@ -98,18 +98,3 @@ func DetectArchitectState(sess *session.Session, tmuxSession string, tmuxChecker
 
 	return info, nil
 }
-
-// CanSpawn returns true if a new session can be spawned based on the state.
-func (s *StateInfo) CanSpawn() bool {
-	return s.State == StateNormal || s.State == StateOrphaned
-}
-
-// CanResume returns true if an existing session can be resumed.
-func (s *StateInfo) CanResume() bool {
-	return s.State == StateOrphaned && s.Session != nil
-}
-
-// NeedsCleanup returns true if the session should be cleaned up before spawning.
-func (s *StateInfo) NeedsCleanup() bool {
-	return s.State == StateOrphaned
-}

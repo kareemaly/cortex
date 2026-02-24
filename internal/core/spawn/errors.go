@@ -74,12 +74,6 @@ func IsStateError(err error) bool {
 	return ok
 }
 
-// IsTmuxError returns true if err is a TmuxError.
-func IsTmuxError(err error) bool {
-	_, ok := err.(*TmuxError)
-	return ok
-}
-
 // IsConfigError returns true if err is a ConfigError.
 func IsConfigError(err error) bool {
 	_, ok := err.(*ConfigError)

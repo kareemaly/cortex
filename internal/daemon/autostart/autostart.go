@@ -54,15 +54,6 @@ func EnsureDaemonRunning() error {
 	return nil
 }
 
-// IsDaemonRunning returns true if the daemon is healthy.
-func IsDaemonRunning() bool {
-	cfg, err := config.Load()
-	if err != nil {
-		return false
-	}
-	return checkHealth(cfg.Port)
-}
-
 // checkHealth performs a single health check against the daemon.
 func checkHealth(port int) bool {
 	client := &http.Client{Timeout: 2 * time.Second}

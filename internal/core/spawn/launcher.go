@@ -50,17 +50,6 @@ func WriteLauncherScript(params LauncherParams, identifier, configDir string) (s
 	return path, nil
 }
 
-// RemoveLauncherScript removes a launcher script file.
-func RemoveLauncherScript(path string) error {
-	if path == "" {
-		return nil
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove launcher script: %w", err)
-	}
-	return nil
-}
-
 // buildLauncherScript generates the bash script content.
 // cleanupFiles includes all temp files plus the launcher script itself.
 func buildLauncherScript(params LauncherParams, cleanupFiles []string) string {

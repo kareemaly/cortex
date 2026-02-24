@@ -22,14 +22,3 @@ func WritePromptFile(content, identifier, suffix, configDir string) (string, err
 
 	return path, nil
 }
-
-// RemovePromptFile removes a prompt temp file.
-func RemovePromptFile(path string) error {
-	if path == "" {
-		return nil
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove prompt file: %w", err)
-	}
-	return nil
-}
