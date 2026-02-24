@@ -43,9 +43,9 @@ type DependencyResult struct {
 // Result holds the complete installation result.
 type Result struct {
 	GlobalItems       []SetupItem
-	ArchitectItems     []SetupItem
+	ArchitectItems    []SetupItem
 	Dependencies      []DependencyResult
-	ArchitectName      string
+	ArchitectName     string
 	Registered        bool
 	RegistrationError error
 }

@@ -21,15 +21,15 @@ const ArchitectHeader = "X-Cortex-Architect"
 
 // Client is an HTTP client for communicating with the cortex daemon.
 type Client struct {
-	baseURL     string
-	httpClient  *http.Client
+	baseURL       string
+	httpClient    *http.Client
 	architectPath string
 }
 
 // NewClient creates a new client with the specified base URL and project path.
 func NewClient(baseURL, architectPath string) *Client {
 	return &Client{
-		baseURL:     baseURL,
+		baseURL:       baseURL,
 		architectPath: architectPath,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
@@ -763,10 +763,10 @@ func (c *Client) FocusTicket(ticketID string) error {
 
 // Event represents an SSE event from the daemon.
 type Event struct {
-	Type        string `json:"type"`
+	Type          string `json:"type"`
 	ArchitectPath string `json:"architect_path"`
-	TicketID    string `json:"ticket_id"`
-	Payload     any    `json:"payload,omitempty"`
+	TicketID      string `json:"ticket_id"`
+	Payload       any    `json:"payload,omitempty"`
 }
 
 // SubscribeEvents opens an SSE connection and returns a channel of events.

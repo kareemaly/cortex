@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"gopkg.in/yaml.v3"
 )
 

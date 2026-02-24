@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
-	"github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/pkg/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"

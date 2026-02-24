@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
-	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
@@ -463,8 +463,8 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	// Delegate to shared orchestration
 	sessionStore := h.deps.SessionManager.GetStore(projectPath)
 	result, err := spawn.Orchestrate(r.Context(), spawn.OrchestrateRequest{
-		TicketID:    id,
-		Mode:        mode,
+		TicketID:      id,
+		Mode:          mode,
 		ArchitectPath: projectPath,
 	}, spawn.OrchestrateDeps{
 		Store:        store,
@@ -521,9 +521,9 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		resp.Session = types.ToSessionResponse(sess)
 	}
 	h.deps.Bus.Emit(events.Event{
-		Type:        events.SessionStarted,
+		Type:          events.SessionStarted,
 		ArchitectPath: projectPath,
-		TicketID:    id,
+		TicketID:      id,
 	})
 	writeJSON(w, http.StatusCreated, resp)
 }
@@ -640,9 +640,9 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.deps.Bus.Emit(events.Event{
-		Type:        events.SessionEnded,
+		Type:          events.SessionEnded,
 		ArchitectPath: projectPath,
-		TicketID:    id,
+		TicketID:      id,
 	})
 
 	// Create conclusion record

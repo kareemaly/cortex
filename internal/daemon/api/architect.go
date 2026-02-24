@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
-	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/tmux"
 )
@@ -208,25 +208,25 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 
 	if resume {
 		result, err = spawner.Resume(r.Context(), spawn.ResumeRequest{
-			AgentType:   spawn.AgentTypeArchitect,
-			Agent:       architectAgent,
-			TmuxSession: sessionName,
+			AgentType:     spawn.AgentTypeArchitect,
+			Agent:         architectAgent,
+			TmuxSession:   sessionName,
 			ArchitectPath: projectPath,
-			TicketsDir:  ticketsDir,
-			WindowName:  "architect",
-			Companion:   projectCfg.Architect.Companion,
-			AgentArgs:   projectCfg.Architect.Args,
+			TicketsDir:    ticketsDir,
+			WindowName:    "architect",
+			Companion:     projectCfg.Architect.Companion,
+			AgentArgs:     projectCfg.Architect.Args,
 		})
 	} else {
 		result, err = spawner.Spawn(r.Context(), spawn.SpawnRequest{
-			AgentType:   spawn.AgentTypeArchitect,
-			Agent:       architectAgent,
-			TmuxSession: sessionName,
+			AgentType:     spawn.AgentTypeArchitect,
+			Agent:         architectAgent,
+			TmuxSession:   sessionName,
 			ArchitectPath: projectPath,
-			TicketsDir:  ticketsDir,
+			TicketsDir:    ticketsDir,
 			ArchitectName: sessionName,
-			Companion:   projectCfg.Architect.Companion,
-			AgentArgs:   projectCfg.Architect.Args,
+			Companion:     projectCfg.Architect.Companion,
+			AgentArgs:     projectCfg.Architect.Args,
 		})
 	}
 
@@ -242,7 +242,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 	}
 
 	h.deps.Bus.Emit(events.Event{
-		Type:        events.SessionStarted,
+		Type:          events.SessionStarted,
 		ArchitectPath: projectPath,
 	})
 
@@ -287,7 +287,7 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.deps.Bus.Emit(events.Event{
-		Type:        events.SessionEnded,
+		Type:          events.SessionEnded,
 		ArchitectPath: projectPath,
 	})
 

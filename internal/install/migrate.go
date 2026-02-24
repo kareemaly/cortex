@@ -11,8 +11,8 @@ import (
 
 // MigrationResult holds the result of migrating a single project config.
 type MigrationResult struct {
-	ArchitectPath   string
-	ArchitectName   string
+	ArchitectPath string
+	ArchitectName string
 	DetectedAgent string
 	Migrated      bool
 	Skipped       bool

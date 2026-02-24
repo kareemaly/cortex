@@ -16,7 +16,7 @@ func TestNewServerArchitect(t *testing.T) {
 
 	server, err := NewServer(&Config{
 		ArchitectPath: tmpDir,
-		DaemonURL:   daemonconfig.DefaultDaemonURL,
+		DaemonURL:     daemonconfig.DefaultDaemonURL,
 	})
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)
@@ -44,8 +44,8 @@ func TestNewServerTicket(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	server, err := NewServer(&Config{
-		TicketID:    "test-ticket-123",
-		DaemonURL:   daemonconfig.DefaultDaemonURL,
+		TicketID:      "test-ticket-123",
+		DaemonURL:     daemonconfig.DefaultDaemonURL,
 		ArchitectPath: tmpDir,
 	})
 	if err != nil {
@@ -147,9 +147,9 @@ func TestNewServerTicketWithType(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	server, err := NewServer(&Config{
-		TicketID:    "test-ticket-123",
-		TicketType:  "custom",
-		DaemonURL:   daemonconfig.DefaultDaemonURL,
+		TicketID:      "test-ticket-123",
+		TicketType:    "custom",
+		DaemonURL:     daemonconfig.DefaultDaemonURL,
 		ArchitectPath: tmpDir,
 	})
 	if err != nil {
@@ -169,8 +169,8 @@ func TestNewServerTicketDefaultType(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	server, err := NewServer(&Config{
-		TicketID:    "test-ticket-123",
-		DaemonURL:   daemonconfig.DefaultDaemonURL,
+		TicketID:      "test-ticket-123",
+		DaemonURL:     daemonconfig.DefaultDaemonURL,
 		ArchitectPath: tmpDir,
 	})
 	if err != nil {
@@ -194,8 +194,8 @@ func TestTicketSessionHasReadTicket(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	server, err := NewServer(&Config{
-		TicketID:    "test-ticket-readticket",
-		DaemonURL:   daemonconfig.DefaultDaemonURL,
+		TicketID:      "test-ticket-readticket",
+		DaemonURL:     daemonconfig.DefaultDaemonURL,
 		ArchitectPath: tmpDir,
 	})
 	if err != nil {

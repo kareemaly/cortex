@@ -23,13 +23,13 @@ type ClaudeMCPConfig struct {
 
 // MCPConfigParams contains parameters for generating MCP config.
 type MCPConfigParams struct {
-	CortexdPath string
-	TicketID    string // for ticket agents
-	TicketType  string // for ticket agents
-	TicketsDir  string
+	CortexdPath   string
+	TicketID      string // for ticket agents
+	TicketType    string // for ticket agents
+	TicketsDir    string
 	ArchitectPath string
-	TmuxSession string
-	DaemonURL   string // optional; defaults to daemonconfig.DefaultDaemonURL
+	TmuxSession   string
+	DaemonURL     string // optional; defaults to daemonconfig.DefaultDaemonURL
 }
 
 // GenerateMCPConfig creates an MCP configuration for a claude agent.

@@ -132,13 +132,13 @@ func TestOpenCodeSpawnIncludesPluginDir(t *testing.T) {
 	})
 
 	result, err := spawner.Spawn(t.Context(), SpawnRequest{
-		AgentType:   AgentTypeTicketAgent,
-		Agent:       "opencode",
-		TmuxSession: "test-session",
+		AgentType:     AgentTypeTicketAgent,
+		Agent:         "opencode",
+		TmuxSession:   "test-session",
 		ArchitectPath: tmpDir,
-		TicketsDir:  filepath.Join(tmpDir, "tickets"),
-		TicketID:    "ticket-1",
-		Ticket:      testTicket,
+		TicketsDir:    filepath.Join(tmpDir, "tickets"),
+		TicketID:      "ticket-1",
+		Ticket:        testTicket,
 	})
 
 	if err != nil {
@@ -213,13 +213,13 @@ func TestClaudeSpawnDoesNotIncludePluginDir(t *testing.T) {
 	})
 
 	result, err := spawner.Spawn(t.Context(), SpawnRequest{
-		AgentType:   AgentTypeTicketAgent,
-		Agent:       "claude",
-		TmuxSession: "test-session",
+		AgentType:     AgentTypeTicketAgent,
+		Agent:         "claude",
+		TmuxSession:   "test-session",
 		ArchitectPath: tmpDir,
-		TicketsDir:  filepath.Join(tmpDir, "tickets"),
-		TicketID:    "ticket-1",
-		Ticket:      testTicket,
+		TicketsDir:    filepath.Join(tmpDir, "tickets"),
+		TicketID:      "ticket-1",
+		Ticket:        testTicket,
 	})
 
 	if err != nil {

@@ -5,8 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/kareemaly/cortex/internal/daemon/config"
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
+	"github.com/kareemaly/cortex/internal/daemon/config"
 )
 
 // Options configures the installation.

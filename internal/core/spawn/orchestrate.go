@@ -18,12 +18,12 @@ type OrchestrateStore interface {
 
 // OrchestrateRequest contains parameters for orchestrating a spawn operation.
 type OrchestrateRequest struct {
-	TicketID    string
-	Mode        string // "normal", "resume", "fresh" (validated internally; defaults to "normal")
-	Agent       string // optional: falls back to project config, then "claude"
+	TicketID      string
+	Mode          string // "normal", "resume", "fresh" (validated internally; defaults to "normal")
+	Agent         string // optional: falls back to project config, then "claude"
 	ArchitectPath string
-	TicketsDir  string // optional: derived from ProjectPath if empty
-	TmuxSession string // optional: derived from project config name if empty
+	TicketsDir    string // optional: derived from ProjectPath if empty
+	TmuxSession   string // optional: derived from project config name if empty
 }
 
 // Outcome describes the result of an orchestration.
@@ -151,15 +151,15 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 
 	buildSpawnReq := func() SpawnRequest {
 		return SpawnRequest{
-			AgentType:   AgentTypeTicketAgent,
-			Agent:       agent,
-			TmuxSession: tmuxSession,
+			AgentType:     AgentTypeTicketAgent,
+			Agent:         agent,
+			TmuxSession:   tmuxSession,
 			ArchitectPath: req.ArchitectPath,
-			TicketsDir:  ticketsDir,
-			TicketID:    req.TicketID,
-			Ticket:      t,
-			Companion:   ticketRoleCfg.Companion,
-			AgentArgs:   ticketRoleCfg.Args,
+			TicketsDir:    ticketsDir,
+			TicketID:      req.TicketID,
+			Ticket:        t,
+			Companion:     ticketRoleCfg.Companion,
+			AgentArgs:     ticketRoleCfg.Args,
 		}
 	}
 
@@ -211,16 +211,16 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				}
 			}
 			result, err = spawner.Resume(ctx, ResumeRequest{
-				AgentType:   AgentTypeTicketAgent,
-				Agent:       agent,
-				TmuxSession: tmuxSession,
+				AgentType:     AgentTypeTicketAgent,
+				Agent:         agent,
+				TmuxSession:   tmuxSession,
 				ArchitectPath: req.ArchitectPath,
-				TicketsDir:  ticketsDir,
-				WindowName:  stateInfo.Session.TmuxWindow,
-				TicketID:    req.TicketID,
-				TicketType:  ticketType,
-				Companion:   ticketRoleCfg.Companion,
-				AgentArgs:   ticketRoleCfg.Args,
+				TicketsDir:    ticketsDir,
+				WindowName:    stateInfo.Session.TmuxWindow,
+				TicketID:      req.TicketID,
+				TicketType:    ticketType,
+				Companion:     ticketRoleCfg.Companion,
+				AgentArgs:     ticketRoleCfg.Args,
 			})
 			outcome = OutcomeResumed
 		case "fresh":

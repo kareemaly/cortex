@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
-	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
@@ -83,11 +83,11 @@ func (s *Spawner) logWarn(msg string, args ...any) {
 
 // SpawnRequest contains parameters for spawning a new agent session.
 type SpawnRequest struct {
-	AgentType   AgentType
-	Agent       string // agent identifier (e.g., "claude")
-	TmuxSession string
+	AgentType     AgentType
+	Agent         string // agent identifier (e.g., "claude")
+	TmuxSession   string
 	ArchitectPath string
-	TicketsDir  string
+	TicketsDir    string
 
 	// For ticket agents
 	TicketID string
@@ -105,13 +105,13 @@ type SpawnRequest struct {
 
 // ResumeRequest contains parameters for resuming an orphaned session.
 type ResumeRequest struct {
-	AgentType   AgentType
-	Agent       string // agent identifier (e.g., "claude", "opencode")
-	TmuxSession string
+	AgentType     AgentType
+	Agent         string // agent identifier (e.g., "claude", "opencode")
+	TmuxSession   string
 	ArchitectPath string
-	TicketsDir  string
-	SessionID   string
-	WindowName  string
+	TicketsDir    string
+	SessionID     string
+	WindowName    string
 
 	// For ticket agents
 	TicketID   string
@@ -202,9 +202,9 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 			}
 			return ""
 		}(),
-		TicketsDir:  req.TicketsDir,
+		TicketsDir:    req.TicketsDir,
 		ArchitectPath: req.ArchitectPath,
-		TmuxSession: req.TmuxSession,
+		TmuxSession:   req.TmuxSession,
 	})
 
 	identifier := req.TicketID
@@ -222,8 +222,8 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	var settingsPath string
 	if req.Agent != "opencode" {
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
-			CortexdPath: cortexdPath,
-			TicketID:    req.TicketID,
+			CortexdPath:   cortexdPath,
+			TicketID:      req.TicketID,
 			ArchitectPath: req.ArchitectPath,
 		})
 
@@ -292,12 +292,12 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": session.ArchitectSessionKey,
-			"CORTEX_ARCHITECT":   req.ArchitectPath,
+			"CORTEX_ARCHITECT": req.ArchitectPath,
 		}
 	case AgentTypeTicketAgent:
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": req.TicketID,
-			"CORTEX_ARCHITECT":   req.ArchitectPath,
+			"CORTEX_ARCHITECT": req.ArchitectPath,
 			"CORTEX_TICKET_TYPE": func() string {
 				if req.Ticket != nil {
 					return req.Ticket.Type
@@ -379,12 +379,12 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 	// Generate MCP config
 	mcpConfig := GenerateMCPConfig(MCPConfigParams{
-		CortexdPath: cortexdPath,
-		TicketID:    req.TicketID,
-		TicketType:  req.TicketType,
-		TicketsDir:  req.TicketsDir,
+		CortexdPath:   cortexdPath,
+		TicketID:      req.TicketID,
+		TicketType:    req.TicketType,
+		TicketsDir:    req.TicketsDir,
 		ArchitectPath: req.ArchitectPath,
-		TmuxSession: req.TmuxSession,
+		TmuxSession:   req.TmuxSession,
 	})
 
 	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
@@ -409,8 +409,8 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	var settingsPath string
 	if req.Agent != "opencode" {
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
-			CortexdPath: cortexdPath,
-			TicketID:    identifier,
+			CortexdPath:   cortexdPath,
+			TicketID:      identifier,
 			ArchitectPath: req.ArchitectPath,
 		})
 
@@ -858,10 +858,10 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	if kickoffErr == nil {
 		vars := prompt.ArchitectKickoffVars{
 			ArchitectName: req.ArchitectName,
-			TicketList:  ticketList,
-			CurrentDate: time.Now().Format("2006-01-02 15:04 MST"),
-			Sessions:    sessionsList,
-			Repos:       reposList,
+			TicketList:    ticketList,
+			CurrentDate:   time.Now().Format("2006-01-02 15:04 MST"),
+			Sessions:      sessionsList,
+			Repos:         reposList,
 		}
 		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
 		if renderErr == nil {

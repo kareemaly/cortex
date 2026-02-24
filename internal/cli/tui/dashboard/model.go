@@ -119,16 +119,16 @@ type ArchitectsErrorMsg struct {
 // ProjectDetailLoadedMsg is sent when a project's detail data is loaded.
 type ArchitectDetailLoadedMsg struct {
 	ArchitectPath string
-	Tickets     *sdk.ListAllTicketsResponse
-	Architect   *sdk.ArchitectStateResponse
-	Err         error
+	Tickets       *sdk.ListAllTicketsResponse
+	Architect     *sdk.ArchitectStateResponse
+	Err           error
 }
 
 // SSEConnectedMsg is sent when an SSE subscription is established.
 type SSEConnectedMsg struct {
 	ArchitectPath string
-	Ch          <-chan sdk.Event
-	Cancel      context.CancelFunc
+	Ch            <-chan sdk.Event
+	Cancel        context.CancelFunc
 }
 
 // SSEEventMsg is sent when an SSE event is received for a project.
@@ -139,7 +139,7 @@ type SSEEventMsg struct {
 // SpawnArchitectMsg is sent when architect spawn completes.
 type SpawnArchitectMsg struct {
 	ArchitectPath string
-	Err         error
+	Err           error
 }
 
 // FocusSuccessMsg is sent when a window is focused.
@@ -155,7 +155,7 @@ type FocusErrorMsg struct {
 // UnlinkProjectMsg is sent when project unlink completes.
 type UnlinkArchitectMsg struct {
 	ArchitectPath string
-	Err         error
+	Err           error
 }
 
 // SessionKilledMsg is sent when a session kill completes.
@@ -1263,8 +1263,8 @@ func (m Model) loadProjectDetail(projectPath string) tea.Cmd {
 
 		return ArchitectDetailLoadedMsg{
 			ArchitectPath: projectPath,
-			Tickets:     tickets,
-			Architect:   architect,
+			Tickets:       tickets,
+			Architect:     architect,
 		}
 	}
 }

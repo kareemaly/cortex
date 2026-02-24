@@ -7,7 +7,6 @@ import (
 
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
-	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -47,9 +46,4 @@ func resolveArchitectPath(name string) (string, error) {
 		return "", fmt.Errorf("not in a cortex architect (no cortex.yaml found)")
 	}
 	return root, nil
-}
-
-// newProjectClient creates an SDK client scoped to the architect path.
-func newProjectClient(architectPath string) *sdk.Client {
-	return sdk.DefaultClient(architectPath)
 }

@@ -74,7 +74,7 @@ func setupArchitectWithDaemon(t *testing.T, windowExists bool) (*Server, *ticket
 	// Create MCP server with DaemonURL pointing to test server
 	cfg := &Config{
 		ArchitectPath: tmpDir,
-		DaemonURL:   ts.URL,
+		DaemonURL:     ts.URL,
 	}
 
 	server, err := NewServer(cfg)
@@ -614,8 +614,8 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 
 	// Create MCP server with SDK client (ticket session)
 	cfg := &Config{
-		TicketID:    tk.ID,
-		DaemonURL:   ts.URL,
+		TicketID:      tk.ID,
+		DaemonURL:     ts.URL,
 		ArchitectPath: tmpDir,
 	}
 

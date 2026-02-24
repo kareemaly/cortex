@@ -71,9 +71,9 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		}
 
 		h.deps.Bus.Emit(events.Event{
-			Type:        events.SessionStatus,
+			Type:          events.SessionStatus,
 			ArchitectPath: projectPath,
-			TicketID:    req.TicketID,
+			TicketID:      req.TicketID,
 			Payload: map[string]any{
 				"status": req.Status,
 				"tool":   req.Tool,
@@ -117,9 +117,9 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.deps.Bus.Emit(events.Event{
-		Type:        events.SessionStatus,
+		Type:          events.SessionStatus,
 		ArchitectPath: projectPath,
-		TicketID:    req.TicketID,
+		TicketID:      req.TicketID,
 		Payload: map[string]any{
 			"status": req.Status,
 			"tool":   req.Tool,

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/kareemaly/cortex/internal/events"
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 

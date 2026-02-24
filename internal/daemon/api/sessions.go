@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kareemaly/cortex/internal/events"
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
+	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
@@ -127,9 +127,9 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.deps.Bus.Emit(events.Event{
-		Type:        events.SessionEnded,
+		Type:          events.SessionEnded,
 		ArchitectPath: projectPath,
-		TicketID:    shortID,
+		TicketID:      shortID,
 	})
 
 	w.WriteHeader(http.StatusNoContent)

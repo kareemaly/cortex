@@ -39,8 +39,8 @@ type HookAction struct {
 
 // SettingsConfigParams contains parameters for generating settings config.
 type SettingsConfigParams struct {
-	CortexdPath string
-	TicketID    string
+	CortexdPath   string
+	TicketID      string
 	ArchitectPath string
 }
 

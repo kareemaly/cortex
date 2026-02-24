@@ -50,11 +50,11 @@ func runMCP(cmd *cobra.Command, args []string) error {
 
 	// Create MCP server config
 	cfg := &mcp.Config{
-		TicketID:    ticketID,
-		TicketType:  mcpTicketType,
+		TicketID:      ticketID,
+		TicketType:    mcpTicketType,
 		ArchitectPath: projectPath,
-		TmuxSession: tmuxSession,
-		DaemonURL:   daemonURL,
+		TmuxSession:   tmuxSession,
+		DaemonURL:     daemonURL,
 	}
 
 	// Create MCP server
