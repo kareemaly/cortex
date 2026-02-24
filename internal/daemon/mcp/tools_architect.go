@@ -141,9 +141,27 @@ func (s *Server) handleReadTicket(
 		return nil, ReadTicketOutput{}, wrapSDKError(err)
 	}
 
-	return nil, ReadTicketOutput{
-		Ticket: ticketResponseToOutput(resp),
-	}, nil
+	out := ticketResponseToOutput(resp)
+
+	if resp.Session != "" {
+		conclusion, err := s.sdkClient.GetConclusion(resp.Session)
+		if err != nil {
+			if s.config.Logger != nil {
+				s.config.Logger.Warn("failed to fetch conclusion for ticket", "ticket_id", input.ID, "conclusion_id", resp.Session, "error", err)
+			}
+		} else {
+			out.Conclusion = &ConclusionOutput{
+				ID:      conclusion.ID,
+				Type:    conclusion.Type,
+				Ticket:  conclusion.Ticket,
+				Repo:    conclusion.Repo,
+				Body:    conclusion.Body,
+				Created: conclusion.Created.Format(time.RFC3339),
+			}
+		}
+	}
+
+	return nil, ReadTicketOutput{Ticket: out}, nil
 }
 
 // handleCreateWorkTicket creates a new work ticket via the daemon HTTP API.

@@ -118,18 +118,19 @@ type SessionOutput struct {
 
 // TicketOutput is the full ticket representation.
 type TicketOutput struct {
-	ID         string     `json:"id"`
-	Type       string     `json:"type"`
-	Title      string     `json:"title"`
-	Body       string     `json:"body"`
-	Repo       string     `json:"repo,omitempty"`
-	Path       string     `json:"path,omitempty"`
-	Session    string     `json:"session,omitempty"`
-	References []string   `json:"references,omitempty"`
-	Status     string     `json:"status"`
-	Created    time.Time  `json:"created"`
-	Updated    time.Time  `json:"updated"`
-	Due        *time.Time `json:"due,omitempty"`
+	ID         string            `json:"id"`
+	Type       string            `json:"type"`
+	Title      string            `json:"title"`
+	Body       string            `json:"body"`
+	Repo       string            `json:"repo,omitempty"`
+	Path       string            `json:"path,omitempty"`
+	Session    string            `json:"session,omitempty"`
+	References []string          `json:"references,omitempty"`
+	Status     string            `json:"status"`
+	Created    time.Time         `json:"created"`
+	Updated    time.Time         `json:"updated"`
+	Due        *time.Time        `json:"due,omitempty"`
+	Conclusion *ConclusionOutput `json:"conclusion,omitempty"`
 }
 
 // Tool output wrappers

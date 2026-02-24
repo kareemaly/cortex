@@ -3,8 +3,10 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -458,6 +460,135 @@ func TestIntegration_ReadTicket_NotFound(t *testing.T) {
 	// Should have an error
 	if !result.IsError {
 		t.Error("expected error for nonexistent ticket")
+	}
+}
+
+// daemonURL returns the daemon URL for direct HTTP API calls in integration tests.
+// Reads CORTEX_DAEMON_URL from env or falls back to the default.
+func daemonURL() string {
+	if u := os.Getenv("CORTEX_DAEMON_URL"); u != "" {
+		return u
+	}
+	return "http://localhost:4200"
+}
+
+// daemonPost makes a direct HTTP POST to the daemon API.
+func daemonPost(t *testing.T, path string, body any) *http.Response {
+	t.Helper()
+
+	architectPath := os.Getenv("CORTEX_ARCHITECT_PATH")
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("failed to marshal request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, daemonURL()+path, bytes.NewReader(jsonBody))
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if architectPath != "" {
+		req.Header.Set("X-Cortex-Architect", architectPath)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("daemon request failed: %v", err)
+	}
+	return resp
+}
+
+func TestIntegration_ReadTicket_NoConclusion(t *testing.T) {
+	skipIfCI(t)
+
+	env := setupTestEnv(t)
+	defer env.cleanup()
+
+	client := newMCPTestClient(t, env)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// Create a ticket
+	createResult, err := client.callTool(ctx, "createTicket", map[string]any{
+		"title": "No Conclusion Ticket",
+		"body":  "Test body",
+	})
+	if err != nil {
+		t.Fatalf("createTicket failed: %v", err)
+	}
+	created := parseToolOutput[CreateTicketOutput](t, createResult)
+
+	// Read the ticket and assert no conclusion is embedded
+	result, err := client.callTool(ctx, "readTicket", map[string]any{
+		"id": created.Ticket.ID,
+	})
+	if err != nil {
+		t.Fatalf("readTicket failed: %v", err)
+	}
+
+	output := parseToolOutput[ReadTicketOutput](t, result)
+	if output.Ticket.Conclusion != nil {
+		t.Errorf("expected Conclusion to be nil for ticket without session, got: %+v", output.Ticket.Conclusion)
+	}
+}
+
+func TestIntegration_ReadTicket_WithConclusion(t *testing.T) {
+	skipIfCI(t)
+
+	architectPath := os.Getenv("CORTEX_ARCHITECT_PATH")
+	if architectPath == "" {
+		t.Skip("CORTEX_ARCHITECT_PATH not set, skipping conclusion embedding test")
+	}
+
+	env := setupTestEnv(t)
+	defer env.cleanup()
+
+	client := newMCPTestClient(t, env)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// Create a ticket via MCP
+	createResult, err := client.callTool(ctx, "createTicket", map[string]any{
+		"title": "Conclusion Embedding Test",
+		"body":  "Test body for conclusion embedding",
+	})
+	if err != nil {
+		t.Fatalf("createTicket failed: %v", err)
+	}
+	created := parseToolOutput[CreateTicketOutput](t, createResult)
+	ticketID := created.Ticket.ID
+
+	// Conclude the ticket via the daemon HTTP API directly to create a conclusion
+	// and set the ticket's session back-reference.
+	const conclusionBody = "Work completed: implemented the feature and all tests pass."
+	concludeResp := daemonPost(t, "/tickets/"+ticketID+"/conclude", map[string]string{
+		"content": conclusionBody,
+	})
+	defer func() { _ = concludeResp.Body.Close() }()
+	if concludeResp.StatusCode != http.StatusOK {
+		t.Fatalf("conclude API returned status %d", concludeResp.StatusCode)
+	}
+
+	// Read the ticket via MCP and assert the conclusion is embedded
+	result, err := client.callTool(ctx, "readTicket", map[string]any{
+		"id": ticketID,
+	})
+	if err != nil {
+		t.Fatalf("readTicket failed: %v", err)
+	}
+
+	output := parseToolOutput[ReadTicketOutput](t, result)
+	if output.Ticket.Conclusion == nil {
+		t.Fatal("expected Conclusion to be non-nil for ticket with session")
+	}
+	if output.Ticket.Conclusion.ID == "" {
+		t.Error("expected Conclusion.ID to be non-empty")
+	}
+	if output.Ticket.Conclusion.Body != conclusionBody {
+		t.Errorf("expected Conclusion.Body %q, got %q", conclusionBody, output.Ticket.Conclusion.Body)
 	}
 }
 
