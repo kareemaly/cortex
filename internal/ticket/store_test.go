@@ -185,7 +185,6 @@ func TestStoreUpdatePartial(t *testing.T) {
 	}
 }
 
-
 func TestStoreUpdateTitleRename(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
