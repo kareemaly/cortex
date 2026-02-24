@@ -1559,8 +1559,8 @@ func TestGenerateOpenCodeConfigContent(t *testing.T) {
 	if agent.Prompt != "You are a helpful agent." {
 		t.Errorf("expected system prompt, got: %s", agent.Prompt)
 	}
-	if agent.Mode != "bypassPermissions" {
-		t.Errorf("expected mode 'bypassPermissions', got: %s", agent.Mode)
+	if agent.Mode != "primary" {
+		t.Errorf("expected mode 'primary', got: %s", agent.Mode)
 	}
 	if agent.Permission["*"] != "allow" {
 		t.Errorf("expected permission '*' = 'allow', got: %v", agent.Permission)

@@ -50,7 +50,7 @@ func GenerateOpenCodeConfigContent(claudeConfig *ClaudeMCPConfig, systemPrompt s
 		// embedded in agent.prompt (replacing OpenCode's built-in provider prompt).
 		config.Agent["cortex"] = OpenCodeAgentConfig{
 			Description: "Cortex architect agent",
-			Mode:        "bypassPermissions",
+			Mode:        "primary",
 			Prompt:      systemPrompt,
 			Permission:  map[string]string{"*": "allow"},
 		}
