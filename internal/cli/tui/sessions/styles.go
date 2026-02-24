@@ -76,6 +76,7 @@ var (
 	architectColor = lipgloss.Color("141")
 	researchColor  = lipgloss.Color("39")
 	workColor      = lipgloss.Color("82")
+	collabColor    = lipgloss.Color("214") // amber/yellow
 )
 
 func typeBadgeStyle(sessionType string) lipgloss.Style {
@@ -87,6 +88,8 @@ func typeBadgeStyle(sessionType string) lipgloss.Style {
 		color = researchColor
 	case "work":
 		color = workColor
+	case "collab":
+		color = collabColor
 	default:
 		color = mutedColor
 	}

@@ -12,6 +12,7 @@ type SessionType string
 const (
 	SessionTypeArchitect SessionType = "architect"
 	SessionTypeTicket    SessionType = "ticket"
+	SessionTypeCollab    SessionType = "collab"
 )
 
 // Session holds the current session context.
@@ -19,7 +20,30 @@ type Session struct {
 	Type       SessionType
 	TicketID   string // Only set for ticket sessions
 	TicketType string // Only set for ticket sessions
+	CollabID   string // Only set for collab sessions
 	Repo       string // from CORTEX_REPO env var
+}
+
+// SpawnCollabSessionInput is the input for the spawnCollabSession tool.
+type SpawnCollabSessionInput struct {
+	Repo   string `json:"repo" jsonschema:"Repository path where the collab agent will spawn (required). Must be from the configured repos list in cortex.yaml."`
+	Prompt string `json:"prompt" jsonschema:"Kickoff prompt for the collab session (required). This is the sole context for the agent."`
+}
+
+// SpawnCollabSessionOutput is the output for the spawnCollabSession tool.
+type SpawnCollabSessionOutput struct {
+	Success    bool   `json:"success"`
+	CollabID   string `json:"collab_id,omitempty"`
+	TmuxWindow string `json:"tmux_window,omitempty"`
+	State      string `json:"state,omitempty"`
+	Message    string `json:"message,omitempty"`
+}
+
+// CollabConcludeOutput is the output for the collab concludeSession tool.
+type CollabConcludeOutput struct {
+	Success  bool   `json:"success"`
+	CollabID string `json:"collab_id"`
+	Message  string `json:"message,omitempty"`
 }
 
 // Input types for architect tools

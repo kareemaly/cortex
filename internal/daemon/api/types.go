@@ -30,6 +30,7 @@ type (
 	PromptFileInfo           = types.PromptFileInfo
 	PromptGroupInfo          = types.PromptGroupInfo
 	ListPromptsResponse      = types.ListPromptsResponse
+	SpawnCollabResponse      = types.SpawnCollabResponse
 )
 
 // CreateTicketRequest is the request body for creating a ticket.

@@ -19,6 +19,7 @@ type SessionType string
 const (
 	SessionTypeArchitect SessionType = "architect"
 	SessionTypeTicket    SessionType = "ticket"
+	SessionTypeCollab    SessionType = "collab"
 )
 
 // ArchitectSessionKey is the session store key for the architect session.
@@ -31,6 +32,8 @@ const ArchitectSessionKey = "architect"
 type Session struct {
 	Type       SessionType `json:"type"`
 	TicketID   string      `json:"ticket_id,omitempty"`
+	CollabID   string      `json:"collab_id,omitempty"`
+	Prompt     string      `json:"prompt,omitempty"`
 	Agent      string      `json:"agent"`
 	TmuxWindow string      `json:"tmux_window"`
 	StartedAt  time.Time   `json:"started_at"`

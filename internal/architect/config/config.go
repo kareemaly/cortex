@@ -42,6 +42,7 @@ type Config struct {
 	Architect RoleConfig         `yaml:"architect"`
 	Work      RoleConfig         `yaml:"work"`
 	Research  ResearchRoleConfig `yaml:"research"`
+	Collab    RoleConfig         `yaml:"collab,omitempty"`
 	Tickets   TicketsConfig      `yaml:"tickets,omitempty"`
 }
 
@@ -146,6 +147,9 @@ func DefaultConfig() *Config {
 				Agent: AgentClaude,
 			},
 		},
+		Collab: RoleConfig{
+			Agent: AgentClaude,
+		},
 	}
 }
 
@@ -248,6 +252,14 @@ func (c *Config) Validate() error {
 	if c.Research.Agent != "" && c.Research.Agent != AgentClaude && c.Research.Agent != AgentOpenCode {
 		return &ValidationError{
 			Field:   "research.agent",
+			Message: "must be 'claude' or 'opencode'",
+		}
+	}
+
+	// Validate collab agent type
+	if c.Collab.Agent != "" && c.Collab.Agent != AgentClaude && c.Collab.Agent != AgentOpenCode {
+		return &ValidationError{
+			Field:   "collab.agent",
 			Message: "must be 'claude' or 'opencode'",
 		}
 	}

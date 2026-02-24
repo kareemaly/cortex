@@ -304,7 +304,7 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 					startedAt = parsed
 				}
 			}
-			if _, err := conclusionStore.Create("architect", "", "", req.Content, startedAt); err != nil {
+			if _, err := conclusionStore.Create("architect", "", "", req.Content, startedAt, ""); err != nil {
 				h.deps.Logger.Warn("failed to persist architect session conclusion", "error", err)
 			}
 		}

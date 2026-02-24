@@ -13,6 +13,7 @@ const (
 	TypeArchitect ConclusionType = "architect"
 	TypeWork      ConclusionType = "work"
 	TypeResearch  ConclusionType = "research"
+	TypeCollab    ConclusionType = "collab"
 )
 
 // Re-export shared types from storage.
@@ -30,6 +31,7 @@ type ConclusionMeta struct {
 	Type        ConclusionType `yaml:"type"`
 	Ticket      string         `yaml:"ticket,omitempty"`
 	Repo        string         `yaml:"repo,omitempty"`
+	Prompt      string         `yaml:"prompt,omitempty"`
 	ConcludedAt time.Time      `yaml:"concluded_at"`
 	StartedAt   time.Time      `yaml:"started_at,omitempty"`
 }

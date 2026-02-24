@@ -13,6 +13,7 @@ type ErrorResponse struct {
 type SessionResponse struct {
 	Type       string    `json:"type"`
 	TicketID   string    `json:"ticket_id,omitempty"`
+	CollabID   string    `json:"collab_id,omitempty"`
 	Agent      string    `json:"agent"`
 	TmuxWindow string    `json:"tmux_window"`
 	StartedAt  time.Time `json:"started_at"`
@@ -70,6 +71,8 @@ type ConclusionResponse struct {
 	Type        string    `json:"type"`
 	Ticket      string    `json:"ticket,omitempty"`
 	Repo        string    `json:"repo,omitempty"`
+	Prompt      string    `json:"prompt,omitempty"`
+	CollabID    string    `json:"collab_id,omitempty"`
 	Body        string    `json:"body"`
 	ConcludedAt time.Time `json:"concluded_at"`
 	StartedAt   time.Time `json:"started_at,omitempty"`
@@ -82,8 +85,19 @@ type ConclusionSummary struct {
 	Ticket      string    `json:"ticket,omitempty"`
 	TicketTitle string    `json:"ticket_title,omitempty"`
 	Repo        string    `json:"repo,omitempty"`
+	Prompt      string    `json:"prompt,omitempty"`
+	CollabID    string    `json:"collab_id,omitempty"`
 	ConcludedAt time.Time `json:"concluded_at"`
 	StartedAt   time.Time `json:"started_at,omitempty"`
+}
+
+// SpawnCollabResponse is the response for spawning a collab session.
+type SpawnCollabResponse struct {
+	CollabID    string          `json:"collab_id"`
+	TmuxWindow  string          `json:"tmux_window"`
+	TmuxSession string          `json:"tmux_session"`
+	State       string          `json:"state"`
+	Session     SessionResponse `json:"session"`
 }
 
 // ListConclusionsResponse is a paginated list of conclusions (metadata only).

@@ -94,6 +94,12 @@ func (s *Server) registerArchitectTools() {
 		Name:        "concludeSession",
 		Description: "Conclude the architect session and clean up",
 	}, s.handleArchitectConcludeSession)
+
+	// Spawn collab session
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "spawnCollabSession",
+		Description: "Spawn a ticketless collab session with a repo and a kickoff prompt. The agent starts immediately in the repo with the given prompt as context.",
+	}, s.handleSpawnCollabSession)
 }
 
 // handleListTickets lists tickets by status.
@@ -542,6 +548,39 @@ func (s *Server) handleReadConclusion(
 			ConcludedAt: resp.ConcludedAt.Format(time.RFC3339),
 			StartedAt:   startedAtStr,
 		},
+	}, nil
+}
+
+// handleSpawnCollabSession spawns a collab session via the daemon HTTP API.
+func (s *Server) handleSpawnCollabSession(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input SpawnCollabSessionInput,
+) (*mcp.CallToolResult, SpawnCollabSessionOutput, error) {
+	if input.Repo == "" {
+		return nil, SpawnCollabSessionOutput{}, NewValidationError("repo", "cannot be empty")
+	}
+	if input.Prompt == "" {
+		return nil, SpawnCollabSessionOutput{}, NewValidationError("prompt", "cannot be empty")
+	}
+
+	// Validate repo against architect config
+	if s.projectConfig != nil {
+		if err := s.projectConfig.ValidateRepo(input.Repo); err != nil {
+			return nil, SpawnCollabSessionOutput{}, NewValidationError("repo", err.Error())
+		}
+	}
+
+	resp, err := s.sdkClient.SpawnCollabSession(input.Repo, input.Prompt, "normal")
+	if err != nil {
+		return nil, SpawnCollabSessionOutput{}, wrapSDKError(err)
+	}
+
+	return nil, SpawnCollabSessionOutput{
+		Success:    true,
+		CollabID:   resp.CollabID,
+		TmuxWindow: resp.TmuxWindow,
+		State:      resp.State,
 	}, nil
 }
 

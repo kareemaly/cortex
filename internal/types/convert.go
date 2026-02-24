@@ -15,6 +15,7 @@ func ToSessionResponse(s *session.Session) SessionResponse {
 	return SessionResponse{
 		Type:       string(s.Type),
 		TicketID:   s.TicketID,
+		CollabID:   s.CollabID,
 		Agent:      s.Agent,
 		TmuxWindow: s.TmuxWindow,
 		StartedAt:  s.StartedAt,

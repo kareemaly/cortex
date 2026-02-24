@@ -28,6 +28,8 @@ const (
 	AgentTypeArchitect AgentType = "architect"
 	// AgentTypeTicketAgent is the ticket agent type.
 	AgentTypeTicketAgent AgentType = "ticket_agent"
+	// AgentTypeCollabAgent is the collab agent type.
+	AgentTypeCollabAgent AgentType = "collab_agent"
 )
 
 // StoreInterface defines the ticket store operations needed for spawning.
@@ -43,6 +45,7 @@ type SessionStoreInterface interface {
 	CreateArchitect(agent, tmuxWindow string) (*session.Session, error)
 	GetArchitect() (*session.Session, error)
 	EndArchitect() error
+	CreateCollab(collabID, prompt, agent, tmuxWindow string) (string, *session.Session, error)
 }
 
 // TmuxManagerInterface defines the tmux operations needed for spawning.
@@ -95,6 +98,11 @@ type SpawnRequest struct {
 
 	// For architect agents
 	ArchitectName string
+
+	// For collab agents
+	CollabID string // unique UUID for this collab session
+	Prompt   string // kickoff prompt text
+	Repo     string // working directory (used for collab agents)
 
 	// Companion pane command (from cortex.yaml)
 	Companion string
@@ -190,6 +198,11 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 			if err != nil {
 				return nil, err
 			}
+		case AgentTypeCollabAgent:
+			_, _, err := s.deps.SessionStore.CreateCollab(req.CollabID, req.Prompt, req.Agent, windowName)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -207,10 +220,13 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		ArchitectPath: req.ArchitectPath,
 		TmuxSession:   req.TmuxSession,
 		StartedAt:     startedAt,
+		CollabID:      req.CollabID,
 	})
 
 	identifier := req.TicketID
-	if identifier == "" {
+	if identifier == "" && req.CollabID != "" {
+		identifier = "collab-" + storage.ShortID(req.CollabID)
+	} else if identifier == "" {
 		identifier = "architect-" + req.TmuxSession
 	}
 
@@ -313,6 +329,13 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 				}
 				return ""
 			}(),
+			"CORTEX_STARTED_AT": startedAt,
+		}
+	case AgentTypeCollabAgent:
+		launcherParams.EnvVars = map[string]string{
+			"CORTEX_COLLAB_ID":  req.CollabID,
+			"CORTEX_ARCHITECT":  req.ArchitectPath,
+			"CORTEX_REPO":       req.Repo,
 			"CORTEX_STARTED_AT": startedAt,
 		}
 	}
@@ -608,6 +631,12 @@ func (s *Spawner) validateSpawnRequest(req SpawnRequest) error {
 		}
 	}
 
+	if req.AgentType == AgentTypeCollabAgent {
+		if req.CollabID == "" {
+			return &ConfigError{Field: "CollabID", Message: "cannot be empty for collab agent"}
+		}
+	}
+
 	return nil
 }
 
@@ -646,7 +675,24 @@ func (s *Spawner) getCortexdPath() (string, error) {
 
 // getWorkingDirectory determines the working directory for a ticket agent.
 // Work tickets spawn in the repo directory, research tickets spawn in the architect project root.
+// Collab agents spawn in the specified Repo directory.
 func getWorkingDirectory(req SpawnRequest) (string, error) {
+	if req.AgentType == AgentTypeCollabAgent {
+		if req.Repo != "" {
+			repo := req.Repo
+			if strings.HasPrefix(repo, "~/") {
+				if home, err := os.UserHomeDir(); err == nil {
+					repo = filepath.Join(home, repo[2:])
+				}
+			}
+			if err := validateGitRepository(repo); err != nil {
+				return "", err
+			}
+			return repo, nil
+		}
+		return req.ArchitectPath, nil
+	}
+
 	if req.AgentType != AgentTypeTicketAgent {
 		return req.ArchitectPath, nil
 	}
@@ -721,6 +767,9 @@ func (s *Spawner) generateWindowName(req SpawnRequest) string {
 	if req.AgentType == AgentTypeTicketAgent && req.Ticket != nil {
 		return GenerateWindowName(req.Ticket.Title)
 	}
+	if req.AgentType == AgentTypeCollabAgent && req.CollabID != "" {
+		return "collab-" + storage.ShortID(req.CollabID)
+	}
 	return "architect"
 }
 
@@ -740,6 +789,8 @@ func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
 		return s.buildTicketAgentPrompt(req)
 	case AgentTypeArchitect:
 		return s.buildArchitectPrompt(req)
+	case AgentTypeCollabAgent:
+		return &promptInfo{PromptText: req.Prompt}, nil
 	default:
 		return nil, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
 	}
@@ -937,6 +988,9 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDi
 		}
 		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, req.ArchitectPath)
 		return 0, err
+	case AgentTypeCollabAgent:
+		// Collab agents spawn as simple agent windows (no companion)
+		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, req.Companion, workingDir, workingDir)
 	default:
 		return 0, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}
 	}
@@ -957,6 +1011,7 @@ func (s *Spawner) cleanupOnFailure(_ context.Context, agentType AgentType, ticke
 			if err := s.deps.SessionStore.EndArchitect(); err != nil {
 				s.logWarn("cleanup: failed to end architect session", "error", err)
 			}
+		// AgentTypeCollabAgent cleanup handled in SpawnCollab via EndCollab
 		}
 	}
 	for _, path := range tempFiles {

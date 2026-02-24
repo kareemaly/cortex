@@ -23,6 +23,10 @@ type Config struct {
 	// Only used for ticket sessions.
 	TicketType string
 
+	// CollabID identifies a collab session.
+	// When set, the session is a collab session with concludeSession access only.
+	CollabID string
+
 	// ArchitectPath is the architect root for hook execution.
 	// If set, architect config is loaded from this path.
 	// Required for architect sessions.
@@ -74,7 +78,13 @@ func NewServer(cfg *Config) (*Server, error) {
 
 	// Determine session type
 	var session *Session
-	if cfg.TicketID != "" {
+	if cfg.CollabID != "" {
+		session = &Session{
+			Type:     SessionTypeCollab,
+			CollabID: cfg.CollabID,
+			Repo:     cfg.Repo,
+		}
+	} else if cfg.TicketID != "" {
 		session = &Session{
 			Type:       SessionTypeTicket,
 			TicketID:   cfg.TicketID,
@@ -91,10 +101,10 @@ func NewServer(cfg *Config) (*Server, error) {
 	var projectCfg *config.Config
 
 	switch session.Type {
-	case SessionTypeTicket:
-		// Ticket sessions always route through the daemon HTTP API
+	case SessionTypeTicket, SessionTypeCollab:
+		// Ticket and collab sessions always route through the daemon HTTP API
 		if cfg.DaemonURL == "" {
-			return nil, fmt.Errorf("ticket sessions require CORTEX_DAEMON_URL to be set")
+			return nil, fmt.Errorf("ticket/collab sessions require CORTEX_DAEMON_URL to be set")
 		}
 		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ArchitectPath)
 
@@ -136,6 +146,8 @@ func NewServer(cfg *Config) (*Server, error) {
 	switch session.Type {
 	case SessionTypeArchitect:
 		s.registerArchitectTools()
+	case SessionTypeCollab:
+		s.registerCollabTools()
 	default:
 		s.registerTicketTools()
 	}
@@ -161,4 +173,9 @@ func (s *Server) IsArchitectSession() bool {
 // IsTicketSession returns true if this is a ticket session.
 func (s *Server) IsTicketSession() bool {
 	return s.session.Type == SessionTypeTicket
+}
+
+// IsCollabSession returns true if this is a collab session.
+func (s *Server) IsCollabSession() bool {
+	return s.session.Type == SessionTypeCollab
 }

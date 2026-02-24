@@ -93,6 +93,7 @@ func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
 			Type:        string(c.Type),
 			Ticket:      c.Ticket,
 			Repo:        c.Repo,
+			Prompt:      c.Prompt,
 			ConcludedAt: c.ConcludedAt,
 			StartedAt:   c.StartedAt,
 		}
@@ -132,6 +133,7 @@ func (h *ConclusionHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		Type:        string(c.Type),
 		Ticket:      c.Ticket,
 		Repo:        c.Repo,
+		Prompt:      c.Prompt,
 		Body:        c.Body,
 		ConcludedAt: c.ConcludedAt,
 		StartedAt:   c.StartedAt,
@@ -173,7 +175,7 @@ func (h *ConclusionHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	c, err := store.Create(req.Type, req.Ticket, req.Repo, req.Body, startedAt)
+	c, err := store.Create(req.Type, req.Ticket, req.Repo, req.Body, startedAt, "")
 	if err != nil {
 		handleConclusionError(w, err, h.deps.Logger)
 		return
@@ -184,6 +186,7 @@ func (h *ConclusionHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		Type:        string(c.Type),
 		Ticket:      c.Ticket,
 		Repo:        c.Repo,
+		Prompt:      c.Prompt,
 		Body:        c.Body,
 		ConcludedAt: c.ConcludedAt,
 		StartedAt:   c.StartedAt,

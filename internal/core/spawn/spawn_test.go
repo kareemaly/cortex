@@ -124,6 +124,19 @@ func (m *mockSessionStore) EndArchitect() error {
 	return nil
 }
 
+func (m *mockSessionStore) CreateCollab(collabID, prompt, agent, tmuxWindow string) (string, *session.Session, error) {
+	key := "collab-" + collabID[:8]
+	sess := &session.Session{
+		Type:       session.SessionTypeCollab,
+		CollabID:   collabID,
+		Prompt:     prompt,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+	}
+	m.sessions[key] = sess
+	return key, sess, nil
+}
+
 // mockTmuxManager implements TmuxManagerInterface for testing.
 type mockTmuxManager struct {
 	windows          map[string]bool // window existence by name

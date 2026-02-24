@@ -44,13 +44,13 @@ func (s *Store) emit(eventType events.EventType, payload any) {
 }
 
 // Create creates a new conclusion record.
-func (s *Store) Create(conclusionType string, ticketID, repo, body string, startedAt time.Time) (*Conclusion, error) {
+func (s *Store) Create(conclusionType string, ticketID, repo, body string, startedAt time.Time, prompt string) (*Conclusion, error) {
 	if body == "" {
 		return nil, &ValidationError{Field: "body", Message: "cannot be empty"}
 	}
 
 	ct := ConclusionType(conclusionType)
-	if ct != TypeArchitect && ct != TypeWork && ct != TypeResearch {
+	if ct != TypeArchitect && ct != TypeWork && ct != TypeResearch && ct != TypeCollab {
 		ct = TypeWork
 	}
 
@@ -61,6 +61,7 @@ func (s *Store) Create(conclusionType string, ticketID, repo, body string, start
 			Type:        ct,
 			Ticket:      ticketID,
 			Repo:        repo,
+			Prompt:      prompt,
 			ConcludedAt: now,
 			StartedAt:   startedAt,
 		},

@@ -76,7 +76,7 @@ func TestNewServerTicketRequiresDaemonURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when DaemonURL is missing for ticket session")
 	}
-	expected := "ticket sessions require CORTEX_DAEMON_URL to be set"
+	expected := "ticket/collab sessions require CORTEX_DAEMON_URL to be set"
 	if err.Error() != expected {
 		t.Errorf("error = %q, want %q", err.Error(), expected)
 	}

@@ -571,7 +571,10 @@ func (m Model) renderDetailView(height int) string {
 	var meta strings.Builder
 	meta.WriteString(typeBadgeStyle(c.Type).Render(c.Type))
 	meta.WriteString(" ")
-	if c.TicketTitle != "" {
+	if c.Type == "collab" && c.Prompt != "" {
+		meta.WriteString(ticketRefStyle.Render(sessionTitle(c)))
+		meta.WriteString("  ")
+	} else if c.TicketTitle != "" {
 		meta.WriteString(ticketRefStyle.Render(c.TicketTitle))
 		meta.WriteString("  ")
 	} else if c.Ticket != "" {
@@ -662,6 +665,8 @@ func typeShortLabel(t string) string {
 		return "research"
 	case "work":
 		return "work"
+	case "collab":
+		return "collab"
 	default:
 		return t
 	}
@@ -669,6 +674,15 @@ func typeShortLabel(t string) string {
 
 // sessionTitle returns the display title for a conclusion.
 func sessionTitle(c sdk.ConclusionSummary) string {
+	if c.Type == "collab" {
+		if c.Prompt != "" {
+			if len(c.Prompt) > 60 {
+				return c.Prompt[:57] + "..."
+			}
+			return c.Prompt
+		}
+		return "Collab session"
+	}
 	if c.TicketTitle != "" {
 		return c.TicketTitle
 	}

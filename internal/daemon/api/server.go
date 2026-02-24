@@ -115,6 +115,13 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		r.Get("/config/project", configHandlers.ReadProjectConfig)
 		r.Put("/config/project", configHandlers.UpdateProjectConfig)
 		r.Post("/config/project/edit", configHandlers.EditProjectConfig)
+
+		// Collab routes
+		collabHandlers := NewCollabHandlers(deps)
+		r.Route("/collab", func(r chi.Router) {
+			r.Post("/spawn", collabHandlers.Spawn)
+			r.Post("/{id}/conclude", collabHandlers.Conclude)
+		})
 	})
 
 	return r

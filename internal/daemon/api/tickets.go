@@ -691,7 +691,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	if h.deps.ConclusionStoreManager != nil {
 		conclusionStore, csErr := h.deps.ConclusionStoreManager.GetStore(projectPath)
 		if csErr == nil {
-			conclusion, createErr := conclusionStore.Create(conclusionType, id, repo, req.Content, startedAt)
+			conclusion, createErr := conclusionStore.Create(conclusionType, id, repo, req.Content, startedAt, "")
 			if createErr != nil {
 				h.deps.Logger.Warn("failed to create conclusion", "error", createErr)
 			} else {

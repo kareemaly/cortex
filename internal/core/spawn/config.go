@@ -31,6 +31,7 @@ type MCPConfigParams struct {
 	TmuxSession   string
 	DaemonURL     string // optional; defaults to daemonconfig.DefaultDaemonURL
 	StartedAt     string // RFC3339 timestamp of when the session started
+	CollabID      string // for collab agents
 }
 
 // GenerateMCPConfig creates an MCP configuration for a claude agent.
@@ -70,6 +71,11 @@ func GenerateMCPConfig(params MCPConfigParams) *ClaudeMCPConfig {
 	// Pass session start time so the MCP subprocess can include it in concludeSession
 	if params.StartedAt != "" {
 		serverConfig.Env["CORTEX_STARTED_AT"] = params.StartedAt
+	}
+
+	// Pass collab ID so the MCP subprocess knows it's a collab session
+	if params.CollabID != "" {
+		serverConfig.Env["CORTEX_COLLAB_ID"] = params.CollabID
 	}
 
 	return &ClaudeMCPConfig{

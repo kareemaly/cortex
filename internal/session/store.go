@@ -52,6 +52,47 @@ func (s *Store) Create(ticketID, agent, tmuxWindow string) (string, *Session, er
 	return key, session, nil
 }
 
+// CreateCollab adds a new collab session.
+// Key is "collab-" + storage.ShortID(collabID).
+func (s *Store) CreateCollab(collabID, prompt, agent, tmuxWindow string) (string, *Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sessions, err := s.load()
+	if err != nil {
+		return "", nil, err
+	}
+
+	key := "collab-" + storage.ShortID(collabID)
+	sess := &Session{
+		Type:       SessionTypeCollab,
+		CollabID:   collabID,
+		Prompt:     prompt,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now().UTC(),
+		Status:     AgentStatusStarting,
+	}
+
+	sessions[key] = sess
+
+	if err := s.save(sessions); err != nil {
+		return "", nil, err
+	}
+
+	return key, sess, nil
+}
+
+// GetByCollabID retrieves a collab session by its full collab ID.
+func (s *Store) GetByCollabID(collabID string) (*Session, error) {
+	return s.Get("collab-" + storage.ShortID(collabID))
+}
+
+// EndCollab removes a collab session entry.
+func (s *Store) EndCollab(collabID string) error {
+	return s.End("collab-" + storage.ShortID(collabID))
+}
+
 // CreateArchitect adds a new architect session.
 // Uses ArchitectSessionKey as the literal key (not shortened via ShortID).
 func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
