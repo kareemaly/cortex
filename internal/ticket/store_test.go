@@ -35,7 +35,7 @@ func TestNewStore(t *testing.T) {
 	defer cleanup()
 
 	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
-		dir := filepath.Join(store.ticketsDir, string(status))
+		dir := filepath.Join(store.RootDir(), string(status))
 		info, err := os.Stat(dir)
 		if err != nil {
 			t.Errorf("directory %s not created: %v", status, err)
@@ -193,7 +193,7 @@ func TestStoreUpdateTitleRename(t *testing.T) {
 	shortID := storage.ShortID(ticket.ID)
 
 	// Verify old directory exists
-	oldDir := filepath.Join(store.ticketsDir, "backlog", "old-title-"+shortID)
+	oldDir := filepath.Join(store.RootDir(), "backlog", "old-title-"+shortID)
 	if _, err := os.Stat(oldDir); err != nil {
 		t.Fatalf("old dir should exist: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestStoreUpdateTitleRename(t *testing.T) {
 	}
 
 	// New dir should exist
-	newDir := filepath.Join(store.ticketsDir, "backlog", "new-title-"+shortID)
+	newDir := filepath.Join(store.RootDir(), "backlog", "new-title-"+shortID)
 	if _, err := os.Stat(newDir); err != nil {
 		t.Errorf("new dir should exist: %v", err)
 	}
@@ -373,7 +373,7 @@ func TestStoreDirLayout(t *testing.T) {
 	shortID := storage.ShortID(ticket.ID)
 
 	// Verify directory structure
-	entityDir := filepath.Join(store.ticketsDir, "backlog", "fix-auth-bug-"+shortID)
+	entityDir := filepath.Join(store.RootDir(), "backlog", "fix-auth-bug-"+shortID)
 	if _, err := os.Stat(entityDir); err != nil {
 		t.Fatalf("entity dir should exist: %v", err)
 	}
@@ -405,8 +405,6 @@ func TestStoreClearDueDate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	due := store.ticketsDir // irrelevant, just need a time
-	_ = due
 	ticket, _ := store.Create("Test", "body", "", nil, nil, "", "")
 
 	d := ticket.Created.AddDate(0, 0, 7)
