@@ -7,12 +7,6 @@
 
 {{.References}}
 {{end}}
-{{if .Comments}}
-
-## Comments
-
-{{.Comments}}
-{{end}}
 
 ## Research Workflow
 

@@ -18,13 +18,13 @@ var ejectForce bool
 var ejectCmd = &cobra.Command{
 	Use:   "eject <prompt-path>",
 	Short: "Copy an inherited prompt to your project for customization",
-	Long: `Copy a prompt file from the base configuration to .cortex/prompts/
-for local customization. The prompt path is relative to the prompts directory.
+	Long: `Copy a prompt file from the base configuration to your project's prompts/
+directory for local customization. The prompt path is relative to the prompts directory.
 
 Examples:
-  cortex eject ticket/work/SYSTEM.md
+  cortex eject work/KICKOFF.md
   cortex eject architect/KICKOFF.md
-  cortex eject ticket/work/SYSTEM.md --force`,
+  cortex eject research/KICKOFF.md --force`,
 	Args: cobra.ExactArgs(1),
 	RunE: runEject,
 }

@@ -7,16 +7,10 @@
 
 {{.References}}
 {{end}}
-{{if .Comments}}
-
-## Comments
-
-{{.Comments}}
-{{end}}
 
 ## Workflow
 
-You are working in this ticket to implement the requirements above. Follow this workflow:
+You are working on this ticket to implement the requirements above. Follow this workflow:
 
 1. **Create a branch**: Start with a descriptive branch name (e.g., `feat/add-webhook-support`, `fix/tmux-panes`)
 
