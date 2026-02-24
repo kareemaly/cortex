@@ -41,5 +41,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the config browser.
 func helpText() string {
-	return "[j/k] navigate  [e]ject/edit  [x] reset  [c]onfig  [h/l] pane  [ctrl+u/d] scroll  [r]efresh  [!] logs  [q]uit"
+	return "j/k navigate  h/l pane  e eject/edit  x reset  c config  r refresh  ! logs  q quit"
 }

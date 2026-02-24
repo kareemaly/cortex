@@ -433,18 +433,17 @@ func (m Model) View() string {
 	}
 
 	// Status bar
-	var sessionCount int
-	if len(m.dateGroups) > 0 && m.dateIdx < len(m.dateGroups) {
-		sessionCount = len(m.dateGroups[m.dateIdx].sessions)
+	var totalSessions int
+	for _, dg := range m.dateGroups {
+		totalSessions += len(dg.sessions)
 	}
-	countStr := statusBarStyle.Render(fmt.Sprintf("%d sessions", sessionCount))
+	countStr := statusBarStyle.Render(fmt.Sprintf("%d sessions", totalSessions))
 
 	var helpStr string
 	if m.mode == viewDetail {
 		helpStr = countStr + "  " + helpBarStyle.Render(detailHelpText())
 	} else {
-		openHint := helpBarStyle.Render("o/↵: open")
-		helpStr = countStr + "  " + helpBarStyle.Render(listHelpText()) + "  " + openHint
+		helpStr = countStr + "  " + helpBarStyle.Render(listHelpText())
 	}
 
 	badge := m.logBadge()
@@ -469,11 +468,29 @@ func (m Model) renderListView(height int) string {
 	divider := dividerStyle.Render(strings.Repeat("─", m.width))
 	dividerHeight := 1
 
-	listHeight := max(height-stripHeight-dividerHeight-1, 1)
+	listHeight := max(height-stripHeight-dividerHeight, 1)
 
 	sessionList := m.renderSessionList(listHeight)
 
 	return dateStripStyle.Render(dateStrip) + "\n" + divider + "\n" + sessionList
+}
+
+// relativeDateLabel returns a friendly date label like "Today", "Yesterday", or "Jan 2".
+func relativeDateLabel(d time.Time) string {
+	now := time.Now().Local()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	day := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
+
+	switch {
+	case day.Equal(today):
+		return "Today"
+	case day.Equal(today.AddDate(0, 0, -1)):
+		return "Yesterday"
+	case day.Year() == today.Year():
+		return d.Format("Jan 2")
+	default:
+		return d.Format("Jan 2, 2006")
+	}
 }
 
 // renderDateStrip renders the horizontal date strip with active/inactive pills.
@@ -484,17 +501,18 @@ func (m Model) renderDateStrip() string {
 
 	var parts []string
 	for i, dg := range m.dateGroups {
-		label := dg.date.Format("Jan 2")
+		label := relativeDateLabel(dg.date)
+		count := fmt.Sprintf(" %d", len(dg.sessions))
 		if i == m.dateIdx {
-			parts = append(parts, activeDateStyle.Render(label))
+			parts = append(parts, activeDateStyle.Render(label+count))
 		} else {
-			parts = append(parts, inactiveDateStyle.Render(label))
+			parts = append(parts, inactiveDateStyle.Render(label+dateCountStyle.Render(count)))
 		}
 	}
 
 	strip := strings.Join(parts, " ")
 
-	// Add navigation arrows
+	// Navigation arrows
 	leftArrow := "◀ "
 	rightArrow := " ▶"
 	if m.dateIdx == 0 {
@@ -518,29 +536,42 @@ func (m Model) renderSessionList(height int) string {
 		return emptyStyle.Render("No sessions for this date.")
 	}
 
+	// Fixed columns: gutter(2) + time(7) + type(10) + title(flex) + duration(8)
+	titleWidth := max(m.width-colGutter-colTime-colType-colDuration, 10)
+
 	var lines []string
 	for i, c := range sessions {
-		var row string
+		timeRaw := c.ConcludedAt.Local().Format("15:04")
+		typeRaw := typeShortLabel(c.Type)
+		titleRaw := sessionTitle(c)
 		dur := formatDuration(c.StartedAt, c.ConcludedAt)
-		if i == m.cursor {
-			timeRaw := c.ConcludedAt.Local().Format("15:04")
-			typeRaw := fmt.Sprintf("%-10s", typeShortLabel(c.Type))
-			titleRaw := sessionTitle(c)
-			rawRow := "▸ " + timeRaw + "  " + typeRaw + "  " + titleRaw
-			if dur != "" {
-				rawRow += "  " + dur
-			}
-			row = selectedItemStyle.Width(m.width).Render(rawRow)
-		} else {
-			timeStr := timeStyle.Render(c.ConcludedAt.Local().Format("15:04"))
-			typePart := typeLabelStyle.Render(typeShortLabel(c.Type))
-			title := sessionTitle(c)
-			row = "  " + timeStr + "  " + typePart + "  " + title
-			if dur != "" {
-				row += "  " + dur
-			}
+
+		// Truncate title to fit column
+		titleRunes := []rune(titleRaw)
+		if len(titleRunes) > titleWidth {
+			titleRaw = string(titleRunes[:titleWidth-1]) + "…"
 		}
-		lines = append(lines, row)
+
+		if i == m.cursor {
+			// Selected: full-width highlight with inline color changes for type
+			gutter := "▸ "
+			timePart := fmt.Sprintf("%-*s", colTime, timeRaw)
+			typePart := inlineFgColor(typeColorCode(c.Type)) + fmt.Sprintf("%-*s", colType, typeRaw) + resetFg()
+			titlePart := fmt.Sprintf("%-*s", titleWidth, titleRaw)
+			durPart := fmt.Sprintf("%*s", colDuration, dur)
+
+			row := gutter + timePart + typePart + titlePart + durPart
+			lines = append(lines, selectedItemStyle.Width(m.width).Render(row))
+		} else {
+			// Unselected: each column individually styled
+			gutter := "  "
+			timePart := timeStyle.Render(fmt.Sprintf("%-*s", colTime, timeRaw))
+			typePart := typeLabelColorStyle(c.Type).Render(typeRaw)
+			titlePart := fmt.Sprintf("%-*s", titleWidth, titleRaw)
+			durPart := durationStyle.Render(fmt.Sprintf("%*s", colDuration, dur))
+
+			lines = append(lines, gutter+timePart+typePart+titlePart+durPart)
+		}
 	}
 
 	// Clamp to visible height with scroll.
@@ -565,25 +596,37 @@ func (m Model) renderDetailView(height int) string {
 	c := sessions[m.cursor]
 
 	var header strings.Builder
-	header.WriteString(detailHeaderStyle.Render("Session Conclusion"))
-	header.WriteString("\n")
 
-	var meta strings.Builder
-	meta.WriteString(typeBadgeStyle(c.Type).Render(c.Type))
-	meta.WriteString(" ")
-	if c.Type == "collab" && c.Prompt != "" {
-		meta.WriteString(ticketRefStyle.Render(sessionTitle(c)))
-		meta.WriteString("  ")
-	} else if c.TicketTitle != "" {
-		meta.WriteString(ticketRefStyle.Render(c.TicketTitle))
-		meta.WriteString("  ")
-	} else if c.Ticket != "" {
-		meta.WriteString("Ticket: ")
-		meta.WriteString(ticketRefStyle.Render(c.Ticket))
-		meta.WriteString("  ")
+	// Title line: badge + title
+	header.WriteString(typeBadgeStyle(c.Type).Render(c.Type))
+	header.WriteString("  ")
+	header.WriteString(detailHeaderStyle.Render(sessionTitle(c)))
+	header.WriteString("\n\n")
+
+	// Metadata rows
+	concludedLabel := detailLabelStyle.Render("Concluded")
+	concludedVal := detailValueStyle.Render(c.ConcludedAt.Local().Format("Jan 2, 2006 at 15:04"))
+	header.WriteString(concludedLabel + concludedVal + "\n")
+
+	dur := formatDuration(c.StartedAt, c.ConcludedAt)
+	if dur != "" {
+		durationLabel := detailLabelStyle.Render("Duration")
+		durationVal := detailValueStyle.Render(dur)
+		header.WriteString(durationLabel + durationVal + "\n")
 	}
-	meta.WriteString(dateStyle.Render(c.ConcludedAt.Local().Format("Jan 2, 2006 15:04")))
-	header.WriteString(detailMetaStyle.Render(meta.String()))
+
+	if c.TicketTitle != "" {
+		ticketLabel := detailLabelStyle.Render("Ticket")
+		ticketVal := ticketRefStyle.Render(c.TicketTitle)
+		header.WriteString(ticketLabel + ticketVal + "\n")
+	} else if c.Ticket != "" {
+		ticketLabel := detailLabelStyle.Render("Ticket")
+		ticketVal := ticketRefStyle.Render(c.Ticket)
+		header.WriteString(ticketLabel + ticketVal + "\n")
+	}
+
+	header.WriteString("\n")
+	header.WriteString(dividerStyle.Render(strings.Repeat("─", min(m.width, 60))))
 	header.WriteString("\n\n")
 
 	headerStr := header.String()
@@ -676,9 +719,6 @@ func typeShortLabel(t string) string {
 func sessionTitle(c sdk.ConclusionSummary) string {
 	if c.Type == "collab" {
 		if c.Prompt != "" {
-			if len(c.Prompt) > 60 {
-				return c.Prompt[:57] + "..."
-			}
 			return c.Prompt
 		}
 		return "Collab session"

@@ -720,7 +720,7 @@ func (m Model) renderOrphanModal() string {
 		title = title[:27] + "..."
 	}
 	prompt := fmt.Sprintf("Orphaned session found for \"%s\"", title)
-	options := "[r]esume  [f]resh  [D]elete  [c]ancel"
+	options := "r resume  f fresh  D delete  c cancel"
 	return statusBarStyle.Render(prompt) + "\n" + helpBarStyle.Render(options)
 }
 
@@ -731,6 +731,6 @@ func (m Model) renderDeleteModal() string {
 		title = title[:27] + "..."
 	}
 	prompt := fmt.Sprintf("Delete orphaned session for \"%s\"?", title)
-	options := "[y]es  [n]o"
+	options := "y yes  n no"
 	return statusBarStyle.Render(prompt) + "\n" + helpBarStyle.Render(options)
 }

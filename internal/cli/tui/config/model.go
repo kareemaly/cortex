@@ -545,7 +545,7 @@ func (m Model) renderResetModal() string {
 		path = path[:37] + "..."
 	}
 	prompt := fmt.Sprintf("Reset \"%s\" to default?", path)
-	options := "[y]es  [n]o"
+	options := "y yes  n no"
 	return statusBarStyle.Render(prompt) + "\n" + helpBarStyle.Render(options)
 }
 

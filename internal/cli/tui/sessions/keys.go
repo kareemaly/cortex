@@ -34,9 +34,9 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 }
 
 func listHelpText() string {
-	return "[←/→] dates  [j/k] navigate  [o/↵] open  [r] refresh  [!] logs  [q]uit"
+	return "←/→ dates  j/k navigate  o/↵ open  r refresh  ! logs  q quit"
 }
 
 func detailHelpText() string {
-	return "[j/k/ctrl+u/d] scroll  [esc] back  [!] logs  [q]uit"
+	return "j/k scroll  esc back  ! logs  q quit"
 }

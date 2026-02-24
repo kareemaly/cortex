@@ -47,5 +47,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the kanban board.
 func helpText() string {
-	return "[s]pawn  [o/↵] open  [f]ocus  [r]efresh  [h/l] columns  [j/k/gg/G] navigate  [!] logs  [q]uit"
+	return "h/l columns  j/k navigate  s spawn  o/↵ open  f focus  r refresh  ! logs  q quit"
 }
