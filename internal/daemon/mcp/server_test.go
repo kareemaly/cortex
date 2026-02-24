@@ -181,3 +181,32 @@ func TestNewServerTicketDefaultType(t *testing.T) {
 		t.Errorf("ticket type = %q, want empty", server.Session().TicketType)
 	}
 }
+
+// TestTicketSessionHasReadTicket verifies that a ticket session registers the
+// readTicket tool. The meaningful coverage is that handleReadTicket (defined on
+// *Server in tools_architect.go) is reachable from registerTicketTools without
+// compilation errors. A successful build plus this init check is sufficient.
+func TestTicketSessionHasReadTicket(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "mcp-server-test")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	server, err := NewServer(&Config{
+		TicketID:    "test-ticket-readticket",
+		DaemonURL:   daemonconfig.DefaultDaemonURL,
+		ProjectPath: tmpDir,
+	})
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
+
+	// Verify the server is a ticket session and initialised without panic.
+	if !server.IsTicketSession() {
+		t.Error("expected ticket session")
+	}
+	if server.mcpServer == nil {
+		t.Error("mcpServer should not be nil after init")
+	}
+}

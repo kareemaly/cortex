@@ -10,6 +10,12 @@ import (
 
 // registerTicketTools registers all tools available to ticket sessions.
 func (s *Server) registerTicketTools() {
+	// Read ticket (for cross-reference context)
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "readTicket",
+		Description: "Read full ticket details by ID. Use this to get context on referenced tickets.",
+	}, s.handleReadTicket)
+
 	// Conclude session tool
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",

@@ -46,7 +46,7 @@ type CreateTicketInput struct {
 	Type        string   `json:"type,omitempty" jsonschema:"The ticket type. Must match a type defined in the project's cortex.yaml ticket config. Defaults to 'work' if not specified."`
 	Repo        string   `json:"repo,omitempty" jsonschema:"Optional repository path for this ticket"`
 	DueDate     string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
-	References  []string `json:"references,omitempty" jsonschema:"Cross-references (e.g., 'doc:abc123', 'ticket:xyz789')"`
+	References  []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"Free-form tags for categorization"`
 	ProjectPath string   `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
@@ -57,7 +57,7 @@ type UpdateTicketInput struct {
 	Title       *string   `json:"title,omitempty" jsonschema:"New title (optional)"`
 	Body        *string   `json:"body,omitempty" jsonschema:"New body (optional)"`
 	Type        *string   `json:"type,omitempty" jsonschema:"New ticket type (optional). Must match a type defined in project config."`
-	References  *[]string `json:"references,omitempty" jsonschema:"New references (optional, full replacement)"`
+	References  *[]string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (optional, full replacement — plain ticket IDs only, no prefix scheme)"`
 	Tags        *[]string `json:"tags,omitempty" jsonschema:"New tags (optional, full replacement)"`
 	ProjectPath string    `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
@@ -254,79 +254,6 @@ type ListConclusionsOutput struct {
 // ReadConclusionOutput is the output for the readSession tool.
 type ReadConclusionOutput struct {
 	Conclusion ConclusionOutput `json:"conclusion"`
-}
-
-// Note input types
-
-// ListNotesInput is the input for the listNotes tool.
-type ListNotesInput struct {
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
-}
-
-// CreateNoteInput is the input for the createNote tool.
-type CreateNoteInput struct {
-	Text        string `json:"text" jsonschema:"The note/reminder text (required)"`
-	Due         string `json:"due,omitempty" jsonschema:"Optional due date in YYYY-MM-DD format"`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
-}
-
-// UpdateNoteInput is the input for the updateNote tool.
-type UpdateNoteInput struct {
-	ID          string  `json:"id" jsonschema:"The note ID to update"`
-	Text        *string `json:"text,omitempty" jsonschema:"New text (optional)"`
-	Due         *string `json:"due,omitempty" jsonschema:"New due date in YYYY-MM-DD format (optional, empty string to clear)"`
-	ProjectPath string  `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
-}
-
-// DeleteNoteInput is the input for the deleteNote tool.
-type DeleteNoteInput struct {
-	ID string `json:"id" jsonschema:"The note ID to delete"`
-}
-
-// Note output types
-
-// NoteOutput is a note representation for MCP.
-type NoteOutput struct {
-	ID      string `json:"id"`
-	Text    string `json:"text"`
-	Due     string `json:"due,omitempty"`
-	Created string `json:"created"`
-}
-
-// ListNotesOutput is the output for the listNotes tool.
-type ListNotesOutput struct {
-	Notes []NoteOutput `json:"notes"`
-	Total int          `json:"total"`
-}
-
-// CreateNoteOutput is the output for the createNote tool.
-type CreateNoteOutput struct {
-	Note NoteOutput `json:"note"`
-}
-
-// UpdateNoteOutput is the output for the updateNote tool.
-type UpdateNoteOutput struct {
-	Note NoteOutput `json:"note"`
-}
-
-// DeleteNoteOutput is the output for the deleteNote tool.
-type DeleteNoteOutput struct {
-	Success bool   `json:"success"`
-	ID      string `json:"id"`
-}
-
-// noteResponseToOutput converts an SDK NoteResponse to an MCP NoteOutput.
-func noteResponseToOutput(r *types.NoteResponse) NoteOutput {
-	dueStr := ""
-	if r.Due != nil {
-		dueStr = r.Due.Format(time.DateOnly)
-	}
-	return NoteOutput{
-		ID:      r.ID,
-		Text:    r.Text,
-		Due:     dueStr,
-		Created: r.Created.Format(time.RFC3339),
-	}
 }
 
 // ticketSummaryResponseToMCP maps a shared TicketSummary (from the HTTP API)
