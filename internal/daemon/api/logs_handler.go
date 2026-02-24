@@ -122,7 +122,7 @@ func (h *LogsHandlers) DaemonStatus(w http.ResponseWriter, r *http.Request) {
 	projectCount := 0
 	cfg, err := daemonconfig.Load()
 	if err == nil {
-		projectCount = len(cfg.Projects)
+		projectCount = len(cfg.Architects)
 	}
 
 	writeJSON(w, http.StatusOK, DaemonStatusResponse{

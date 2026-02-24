@@ -15,46 +15,47 @@ import (
 )
 
 var (
-	initGlobalOnly bool
-	initForce      bool
-	initAgent      string
+	architectCreateGlobalOnly bool
+	architectCreateForce      bool
+	architectCreateAgent      string
 )
 
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize project",
-	Long: `Initialize Cortex for a project.
+var architectCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Initialize a new architect workspace",
+	Long: `Initialize Cortex for an architect workspace.
 
 Creates the global ~/.cortex/settings.yaml and sets up a cortex.yaml
 in the current directory. Use --global-only to skip project setup.
 
 The agent is auto-detected from your PATH. If both claude and opencode are
 available, you'll be prompted to choose. Use --agent to skip detection.`,
-	RunE: runInit,
+	RunE: runArchitectCreate,
 }
 
 func init() {
-	initCmd.Flags().BoolVarP(&initGlobalOnly, "global-only", "g", false, "Only set up global ~/.cortex/, skip project setup")
-	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing config files")
-	initCmd.Flags().StringVarP(&initAgent, "agent", "a", "", "Agent type: claude, opencode (auto-detected if not set)")
-	rootCmd.AddCommand(initCmd)
+	architectCreateCmd.Flags().BoolVarP(&architectCreateGlobalOnly, "global-only", "g", false, "Only set up global ~/.cortex/, skip project setup")
+	architectCreateCmd.Flags().BoolVarP(&architectCreateForce, "force", "f", false, "Overwrite existing config files")
+	architectCreateCmd.Flags().StringVarP(&architectCreateAgent, "agent", "a", "", "Agent type: claude, opencode (auto-detected if not set)")
+	architectCmd.AddCommand(architectCreateCmd)
 }
 
-func runInit(cmd *cobra.Command, args []string) error {
+func runArchitectCreate(cmd *cobra.Command, args []string) error {
 	agentExplicit := cmd.Flags().Changed("agent")
+	agent := architectCreateAgent
 
 	// Resolve agent for project setup
-	if !initGlobalOnly {
+	if !architectCreateGlobalOnly {
 		if agentExplicit {
 			// Validate explicit agent flag
-			switch initAgent {
+			switch agent {
 			case "claude", "opencode":
 				// valid — verify binary exists
-				if _, err := exec.LookPath(initAgent); err != nil {
-					return fmt.Errorf("%s binary not found in PATH; install it first", initAgent)
+				if _, err := exec.LookPath(agent); err != nil {
+					return fmt.Errorf("%s binary not found in PATH; install it first", agent)
 				}
 			default:
-				return fmt.Errorf("invalid agent type %q: must be claude or opencode", initAgent)
+				return fmt.Errorf("invalid agent type %q: must be claude or opencode", agent)
 			}
 		} else {
 			// Auto-detect
@@ -63,33 +64,33 @@ func runInit(cmd *cobra.Command, args []string) error {
 			case 0:
 				return fmt.Errorf("no supported agent found in PATH\n\nInstall one of:\n  claude  — https://docs.anthropic.com/en/docs/claude-code\n  opencode — https://opencode.ai")
 			case 1:
-				initAgent = agents.OnlyAgent()
-				fmt.Printf("Detected agent: %s\n\n", initAgent)
+				agent = agents.OnlyAgent()
+				fmt.Printf("Detected agent: %s\n\n", agent)
 			case 2:
 				isTTY := isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd())
 				if !isTTY {
 					return fmt.Errorf("both claude and opencode found; use --agent to select one")
 				}
-				selected, err := promptAgentChoice()
+				selected, err := architectPromptAgentChoice()
 				if err != nil {
 					return err
 				}
-				initAgent = selected
+				agent = selected
 			}
 		}
 	}
 
 	opts := install.Options{
-		Agent: initAgent,
-		Force: initForce,
+		Agent: agent,
+		Force: architectCreateForce,
 	}
 
-	if !initGlobalOnly {
+	if !architectCreateGlobalOnly {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
-		opts.ProjectPath = cwd
+		opts.ArchitectPath = cwd
 	}
 
 	result, err := install.Run(opts)
@@ -102,14 +103,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 	printItems(result.GlobalItems)
 
 	// Print project setup results if applicable
-	if len(result.ProjectItems) > 0 {
-		fmt.Printf("\nProject setup (%s):\n", result.ProjectName)
-		printItems(result.ProjectItems)
+	if len(result.ArchitectItems) > 0 {
+		fmt.Printf("\nProject setup (%s):\n", result.ArchitectName)
+		printItems(result.ArchitectItems)
 
 		// Print registration status
 		fmt.Println("\nGlobal registry:")
 		if result.RegistrationError != nil {
-			fmt.Printf("  %s Failed to register project: %v\n", crossMark(), result.RegistrationError)
+			fmt.Printf("  %s Failed to register architect: %v\n", crossMark(), result.RegistrationError)
 		} else if result.Registered {
 			fmt.Printf("  %s Registered in ~/.cortex/settings.yaml\n", checkMark())
 		} else {
@@ -139,8 +140,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// promptAgentChoice presents an interactive numbered menu for agent selection.
-func promptAgentChoice() (string, error) {
+// architectPromptAgentChoice presents an interactive numbered menu for agent selection.
+func architectPromptAgentChoice() (string, error) {
 	fmt.Println("Multiple agents detected. Select one:")
 	fmt.Println("  1) claude")
 	fmt.Println("  2) opencode")
@@ -163,44 +164,4 @@ func promptAgentChoice() (string, error) {
 	default:
 		return "", fmt.Errorf("invalid choice %q: enter 1 or 2", input)
 	}
-}
-
-func printItems(items []install.SetupItem) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		homeDir = "" // Acceptable fallback for display purposes only
-	}
-
-	for _, item := range items {
-		path := item.Path
-		// Replace home directory with ~
-		if homeDir != "" && strings.HasPrefix(path, homeDir) {
-			path = "~" + path[len(homeDir):]
-		}
-
-		switch item.Status {
-		case install.StatusCreated:
-			fmt.Printf("  %s Created %s\n", checkMark(), path)
-		case install.StatusExists:
-			fmt.Printf("  %s %s already exists\n", bullet(), path)
-		case install.StatusSkipped:
-			fmt.Printf("  - Skipped %s\n", path)
-		}
-
-		if item.Error != nil {
-			fmt.Printf("    Error: %v\n", item.Error)
-		}
-	}
-}
-
-func checkMark() string {
-	return "\u2713"
-}
-
-func crossMark() string {
-	return "\u2717"
-}
-
-func bullet() string {
-	return "\u2022"
 }

@@ -21,13 +21,13 @@ const (
 
 // Event represents a change in the system.
 type Event struct {
-	Type        EventType `json:"type"`
-	ProjectPath string    `json:"project_path"`
-	TicketID    string    `json:"ticket_id"`
-	Payload     any       `json:"payload,omitempty"`
+	Type          EventType `json:"type"`
+	ArchitectPath string    `json:"architect_path"`
+	TicketID      string    `json:"ticket_id"`
+	Payload       any       `json:"payload,omitempty"`
 }
 
-// Bus is an in-process pub/sub event bus keyed by project path.
+// Bus is an in-process pub/sub event bus keyed by architect path.
 type Bus struct {
 	mu          sync.RWMutex
 	subscribers map[string]map[*subscriber]struct{}
@@ -44,13 +44,13 @@ func NewBus() *Bus {
 	}
 }
 
-// Emit sends an event to all subscribers for the event's project path.
+// Emit sends an event to all subscribers for the event's architect path.
 // Non-blocking: slow consumers will miss events.
 func (b *Bus) Emit(e Event) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	subs, ok := b.subscribers[e.ProjectPath]
+	subs, ok := b.subscribers[e.ArchitectPath]
 	if !ok {
 		return
 	}
@@ -61,24 +61,24 @@ func (b *Bus) Emit(e Event) {
 		default:
 			slog.Warn("event dropped: subscriber buffer full",
 				"type", string(e.Type),
-				"project", e.ProjectPath,
+				"architect", e.ArchitectPath,
 			)
 		}
 	}
 }
 
-// Subscribe registers a listener for events on the given project path.
+// Subscribe registers a listener for events on the given architect path.
 // Returns a receive-only channel and an unsubscribe function.
-func (b *Bus) Subscribe(projectPath string) (<-chan Event, func()) {
+func (b *Bus) Subscribe(architectPath string) (<-chan Event, func()) {
 	sub := &subscriber{
 		ch: make(chan Event, 64),
 	}
 
 	b.mu.Lock()
-	subs, ok := b.subscribers[projectPath]
+	subs, ok := b.subscribers[architectPath]
 	if !ok {
 		subs = make(map[*subscriber]struct{})
-		b.subscribers[projectPath] = subs
+		b.subscribers[architectPath] = subs
 	}
 	subs[sub] = struct{}{}
 	b.mu.Unlock()
@@ -87,10 +87,10 @@ func (b *Bus) Subscribe(projectPath string) (<-chan Event, func()) {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 
-		if subs, ok := b.subscribers[projectPath]; ok {
+		if subs, ok := b.subscribers[architectPath]; ok {
 			delete(subs, sub)
 			if len(subs) == 0 {
-				delete(b.subscribers, projectPath)
+				delete(b.subscribers, architectPath)
 			}
 		}
 		close(sub.ch)

@@ -7,7 +7,7 @@ import (
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
-	"github.com/kareemaly/cortex/internal/project/config"
+	"github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/pkg/version"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -23,10 +23,10 @@ type Config struct {
 	// Only used for ticket sessions.
 	TicketType string
 
-	// ProjectPath is the project root for hook execution.
-	// If set, project config is loaded from this path.
+	// ArchitectPath is the architect root for hook execution.
+	// If set, architect config is loaded from this path.
 	// Required for architect sessions.
-	ProjectPath string
+	ArchitectPath string
 
 	// TmuxSession is the tmux session name for spawning agents.
 	// Required for spawn operations - no default value.
@@ -96,16 +96,16 @@ func NewServer(cfg *Config) (*Server, error) {
 		if cfg.DaemonURL == "" {
 			return nil, fmt.Errorf("ticket sessions require CORTEX_DAEMON_URL to be set")
 		}
-		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ProjectPath)
+		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ArchitectPath)
 
 	default:
 		// Architect sessions route all operations through the daemon HTTP API
-		if cfg.ProjectPath == "" {
-			return nil, fmt.Errorf("MCP server requires CORTEX_PROJECT_PATH to be set")
+		if cfg.ArchitectPath == "" {
+			return nil, fmt.Errorf("MCP server requires CORTEX_ARCHITECT_PATH to be set")
 		}
 
 		var err error
-		projectCfg, err = config.Load(cfg.ProjectPath)
+		projectCfg, err = config.Load(cfg.ArchitectPath)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +114,7 @@ func NewServer(cfg *Config) (*Server, error) {
 			cfg.DaemonURL = daemonconfig.DefaultDaemonURL
 		}
 
-		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ProjectPath)
+		sdkClient = sdk.NewClient(cfg.DaemonURL, cfg.ArchitectPath)
 	}
 
 	// Create MCP server

@@ -53,7 +53,7 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	sessStore := h.deps.SessionManager.GetStore(projectPath)
 
@@ -72,7 +72,7 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 		h.deps.Bus.Emit(events.Event{
 			Type:        events.SessionStatus,
-			ProjectPath: projectPath,
+			ArchitectPath: projectPath,
 			TicketID:    req.TicketID,
 			Payload: map[string]any{
 				"status": req.Status,
@@ -118,7 +118,7 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 	h.deps.Bus.Emit(events.Event{
 		Type:        events.SessionStatus,
-		ProjectPath: projectPath,
+		ArchitectPath: projectPath,
 		TicketID:    req.TicketID,
 		Payload: map[string]any{
 			"status": req.Status,

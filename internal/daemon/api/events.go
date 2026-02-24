@@ -25,7 +25,7 @@ func (h *EventHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	ch, unsubscribe := h.deps.Bus.Subscribe(projectPath)
 	defer unsubscribe()

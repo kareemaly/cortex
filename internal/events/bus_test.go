@@ -11,7 +11,7 @@ func TestEmitAndReceive(t *testing.T) {
 	ch, unsub := bus.Subscribe("/project")
 	defer unsub()
 
-	bus.Emit(Event{Type: TicketCreated, ProjectPath: "/project", TicketID: "t1"})
+	bus.Emit(Event{Type: TicketCreated, ArchitectPath: "/project", TicketID: "t1"})
 
 	select {
 	case e := <-ch:
@@ -33,7 +33,7 @@ func TestMultipleSubscribers(t *testing.T) {
 	ch2, unsub2 := bus.Subscribe("/project")
 	defer unsub2()
 
-	bus.Emit(Event{Type: TicketUpdated, ProjectPath: "/project", TicketID: "t1"})
+	bus.Emit(Event{Type: TicketUpdated, ArchitectPath: "/project", TicketID: "t1"})
 
 	for i, ch := range []<-chan Event{ch1, ch2} {
 		select {
@@ -54,7 +54,7 @@ func TestProjectIsolation(t *testing.T) {
 	chB, unsubB := bus.Subscribe("/projectB")
 	defer unsubB()
 
-	bus.Emit(Event{Type: TicketCreated, ProjectPath: "/projectA", TicketID: "t1"})
+	bus.Emit(Event{Type: TicketCreated, ArchitectPath: "/projectA", TicketID: "t1"})
 
 	select {
 	case <-chA:
@@ -78,7 +78,7 @@ func TestSlowConsumerNonBlocking(t *testing.T) {
 
 	// Fill the buffer (capacity 64)
 	for range 100 {
-		bus.Emit(Event{Type: TicketCreated, ProjectPath: "/project", TicketID: "t1"})
+		bus.Emit(Event{Type: TicketCreated, ArchitectPath: "/project", TicketID: "t1"})
 	}
 
 	// Emit should not block, verify we can drain what's in the buffer
@@ -127,7 +127,7 @@ func TestConcurrentSafety(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for range 100 {
-			bus.Emit(Event{Type: TicketCreated, ProjectPath: "/project", TicketID: "t1"})
+			bus.Emit(Event{Type: TicketCreated, ArchitectPath: "/project", TicketID: "t1"})
 		}
 	}()
 
@@ -137,7 +137,7 @@ func TestConcurrentSafety(t *testing.T) {
 		ch, unsub := bus.Subscribe("/project")
 		defer unsub()
 		for range 50 {
-			bus.Emit(Event{Type: TicketUpdated, ProjectPath: "/project", TicketID: "t2"})
+			bus.Emit(Event{Type: TicketUpdated, ArchitectPath: "/project", TicketID: "t2"})
 		}
 		// Drain
 		for {

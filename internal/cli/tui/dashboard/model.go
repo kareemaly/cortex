@@ -38,7 +38,7 @@ type row struct {
 
 // projectData holds per-project state.
 type projectData struct {
-	project   sdk.ProjectResponse
+	project   sdk.ArchitectResponse
 	tickets   *sdk.ListAllTicketsResponse
 	architect *sdk.ArchitectStateResponse
 	loading   bool
@@ -107,18 +107,18 @@ type Model struct {
 // --- Message types ---
 
 // ProjectsLoadedMsg is sent when the project list is fetched.
-type ProjectsLoadedMsg struct {
-	Projects []sdk.ProjectResponse
+type ArchitectsLoadedMsg struct {
+	Architects []sdk.ArchitectResponse
 }
 
 // ProjectsErrorMsg is sent when fetching projects fails.
-type ProjectsErrorMsg struct {
+type ArchitectsErrorMsg struct {
 	Err error
 }
 
 // ProjectDetailLoadedMsg is sent when a project's detail data is loaded.
-type ProjectDetailLoadedMsg struct {
-	ProjectPath string
+type ArchitectDetailLoadedMsg struct {
+	ArchitectPath string
 	Tickets     *sdk.ListAllTicketsResponse
 	Architect   *sdk.ArchitectStateResponse
 	Err         error
@@ -126,19 +126,19 @@ type ProjectDetailLoadedMsg struct {
 
 // SSEConnectedMsg is sent when an SSE subscription is established.
 type SSEConnectedMsg struct {
-	ProjectPath string
+	ArchitectPath string
 	Ch          <-chan sdk.Event
 	Cancel      context.CancelFunc
 }
 
 // SSEEventMsg is sent when an SSE event is received for a project.
 type SSEEventMsg struct {
-	ProjectPath string
+	ArchitectPath string
 }
 
 // SpawnArchitectMsg is sent when architect spawn completes.
 type SpawnArchitectMsg struct {
-	ProjectPath string
+	ArchitectPath string
 	Err         error
 }
 
@@ -153,14 +153,14 @@ type FocusErrorMsg struct {
 }
 
 // UnlinkProjectMsg is sent when project unlink completes.
-type UnlinkProjectMsg struct {
-	ProjectPath string
+type UnlinkArchitectMsg struct {
+	ArchitectPath string
 	Err         error
 }
 
 // SessionKilledMsg is sent when a session kill completes.
 type SessionKilledMsg struct {
-	ProjectPath string
+	ArchitectPath string
 }
 
 // SessionKillErrorMsg is sent when a session kill fails.
@@ -170,12 +170,12 @@ type SessionKillErrorMsg struct {
 
 // SSEDisconnectedMsg is sent when a project's SSE connection is lost.
 type SSEDisconnectedMsg struct {
-	ProjectPath string
+	ArchitectPath string
 }
 
 // SSEReconnectTickMsg is sent when it's time to attempt SSE reconnection for a project.
 type SSEReconnectTickMsg struct {
-	ProjectPath string
+	ArchitectPath string
 }
 
 // PollTickMsg is sent periodically as a safety-net data refresh.
@@ -236,12 +236,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
 
-	case ProjectsLoadedMsg:
+	case ArchitectsLoadedMsg:
 		m.loading = false
 		m.err = nil
-		m.projects = make([]projectData, len(msg.Projects))
+		m.projects = make([]projectData, len(msg.Architects))
 		var cmds []tea.Cmd
-		for i, p := range msg.Projects {
+		for i, p := range msg.Architects {
 			m.projects[i] = projectData{project: p, loading: true}
 			if p.Exists {
 				cmds = append(cmds, m.loadProjectDetail(p.Path))
@@ -249,78 +249,78 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.rebuildRows()
-		m.logBuf.Debugf("api", "projects loaded: %d", len(msg.Projects))
+		m.logBuf.Debugf("api", "projects loaded: %d", len(msg.Architects))
 		return m, tea.Batch(cmds...)
 
-	case ProjectsErrorMsg:
+	case ArchitectsErrorMsg:
 		m.loading = false
 		m.err = msg.Err
 		m.logBuf.Errorf("api", "failed to load projects: %s", msg.Err)
 		return m, nil
 
-	case ProjectDetailLoadedMsg:
-		idx := m.findProject(msg.ProjectPath)
+	case ArchitectDetailLoadedMsg:
+		idx := m.findProject(msg.ArchitectPath)
 		if idx < 0 {
 			return m, nil
 		}
 		m.projects[idx].loading = false
 		if msg.Err != nil {
 			m.projects[idx].err = msg.Err
-			m.logBuf.Errorf("api", "failed to load project detail: %s: %s", filepath.Base(msg.ProjectPath), msg.Err)
+			m.logBuf.Errorf("api", "failed to load project detail: %s: %s", filepath.Base(msg.ArchitectPath), msg.Err)
 		} else {
 			m.projects[idx].tickets = msg.Tickets
 			m.projects[idx].architect = msg.Architect
 			m.projects[idx].err = nil
-			m.logBuf.Debugf("api", "project detail loaded: %s", filepath.Base(msg.ProjectPath))
+			m.logBuf.Debugf("api", "project detail loaded: %s", filepath.Base(msg.ArchitectPath))
 		}
 		m.rebuildRows()
 		return m, nil
 
 	case SSEConnectedMsg:
 		// Cancel old connection for same project if replacing.
-		if oldCancel, ok := m.sseContexts[msg.ProjectPath]; ok {
+		if oldCancel, ok := m.sseContexts[msg.ArchitectPath]; ok {
 			oldCancel()
 		}
-		m.sseContexts[msg.ProjectPath] = msg.Cancel
-		m.sseChannels[msg.ProjectPath] = msg.Ch
-		delete(m.sseBackoffs, msg.ProjectPath)
-		m.logBuf.Infof("sse", "connected: %s", filepath.Base(msg.ProjectPath))
-		idx := m.findProject(msg.ProjectPath)
-		cmds := []tea.Cmd{m.waitForProjectEvent(msg.ProjectPath)}
+		m.sseContexts[msg.ArchitectPath] = msg.Cancel
+		m.sseChannels[msg.ArchitectPath] = msg.Ch
+		delete(m.sseBackoffs, msg.ArchitectPath)
+		m.logBuf.Infof("sse", "connected: %s", filepath.Base(msg.ArchitectPath))
+		idx := m.findProject(msg.ArchitectPath)
+		cmds := []tea.Cmd{m.waitForProjectEvent(msg.ArchitectPath)}
 		if idx >= 0 {
-			cmds = append(cmds, m.loadProjectDetail(msg.ProjectPath))
+			cmds = append(cmds, m.loadProjectDetail(msg.ArchitectPath))
 		}
 		return m, tea.Batch(cmds...)
 
 	case SSEEventMsg:
-		m.logBuf.Debugf("sse", "event: %s", filepath.Base(msg.ProjectPath))
+		m.logBuf.Debugf("sse", "event: %s", filepath.Base(msg.ArchitectPath))
 		// Reload this project's data and wait for next event.
-		idx := m.findProject(msg.ProjectPath)
-		cmds := []tea.Cmd{m.waitForProjectEvent(msg.ProjectPath)}
+		idx := m.findProject(msg.ArchitectPath)
+		cmds := []tea.Cmd{m.waitForProjectEvent(msg.ArchitectPath)}
 		if idx >= 0 {
-			cmds = append(cmds, m.loadProjectDetail(msg.ProjectPath))
+			cmds = append(cmds, m.loadProjectDetail(msg.ArchitectPath))
 		}
 		return m, tea.Batch(cmds...)
 
 	case SSEDisconnectedMsg:
 		// Guard: if a channel already exists for this project, the disconnect is stale; ignore.
-		if ch, ok := m.sseChannels[msg.ProjectPath]; ok && ch != nil {
+		if ch, ok := m.sseChannels[msg.ArchitectPath]; ok && ch != nil {
 			return m, nil
 		}
-		if cancel, ok := m.sseContexts[msg.ProjectPath]; ok {
+		if cancel, ok := m.sseContexts[msg.ArchitectPath]; ok {
 			cancel()
-			delete(m.sseContexts, msg.ProjectPath)
+			delete(m.sseContexts, msg.ArchitectPath)
 		}
-		delete(m.sseChannels, msg.ProjectPath)
-		m.sseBackoffs[msg.ProjectPath] = nextBackoff(m.sseBackoffs[msg.ProjectPath])
-		m.logBuf.Warnf("sse", "disconnected: %s, reconnecting in %s", filepath.Base(msg.ProjectPath), m.sseBackoffs[msg.ProjectPath])
-		return m, m.scheduleSSEReconnect(msg.ProjectPath)
+		delete(m.sseChannels, msg.ArchitectPath)
+		m.sseBackoffs[msg.ArchitectPath] = nextBackoff(m.sseBackoffs[msg.ArchitectPath])
+		m.logBuf.Warnf("sse", "disconnected: %s, reconnecting in %s", filepath.Base(msg.ArchitectPath), m.sseBackoffs[msg.ArchitectPath])
+		return m, m.scheduleSSEReconnect(msg.ArchitectPath)
 
 	case SSEReconnectTickMsg:
 		// Only reconnect if the project still exists.
-		if m.findProject(msg.ProjectPath) >= 0 {
-			m.logBuf.Debugf("sse", "attempting reconnect: %s", filepath.Base(msg.ProjectPath))
-			return m, m.subscribeProjectEvents(msg.ProjectPath)
+		if m.findProject(msg.ArchitectPath) >= 0 {
+			m.logBuf.Debugf("sse", "attempting reconnect: %s", filepath.Base(msg.ArchitectPath))
+			return m, m.subscribeProjectEvents(msg.ArchitectPath)
 		}
 		return m, nil
 
@@ -338,15 +338,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.statusMsg = fmt.Sprintf("Spawn error: %s", msg.Err)
 			m.statusIsError = true
-			m.logBuf.Errorf("spawn", "architect spawn failed: %s: %s", filepath.Base(msg.ProjectPath), msg.Err)
+			m.logBuf.Errorf("spawn", "architect spawn failed: %s: %s", filepath.Base(msg.ArchitectPath), msg.Err)
 		} else {
 			m.statusMsg = "Architect spawned"
 			m.statusIsError = false
-			m.logBuf.Infof("spawn", "architect spawned: %s", filepath.Base(msg.ProjectPath))
+			m.logBuf.Infof("spawn", "architect spawned: %s", filepath.Base(msg.ArchitectPath))
 			// Reload project detail.
-			idx := m.findProject(msg.ProjectPath)
+			idx := m.findProject(msg.ArchitectPath)
 			if idx >= 0 {
-				return m, tea.Batch(m.loadProjectDetail(msg.ProjectPath), m.clearStatusAfterDelay())
+				return m, tea.Batch(m.loadProjectDetail(msg.ArchitectPath), m.clearStatusAfterDelay())
 			}
 		}
 		return m, m.clearStatusAfterDelay()
@@ -363,20 +363,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logBuf.Errorf("focus", "focus failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
-	case UnlinkProjectMsg:
+	case UnlinkArchitectMsg:
 		if msg.Err != nil {
 			m.statusMsg = fmt.Sprintf("Unlink error: %s", msg.Err)
 			m.statusIsError = true
-			m.logBuf.Errorf("unlink", "unlink failed: %s: %s", filepath.Base(msg.ProjectPath), msg.Err)
+			m.logBuf.Errorf("unlink", "unlink failed: %s: %s", filepath.Base(msg.ArchitectPath), msg.Err)
 		} else {
 			m.statusMsg = "Project unlinked"
 			m.statusIsError = false
-			m.logBuf.Infof("unlink", "project unlinked: %s", filepath.Base(msg.ProjectPath))
+			m.logBuf.Infof("unlink", "project unlinked: %s", filepath.Base(msg.ArchitectPath))
 			// Cancel any SSE subscription for this project.
-			if cancel, ok := m.sseContexts[msg.ProjectPath]; ok {
+			if cancel, ok := m.sseContexts[msg.ArchitectPath]; ok {
 				cancel()
-				delete(m.sseContexts, msg.ProjectPath)
-				delete(m.sseChannels, msg.ProjectPath)
+				delete(m.sseContexts, msg.ArchitectPath)
+				delete(m.sseChannels, msg.ArchitectPath)
 			}
 			// Reload projects.
 			m.loading = true
@@ -389,10 +389,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showKillConfirm = false
 		m.statusMsg = "Session killed"
 		m.statusIsError = false
-		m.logBuf.Infof("kill", "session killed: %s", filepath.Base(msg.ProjectPath))
-		idx := m.findProject(msg.ProjectPath)
+		m.logBuf.Infof("kill", "session killed: %s", filepath.Base(msg.ArchitectPath))
+		idx := m.findProject(msg.ArchitectPath)
 		if idx >= 0 {
-			return m, tea.Batch(m.loadProjectDetail(msg.ProjectPath), m.clearStatusAfterDelay())
+			return m, tea.Batch(m.loadProjectDetail(msg.ArchitectPath), m.clearStatusAfterDelay())
 		}
 		return m, m.clearStatusAfterDelay()
 
@@ -568,7 +568,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Unlink project.
 	if isKey(msg, KeyUnlink) {
-		return m.handleUnlinkProject()
+		return m.handleUnlinkArchitect()
 	}
 
 	// Refresh.
@@ -657,8 +657,8 @@ func (m Model) handleSpawnArchitect() (tea.Model, tea.Cmd) {
 	return m, m.spawnArchitect(pd.project.Path)
 }
 
-// handleUnlinkProject initiates unlink confirmation for the selected project.
-func (m Model) handleUnlinkProject() (tea.Model, tea.Cmd) {
+// handleUnlinkArchitect initiates unlink confirmation for the selected project.
+func (m Model) handleUnlinkArchitect() (tea.Model, tea.Cmd) {
 	if m.cursor < 0 || m.cursor >= len(m.rows) {
 		return m, nil
 	}
@@ -805,7 +805,7 @@ func (m Model) View() string {
 
 	// Empty state.
 	if len(m.projects) == 0 {
-		b.WriteString(loadingStyle.Render("No projects registered. Use 'cortex init' in a project directory."))
+		b.WriteString(loadingStyle.Render("No projects registered. Use 'cortex architect create' in a project directory."))
 		b.WriteString("\n\n")
 		b.WriteString(helpBarStyle.Render("[r]efresh  [q]uit"))
 		return b.String()
@@ -1240,11 +1240,11 @@ func formatDuration(d time.Duration) string {
 // loadProjects fetches the project list.
 func (m Model) loadProjects() tea.Cmd {
 	return func() tea.Msg {
-		resp, err := m.globalClient.ListProjects()
+		resp, err := m.globalClient.ListArchitects()
 		if err != nil {
-			return ProjectsErrorMsg{Err: err}
+			return ArchitectsErrorMsg{Err: err}
 		}
-		return ProjectsLoadedMsg{Projects: resp.Projects}
+		return ArchitectsLoadedMsg{Architects: resp.Architects}
 	}
 }
 
@@ -1255,14 +1255,14 @@ func (m Model) loadProjectDetail(projectPath string) tea.Cmd {
 
 		tickets, err := client.ListAllTickets("", nil)
 		if err != nil {
-			return ProjectDetailLoadedMsg{ProjectPath: projectPath, Err: err}
+			return ArchitectDetailLoadedMsg{ArchitectPath: projectPath, Err: err}
 		}
 
 		// Architect state is non-fatal.
 		architect, _ := client.GetArchitect()
 
-		return ProjectDetailLoadedMsg{
-			ProjectPath: projectPath,
+		return ArchitectDetailLoadedMsg{
+			ArchitectPath: projectPath,
 			Tickets:     tickets,
 			Architect:   architect,
 		}
@@ -1277,9 +1277,9 @@ func (m Model) subscribeProjectEvents(projectPath string) tea.Cmd {
 		ch, err := client.SubscribeEvents(ctx)
 		if err != nil {
 			cancel()
-			return SSEDisconnectedMsg{ProjectPath: projectPath}
+			return SSEDisconnectedMsg{ArchitectPath: projectPath}
 		}
-		return SSEConnectedMsg{ProjectPath: projectPath, Ch: ch, Cancel: cancel}
+		return SSEConnectedMsg{ArchitectPath: projectPath, Ch: ch, Cancel: cancel}
 	}
 }
 
@@ -1292,9 +1292,9 @@ func (m Model) waitForProjectEvent(projectPath string) tea.Cmd {
 	return func() tea.Msg {
 		_, ok := <-ch
 		if !ok {
-			return SSEDisconnectedMsg{ProjectPath: projectPath}
+			return SSEDisconnectedMsg{ArchitectPath: projectPath}
 		}
-		return SSEEventMsg{ProjectPath: projectPath}
+		return SSEEventMsg{ArchitectPath: projectPath}
 	}
 }
 
@@ -1314,7 +1314,7 @@ func nextBackoff(current time.Duration) time.Duration {
 func (m Model) scheduleSSEReconnect(projectPath string) tea.Cmd {
 	backoff := m.sseBackoffs[projectPath]
 	return tea.Tick(backoff, func(time.Time) tea.Msg {
-		return SSEReconnectTickMsg{ProjectPath: projectPath}
+		return SSEReconnectTickMsg{ArchitectPath: projectPath}
 	})
 }
 
@@ -1330,7 +1330,7 @@ func (m Model) spawnArchitect(projectPath string) tea.Cmd {
 	return func() tea.Msg {
 		client := sdk.DefaultClient(projectPath)
 		_, err := client.SpawnArchitect("")
-		return SpawnArchitectMsg{ProjectPath: projectPath, Err: err}
+		return SpawnArchitectMsg{ArchitectPath: projectPath, Err: err}
 	}
 }
 
@@ -1339,7 +1339,7 @@ func (m Model) spawnArchitectWithMode(projectPath, mode string) tea.Cmd {
 	return func() tea.Msg {
 		client := sdk.DefaultClient(projectPath)
 		_, err := client.SpawnArchitect(mode)
-		return SpawnArchitectMsg{ProjectPath: projectPath, Err: err}
+		return SpawnArchitectMsg{ArchitectPath: projectPath, Err: err}
 	}
 }
 
@@ -1357,8 +1357,8 @@ func (m Model) focusTicket(projectPath, ticketID string) tea.Cmd {
 // unlinkProject removes a project from the global registry.
 func (m Model) unlinkProject(projectPath string) tea.Cmd {
 	return func() tea.Msg {
-		err := m.globalClient.UnlinkProject(projectPath)
-		return UnlinkProjectMsg{ProjectPath: projectPath, Err: err}
+		err := m.globalClient.UnlinkArchitect(projectPath)
+		return UnlinkArchitectMsg{ArchitectPath: projectPath, Err: err}
 	}
 }
 
@@ -1370,7 +1370,7 @@ func (m Model) killSession(projectPath, sessionID string) tea.Cmd {
 		if err != nil {
 			return SessionKillErrorMsg{Err: err}
 		}
-		return SessionKilledMsg{ProjectPath: projectPath}
+		return SessionKilledMsg{ArchitectPath: projectPath}
 	}
 }
 

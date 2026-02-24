@@ -6,7 +6,7 @@ import (
 
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/tmux"
 )
@@ -22,8 +22,8 @@ func NewArchitectHandlers(deps *Dependencies) *ArchitectHandlers {
 }
 
 // getSessionAndConfig is a helper that loads project config and retrieves the architect session.
-func (h *ArchitectHandlers) getSessionAndConfig(projectPath string) (sessionName string, sess *session.Session, projectCfg *projectconfig.Config, err error) {
-	projectCfg, err = projectconfig.Load(projectPath)
+func (h *ArchitectHandlers) getSessionAndConfig(projectPath string) (sessionName string, sess *session.Session, projectCfg *architectconfig.Config, err error) {
+	projectCfg, err = architectconfig.Load(projectPath)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -43,7 +43,7 @@ func (h *ArchitectHandlers) getSessionAndConfig(projectPath string) (sessionName
 
 // GetState handles GET /architect - returns architect session state.
 func (h *ArchitectHandlers) GetState(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	sessionName, sess, _, err := h.getSessionAndConfig(projectPath)
 	if err != nil {
@@ -84,7 +84,7 @@ func (h *ArchitectHandlers) GetState(w http.ResponseWriter, r *http.Request) {
 
 // Spawn handles POST /architect/spawn - spawns an architect session.
 func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	mode := r.URL.Query().Get("mode")
 	if mode == "" {
 		mode = "normal"
@@ -182,7 +182,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 }
 
 // spawnArchitectSession spawns an architect session (new or resumed).
-func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http.Request, projectPath, sessionName string, projectCfg *projectconfig.Config, resume bool) {
+func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http.Request, projectPath, sessionName string, projectCfg *architectconfig.Config, resume bool) {
 	ticketsDir := projectCfg.TicketsPath(projectPath)
 
 	var sessStore spawn.SessionStoreInterface
@@ -211,7 +211,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 			AgentType:   spawn.AgentTypeArchitect,
 			Agent:       architectAgent,
 			TmuxSession: sessionName,
-			ProjectPath: projectPath,
+			ArchitectPath: projectPath,
 			TicketsDir:  ticketsDir,
 			WindowName:  "architect",
 			Companion:   projectCfg.Architect.Companion,
@@ -222,9 +222,9 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 			AgentType:   spawn.AgentTypeArchitect,
 			Agent:       architectAgent,
 			TmuxSession: sessionName,
-			ProjectPath: projectPath,
+			ArchitectPath: projectPath,
 			TicketsDir:  ticketsDir,
-			ProjectName: sessionName,
+			ArchitectName: sessionName,
 			Companion:   projectCfg.Architect.Companion,
 			AgentArgs:   projectCfg.Architect.Args,
 		})
@@ -243,7 +243,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 
 	h.deps.Bus.Emit(events.Event{
 		Type:        events.SessionStarted,
-		ProjectPath: projectPath,
+		ArchitectPath: projectPath,
 	})
 
 	writeJSON(w, http.StatusCreated, ArchitectSpawnResponse{
@@ -259,7 +259,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 
 // Conclude handles POST /architect/conclude - concludes the architect session.
 func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	var req ConcludeSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -288,7 +288,7 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 
 	h.deps.Bus.Emit(events.Event{
 		Type:        events.SessionEnded,
-		ProjectPath: projectPath,
+		ArchitectPath: projectPath,
 	})
 
 	// Persist session summary as a conclusion (best-effort)
@@ -305,7 +305,7 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 
 	// Kill tmux window if associated (best-effort)
 	if tmuxWindow != "" && h.deps.TmuxManager != nil {
-		projectCfg, cfgErr := projectconfig.Load(projectPath)
+		projectCfg, cfgErr := architectconfig.Load(projectPath)
 		tmuxSession := "cortex"
 		if cfgErr == nil && projectCfg.Name != "" {
 			tmuxSession = projectCfg.Name
@@ -327,9 +327,9 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 
 // Focus handles POST /architect/focus - focuses the architect tmux window.
 func (h *ArchitectHandlers) Focus(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
-	projectCfg, err := projectconfig.Load(projectPath)
+	projectCfg, err := architectconfig.Load(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
 		return

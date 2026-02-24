@@ -16,21 +16,21 @@ import (
 	"github.com/kareemaly/cortex/internal/types"
 )
 
-// ProjectHeader is the HTTP header name for specifying the project path.
-const ProjectHeader = "X-Cortex-Project"
+// ArchitectHeader is the HTTP header name for specifying the architect path.
+const ArchitectHeader = "X-Cortex-Architect"
 
 // Client is an HTTP client for communicating with the cortex daemon.
 type Client struct {
 	baseURL     string
 	httpClient  *http.Client
-	projectPath string
+	architectPath string
 }
 
 // NewClient creates a new client with the specified base URL and project path.
-func NewClient(baseURL, projectPath string) *Client {
+func NewClient(baseURL, architectPath string) *Client {
 	return &Client{
 		baseURL:     baseURL,
-		projectPath: projectPath,
+		architectPath: architectPath,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -39,18 +39,18 @@ func NewClient(baseURL, projectPath string) *Client {
 
 // DefaultClient returns a client configured for the default daemon address.
 // It checks CORTEX_DAEMON_URL env var first, falling back to the default.
-func DefaultClient(projectPath string) *Client {
+func DefaultClient(architectPath string) *Client {
 	baseURL := os.Getenv("CORTEX_DAEMON_URL")
 	if baseURL == "" {
 		baseURL = daemonconfig.DefaultDaemonURL
 	}
-	return NewClient(baseURL, projectPath)
+	return NewClient(baseURL, architectPath)
 }
 
 // doRequest executes an HTTP request with the project header.
 func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
-	if c.projectPath != "" {
-		req.Header.Set(ProjectHeader, c.projectPath)
+	if c.architectPath != "" {
+		req.Header.Set(ArchitectHeader, c.architectPath)
 	}
 	return c.httpClient.Do(req)
 }
@@ -67,8 +67,8 @@ type (
 	ArchitectStateResponse   = types.ArchitectStateResponse
 	ArchitectSpawnResponse   = types.ArchitectSpawnResponse
 	HealthResponse           = types.HealthResponse
-	ProjectTicketCounts      = types.ProjectTicketCounts
-	ProjectResponse          = types.ProjectResponse
+	ArchitectTicketCounts    = types.ArchitectTicketCounts
+	ArchitectResponse        = types.ArchitectResponse
 	ConcludeSessionResponse  = types.ConcludeSessionResponse
 	ConclusionResponse       = types.ConclusionResponse
 	ConclusionSummary        = types.ConclusionSummary
@@ -413,14 +413,14 @@ func (c *Client) ApproveSession(id string) error {
 	return nil
 }
 
-// ListProjectsResponse is the response from GET /projects.
-type ListProjectsResponse struct {
-	Projects []ProjectResponse `json:"projects"`
+// ListArchitectsResponse is the response from GET /architects.
+type ListArchitectsResponse struct {
+	Architects []ArchitectResponse `json:"projects"`
 }
 
-// ListProjects returns all registered projects from the daemon.
-func (c *Client) ListProjects() (*ListProjectsResponse, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/projects", nil)
+// ListArchitects returns all registered architects from the daemon.
+func (c *Client) ListArchitects() (*ListArchitectsResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/architects", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -435,7 +435,7 @@ func (c *Client) ListProjects() (*ListProjectsResponse, error) {
 		return nil, c.parseError(resp)
 	}
 
-	var result ListProjectsResponse
+	var result ListArchitectsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -443,10 +443,10 @@ func (c *Client) ListProjects() (*ListProjectsResponse, error) {
 	return &result, nil
 }
 
-// UnlinkProject removes a project from the global registry.
-// This does not delete any files, only removes the project from tracking.
-func (c *Client) UnlinkProject(projectPath string) error {
-	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/projects?path="+projectPath, nil)
+// UnlinkArchitect removes an architect from the global registry.
+// This does not delete any files, only removes the architect from tracking.
+func (c *Client) UnlinkArchitect(architectPath string) error {
+	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/architects?path="+architectPath, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -764,7 +764,7 @@ func (c *Client) FocusTicket(ticketID string) error {
 // Event represents an SSE event from the daemon.
 type Event struct {
 	Type        string `json:"type"`
-	ProjectPath string `json:"project_path"`
+	ArchitectPath string `json:"architect_path"`
 	TicketID    string `json:"ticket_id"`
 	Payload     any    `json:"payload,omitempty"`
 }
@@ -777,8 +777,8 @@ func (c *Client) SubscribeEvents(ctx context.Context) (<-chan Event, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Accept", "text/event-stream")
-	if c.projectPath != "" {
-		req.Header.Set(ProjectHeader, c.projectPath)
+	if c.architectPath != "" {
+		req.Header.Set(ArchitectHeader, c.architectPath)
 	}
 
 	// Use a dedicated client with no timeout for the long-lived SSE connection.
@@ -1180,8 +1180,8 @@ func (c *Client) EditProjectConfigInEditor() error {
 	return nil
 }
 
-// RegisterProject registers a project with the daemon.
-func (c *Client) RegisterProject(path, title string) error {
+// RegisterArchitect registers an architect with the daemon.
+func (c *Client) RegisterArchitect(path, title string) error {
 	reqBody := map[string]string{"path": path}
 	if title != "" {
 		reqBody["title"] = title
@@ -1191,7 +1191,7 @@ func (c *Client) RegisterProject(path, title string) error {
 		return fmt.Errorf("failed to encode request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/projects", bytes.NewReader(jsonBody))
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/architects", bytes.NewReader(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

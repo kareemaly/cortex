@@ -78,7 +78,7 @@ func (ts *testServer) request(t *testing.T, method, path string, body any) *http
 
 	// Add project header for non-health requests
 	if path != "/health" {
-		req.Header.Set(ProjectHeader, ts.projectRoot)
+		req.Header.Set(ArchitectHeader, ts.projectRoot)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
@@ -212,7 +212,7 @@ func TestCreateTicketInvalidJSON(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/tickets", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(ProjectHeader, ts.projectRoot)
+	req.Header.Set(ArchitectHeader, ts.projectRoot)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -413,7 +413,7 @@ func TestInvalidStatus(t *testing.T) {
 	}
 }
 
-func TestMissingProjectHeader(t *testing.T) {
+func TestMissingArchitectHeader(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.Close()
 
@@ -446,7 +446,7 @@ func TestInvalidProjectPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
-	req.Header.Set(ProjectHeader, "relative/path")
+	req.Header.Set(ArchitectHeader, "relative/path")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -471,7 +471,7 @@ func TestProjectNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
-	req.Header.Set(ProjectHeader, "/nonexistent/path/12345")
+	req.Header.Set(ArchitectHeader, "/nonexistent/path/12345")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

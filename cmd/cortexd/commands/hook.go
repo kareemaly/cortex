@@ -115,8 +115,8 @@ func readHookInput() *hookInput {
 
 func runHookPostToolUse(cmd *cobra.Command, args []string) error {
 	ticketID := os.Getenv("CORTEX_TICKET_ID")
-	projectPath := os.Getenv("CORTEX_PROJECT")
-	if ticketID == "" || projectPath == "" {
+	architectPath := os.Getenv("CORTEX_ARCHITECT")
+	if ticketID == "" || architectPath == "" {
 		return nil
 	}
 
@@ -126,43 +126,43 @@ func runHookPostToolUse(cmd *cobra.Command, args []string) error {
 		toolName = &data.ToolName
 	}
 
-	return postAgentStatus(ticketID, projectPath, "in_progress", toolName, nil)
+	return postAgentStatus(ticketID, architectPath, "in_progress", toolName, nil)
 }
 
 func runHookStop(cmd *cobra.Command, args []string) error {
 	ticketID := os.Getenv("CORTEX_TICKET_ID")
-	projectPath := os.Getenv("CORTEX_PROJECT")
-	if ticketID == "" || projectPath == "" {
+	architectPath := os.Getenv("CORTEX_ARCHITECT")
+	if ticketID == "" || architectPath == "" {
 		return nil
 	}
 
-	return postAgentStatus(ticketID, projectPath, "idle", nil, nil)
+	return postAgentStatus(ticketID, architectPath, "idle", nil, nil)
 }
 
 func runHookPermissionRequest(cmd *cobra.Command, args []string) error {
 	ticketID := os.Getenv("CORTEX_TICKET_ID")
-	projectPath := os.Getenv("CORTEX_PROJECT")
-	if ticketID == "" || projectPath == "" {
+	architectPath := os.Getenv("CORTEX_ARCHITECT")
+	if ticketID == "" || architectPath == "" {
 		return nil
 	}
 
-	return postAgentStatus(ticketID, projectPath, "waiting_permission", nil, nil)
+	return postAgentStatus(ticketID, architectPath, "waiting_permission", nil, nil)
 }
 
 func runHookSessionStart(cmd *cobra.Command, args []string) error {
 	ticketID := os.Getenv("CORTEX_TICKET_ID")
-	projectPath := os.Getenv("CORTEX_PROJECT")
-	if ticketID == "" || projectPath == "" {
+	architectPath := os.Getenv("CORTEX_ARCHITECT")
+	if ticketID == "" || architectPath == "" {
 		return nil
 	}
 
-	return postAgentStatus(ticketID, projectPath, "in_progress", nil, nil)
+	return postAgentStatus(ticketID, architectPath, "in_progress", nil, nil)
 }
 
 func runHookSessionEnd(cmd *cobra.Command, args []string) error {
 	ticketID := os.Getenv("CORTEX_TICKET_ID")
-	projectPath := os.Getenv("CORTEX_PROJECT")
-	if ticketID == "" || projectPath == "" {
+	architectPath := os.Getenv("CORTEX_ARCHITECT")
+	if ticketID == "" || architectPath == "" {
 		return nil
 	}
 
@@ -170,20 +170,20 @@ func runHookSessionEnd(cmd *cobra.Command, args []string) error {
 
 	// Normal exits → idle, abnormal exits → error with reason in work
 	if data.Reason == "prompt_input_exit" || data.Reason == "clear" {
-		return postAgentStatus(ticketID, projectPath, "idle", nil, nil)
+		return postAgentStatus(ticketID, architectPath, "idle", nil, nil)
 	}
 
 	var work *string
 	if data.Reason != "" {
 		work = &data.Reason
 	}
-	return postAgentStatus(ticketID, projectPath, "error", nil, work)
+	return postAgentStatus(ticketID, architectPath, "error", nil, work)
 }
 
 func runHookPostToolUseFailure(cmd *cobra.Command, args []string) error {
 	ticketID := os.Getenv("CORTEX_TICKET_ID")
-	projectPath := os.Getenv("CORTEX_PROJECT")
-	if ticketID == "" || projectPath == "" {
+	architectPath := os.Getenv("CORTEX_ARCHITECT")
+	if ticketID == "" || architectPath == "" {
 		return nil
 	}
 
@@ -197,13 +197,13 @@ func runHookPostToolUseFailure(cmd *cobra.Command, args []string) error {
 		work = &data.Error
 	}
 
-	return postAgentStatus(ticketID, projectPath, "in_progress", toolName, work)
+	return postAgentStatus(ticketID, architectPath, "in_progress", toolName, work)
 }
 
 func runHookSubagentStart(cmd *cobra.Command, args []string) error {
 	ticketID := os.Getenv("CORTEX_TICKET_ID")
-	projectPath := os.Getenv("CORTEX_PROJECT")
-	if ticketID == "" || projectPath == "" {
+	architectPath := os.Getenv("CORTEX_ARCHITECT")
+	if ticketID == "" || architectPath == "" {
 		return nil
 	}
 
@@ -213,21 +213,21 @@ func runHookSubagentStart(cmd *cobra.Command, args []string) error {
 		toolLabel = fmt.Sprintf("Task (%s)", data.AgentType)
 	}
 
-	return postAgentStatus(ticketID, projectPath, "in_progress", &toolLabel, nil)
+	return postAgentStatus(ticketID, architectPath, "in_progress", &toolLabel, nil)
 }
 
 func runHookSubagentStop(cmd *cobra.Command, args []string) error {
 	ticketID := os.Getenv("CORTEX_TICKET_ID")
-	projectPath := os.Getenv("CORTEX_PROJECT")
-	if ticketID == "" || projectPath == "" {
+	architectPath := os.Getenv("CORTEX_ARCHITECT")
+	if ticketID == "" || architectPath == "" {
 		return nil
 	}
 
-	return postAgentStatus(ticketID, projectPath, "in_progress", nil, nil)
+	return postAgentStatus(ticketID, architectPath, "in_progress", nil, nil)
 }
 
 // postAgentStatus sends a status update to the daemon API.
-func postAgentStatus(ticketID, projectPath, status string, tool *string, work *string) error {
+func postAgentStatus(ticketID, architectPath, status string, tool *string, work *string) error {
 	payload := map[string]any{
 		"ticket_id": ticketID,
 		"status":    status,
@@ -255,7 +255,7 @@ func postAgentStatus(ticketID, projectPath, status string, tool *string, work *s
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Cortex-Project", projectPath)
+	req.Header.Set("X-Cortex-Architect", architectPath)
 
 	client := &http.Client{Timeout: hookTimeout}
 	resp, err := client.Do(req)

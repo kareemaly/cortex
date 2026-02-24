@@ -13,7 +13,7 @@ import (
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
@@ -86,7 +86,7 @@ type SpawnRequest struct {
 	AgentType   AgentType
 	Agent       string // agent identifier (e.g., "claude")
 	TmuxSession string
-	ProjectPath string
+	ArchitectPath string
 	TicketsDir  string
 
 	// For ticket agents
@@ -94,7 +94,7 @@ type SpawnRequest struct {
 	Ticket   *ticket.Ticket
 
 	// For architect agents
-	ProjectName string
+	ArchitectName string
 
 	// Companion pane command (from cortex.yaml)
 	Companion string
@@ -108,7 +108,7 @@ type ResumeRequest struct {
 	AgentType   AgentType
 	Agent       string // agent identifier (e.g., "claude", "opencode")
 	TmuxSession string
-	ProjectPath string
+	ArchitectPath string
 	TicketsDir  string
 	SessionID   string
 	WindowName  string
@@ -203,7 +203,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 			return ""
 		}(),
 		TicketsDir:  req.TicketsDir,
-		ProjectPath: req.ProjectPath,
+		ArchitectPath: req.ArchitectPath,
 		TmuxSession: req.TmuxSession,
 	})
 
@@ -224,7 +224,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
 			CortexdPath: cortexdPath,
 			TicketID:    req.TicketID,
-			ProjectPath: req.ProjectPath,
+			ArchitectPath: req.ArchitectPath,
 		})
 
 		settingsPath, err = WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
@@ -292,12 +292,12 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": session.ArchitectSessionKey,
-			"CORTEX_PROJECT":   req.ProjectPath,
+			"CORTEX_ARCHITECT":   req.ArchitectPath,
 		}
 	case AgentTypeTicketAgent:
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": req.TicketID,
-			"CORTEX_PROJECT":   req.ProjectPath,
+			"CORTEX_ARCHITECT":   req.ArchitectPath,
 			"CORTEX_TICKET_TYPE": func() string {
 				if req.Ticket != nil {
 					return req.Ticket.Type
@@ -322,7 +322,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		pluginContent := GenerateOpenCodeStatusPlugin(
 			daemonconfig.DefaultDaemonURL,
 			launcherParams.EnvVars["CORTEX_TICKET_ID"],
-			req.ProjectPath,
+			req.ArchitectPath,
 		)
 		pluginDir, pluginErr := WriteOpenCodePluginDir(pluginContent, identifier)
 		if pluginErr != nil {
@@ -383,7 +383,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		TicketID:    req.TicketID,
 		TicketType:  req.TicketType,
 		TicketsDir:  req.TicketsDir,
-		ProjectPath: req.ProjectPath,
+		ArchitectPath: req.ArchitectPath,
 		TmuxSession: req.TmuxSession,
 	})
 
@@ -394,8 +394,8 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 	// Determine env vars based on agent type
 	envVars := map[string]string{}
-	if req.ProjectPath != "" {
-		envVars["CORTEX_PROJECT"] = req.ProjectPath
+	if req.ArchitectPath != "" {
+		envVars["CORTEX_ARCHITECT"] = req.ArchitectPath
 	}
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
@@ -411,7 +411,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
 			CortexdPath: cortexdPath,
 			TicketID:    identifier,
-			ProjectPath: req.ProjectPath,
+			ArchitectPath: req.ArchitectPath,
 		})
 
 		settingsPath, err = WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
@@ -466,7 +466,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		pluginContent := GenerateOpenCodeStatusPlugin(
 			daemonconfig.DefaultDaemonURL,
 			ticketID,
-			req.ProjectPath,
+			req.ArchitectPath,
 		)
 		pluginDir, pluginErr := WriteOpenCodePluginDir(pluginContent, identifier)
 		if pluginErr != nil {
@@ -506,18 +506,18 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	var windowIndex int
 
 	// Determine working directory and companion for resume
-	workingDir := req.ProjectPath
+	workingDir := req.ArchitectPath
 	if req.AgentType == AgentTypeTicketAgent && req.TicketType == "work" {
 		// For work tickets, we would need to look up the ticket to get the repo path
 		// but resume doesn't have access to the full ticket. Use project path for now.
-		workingDir = req.ProjectPath
+		workingDir = req.ArchitectPath
 	}
 
 	switch req.AgentType {
 	case AgentTypeArchitect:
 		companionCmd := req.Companion
 		if companionCmd == "" {
-			companionCmd = "cortex project"
+			companionCmd = "cortex architect show"
 		}
 		err = s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, req.WindowName, launchCmd, companionCmd, workingDir, workingDir)
 	case AgentTypeTicketAgent:
@@ -579,8 +579,8 @@ func (s *Spawner) validateSpawnRequest(req SpawnRequest) error {
 		return &ConfigError{Field: "TmuxSession", Message: err.Error()}
 	}
 
-	if req.ProjectPath != "" {
-		if _, err := os.Stat(req.ProjectPath); os.IsNotExist(err) {
+	if req.ArchitectPath != "" {
+		if _, err := os.Stat(req.ArchitectPath); os.IsNotExist(err) {
 			return &ConfigError{Field: "ProjectPath", Message: "directory does not exist"}
 		}
 	}
@@ -595,8 +595,8 @@ func (s *Spawner) validateSpawnRequest(req SpawnRequest) error {
 	}
 
 	if req.AgentType == AgentTypeArchitect {
-		if req.ProjectName == "" {
-			return &ConfigError{Field: "ProjectName", Message: "cannot be empty for architect"}
+		if req.ArchitectName == "" {
+			return &ConfigError{Field: "ArchitectName", Message: "cannot be empty for architect"}
 		}
 	}
 
@@ -640,11 +640,11 @@ func (s *Spawner) getCortexdPath() (string, error) {
 // Work tickets spawn in the repo directory, research tickets spawn in the architect project root.
 func getWorkingDirectory(req SpawnRequest) (string, error) {
 	if req.AgentType != AgentTypeTicketAgent {
-		return req.ProjectPath, nil
+		return req.ArchitectPath, nil
 	}
 
 	if req.Ticket == nil {
-		return req.ProjectPath, nil
+		return req.ArchitectPath, nil
 	}
 
 	if req.Ticket.Type == "work" {
@@ -661,11 +661,11 @@ func getWorkingDirectory(req SpawnRequest) (string, error) {
 			}
 			return repo, nil
 		}
-		return req.ProjectPath, nil
+		return req.ArchitectPath, nil
 	}
 
 	// Research tickets spawn in project root
-	return req.ProjectPath, nil
+	return req.ArchitectPath, nil
 }
 
 // validateGitRepository checks if the given path exists and is a git repository.
@@ -727,7 +727,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 	}
 
 	// Create prompt resolver with fallback to defaults
-	resolver := prompt.NewPromptResolver(req.ProjectPath, s.deps.DefaultsDir)
+	resolver := prompt.NewPromptResolver(req.ArchitectPath, s.deps.DefaultsDir)
 
 	// Try to resolve system prompt (optional — used by opencode via instructions file)
 	systemPromptContent, _ := resolver.ResolveTicketPrompt(ticketType, prompt.StageSystem)
@@ -745,7 +745,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 
 	// Render template with ticket variables
 	vars := prompt.TicketVars{
-		ProjectPath: req.ProjectPath,
+		ProjectPath: req.ArchitectPath,
 		TicketID:    req.TicketID,
 		TicketTitle: req.Ticket.Title,
 		TicketBody:  req.Ticket.Body,
@@ -783,7 +783,7 @@ func formatTicketReferences(refs []string) string {
 // buildArchitectPrompt creates the dynamic architect prompt with ticket list.
 func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	// Create prompt resolver with fallback to defaults
-	resolver := prompt.NewPromptResolver(req.ProjectPath, s.deps.DefaultsDir)
+	resolver := prompt.NewPromptResolver(req.ArchitectPath, s.deps.DefaultsDir)
 
 	// Load system prompt (MCP tool instructions and workflow)
 	var systemPromptContent string
@@ -796,7 +796,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	}
 
 	// Query daemon API to get tickets by status
-	client := sdk.DefaultClient(req.ProjectPath)
+	client := sdk.DefaultClient(req.ArchitectPath)
 	tickets, err := client.ListAllTickets("", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tickets: %w", err)
@@ -844,7 +844,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 
 	// Fetch repos from project config (graceful degradation)
 	var reposList string
-	projectCfg, cfgErr := projectconfig.Load(req.ProjectPath)
+	projectCfg, cfgErr := architectconfig.Load(req.ArchitectPath)
 	if cfgErr == nil && len(projectCfg.Repos) > 0 {
 		var reposSB strings.Builder
 		for _, repo := range projectCfg.Repos {
@@ -857,7 +857,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	kickoffTemplate, kickoffErr := resolver.ResolveArchitectPrompt(prompt.StageKickoff)
 	if kickoffErr == nil {
 		vars := prompt.ArchitectKickoffVars{
-			ProjectName: req.ProjectName,
+			ArchitectName: req.ArchitectName,
 			TicketList:  ticketList,
 			CurrentDate: time.Now().Format("2006-01-02 15:04 MST"),
 			Sessions:    sessionsList,
@@ -873,7 +873,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	}
 
 	// Fallback: inline format
-	promptText := fmt.Sprintf("# Project: %s\n\n# Tickets\n\n%s", req.ProjectName, ticketList)
+	promptText := fmt.Sprintf("# Project: %s\n\n# Tickets\n\n%s", req.ArchitectName, ticketList)
 
 	return &promptInfo{
 		PromptText:          promptText,
@@ -890,14 +890,14 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDi
 		if companionCmd == "" {
 			companionCmd = fmt.Sprintf("cortex ticket show %s", req.TicketID)
 		}
-		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, req.ProjectPath)
+		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, req.ArchitectPath)
 	case AgentTypeArchitect:
 		// Use companion command from config, or default to showing kanban board
 		companionCmd := req.Companion
 		if companionCmd == "" {
-			companionCmd = "cortex project"
+			companionCmd = "cortex architect show"
 		}
-		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, req.ProjectPath)
+		err := s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, req.ArchitectPath)
 		return 0, err
 	default:
 		return 0, &ConfigError{Field: "AgentType", Message: "unknown agent type: " + string(req.AgentType)}

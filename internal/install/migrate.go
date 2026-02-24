@@ -11,8 +11,8 @@ import (
 
 // MigrationResult holds the result of migrating a single project config.
 type MigrationResult struct {
-	ProjectPath   string
-	ProjectName   string
+	ArchitectPath   string
+	ArchitectName   string
 	DetectedAgent string
 	Migrated      bool
 	Skipped       bool
@@ -58,7 +58,7 @@ func DetectAgentFromExtend(extendPath string) string {
 // from the legacy format (with extend, ticket, git fields) to the new format
 // with top-level architect, work, and research sections.
 func MigrateProjectConfig(projectPath string) *MigrationResult {
-	result := &MigrationResult{ProjectPath: projectPath}
+	result := &MigrationResult{ArchitectPath: projectPath}
 
 	configPath := filepath.Join(projectPath, "cortex.yaml")
 	data, err := os.ReadFile(configPath)
@@ -78,9 +78,9 @@ func MigrateProjectConfig(projectPath string) *MigrationResult {
 		return result
 	}
 
-	result.ProjectName = old.Name
-	if result.ProjectName == "" {
-		result.ProjectName = DetectProjectName(projectPath)
+	result.ArchitectName = old.Name
+	if result.ArchitectName == "" {
+		result.ArchitectName = DetectArchitectName(projectPath)
 	}
 
 	// Skip if already migrated (new format has work section and no extend)
@@ -103,7 +103,7 @@ func MigrateProjectConfig(projectPath string) *MigrationResult {
 	result.DetectedAgent = agent
 
 	// Generate new config
-	newConfig := generateProjectConfig(result.ProjectName, agent)
+	newConfig := generateProjectConfig(result.ArchitectName, agent)
 
 	// Preserve custom tickets path
 	if old.Tickets.Path != "" {
@@ -128,7 +128,7 @@ func MigrateAllProjects() ([]MigrationResult, error) {
 	}
 
 	var results []MigrationResult
-	for _, project := range cfg.Projects {
+	for _, project := range cfg.Architects {
 		r := MigrateProjectConfig(project.Path)
 		results = append(results, *r)
 	}

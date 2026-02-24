@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
@@ -21,7 +21,7 @@ type OrchestrateRequest struct {
 	TicketID    string
 	Mode        string // "normal", "resume", "fresh" (validated internally; defaults to "normal")
 	Agent       string // optional: falls back to project config, then "claude"
-	ProjectPath string
+	ArchitectPath string
 	TicketsDir  string // optional: derived from ProjectPath if empty
 	TmuxSession string // optional: derived from project config name if empty
 }
@@ -83,7 +83,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 	}
 
 	// 3. Load project config
-	projectCfg, err := projectconfig.Load(req.ProjectPath)
+	projectCfg, err := architectconfig.Load(req.ArchitectPath)
 	if err != nil {
 		return nil, &ConfigError{Field: "ProjectPath", Message: "failed to load project config: " + err.Error()}
 	}
@@ -124,7 +124,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 	// 6. Resolve TicketsDir
 	ticketsDir := req.TicketsDir
 	if ticketsDir == "" {
-		ticketsDir = projectCfg.TicketsPath(req.ProjectPath)
+		ticketsDir = projectCfg.TicketsPath(req.ArchitectPath)
 	}
 
 	// 7. Look up existing session
@@ -154,7 +154,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 			AgentType:   AgentTypeTicketAgent,
 			Agent:       agent,
 			TmuxSession: tmuxSession,
-			ProjectPath: req.ProjectPath,
+			ArchitectPath: req.ArchitectPath,
 			TicketsDir:  ticketsDir,
 			TicketID:    req.TicketID,
 			Ticket:      t,
@@ -214,7 +214,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				AgentType:   AgentTypeTicketAgent,
 				Agent:       agent,
 				TmuxSession: tmuxSession,
-				ProjectPath: req.ProjectPath,
+				ArchitectPath: req.ArchitectPath,
 				TicketsDir:  ticketsDir,
 				WindowName:  stateInfo.Session.TmuxWindow,
 				TicketID:    req.TicketID,

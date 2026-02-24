@@ -15,7 +15,7 @@ func TestNewServerArchitect(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	server, err := NewServer(&Config{
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		DaemonURL:   daemonconfig.DefaultDaemonURL,
 	})
 	if err != nil {
@@ -46,7 +46,7 @@ func TestNewServerTicket(t *testing.T) {
 	server, err := NewServer(&Config{
 		TicketID:    "test-ticket-123",
 		DaemonURL:   daemonconfig.DefaultDaemonURL,
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 	})
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)
@@ -90,7 +90,7 @@ func TestNewServerDefaultConfig(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &Config{
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 	}
 
 	server, err := NewServer(cfg)
@@ -110,7 +110,7 @@ func TestNewServerNilConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error with nil config (no ProjectPath)")
 	}
-	expectedMsg := "MCP server requires CORTEX_PROJECT_PATH to be set"
+	expectedMsg := "MCP server requires CORTEX_ARCHITECT_PATH to be set"
 	if err.Error() != expectedMsg {
 		t.Errorf("error = %q, want %q", err.Error(), expectedMsg)
 	}
@@ -125,7 +125,7 @@ func TestNewServerWithProjectPath(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := &Config{
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 	}
 
 	server, err := NewServer(cfg)
@@ -150,7 +150,7 @@ func TestNewServerTicketWithType(t *testing.T) {
 		TicketID:    "test-ticket-123",
 		TicketType:  "custom",
 		DaemonURL:   daemonconfig.DefaultDaemonURL,
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 	})
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)
@@ -171,7 +171,7 @@ func TestNewServerTicketDefaultType(t *testing.T) {
 	server, err := NewServer(&Config{
 		TicketID:    "test-ticket-123",
 		DaemonURL:   daemonconfig.DefaultDaemonURL,
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 	})
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)
@@ -196,7 +196,7 @@ func TestTicketSessionHasReadTicket(t *testing.T) {
 	server, err := NewServer(&Config{
 		TicketID:    "test-ticket-readticket",
 		DaemonURL:   daemonconfig.DefaultDaemonURL,
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 	})
 	if err != nil {
 		t.Fatalf("NewServer failed: %v", err)

@@ -28,7 +28,7 @@ type TicketsConfig struct {
 	Path string `yaml:"path,omitempty"`
 }
 
-// Config holds the project configuration.
+// Config holds the architect configuration.
 type Config struct {
 	Name      string        `yaml:"name"`
 	Repos     []string      `yaml:"repos,omitempty"`
@@ -38,23 +38,23 @@ type Config struct {
 	Tickets   TicketsConfig `yaml:"tickets,omitempty"`
 }
 
-// TicketsPath returns the resolved tickets directory path for the given project root.
-// If Tickets.Path is set, resolves it relative to the project root (or absolute).
-// Otherwise defaults to {projectRoot}/tickets.
-func (c *Config) TicketsPath(projectRoot string) string {
+// TicketsPath returns the resolved tickets directory path for the given architect root.
+// If Tickets.Path is set, resolves it relative to the architect root (or absolute).
+// Otherwise defaults to {architectRoot}/tickets.
+func (c *Config) TicketsPath(architectRoot string) string {
 	if c.Tickets.Path != "" {
 		if filepath.IsAbs(c.Tickets.Path) {
 			return c.Tickets.Path
 		}
-		return filepath.Join(projectRoot, c.Tickets.Path)
+		return filepath.Join(architectRoot, c.Tickets.Path)
 	}
-	return filepath.Join(projectRoot, "tickets")
+	return filepath.Join(architectRoot, "tickets")
 }
 
-// SessionsPath returns the resolved sessions directory path for the given project root.
-// Defaults to {projectRoot}/sessions.
-func (c *Config) SessionsPath(projectRoot string) string {
-	return filepath.Join(projectRoot, "sessions")
+// SessionsPath returns the resolved sessions directory path for the given architect root.
+// Defaults to {architectRoot}/sessions.
+func (c *Config) SessionsPath(architectRoot string) string {
+	return filepath.Join(architectRoot, "sessions")
 }
 
 // RoleConfigForType returns the RoleConfig for a given ticket type.
@@ -70,7 +70,7 @@ func (c *Config) RoleConfigForType(ticketType string) (RoleConfig, error) {
 	}
 }
 
-// ValidateRepo checks if a repo is in the project's repos list.
+// ValidateRepo checks if a repo is in the architect's repos list.
 // If Repos is empty, any repo is allowed.
 func (c *Config) ValidateRepo(repo string) error {
 	if len(c.Repos) == 0 {
@@ -81,7 +81,7 @@ func (c *Config) ValidateRepo(repo string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("repo %q not in project repos list", repo)
+	return fmt.Errorf("repo %q not in architect repos list", repo)
 }
 
 // DefaultConfig returns a Config with default values.
@@ -89,7 +89,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Architect: RoleConfig{
 			Agent:     AgentClaude,
-			Companion: "cortex project",
+			Companion: "cortex architect show",
 		},
 		Work: RoleConfig{
 			Agent:     AgentClaude,
@@ -101,9 +101,9 @@ func DefaultConfig() *Config {
 	}
 }
 
-// FindProjectRoot walks up from startPath to find a cortex.yaml file.
+// FindArchitectRoot walks up from startPath to find a cortex.yaml file.
 // Returns the path containing the cortex.yaml file.
-func FindProjectRoot(startPath string) (string, error) {
+func FindArchitectRoot(startPath string) (string, error) {
 	absPath, err := filepath.Abs(startPath)
 	if err != nil {
 		return "", err
@@ -118,16 +118,16 @@ func FindProjectRoot(startPath string) (string, error) {
 
 		parent := filepath.Dir(current)
 		if parent == current {
-			return "", &ProjectNotFoundError{StartPath: startPath}
+			return "", &ArchitectNotFoundError{StartPath: startPath}
 		}
 		current = parent
 	}
 }
 
-// Load loads configuration from cortex.yaml at the project root.
+// Load loads configuration from cortex.yaml at the architect root.
 // Returns default config if no cortex.yaml exists.
-func Load(projectRoot string) (*Config, error) {
-	absPath, err := filepath.Abs(projectRoot)
+func Load(architectRoot string) (*Config, error) {
+	absPath, err := filepath.Abs(architectRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -153,27 +153,27 @@ func Load(projectRoot string) (*Config, error) {
 	return cfg, nil
 }
 
-// LoadFromPath finds the project root from the given path and loads config.
-// Returns the config, project root path, and any error.
+// LoadFromPath finds the architect root from the given path and loads config.
+// Returns the config, architect root path, and any error.
 func LoadFromPath(path string) (*Config, string, error) {
-	projectRoot, err := FindProjectRoot(path)
+	architectRoot, err := FindArchitectRoot(path)
 	if err != nil {
 		return nil, "", err
 	}
 
-	cfg, err := Load(projectRoot)
+	cfg, err := Load(architectRoot)
 	if err != nil {
 		return nil, "", err
 	}
 
-	return cfg, projectRoot, nil
+	return cfg, architectRoot, nil
 }
 
-// ConfigPath returns the path to cortex.yaml for the given project root.
-func ConfigPath(projectRoot string) string {
-	absPath, err := filepath.Abs(projectRoot)
+// ConfigPath returns the path to cortex.yaml for the given architect root.
+func ConfigPath(architectRoot string) string {
+	absPath, err := filepath.Abs(architectRoot)
 	if err != nil {
-		absPath = projectRoot
+		absPath = architectRoot
 	}
 	return filepath.Join(absPath, "cortex.yaml")
 }

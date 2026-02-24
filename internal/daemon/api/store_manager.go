@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/kareemaly/cortex/internal/events"
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -31,12 +31,12 @@ func NewStoreManager(logger *slog.Logger, bus *events.Bus) *StoreManager {
 
 // GetStore returns the ticket store for the given project path.
 // Creates a new store if one doesn't exist for the path.
-func (m *StoreManager) GetStore(projectPath string) (*ticket.Store, error) {
-	projectPath = filepath.Clean(projectPath)
+func (m *StoreManager) GetStore(architectPath string) (*ticket.Store, error) {
+	architectPath = filepath.Clean(architectPath)
 
 	// Fast path: check if store already exists
 	m.mu.RLock()
-	store, exists := m.stores[projectPath]
+	store, exists := m.stores[architectPath]
 	m.mu.RUnlock()
 
 	if exists {
@@ -48,29 +48,29 @@ func (m *StoreManager) GetStore(projectPath string) (*ticket.Store, error) {
 	defer m.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if store, exists := m.stores[projectPath]; exists {
+	if store, exists := m.stores[architectPath]; exists {
 		return store, nil
 	}
 
 	// Verify project path exists
-	if _, err := os.Stat(projectPath); err != nil {
+	if _, err := os.Stat(architectPath); err != nil {
 		return nil, fmt.Errorf("project path not found: %w", err)
 	}
 
 	// Load project config to resolve tickets path
-	cfg, err := projectconfig.Load(projectPath)
+	cfg, err := architectconfig.Load(architectPath)
 	if err != nil {
-		cfg = projectconfig.DefaultConfig()
+		cfg = architectconfig.DefaultConfig()
 	}
 
-	ticketsDir := cfg.TicketsPath(projectPath)
-	store, err = ticket.NewStore(ticketsDir, m.bus, projectPath)
+	ticketsDir := cfg.TicketsPath(architectPath)
+	store, err = ticket.NewStore(ticketsDir, m.bus, architectPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ticket store: %w", err)
 	}
 
-	m.stores[projectPath] = store
-	m.logger.Debug("created ticket store", "project", projectPath)
+	m.stores[architectPath] = store
+	m.logger.Debug("created ticket store", "project", architectPath)
 
 	return store, nil
 }

@@ -29,9 +29,9 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 
 	// Global endpoints (no project required)
 	r.Get("/health", HealthHandler())
-	r.Get("/projects", ProjectsHandler(deps.StoreManager))
-	r.Post("/projects", RegisterProjectHandler())
-	r.Delete("/projects", UnlinkProjectHandler())
+	r.Get("/architects", ArchitectsHandler(deps.StoreManager))
+	r.Post("/architects", RegisterArchitectHandler())
+	r.Delete("/architects", UnlinkArchitectHandler())
 	// Global config routes (no project header required)
 	configHandlers := NewConfigHandlers(deps)
 	r.Get("/config/global", configHandlers.ReadGlobalConfig)
@@ -44,7 +44,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 
 	// Project-scoped routes
 	r.Group(func(r chi.Router) {
-		r.Use(ProjectRequired())
+		r.Use(ArchitectRequired())
 
 		// SSE event stream
 		eventHandlers := NewEventHandlers(deps)

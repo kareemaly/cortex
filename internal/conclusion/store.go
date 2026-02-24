@@ -38,7 +38,7 @@ func (s *Store) emit(eventType events.EventType, payload any) {
 	}
 	s.bus.Emit(events.Event{
 		Type:        eventType,
-		ProjectPath: s.projectPath,
+		ArchitectPath: s.projectPath,
 		Payload:     payload,
 	})
 }

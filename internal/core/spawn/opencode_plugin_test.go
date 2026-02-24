@@ -58,9 +58,9 @@ func TestGenerateOpenCodeStatusPlugin(t *testing.T) {
 		t.Error("expected plugin to use AbortSignal.timeout(5000)")
 	}
 
-	// Verify X-Cortex-Project header
-	if !strings.Contains(plugin, "X-Cortex-Project") {
-		t.Error("expected plugin to send X-Cortex-Project header")
+	// Verify X-Cortex-Architect header
+	if !strings.Contains(plugin, "X-Cortex-Architect") {
+		t.Error("expected plugin to send X-Cortex-Architect header")
 	}
 
 	// Verify POST to /agent/status
@@ -135,7 +135,7 @@ func TestOpenCodeSpawnIncludesPluginDir(t *testing.T) {
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "opencode",
 		TmuxSession: "test-session",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
 		TicketID:    "ticket-1",
 		Ticket:      testTicket,
@@ -216,7 +216,7 @@ func TestClaudeSpawnDoesNotIncludePluginDir(t *testing.T) {
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "claude",
 		TmuxSession: "test-session",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
 		TicketID:    "ticket-1",
 		Ticket:      testTicket,

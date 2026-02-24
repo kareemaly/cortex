@@ -10,17 +10,17 @@ import (
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
-// ProjectsListResponse is the response for GET /projects.
-type ProjectsListResponse struct {
-	Projects []ProjectResponse `json:"projects"`
+// ArchitectsListResponse is the response for GET /architects.
+type ArchitectsListResponse struct {
+	Architects []ArchitectResponse `json:"architects"`
 }
 
-// UnlinkProjectHandler returns a handler for DELETE /projects.
-// It removes a project from the global registry without deleting any files.
-func UnlinkProjectHandler() http.HandlerFunc {
+// UnlinkArchitectHandler returns a handler for DELETE /architects.
+// It removes an architect from the global registry without deleting any files.
+func UnlinkArchitectHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		projectPath := r.URL.Query().Get("path")
-		if projectPath == "" {
+		architectPath := r.URL.Query().Get("path")
+		if architectPath == "" {
 			writeError(w, http.StatusBadRequest, "bad_request", "missing path parameter")
 			return
 		}
@@ -31,8 +31,8 @@ func UnlinkProjectHandler() http.HandlerFunc {
 			return
 		}
 
-		if !cfg.UnregisterProject(projectPath) {
-			writeError(w, http.StatusNotFound, "not_found", "project not found")
+		if !cfg.UnregisterArchitect(architectPath) {
+			writeError(w, http.StatusNotFound, "not_found", "architect not found")
 			return
 		}
 
@@ -45,16 +45,16 @@ func UnlinkProjectHandler() http.HandlerFunc {
 	}
 }
 
-// RegisterProjectRequest is the request body for POST /projects.
-type RegisterProjectRequest struct {
+// RegisterArchitectRequest is the request body for POST /architects.
+type RegisterArchitectRequest struct {
 	Path  string `json:"path"`
 	Title string `json:"title,omitempty"`
 }
 
-// RegisterProjectHandler returns a handler for POST /projects.
-func RegisterProjectHandler() http.HandlerFunc {
+// RegisterArchitectHandler returns a handler for POST /architects.
+func RegisterArchitectHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req RegisterProjectRequest
+		var req RegisterArchitectRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
 			return
@@ -72,10 +72,10 @@ func RegisterProjectHandler() http.HandlerFunc {
 			return
 		}
 
-		// Check for cortex.yaml (project marker)
+		// Check for cortex.yaml (architect marker)
 		cortexYaml := filepath.Join(absPath, "cortex.yaml")
 		if _, err := os.Stat(cortexYaml); os.IsNotExist(err) {
-			writeError(w, http.StatusBadRequest, "validation_error", "not a cortex project (no cortex.yaml)")
+			writeError(w, http.StatusBadRequest, "validation_error", "not a cortex architect (no cortex.yaml)")
 			return
 		}
 
@@ -90,10 +90,10 @@ func RegisterProjectHandler() http.HandlerFunc {
 			title = filepath.Base(absPath)
 		}
 
-		if !cfg.RegisterProject(absPath, title) {
+		if !cfg.RegisterArchitect(absPath, title) {
 			writeJSON(w, http.StatusOK, map[string]any{
 				"success": true,
-				"message": "project already registered",
+				"message": "architect already registered",
 			})
 			return
 		}
@@ -105,15 +105,15 @@ func RegisterProjectHandler() http.HandlerFunc {
 
 		writeJSON(w, http.StatusCreated, map[string]any{
 			"success": true,
-			"message": "project registered",
+			"message": "architect registered",
 			"path":    absPath,
 			"title":   title,
 		})
 	}
 }
 
-// ProjectsHandler returns a handler for GET /projects.
-func ProjectsHandler(storeManager *StoreManager) http.HandlerFunc {
+// ArchitectsHandler returns a handler for GET /architects.
+func ArchitectsHandler(storeManager *StoreManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cfg, err := config.Load()
 		if err != nil {
@@ -121,24 +121,24 @@ func ProjectsHandler(storeManager *StoreManager) http.HandlerFunc {
 			return
 		}
 
-		projects := make([]ProjectResponse, 0, len(cfg.Projects))
-		for _, entry := range cfg.Projects {
-			proj := ProjectResponse{
+		architects := make([]ArchitectResponse, 0, len(cfg.Architects))
+		for _, entry := range cfg.Architects {
+			arch := ArchitectResponse{
 				Path:  entry.Path,
 				Title: entry.Title,
 			}
 
-			// Check if project exists (cortex.yaml)
+			// Check if architect exists (cortex.yaml)
 			cortexYaml := filepath.Join(entry.Path, "cortex.yaml")
 			if _, err := os.Stat(cortexYaml); err == nil {
-				proj.Exists = true
+				arch.Exists = true
 
 				// Best-effort ticket counts
 				store, err := storeManager.GetStore(entry.Path)
 				if err == nil {
 					allTickets, err := store.ListAll()
 					if err == nil {
-						proj.Counts = &ProjectTicketCounts{
+						arch.Counts = &ArchitectTicketCounts{
 							Backlog:  len(allTickets[ticket.StatusBacklog]),
 							Progress: len(allTickets[ticket.StatusProgress]),
 							Done:     len(allTickets[ticket.StatusDone]),
@@ -147,10 +147,10 @@ func ProjectsHandler(storeManager *StoreManager) http.HandlerFunc {
 				}
 			}
 
-			projects = append(projects, proj)
+			architects = append(architects, arch)
 		}
 
-		resp := ProjectsListResponse{Projects: projects}
+		resp := ArchitectsListResponse{Architects: architects}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			writeError(w, http.StatusInternalServerError, "internal_error", "failed to encode response")

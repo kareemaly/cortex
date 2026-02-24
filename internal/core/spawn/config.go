@@ -27,7 +27,7 @@ type MCPConfigParams struct {
 	TicketID    string // for ticket agents
 	TicketType  string // for ticket agents
 	TicketsDir  string
-	ProjectPath string
+	ArchitectPath string
 	TmuxSession string
 	DaemonURL   string // optional; defaults to daemonconfig.DefaultDaemonURL
 }
@@ -52,8 +52,8 @@ func GenerateMCPConfig(params MCPConfigParams) *ClaudeMCPConfig {
 	if params.TicketsDir != "" {
 		serverConfig.Env["CORTEX_TICKETS_DIR"] = params.TicketsDir
 	}
-	if params.ProjectPath != "" {
-		serverConfig.Env["CORTEX_PROJECT_PATH"] = params.ProjectPath
+	if params.ArchitectPath != "" {
+		serverConfig.Env["CORTEX_ARCHITECT_PATH"] = params.ArchitectPath
 	}
 	if params.TmuxSession != "" {
 		serverConfig.Env["CORTEX_TMUX_SESSION"] = params.TmuxSession

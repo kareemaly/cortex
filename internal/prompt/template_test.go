@@ -6,7 +6,7 @@ import (
 )
 
 func TestRenderTemplate_ArchitectKickoff_Basic(t *testing.T) {
-	tmpl := `# Project: {{.ProjectName}}
+	tmpl := `# Project: {{.ArchitectName}}
 {{.TicketList}}
 {{- if .Sessions}}
 
@@ -16,7 +16,7 @@ func TestRenderTemplate_ArchitectKickoff_Basic(t *testing.T) {
 {{- end}}`
 
 	vars := ArchitectKickoffVars{
-		ProjectName: "TestProject",
+		ArchitectName: "TestProject",
 		TicketList:  "## Backlog\n- [t1] Task 1\n",
 		CurrentDate: "2025-06-01 10:00 UTC",
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/tmux"
@@ -31,7 +31,7 @@ func NewTicketHandlers(deps *Dependencies) *TicketHandlers {
 
 // ListAll handles GET /tickets - lists all tickets grouped by status.
 func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -60,7 +60,7 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 
 	// Load project config to get tmux session name for orphan detection.
 	tmuxSession := ""
-	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	projectCfg, cfgErr := architectconfig.Load(projectPath)
 	if cfgErr == nil && projectCfg.Name != "" {
 		tmuxSession = projectCfg.Name
 	}
@@ -90,7 +90,7 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -119,7 +119,7 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Load project config to get tmux session name for orphan detection.
 	tmuxSession := ""
-	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	projectCfg, cfgErr := architectconfig.Load(projectPath)
 	if cfgErr == nil && projectCfg.Name != "" {
 		tmuxSession = projectCfg.Name
 	}
@@ -144,7 +144,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	// Validate ticket type
 	ticketType := req.Type
@@ -192,7 +192,7 @@ func (h *TicketHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -224,7 +224,7 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -268,7 +268,7 @@ func (h *TicketHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -304,7 +304,7 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -353,7 +353,7 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 
 // SetDueDate handles PATCH /tickets/{id}/due-date - sets the due date for a ticket.
 func (h *TicketHandlers) SetDueDate(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -399,7 +399,7 @@ func (h *TicketHandlers) SetDueDate(w http.ResponseWriter, r *http.Request) {
 
 // ClearDueDate handles DELETE /tickets/{id}/due-date - removes the due date from a ticket.
 func (h *TicketHandlers) ClearDueDate(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -435,7 +435,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	mode := r.URL.Query().Get("mode")
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
@@ -465,7 +465,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	result, err := spawn.Orchestrate(r.Context(), spawn.OrchestrateRequest{
 		TicketID:    id,
 		Mode:        mode,
-		ProjectPath: projectPath,
+		ArchitectPath: projectPath,
 	}, spawn.OrchestrateDeps{
 		Store:        store,
 		SessionStore: sessionStore,
@@ -522,7 +522,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 	h.deps.Bus.Emit(events.Event{
 		Type:        events.SessionStarted,
-		ProjectPath: projectPath,
+		ArchitectPath: projectPath,
 		TicketID:    id,
 	})
 	writeJSON(w, http.StatusCreated, resp)
@@ -530,7 +530,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 // GetByID handles GET /tickets/by-id/{id} - gets a ticket by ID regardless of status.
 func (h *TicketHandlers) GetByID(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -550,7 +550,7 @@ func (h *TicketHandlers) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // Focus handles POST /tickets/{id}/focus - focuses the tmux window of a ticket's active session.
 func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	id := chi.URLParam(r, "id")
 
 	// Look up session from session manager
@@ -571,7 +571,7 @@ func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	projectCfg, cfgErr := architectconfig.Load(projectPath)
 	tmuxSession := "cortex"
 	if cfgErr == nil && projectCfg.Name != "" {
 		tmuxSession = projectCfg.Name
@@ -595,7 +595,7 @@ func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 
 // Conclude handles POST /tickets/{id}/conclude - concludes a session and moves ticket to done.
 func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -641,7 +641,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 
 	h.deps.Bus.Emit(events.Event{
 		Type:        events.SessionEnded,
-		ProjectPath: projectPath,
+		ArchitectPath: projectPath,
 		TicketID:    id,
 	})
 
@@ -683,7 +683,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 
 	// Kill tmux window if associated (best-effort)
 	if tmuxWindow != "" && h.deps.TmuxManager != nil {
-		projectCfg, cfgErr := projectconfig.Load(projectPath)
+		projectCfg, cfgErr := architectconfig.Load(projectPath)
 		tmuxSession := "cortex"
 		if cfgErr == nil && projectCfg.Name != "" {
 			tmuxSession = projectCfg.Name
@@ -706,7 +706,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 
 // Edit handles POST /tickets/{id}/edit - opens the ticket's index.md in $EDITOR via tmux popup.
 func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -736,7 +736,7 @@ func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	command := fmt.Sprintf("%s %q", editor, indexPath)
 
 	// Get tmux session name
-	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	projectCfg, cfgErr := architectconfig.Load(projectPath)
 	tmuxSession := "cortex"
 	if cfgErr == nil && projectCfg.Name != "" {
 		tmuxSession = projectCfg.Name
@@ -756,7 +756,7 @@ func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 
 // ShowPopup handles POST /tickets/{id}/show-popup - opens cortex ticket in a tmux popup.
 func (h *TicketHandlers) ShowPopup(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
@@ -782,7 +782,7 @@ func (h *TicketHandlers) ShowPopup(w http.ResponseWriter, r *http.Request) {
 	command := fmt.Sprintf("cortex ticket %s", ticketID)
 
 	// Get tmux session name
-	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	projectCfg, cfgErr := architectconfig.Load(projectPath)
 	tmuxSession := "cortex"
 	if cfgErr == nil && projectCfg.Name != "" {
 		tmuxSession = projectCfg.Name

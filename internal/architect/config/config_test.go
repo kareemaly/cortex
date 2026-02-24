@@ -21,12 +21,12 @@ func writeConfig(t *testing.T, projectRoot, content string) {
 	}
 }
 
-func TestFindProjectRoot(t *testing.T) {
+func TestFindArchitectRoot(t *testing.T) {
 	projectRoot := setupTestProject(t)
 	writeConfig(t, projectRoot, `name: test`)
 
 	t.Run("finds from root", func(t *testing.T) {
-		root, err := FindProjectRoot(projectRoot)
+		root, err := FindArchitectRoot(projectRoot)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -41,7 +41,7 @@ func TestFindProjectRoot(t *testing.T) {
 			t.Fatalf("failed to create subdir: %v", err)
 		}
 
-		root, err := FindProjectRoot(subdir)
+		root, err := FindArchitectRoot(subdir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -56,7 +56,7 @@ func TestFindProjectRoot(t *testing.T) {
 			t.Fatalf("failed to create nested dir: %v", err)
 		}
 
-		root, err := FindProjectRoot(nested)
+		root, err := FindArchitectRoot(nested)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -66,16 +66,16 @@ func TestFindProjectRoot(t *testing.T) {
 	})
 }
 
-func TestFindProjectRoot_NotFound(t *testing.T) {
+func TestFindArchitectRoot_NotFound(t *testing.T) {
 	// Use a temp directory without cortex.yaml
 	dir := t.TempDir()
 
-	_, err := FindProjectRoot(dir)
+	_, err := FindArchitectRoot(dir)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !IsProjectNotFound(err) {
-		t.Errorf("expected ProjectNotFoundError, got %T", err)
+	if !IsArchitectNotFound(err) {
+		t.Errorf("expected ArchitectNotFoundError, got %T", err)
 	}
 }
 
@@ -276,8 +276,8 @@ func TestLoadFromPath_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !IsProjectNotFound(err) {
-		t.Errorf("expected ProjectNotFoundError, got %T", err)
+	if !IsArchitectNotFound(err) {
+		t.Errorf("expected ArchitectNotFoundError, got %T", err)
 	}
 }
 
