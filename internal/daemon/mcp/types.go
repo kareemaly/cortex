@@ -26,43 +26,38 @@ type Session struct {
 
 // ListTicketsInput is the input for the listTickets tool.
 type ListTicketsInput struct {
-	Status      string `json:"status" jsonschema:"Ticket status to filter by (required). Must be one of: backlog, progress, done"`
-	Query       string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	Status string `json:"status" jsonschema:"Ticket status to filter by (required). Must be one of: backlog, progress, done"`
+	Query  string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
 }
 
 // ReadTicketInput is the input for the readTicket tool.
 type ReadTicketInput struct {
-	ID          string `json:"id" jsonschema:"The ticket ID to read"`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	ID string `json:"id" jsonschema:"The ticket ID to read"`
 }
 
 // CreateWorkTicketInput is the input for the createWorkTicket tool.
 type CreateWorkTicketInput struct {
-	Title       string   `json:"title" jsonschema:"The ticket title (required)"`
-	Body        string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Repo        string   `json:"repo" jsonschema:"Repository path for this ticket (required). Must be from the configured repos list in cortex.yaml."`
-	DueDate     string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
-	References  []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
-	ProjectPath string   `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	Title      string   `json:"title" jsonschema:"The ticket title (required)"`
+	Body       string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
+	Repo       string   `json:"repo" jsonschema:"Repository path for this ticket (required). Must be from the configured repos list in cortex.yaml."`
+	DueDate    string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
+	References []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
 }
 
 // CreateResearchTicketInput is the input for the createResearchTicket tool.
 type CreateResearchTicketInput struct {
-	Title       string   `json:"title" jsonschema:"The ticket title (required)"`
-	Body        string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	DueDate     string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
-	References  []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
-	ProjectPath string   `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	Title      string   `json:"title" jsonschema:"The ticket title (required)"`
+	Body       string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
+	DueDate    string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
+	References []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
 }
 
 // UpdateTicketInput is the input for the updateTicket tool.
 type UpdateTicketInput struct {
-	ID          string    `json:"id" jsonschema:"The ticket ID to update"`
-	Title       *string   `json:"title,omitempty" jsonschema:"New title (optional)"`
-	Body        *string   `json:"body,omitempty" jsonschema:"New body (optional)"`
-	References  *[]string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (optional, full replacement — plain ticket IDs only, no prefix scheme)"`
-	ProjectPath string    `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	ID         string    `json:"id" jsonschema:"The ticket ID to update"`
+	Title      *string   `json:"title,omitempty" jsonschema:"New title (optional)"`
+	Body       *string   `json:"body,omitempty" jsonschema:"New body (optional)"`
+	References *[]string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (optional, full replacement — plain ticket IDs only, no prefix scheme)"`
 }
 
 // DeleteTicketInput is the input for the deleteTicket tool.
@@ -72,45 +67,25 @@ type DeleteTicketInput struct {
 
 // MoveTicketInput is the input for the moveTicket tool.
 type MoveTicketInput struct {
-	ID          string `json:"id" jsonschema:"The ticket ID to move"`
-	Status      string `json:"status" jsonschema:"Target status (backlog/progress/done)"`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	ID     string `json:"id" jsonschema:"The ticket ID to move"`
+	Status string `json:"status" jsonschema:"Target status (backlog/progress/done)"`
 }
 
 // SpawnSessionInput is the input for the spawnSession tool.
 type SpawnSessionInput struct {
-	TicketID    string `json:"ticket_id" jsonschema:"The ticket ID to spawn a session for"`
-	Mode        string `json:"mode,omitempty" jsonschema:"Spawn mode: 'normal' (default), 'resume', or 'fresh'"`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	TicketID string `json:"ticket_id" jsonschema:"The ticket ID to spawn a session for"`
+	Mode     string `json:"mode,omitempty" jsonschema:"Spawn mode: 'normal' (default), 'resume', or 'fresh'"`
 }
 
 // UpdateDueDateInput is the input for the updateDueDate tool.
 type UpdateDueDateInput struct {
-	ID          string `json:"id" jsonschema:"The ticket ID (required)"`
-	DueDate     string `json:"due_date" jsonschema:"The due date in RFC3339 format (required, e.g., '2024-12-31T23:59:59Z')"`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+	ID      string `json:"id" jsonschema:"The ticket ID (required)"`
+	DueDate string `json:"due_date" jsonschema:"The due date in RFC3339 format (required, e.g., '2024-12-31T23:59:59Z')"`
 }
 
 // ClearDueDateInput is the input for the clearDueDate tool.
 type ClearDueDateInput struct {
-	ID          string `json:"id" jsonschema:"The ticket ID (required)"`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
-}
-
-// ListProjectsInput is the input for the listProjects tool.
-// This tool takes no parameters.
-type ListProjectsInput struct{}
-
-// ProjectSummary represents a project in the listProjects output.
-type ProjectSummary struct {
-	Path   string `json:"path"`
-	Title  string `json:"title"`
-	Exists bool   `json:"exists"`
-}
-
-// ListProjectsOutput is the output for the listProjects tool.
-type ListProjectsOutput struct {
-	Projects []ProjectSummary `json:"projects"`
+	ID string `json:"id" jsonschema:"The ticket ID (required)"`
 }
 
 // ConcludeSessionInput is the input for the concludeSession tool.
@@ -227,16 +202,14 @@ type ArchitectConcludeOutput struct {
 
 // ListConclusionsInput is the input for the listConclusions tool.
 type ListConclusionsInput struct {
-	Type        string `json:"type,omitempty" jsonschema:"Filter by type: architect, work, or research."`
-	Limit       int    `json:"limit,omitempty" jsonschema:"Max results to return (default 10)."`
-	Offset      int    `json:"offset,omitempty" jsonschema:"Results to skip for pagination (default 0)."`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project."`
+	Type   string `json:"type,omitempty" jsonschema:"Filter by type: architect, work, or research."`
+	Limit  int    `json:"limit,omitempty" jsonschema:"Max results to return (default 10)."`
+	Offset int    `json:"offset,omitempty" jsonschema:"Results to skip for pagination (default 0)."`
 }
 
 // ReadConclusionInput is the input for the readConclusion tool.
 type ReadConclusionInput struct {
-	ID          string `json:"id" jsonschema:"The conclusion ID to read"`
-	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project."`
+	ID string `json:"id" jsonschema:"The conclusion ID to read"`
 }
 
 // ConclusionListItem is a metadata-only conclusion record for list responses (no body).

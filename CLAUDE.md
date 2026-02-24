@@ -150,13 +150,12 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 
 | Tool | Description |
 |------|-------------|
-| `listProjects` | List all registered projects (for cross-project operations) |
-| `listTickets` | List tickets by status (backlog/progress/done), optional search query and project_path |
+| `listTickets` | List tickets by status (backlog/progress/done), optional search query |
 | `readTicket` | Read full ticket details by ID |
 | `createWorkTicket` | Create a work ticket with title, body, required repo, optional due_date and references |
 | `createResearchTicket` | Create a research ticket with title, body, optional due_date and references (no repo) |
 | `updateTicket` | Update ticket title, body, and/or references |
-| `deleteTicket` | Delete ticket by ID (current project only) |
+| `deleteTicket` | Delete ticket by ID |
 | `moveTicket` | Move ticket to different status |
 | `updateDueDate` | Set or update ticket due date |
 | `clearDueDate` | Remove due date from ticket |
@@ -164,8 +163,6 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 | `listSessions` | List persistent conclusions (session records) |
 | `readSession` | Read a conclusion by ID |
 | `concludeSession` | Conclude the architect session and clean up |
-
-**Cross-project support**: Most architect tools accept an optional `project_path` parameter to operate on a different registered project. Use `listProjects` to discover available projects. Exception: `deleteTicket` is restricted to the current project for safety.
 
 **Ticket Agent** (`tools_ticket.go`):
 

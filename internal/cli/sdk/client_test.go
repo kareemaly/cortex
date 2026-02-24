@@ -101,34 +101,6 @@ func TestDefaultClient(t *testing.T) {
 	}
 }
 
-func TestWithProject(t *testing.T) {
-	c := NewClient("http://example.com", "/project-a")
-
-	c2 := c.WithProject("/project-b")
-	if c2.projectPath != "/project-b" {
-		t.Errorf("expected projectPath %q, got %q", "/project-b", c2.projectPath)
-	}
-	if c2.baseURL != c.baseURL {
-		t.Errorf("expected shared baseURL")
-	}
-}
-
-func TestWithProjectSharesHTTPClient(t *testing.T) {
-	c := NewClient("http://example.com", "/project-a")
-	c2 := c.WithProject("/project-b")
-	if c2.httpClient != c.httpClient {
-		t.Error("expected shared HTTP client")
-	}
-}
-
-func TestWithProjectEmpty(t *testing.T) {
-	c := NewClient("http://example.com", "/project-a")
-	c2 := c.WithProject("")
-	if c2 != c {
-		t.Error("expected same client when projectPath is empty")
-	}
-}
-
 // --- doRequest / project header tests ---
 
 func TestDoRequest_InjectsProjectHeader(t *testing.T) {
