@@ -5,12 +5,6 @@
 # Tickets
 
 {{.TicketList}}
-{{- if .Notes}}
-
-# Notes
-
-{{.Notes}}
-{{- end}}
 {{- if .Sessions}}
 
 # Recent Conclusions
@@ -22,10 +16,4 @@
 # Configured Repos
 
 {{.Repos}}
-{{- end}}
-{{- if .TopTags}}
-
-# Tags
-
-Reuse existing tags when creating tickets: {{.TopTags}}
 {{- end}}

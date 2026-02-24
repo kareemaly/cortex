@@ -21,7 +21,6 @@ type ArchitectKickoffVars struct {
 	ProjectName string
 	TicketList  string
 	CurrentDate string
-	TopTags     string // comma-separated top tags
 	Sessions    string // recent conclusions list
 	Repos       string // configured repo list
 }

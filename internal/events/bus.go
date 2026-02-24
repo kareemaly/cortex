@@ -17,9 +17,6 @@ const (
 	SessionEnded      EventType = "session_ended"
 	SessionStatus     EventType = "session_status"
 	ConclusionCreated EventType = "conclusion_created"
-	NoteCreated       EventType = "note_created"
-	NoteUpdated       EventType = "note_updated"
-	NoteDeleted       EventType = "note_deleted"
 )
 
 // Event represents a change in the system.

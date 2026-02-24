@@ -28,8 +28,6 @@ type Session struct {
 type ListTicketsInput struct {
 	Status      string `json:"status" jsonschema:"Ticket status to filter by (required). Must be one of: backlog, progress, done"`
 	Query       string `json:"query,omitempty" jsonschema:"Optional search term to filter tickets by title/body (case-insensitive substring match)."`
-	DueBefore   string `json:"due_before,omitempty" jsonschema:"Optional RFC3339 timestamp to filter tickets with due date before this time."`
-	Tag         string `json:"tag,omitempty" jsonschema:"Optional tag to filter tickets (case-insensitive)."`
 	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
@@ -39,15 +37,22 @@ type ReadTicketInput struct {
 	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
-// CreateTicketInput is the input for the createTicket tool.
-type CreateTicketInput struct {
+// CreateWorkTicketInput is the input for the createWorkTicket tool.
+type CreateWorkTicketInput struct {
 	Title       string   `json:"title" jsonschema:"The ticket title (required)"`
 	Body        string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Type        string   `json:"type,omitempty" jsonschema:"The ticket type. Must match a type defined in the project's cortex.yaml ticket config. Defaults to 'work' if not specified."`
-	Repo        string   `json:"repo,omitempty" jsonschema:"Optional repository path for this ticket"`
+	Repo        string   `json:"repo" jsonschema:"Repository path for this ticket (required). Must be from the configured repos list in cortex.yaml."`
 	DueDate     string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
 	References  []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
-	Tags        []string `json:"tags,omitempty" jsonschema:"Free-form tags for categorization"`
+	ProjectPath string   `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
+}
+
+// CreateResearchTicketInput is the input for the createResearchTicket tool.
+type CreateResearchTicketInput struct {
+	Title       string   `json:"title" jsonschema:"The ticket title (required)"`
+	Body        string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
+	DueDate     string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
+	References  []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
 	ProjectPath string   `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
@@ -56,9 +61,7 @@ type UpdateTicketInput struct {
 	ID          string    `json:"id" jsonschema:"The ticket ID to update"`
 	Title       *string   `json:"title,omitempty" jsonschema:"New title (optional)"`
 	Body        *string   `json:"body,omitempty" jsonschema:"New body (optional)"`
-	Type        *string   `json:"type,omitempty" jsonschema:"New ticket type (optional). Must match a type defined in project config."`
 	References  *[]string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (optional, full replacement — plain ticket IDs only, no prefix scheme)"`
-	Tags        *[]string `json:"tags,omitempty" jsonschema:"New tags (optional, full replacement)"`
 	ProjectPath string    `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project. If omitted, uses the current session's project."`
 }
 
@@ -123,7 +126,6 @@ type TicketSummary struct {
 	Title   string     `json:"title"`
 	Type    string     `json:"type"`
 	Repo    string     `json:"repo,omitempty"`
-	Tags    []string   `json:"tags,omitempty"`
 	Due     *time.Time `json:"due,omitempty"`
 	Created time.Time  `json:"created"`
 	Updated time.Time  `json:"updated"`
@@ -145,7 +147,6 @@ type TicketOutput struct {
 	Body       string     `json:"body"`
 	Repo       string     `json:"repo,omitempty"`
 	Session    string     `json:"session,omitempty"`
-	Tags       []string   `json:"tags,omitempty"`
 	References []string   `json:"references,omitempty"`
 	Status     string     `json:"status"`
 	Created    time.Time  `json:"created"`
@@ -263,7 +264,6 @@ func ticketSummaryResponseToMCP(s *types.TicketSummary) TicketSummary {
 		ID:      s.ID,
 		Title:   s.Title,
 		Type:    s.Type,
-		Tags:    s.Tags,
 		Due:     s.Due,
 		Created: s.Created,
 		Updated: s.Updated,

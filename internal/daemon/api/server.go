@@ -70,15 +70,6 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Delete("/{id}/due-date", ticketHandlers.ClearDueDate)
 		})
 
-		// Note routes
-		noteHandlers := NewNoteHandlers(deps)
-		r.Route("/notes", func(r chi.Router) {
-			r.Get("/", noteHandlers.List)
-			r.Post("/", noteHandlers.Create)
-			r.Put("/{id}", noteHandlers.Update)
-			r.Delete("/{id}", noteHandlers.Delete)
-		})
-
 		// Conclusion routes
 		conclusionHandlers := NewConclusionHandlers(deps)
 		r.Route("/conclusions", func(r chi.Router) {
@@ -109,9 +100,6 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		r.Route("/agent", func(r chi.Router) {
 			r.Post("/status", agentHandlers.UpdateStatus)
 		})
-
-		// Tags route
-		r.Get("/tags", TagsHandler(deps.StoreManager))
 
 		// Prompt routes
 		promptHandlers := NewPromptHandlers(deps)

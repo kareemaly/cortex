@@ -34,7 +34,6 @@ type TicketMeta struct {
 	Type       string     `yaml:"type"`
 	Repo       string     `yaml:"repo,omitempty"`
 	Session    string     `yaml:"session,omitempty"`
-	Tags       []string   `yaml:"tags,omitempty"`
 	References []string   `yaml:"references,omitempty"`
 	Due        *time.Time `yaml:"due,omitempty"`
 	Created    time.Time  `yaml:"created"`

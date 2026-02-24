@@ -70,16 +70,22 @@ func (s *Server) registerArchitectTools() {
 		Description: "Read full ticket details by ID",
 	}, s.handleReadTicket)
 
-	// Create ticket
+	// Create work ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "createTicket",
-		Description: "Create a new ticket in backlog",
-	}, s.handleCreateTicket)
+		Name:        "createWorkTicket",
+		Description: "Create a new work ticket in backlog. Requires a repo field — the agent will spawn in that repo directory.",
+	}, s.handleCreateWorkTicket)
+
+	// Create research ticket
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "createResearchTicket",
+		Description: "Create a new research ticket in backlog. No repo required — the agent spawns in the architect project root for read-only exploration.",
+	}, s.handleCreateResearchTicket)
 
 	// Update ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
-		Description: "Update ticket title, body, type, references, and/or tags",
+		Description: "Update ticket title, body, and/or references",
 	}, s.handleUpdateTicket)
 
 	// Delete ticket
@@ -111,27 +117,6 @@ func (s *Server) registerArchitectTools() {
 		Name:        "clearDueDate",
 		Description: "Remove the due date from a ticket",
 	}, s.handleClearDueDate)
-
-	// Note tools
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "listNotes",
-		Description: "List all active project notes/reminders",
-	}, s.handleListNotes)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "createNote",
-		Description: "Create a new note/reminder with optional due date (YYYY-MM-DD)",
-	}, s.handleCreateNote)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "updateNote",
-		Description: "Update a note's text and/or due date",
-	}, s.handleUpdateNote)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "deleteNote",
-		Description: "Delete a note by ID",
-	}, s.handleDeleteNote)
 
 	// List sessions (persistent conclusions)
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -200,17 +185,7 @@ func (s *Server) handleListTickets(
 		return nil, ListTicketsOutput{}, NewValidationError("status", "must be one of: backlog, progress, done")
 	}
 
-	// Parse dueBefore if provided
-	var dueBefore *time.Time
-	if input.DueBefore != "" {
-		parsed, err := time.Parse(time.RFC3339, input.DueBefore)
-		if err != nil {
-			return nil, ListTicketsOutput{}, NewValidationError("due_before", "must be in RFC3339 format")
-		}
-		dueBefore = &parsed
-	}
-
-	resp, err := client.ListTicketsByStatus(input.Status, input.Query, dueBefore, input.Tag)
+	resp, err := client.ListTicketsByStatus(input.Status, input.Query, nil)
 	if err != nil {
 		return nil, ListTicketsOutput{}, wrapSDKError(err)
 	}
@@ -255,11 +230,49 @@ func (s *Server) handleReadTicket(
 	}, nil
 }
 
-// handleCreateTicket creates a new ticket via the daemon HTTP API.
-func (s *Server) handleCreateTicket(
+// handleCreateWorkTicket creates a new work ticket via the daemon HTTP API.
+func (s *Server) handleCreateWorkTicket(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
-	input CreateTicketInput,
+	input CreateWorkTicketInput,
+) (*mcp.CallToolResult, CreateTicketOutput, error) {
+	// Validate project path first
+	if err := s.validateProjectPath(input.ProjectPath); err != nil {
+		return nil, CreateTicketOutput{}, err
+	}
+
+	if input.Repo == "" {
+		return nil, CreateTicketOutput{}, NewValidationError("repo", "is required for work tickets")
+	}
+
+	// Get client for target project
+	client := s.getClientForProject(input.ProjectPath)
+
+	// Parse dueDate if provided
+	var dueDate *time.Time
+	if input.DueDate != "" {
+		parsed, err := time.Parse(time.RFC3339, input.DueDate)
+		if err != nil {
+			return nil, CreateTicketOutput{}, NewValidationError("due_date", "must be in RFC3339 format")
+		}
+		dueDate = &parsed
+	}
+
+	resp, err := client.CreateTicket(input.Title, input.Body, "work", input.Repo, dueDate, input.References)
+	if err != nil {
+		return nil, CreateTicketOutput{}, wrapSDKError(err)
+	}
+
+	return nil, CreateTicketOutput{
+		Ticket: ticketResponseToOutput(resp),
+	}, nil
+}
+
+// handleCreateResearchTicket creates a new research ticket via the daemon HTTP API.
+func (s *Server) handleCreateResearchTicket(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input CreateResearchTicketInput,
 ) (*mcp.CallToolResult, CreateTicketOutput, error) {
 	// Validate project path first
 	if err := s.validateProjectPath(input.ProjectPath); err != nil {
@@ -279,7 +292,7 @@ func (s *Server) handleCreateTicket(
 		dueDate = &parsed
 	}
 
-	resp, err := client.CreateTicket(input.Title, input.Body, input.Type, input.Repo, dueDate, input.References, input.Tags)
+	resp, err := client.CreateTicket(input.Title, input.Body, "research", "", dueDate, input.References)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
@@ -289,7 +302,7 @@ func (s *Server) handleCreateTicket(
 	}, nil
 }
 
-// handleUpdateTicket updates a ticket's title and/or body via the daemon HTTP API.
+// handleUpdateTicket updates a ticket's title, body, and/or references via the daemon HTTP API.
 func (s *Server) handleUpdateTicket(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -307,7 +320,7 @@ func (s *Server) handleUpdateTicket(
 		return nil, UpdateTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := client.UpdateTicket(input.ID, input.Title, input.Body, input.Type, input.References, input.Tags)
+	resp, err := client.UpdateTicket(input.ID, input.Title, input.Body, input.References)
 	if err != nil {
 		return nil, UpdateTicketOutput{}, wrapSDKError(err)
 	}

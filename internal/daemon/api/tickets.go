@@ -58,9 +58,6 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		dueBefore = &parsed
 	}
 
-	// Read tag filter
-	tag := r.URL.Query().Get("tag")
-
 	// Load project config to get tmux session name for orphan detection.
 	tmuxSession := ""
 	projectCfg, cfgErr := projectconfig.Load(projectPath)
@@ -69,9 +66,9 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := ListAllTicketsResponse{
-		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
 	}
 
 	// Sort by Created descending (most recent first)
@@ -120,9 +117,6 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 		dueBefore = &parsed
 	}
 
-	// Read tag filter
-	tag := r.URL.Query().Get("tag")
-
 	// Load project config to get tmux session name for orphan detection.
 	tmuxSession := ""
 	projectCfg, cfgErr := projectconfig.Load(projectPath)
@@ -131,7 +125,7 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := ListTicketsResponse{
-		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tag, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
 	}
 
 	// Sort by Created descending (most recent first)
@@ -180,7 +174,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := store.Create(req.Title, req.Body, ticketType, dueDate, req.References, req.Tags, req.Repo)
+	t, err := store.Create(req.Title, req.Body, ticketType, dueDate, req.References, req.Repo)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -256,16 +250,7 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate ticket type
-	if req.Type != nil && *req.Type != "" {
-		if *req.Type != "work" && *req.Type != "research" {
-			writeError(w, http.StatusBadRequest, "invalid_type",
-				fmt.Sprintf("invalid ticket type %q, valid types: work, research", *req.Type))
-			return
-		}
-	}
-
-	t, err := store.Update(id, req.Title, req.Body, req.Type, req.References, req.Tags)
+	t, err := store.Update(id, req.Title, req.Body, req.References)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return

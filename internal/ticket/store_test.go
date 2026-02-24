@@ -50,7 +50,7 @@ func TestStoreCreate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, err := store.Create("Test Ticket", "Test body", "", nil, nil, nil, "")
+	ticket, err := store.Create("Test Ticket", "Test body", "", nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestStoreCreateEmptyTitle(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, err := store.Create("", "body", "", nil, nil, nil, "")
+	_, err := store.Create("", "body", "", nil, nil, "")
 	if err == nil {
 		t.Error("expected error for empty title")
 	}
@@ -93,7 +93,7 @@ func TestStoreCreateWithReferences(t *testing.T) {
 	defer cleanup()
 
 	refs := []string{"doc:abc123"}
-	ticket, err := store.Create("Test", "body", "", nil, refs, nil, "")
+	ticket, err := store.Create("Test", "body", "", nil, refs, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestStoreGet(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	created, err := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
+	created, err := store.Create("Test Ticket", "body", "", nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -148,11 +148,11 @@ func TestStoreUpdate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, nil, "")
+	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, "")
 
 	newTitle := "Updated Title"
 	newBody := "Updated body"
-	updated, err := store.Update(ticket.ID, &newTitle, &newBody, nil, nil, nil)
+	updated, err := store.Update(ticket.ID, &newTitle, &newBody, nil)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -169,10 +169,10 @@ func TestStoreUpdatePartial(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, nil, "")
+	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, "")
 
 	newTitle := "Updated Title"
-	updated, err := store.Update(ticket.ID, &newTitle, nil, nil, nil, nil)
+	updated, err := store.Update(ticket.ID, &newTitle, nil, nil)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -185,40 +185,12 @@ func TestStoreUpdatePartial(t *testing.T) {
 	}
 }
 
-func TestStoreUpdateType(t *testing.T) {
-	store, cleanup := setupTestStore(t)
-	defer cleanup()
-
-	ticket, _ := store.Create("Test Ticket", "body", "work", nil, nil, nil, "")
-	if ticket.Type != "work" {
-		t.Fatalf("type = %q, want %q", ticket.Type, "work")
-	}
-
-	newType := "bug"
-	updated, err := store.Update(ticket.ID, nil, nil, &newType, nil, nil)
-	if err != nil {
-		t.Fatalf("Update failed: %v", err)
-	}
-
-	if updated.Type != "bug" {
-		t.Errorf("type = %q, want %q", updated.Type, "bug")
-	}
-
-	// Verify persistence
-	retrieved, _, err := store.Get(ticket.ID)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-	if retrieved.Type != "bug" {
-		t.Errorf("persisted type = %q, want %q", retrieved.Type, "bug")
-	}
-}
 
 func TestStoreUpdateTitleRename(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Old Title", "body", "", nil, nil, nil, "")
+	ticket, _ := store.Create("Old Title", "body", "", nil, nil, "")
 	shortID := storage.ShortID(ticket.ID)
 
 	// Verify old directory exists
@@ -228,7 +200,7 @@ func TestStoreUpdateTitleRename(t *testing.T) {
 	}
 
 	newTitle := "New Title"
-	_, err := store.Update(ticket.ID, &newTitle, nil, nil, nil, nil)
+	_, err := store.Update(ticket.ID, &newTitle, nil, nil)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -258,7 +230,7 @@ func TestStoreDelete(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, "")
 
 	if err := store.Delete(ticket.ID); err != nil {
 		t.Fatalf("Delete failed: %v", err)
@@ -274,8 +246,8 @@ func TestStoreList(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, _ = store.Create("Ticket 1", "", "", nil, nil, nil, "")
-	_, _ = store.Create("Ticket 2", "", "", nil, nil, nil, "")
+	_, _ = store.Create("Ticket 1", "", "", nil, nil, "")
+	_, _ = store.Create("Ticket 2", "", "", nil, nil, "")
 
 	tickets, err := store.List(StatusBacklog)
 	if err != nil {
@@ -291,8 +263,8 @@ func TestStoreListAll(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	t1, _ := store.Create("Backlog Ticket", "", "", nil, nil, nil, "")
-	t2, _ := store.Create("Progress Ticket", "", "", nil, nil, nil, "")
+	t1, _ := store.Create("Backlog Ticket", "", "", nil, nil, "")
+	t2, _ := store.Create("Progress Ticket", "", "", nil, nil, "")
 	_ = store.Move(t2.ID, StatusProgress)
 
 	all, err := store.ListAll()
@@ -315,7 +287,7 @@ func TestStoreMove(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, "")
 
 	if err := store.Move(ticket.ID, StatusProgress); err != nil {
 		t.Fatalf("Move failed: %v", err)
@@ -335,7 +307,7 @@ func TestStoreMoveSameStatus(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, nil, "")
+	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, "")
 
 	if err := store.Move(ticket.ID, StatusBacklog); err != nil {
 		t.Fatalf("Move to same status failed: %v", err)
@@ -354,7 +326,7 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	tk, err := store.Create("Concurrent Ticket", "initial body", "", nil, nil, nil, "")
+	tk, err := store.Create("Concurrent Ticket", "initial body", "", nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -371,7 +343,7 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 			for i := 0; i < updatesPerGoroutine; i++ {
 				title := fmt.Sprintf("Title-%d-%d", g, i)
 				body := fmt.Sprintf("Body-%d-%d", g, i)
-				_, err := store.Update(tk.ID, &title, &body, nil, nil, nil)
+				_, err := store.Update(tk.ID, &title, &body, nil)
 				if err != nil {
 					t.Errorf("Update goroutine %d iter %d failed: %v", g, i, err)
 					return
@@ -398,7 +370,7 @@ func TestStoreDirLayout(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Fix Auth Bug", "body", "", nil, nil, nil, "")
+	ticket, _ := store.Create("Fix Auth Bug", "body", "", nil, nil, "")
 	shortID := storage.ShortID(ticket.ID)
 
 	// Verify directory structure
@@ -417,7 +389,7 @@ func TestStoreSetDueDate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test", "body", "", nil, nil, nil, "")
+	ticket, _ := store.Create("Test", "body", "", nil, nil, "")
 
 	due := ticket.Created.AddDate(0, 0, 7)
 	updated, err := store.SetDueDate(ticket.ID, &due)
@@ -436,7 +408,7 @@ func TestStoreClearDueDate(t *testing.T) {
 
 	due := store.ticketsDir // irrelevant, just need a time
 	_ = due
-	ticket, _ := store.Create("Test", "body", "", nil, nil, nil, "")
+	ticket, _ := store.Create("Test", "body", "", nil, nil, "")
 
 	d := ticket.Created.AddDate(0, 0, 7)
 	_, _ = store.SetDueDate(ticket.ID, &d)

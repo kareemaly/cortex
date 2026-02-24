@@ -11,7 +11,6 @@ import (
 type Dependencies struct {
 	StoreManager           *StoreManager
 	ConclusionStoreManager *ConclusionStoreManager
-	NotesStoreManager      *NotesStoreManager
 	SessionManager         *SessionManager
 	TmuxManager            *tmux.Manager
 	Bus                    *events.Bus

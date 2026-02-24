@@ -285,7 +285,7 @@ func TestListAllTickets_NoFilters(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.ListAllTickets("", nil, "")
+	resp, err := c.ListAllTickets("", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +305,7 @@ func TestListAllTickets_WithFilters(t *testing.T) {
 
 	c := NewClient(srv.URL, "/p")
 	due := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
-	_, err := c.ListAllTickets("search", &due, "bug")
+	_, err := c.ListAllTickets("search", &due)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,9 +317,6 @@ func TestListAllTickets_WithFilters(t *testing.T) {
 	if !strings.Contains(last.Path, "due_before=") {
 		t.Errorf("expected due_before param, got %q", last.Path)
 	}
-	if !strings.Contains(last.Path, "tag=bug") {
-		t.Errorf("expected tag param, got %q", last.Path)
-	}
 }
 
 func TestListTicketsByStatus(t *testing.T) {
@@ -329,7 +326,7 @@ func TestListTicketsByStatus(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.ListTicketsByStatus("backlog", "", nil, "")
+	resp, err := c.ListTicketsByStatus("backlog", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +401,7 @@ func TestCreateTicket_Success(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.CreateTicket("New Ticket", "body", "", "", nil, nil, nil)
+	resp, err := c.CreateTicket("New Ticket", "body", "", "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +421,7 @@ func TestCreateTicket_WithAllFields(t *testing.T) {
 
 	c := NewClient(srv.URL, "/p")
 	due := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
-	_, err := c.CreateTicket("T", "B", "bug", "", &due, []string{"ref1"}, []string{"tag1"})
+	_, err := c.CreateTicket("T", "B", "bug", "", &due, []string{"ref1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +445,7 @@ func TestCreateTicket_Error(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	_, err := c.CreateTicket("", "", "", "", nil, nil, nil)
+	_, err := c.CreateTicket("", "", "", "", nil, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -469,7 +466,7 @@ func TestUpdateTicket_Success(t *testing.T) {
 
 	c := NewClient(srv.URL, "/p")
 	title := "Updated"
-	resp, err := c.UpdateTicket("abc123", &title, nil, nil, nil, nil)
+	resp, err := c.UpdateTicket("abc123", &title, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -680,56 +677,6 @@ func TestConcludeSession_Success(t *testing.T) {
 	}
 	if resp.TicketID != "abc123" {
 		t.Errorf("expected ticket ID abc123, got %q", resp.TicketID)
-	}
-}
-
-// --- ListTags ---
-
-func TestListTags_Success(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("GET", "/tags", http.StatusOK, ListTagsResponse{
-		Tags: []TagCount{
-			{Name: "api", Count: 3},
-			{Name: "bug", Count: 1},
-		},
-	})
-
-	c := NewClient(srv.URL, "/p")
-	resp, err := c.ListTags()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(resp.Tags) != 2 {
-		t.Fatalf("expected 2 tags, got %d", len(resp.Tags))
-	}
-	if resp.Tags[0].Name != "api" || resp.Tags[0].Count != 3 {
-		t.Errorf("expected first tag api:3, got %s:%d", resp.Tags[0].Name, resp.Tags[0].Count)
-	}
-
-	last := rs.lastRequest()
-	if last.Headers.Get(ProjectHeader) != "/p" {
-		t.Errorf("expected project header /p, got %q", last.Headers.Get(ProjectHeader))
-	}
-}
-
-func TestListTags_Error(t *testing.T) {
-	srv, rs := newRoutedServer(t)
-	rs.setRoute("GET", "/tags", http.StatusInternalServerError, types.ErrorResponse{
-		Error: "internal error",
-		Code:  "internal_error",
-	})
-
-	c := NewClient(srv.URL, "/p")
-	_, err := c.ListTags()
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	apiErr, ok := err.(*APIError)
-	if !ok {
-		t.Fatalf("expected APIError, got %T", err)
-	}
-	if apiErr.Status != http.StatusInternalServerError {
-		t.Errorf("expected status 500, got %d", apiErr.Status)
 	}
 }
 

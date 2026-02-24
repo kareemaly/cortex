@@ -84,10 +84,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create session manager, conclusion store manager, and notes store manager
+	// Create session manager and conclusion store manager
 	sessionManager := api.NewSessionManager(logger)
 	conclusionStoreManager := api.NewConclusionStoreManager(logger, bus)
-	notesStoreManager := api.NewNotesStoreManager(logger, bus)
 
 	// Get home directory for MCP config path
 	homeDir, err := os.UserHomeDir()
@@ -99,7 +98,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	deps := &api.Dependencies{
 		StoreManager:           storeManager,
 		ConclusionStoreManager: conclusionStoreManager,
-		NotesStoreManager:      notesStoreManager,
 		SessionManager:         sessionManager,
 		TmuxManager:            tmuxManager,
 		Bus:                    bus,

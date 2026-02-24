@@ -50,15 +50,12 @@ Tickets and conclusions use **YAML frontmatter + markdown body** stored as `inde
 
 Default ticket path is `{projectRoot}/tickets/` (configurable via `tickets.path` in `cortex.yaml`). Sessions are ephemeral and stored in `.cortex/sessions.json`.
 
-Notes use a **single YAML file** (`{projectRoot}/notes.yaml`) — lightweight reminders surfaced in the architect kickoff prompt.
-
 ## Critical Implementation Notes
 
 - **HTTP-only communication**: All clients (CLI, TUI, MCP) communicate via HTTP to daemon. No direct filesystem access to ticket store.
 - **Project context**: Always use `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
 - **StoreManager**: Single source of truth for ticket state. Located in `internal/daemon/api/store_manager.go`.
 - **ConclusionStoreManager**: Manages conclusion stores per project. Located in `internal/daemon/api/conclusion_store_manager.go`.
-- **NotesStoreManager**: Manages note stores per project. Located in `internal/daemon/api/notes_store_manager.go`.
 - **SessionManager**: Manages ephemeral session stores per project. Located in `internal/daemon/api/session_manager.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 
@@ -91,13 +88,12 @@ Notes use a **single YAML file** (`{projectRoot}/notes.yaml`) — lightweight re
 | MCP tools | `internal/daemon/mcp/` |
 | Ticket store | `internal/ticket/` |
 | Conclusion store | `internal/conclusion/` |
-| Notes store | `internal/notes/` |
 | SDK client | `internal/cli/sdk/client.go` |
 | Spawn orchestration | `internal/core/spawn/` |
 | Project config | `internal/project/config/` |
 | Daemon config | `internal/daemon/config/` |
 | Tmux manager | `internal/tmux/` |
-| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `sessions/`, `notes/`, `config/`, `ticket/`) |
+| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `sessions/`, `config/`, `ticket/`) |
 | Install/init logic | `internal/install/` |
 | Agent defaults | `internal/install/defaults/main/` (shared prompts for all agents) |
 | Shared storage | `internal/storage/` |
@@ -144,7 +140,7 @@ Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/s
 
 **Global** (no project header): `GET /health`, `GET /projects`, `POST /projects`, global config (`/config/global`), daemon logs/status (`/daemon/logs`, `/daemon/status`).
 
-**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, conclude, architect spawn/conclude, session kill/approve, SSE events, conclusions (`/conclusions`), notes CRUD (`/notes`), tags aggregation, project config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`, `/prompts/reset`).
+**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, conclude, architect spawn/conclude, session kill/approve, SSE events, conclusions (`/conclusions`), project config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`, `/prompts/reset`).
 
 ## MCP Tools
 
@@ -155,19 +151,16 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 | Tool | Description |
 |------|-------------|
 | `listProjects` | List all registered projects (for cross-project operations) |
-| `listTickets` | List tickets by status (backlog/progress/done), optional search query, tag, and due_before filter |
+| `listTickets` | List tickets by status (backlog/progress/done), optional search query and project_path |
 | `readTicket` | Read full ticket details by ID |
-| `createTicket` | Create ticket with title, body, type, repo, optional due_date, references, and tags |
-| `updateTicket` | Update ticket title, body, type, references, and/or tags |
+| `createWorkTicket` | Create a work ticket with title, body, required repo, optional due_date and references |
+| `createResearchTicket` | Create a research ticket with title, body, optional due_date and references (no repo) |
+| `updateTicket` | Update ticket title, body, and/or references |
 | `deleteTicket` | Delete ticket by ID (current project only) |
 | `moveTicket` | Move ticket to different status |
 | `updateDueDate` | Set or update ticket due date |
 | `clearDueDate` | Remove due date from ticket |
 | `spawnSession` | Spawn agent session for ticket (modes: normal, resume, fresh) |
-| `listNotes` | List all project notes/reminders |
-| `createNote` | Create a note with optional due date (YYYY-MM-DD) |
-| `updateNote` | Update a note's text and/or due date |
-| `deleteNote` | Delete a note by ID |
 | `listSessions` | List persistent conclusions (session records) |
 | `readSession` | Read a conclusion by ID |
 | `concludeSession` | Conclude the architect session and clean up |

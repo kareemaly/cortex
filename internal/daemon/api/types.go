@@ -22,15 +22,11 @@ type (
 	ArchitectSpawnResponse   = types.ArchitectSpawnResponse
 	ConclusionResponse       = types.ConclusionResponse
 	ListConclusionsResponse  = types.ListConclusionsResponse
-	NoteResponse             = types.NoteResponse
-	ListNotesResponse        = types.ListNotesResponse
 	HealthResponse           = types.HealthResponse
 	ProjectTicketCounts      = types.ProjectTicketCounts
 	ProjectResponse          = types.ProjectResponse
 	ConcludeSessionResponse  = types.ConcludeSessionResponse
 	ResolvePromptResponse    = types.ResolvePromptResponse
-	ListTagsResponse         = types.ListTagsResponse
-	TagCount                 = types.TagCount
 	PromptFileInfo           = types.PromptFileInfo
 	PromptGroupInfo          = types.PromptGroupInfo
 	ListPromptsResponse      = types.ListPromptsResponse
@@ -44,16 +40,13 @@ type CreateTicketRequest struct {
 	Repo       string   `json:"repo,omitempty"`
 	DueDate    *string  `json:"due_date,omitempty"`
 	References []string `json:"references,omitempty"`
-	Tags       []string `json:"tags,omitempty"`
 }
 
 // UpdateTicketRequest is the request body for updating a ticket.
 type UpdateTicketRequest struct {
 	Title      *string   `json:"title,omitempty"`
 	Body       *string   `json:"body,omitempty"`
-	Type       *string   `json:"type,omitempty"`
 	References *[]string `json:"references,omitempty"`
-	Tags       *[]string `json:"tags,omitempty"`
 }
 
 // MoveTicketRequest is the request body for moving a ticket.
@@ -106,18 +99,6 @@ type ResetPromptRequest struct {
 	Path string `json:"path"`
 }
 
-// CreateNoteRequest is the request body for creating a note.
-type CreateNoteRequest struct {
-	Text string  `json:"text"`
-	Due  *string `json:"due,omitempty"`
-}
-
-// UpdateNoteRequest is the request body for updating a note.
-type UpdateNoteRequest struct {
-	Text *string `json:"text,omitempty"`
-	Due  *string `json:"due,omitempty"`
-}
-
 // CreateConclusionRequest is the request body for creating a conclusion.
 type CreateConclusionRequest struct {
 	Type   string `json:"type"`
@@ -126,9 +107,9 @@ type CreateConclusionRequest struct {
 	Body   string `json:"body"`
 }
 
-// filterSummaryList converts tickets to summaries with optional query, dueBefore, and tag filters.
+// filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
 // Looks up session from session manager for each ticket.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tag string, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string) []TicketSummary {
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string) []TicketSummary {
 	var summaries []TicketSummary
 
 	// Get the session store for this project
@@ -147,20 +128,6 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 		// Apply dueBefore filter if specified
 		if dueBefore != nil {
 			if t.Due == nil || !t.Due.Before(*dueBefore) {
-				continue
-			}
-		}
-		// Apply tag filter if specified (case-insensitive)
-		if tag != "" {
-			found := false
-			lowerTag := strings.ToLower(tag)
-			for _, tt := range t.Tags {
-				if strings.ToLower(tt) == lowerTag {
-					found = true
-					break
-				}
-			}
-			if !found {
 				continue
 			}
 		}

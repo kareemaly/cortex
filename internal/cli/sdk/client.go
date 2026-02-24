@@ -80,8 +80,6 @@ type (
 	ArchitectSessionResponse = types.ArchitectSessionResponse
 	ArchitectStateResponse   = types.ArchitectStateResponse
 	ArchitectSpawnResponse   = types.ArchitectSpawnResponse
-	NoteResponse             = types.NoteResponse
-	ListNotesResponse        = types.ListNotesResponse
 	HealthResponse           = types.HealthResponse
 	ProjectTicketCounts      = types.ProjectTicketCounts
 	ProjectResponse          = types.ProjectResponse
@@ -89,8 +87,6 @@ type (
 	ConclusionResponse       = types.ConclusionResponse
 	ListConclusionsResponse  = types.ListConclusionsResponse
 	ResolvePromptResponse    = types.ResolvePromptResponse
-	ListTagsResponse         = types.ListTagsResponse
-	TagCount                 = types.TagCount
 	PromptFileInfo           = types.PromptFileInfo
 	PromptGroupInfo          = types.PromptGroupInfo
 	ListPromptsResponse      = types.ListPromptsResponse
@@ -160,8 +156,7 @@ func (c *Client) HealthWithVersion() (*HealthResponse, error) {
 // ListAllTickets returns all tickets grouped by status.
 // If query is non-empty, filters tickets by title or body (case-insensitive).
 // If dueBefore is non-nil, filters tickets with due date before the specified time.
-// If tag is non-empty, filters tickets that have the specified tag.
-func (c *Client) ListAllTickets(query string, dueBefore *time.Time, tag string) (*ListAllTicketsResponse, error) {
+func (c *Client) ListAllTickets(query string, dueBefore *time.Time) (*ListAllTicketsResponse, error) {
 	url := c.baseURL + "/tickets"
 	params := []string{}
 	if query != "" {
@@ -169,9 +164,6 @@ func (c *Client) ListAllTickets(query string, dueBefore *time.Time, tag string) 
 	}
 	if dueBefore != nil {
 		params = append(params, "due_before="+dueBefore.Format(time.RFC3339))
-	}
-	if tag != "" {
-		params = append(params, "tag="+tag)
 	}
 	if len(params) > 0 {
 		url += "?" + strings.Join(params, "&")
@@ -203,8 +195,7 @@ func (c *Client) ListAllTickets(query string, dueBefore *time.Time, tag string) 
 // ListTicketsByStatus returns tickets with a specific status.
 // If query is non-empty, filters tickets by title or body (case-insensitive).
 // If dueBefore is non-nil, filters tickets with due date before the specified time.
-// If tag is non-empty, filters tickets that have the specified tag.
-func (c *Client) ListTicketsByStatus(status, query string, dueBefore *time.Time, tag string) (*ListTicketsResponse, error) {
+func (c *Client) ListTicketsByStatus(status, query string, dueBefore *time.Time) (*ListTicketsResponse, error) {
 	url := c.baseURL + "/tickets/" + status
 	params := []string{}
 	if query != "" {
@@ -212,9 +203,6 @@ func (c *Client) ListTicketsByStatus(status, query string, dueBefore *time.Time,
 	}
 	if dueBefore != nil {
 		params = append(params, "due_before="+dueBefore.Format(time.RFC3339))
-	}
-	if tag != "" {
-		params = append(params, "tag="+tag)
 	}
 	if len(params) > 0 {
 		url += "?" + strings.Join(params, "&")
@@ -269,7 +257,7 @@ func (c *Client) GetTicket(status, id string) (*TicketResponse, error) {
 }
 
 // CreateTicket creates a new ticket.
-func (c *Client) CreateTicket(title, body, ticketType, repo string, dueDate *time.Time, references, tags []string) (*TicketResponse, error) {
+func (c *Client) CreateTicket(title, body, ticketType, repo string, dueDate *time.Time, references []string) (*TicketResponse, error) {
 	reqBody := map[string]any{"title": title, "body": body}
 	if ticketType != "" {
 		reqBody["type"] = ticketType
@@ -282,9 +270,6 @@ func (c *Client) CreateTicket(title, body, ticketType, repo string, dueDate *tim
 	}
 	if references != nil {
 		reqBody["references"] = references
-	}
-	if tags != nil {
-		reqBody["tags"] = tags
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
@@ -443,7 +428,7 @@ func (c *Client) ApproveSession(id string) error {
 
 // FindTicketByID searches for a ticket by ID across all statuses.
 func (c *Client) FindTicketByID(ticketID string) (*TicketResponse, error) {
-	all, err := c.ListAllTickets("", nil, "")
+	all, err := c.ListAllTickets("", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -519,8 +504,8 @@ func (c *Client) UnlinkProject(projectPath string) error {
 	return nil
 }
 
-// UpdateTicket updates a ticket's title, body, type, references, and/or tags by ID (status-agnostic).
-func (c *Client) UpdateTicket(id string, title, body, ticketType *string, references, tags *[]string) (*TicketResponse, error) {
+// UpdateTicket updates a ticket's title, body, and/or references by ID (status-agnostic).
+func (c *Client) UpdateTicket(id string, title, body *string, references *[]string) (*TicketResponse, error) {
 	// Discover current status
 	current, err := c.GetTicketByID(id)
 	if err != nil {
@@ -534,14 +519,8 @@ func (c *Client) UpdateTicket(id string, title, body, ticketType *string, refere
 	if body != nil {
 		reqBody["body"] = *body
 	}
-	if ticketType != nil {
-		reqBody["type"] = *ticketType
-	}
 	if references != nil {
 		reqBody["references"] = *references
-	}
-	if tags != nil {
-		reqBody["tags"] = *tags
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
@@ -990,149 +969,6 @@ func (c *Client) ResolvePrompt(req ResolvePromptRequest) (*ResolvePromptResponse
 	}
 
 	var result ResolvePromptResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// ListNotes returns all notes for the project.
-func (c *Client) ListNotes() (*ListNotesResponse, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/notes", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.doRequest(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var result ListNotesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// CreateNote creates a new note with optional due date.
-func (c *Client) CreateNote(text string, due *string) (*NoteResponse, error) {
-	reqBody := map[string]any{"text": text}
-	if due != nil {
-		reqBody["due"] = *due
-	}
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode request: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/notes", bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.doRequest(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusCreated {
-		return nil, c.parseError(resp)
-	}
-
-	var result NoteResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// UpdateNote updates a note's text and/or due date.
-func (c *Client) UpdateNote(id string, text *string, due *string) (*NoteResponse, error) {
-	reqBody := map[string]any{}
-	if text != nil {
-		reqBody["text"] = *text
-	}
-	if due != nil {
-		reqBody["due"] = *due
-	}
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode request: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPut, c.baseURL+"/notes/"+id, bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.doRequest(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var result NoteResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// DeleteNote deletes a note by ID.
-func (c *Client) DeleteNote(id string) error {
-	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/notes/"+id, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.doRequest(req)
-	if err != nil {
-		return fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusNoContent {
-		return c.parseError(resp)
-	}
-
-	return nil
-}
-
-// ListTags returns aggregated tags from tickets and docs, sorted by count descending.
-func (c *Client) ListTags() (*ListTagsResponse, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tags", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.doRequest(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var result ListTagsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}

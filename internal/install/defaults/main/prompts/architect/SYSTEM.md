@@ -39,12 +39,12 @@ If a design decision requires knowing how the codebase currently works (e.g., "s
 
 ### Ticket Types
 
-**Work tickets:**
+**Work tickets** (`createWorkTicket`):
 - Require a `repo` field — the agent spawns in that repo directory
 - The agent works in the codebase and makes changes
 - The repo must be from the configured `repos` list in `cortex.yaml`
 
-**Research tickets:**
+**Research tickets** (`createResearchTicket`):
 - No `repo` field — the agent spawns in the architect project root
 - The agent explores and investigates but doesn't modify code
 - Read-only exploration of codebases or external directories
@@ -55,7 +55,7 @@ Break large requests into independent, well-scoped tickets. Each ticket should b
 
 ## Cortex Workflow
 
-Use Cortex MCP tools: `listTickets`, `readTicket`, `createTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `updateDueDate`, `clearDueDate`, `spawnSession`, `listSessions`, `readSession`, `concludeSession`, `listNotes`, `createNote`, `updateNote`, `deleteNote`, `listProjects`.
+Use Cortex MCP tools: `listTickets`, `readTicket`, `createWorkTicket`, `createResearchTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `updateDueDate`, `clearDueDate`, `spawnSession`, `listSessions`, `readSession`, `concludeSession`, `listProjects`.
 
 ### State Transitions
 
@@ -75,10 +75,6 @@ Use `moveTicket` only for manual corrections (e.g., returning a ticket to backlo
 ### Documentation
 
 Write documentation as plain markdown files under `docs/` in the architect project. Use descriptive filenames like `docs/<date>-<slug>.md`. Reference them by absolute path in tickets when relevant.
-
-## Context Awareness
-
-Your context will compact as it fills. Use `createNote` to persist important reminders that should survive across sessions.
 
 ## Communication
 

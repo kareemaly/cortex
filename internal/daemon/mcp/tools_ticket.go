@@ -55,7 +55,6 @@ func ticketResponseToOutput(r *types.TicketResponse) TicketOutput {
 		Body:       r.Body,
 		Repo:       r.Repo,
 		Session:    r.Session,
-		Tags:       r.Tags,
 		References: r.References,
 		Status:     r.Status,
 		Created:    r.Created,

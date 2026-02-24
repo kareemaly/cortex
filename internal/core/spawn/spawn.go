@@ -794,7 +794,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 
 	// Query daemon API to get tickets by status
 	client := sdk.DefaultClient(req.ProjectPath)
-	tickets, err := client.ListAllTickets("", nil, "")
+	tickets, err := client.ListAllTickets("", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tickets: %w", err)
 	}
@@ -827,18 +827,6 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	writeSection("Done", doneTickets)
 
 	ticketList := sb.String()
-
-	// Fetch top tags (graceful degradation)
-	var topTags string
-	tagsResp, tagsErr := client.ListTags()
-	if tagsErr == nil && len(tagsResp.Tags) > 0 {
-		limit := min(20, len(tagsResp.Tags))
-		tagNames := make([]string, limit)
-		for i := range limit {
-			tagNames[i] = tagsResp.Tags[i].Name
-		}
-		topTags = strings.Join(tagNames, ", ")
-	}
 
 	// Fetch conclusions (graceful degradation)
 	var sessionsList string
@@ -875,7 +863,6 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 			ProjectName: req.ProjectName,
 			TicketList:  ticketList,
 			CurrentDate: time.Now().Format("2006-01-02 15:04 MST"),
-			TopTags:     topTags,
 			Sessions:    sessionsList,
 			Repos:       reposList,
 		}

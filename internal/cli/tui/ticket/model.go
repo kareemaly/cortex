@@ -873,12 +873,6 @@ func (m Model) renderAttributes(width, height int) string {
 		b.WriteString(dueDateStyle.Render(m.ticket.Due.Format("Jan 02, 15:04")))
 	}
 
-	if len(m.ticket.Tags) > 0 {
-		b.WriteString("\n")
-		b.WriteString(attributeLabelStyle.Render("Tags     "))
-		b.WriteString(attributeValueStyle.Render(strings.Join(m.ticket.Tags, ", ")))
-	}
-
 	// SESSION section
 	b.WriteString("\n\n")
 	b.WriteString(attributeHeaderStyle.Render("SESSION"))

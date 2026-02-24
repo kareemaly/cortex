@@ -8,7 +8,6 @@ import (
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/cli/tui/config"
 	"github.com/kareemaly/cortex/internal/cli/tui/kanban"
-	"github.com/kareemaly/cortex/internal/cli/tui/notes"
 	"github.com/kareemaly/cortex/internal/cli/tui/sessions"
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
 )
@@ -18,16 +17,14 @@ type viewID int
 const (
 	viewKanban viewID = iota
 	viewSessions
-	viewNotes
 	viewConfig
 	viewCount
 )
 
-// Model is the top-level wrapper that hosts kanban, notes, and config views.
+// Model is the top-level wrapper that hosts kanban, sessions, and config views.
 type Model struct {
 	kanban        kanban.Model
 	sessions      sessions.Model
-	notes         notes.Model
 	config        config.Model
 	active        viewID
 	width, height int
@@ -54,7 +51,6 @@ func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 	return Model{
 		kanban:   kanban.New(client, logBuf),
 		sessions: sessions.New(client, logBuf),
-		notes:    notes.New(client, logBuf),
 		config:   config.New(client, logBuf),
 		active:   viewKanban,
 	}
@@ -62,7 +58,7 @@ func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 
 // Init initializes all child models.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.kanban.Init(), m.sessions.Init(), m.notes.Init(), m.config.Init())
+	return tea.Batch(m.kanban.Init(), m.sessions.Init(), m.config.Init())
 }
 
 // Update routes messages to child models.
@@ -79,7 +75,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Height: msg.Height - 1,
 		}
 
-		var cmd1, cmd2, cmd3, cmd4 tea.Cmd
+		var cmd1, cmd2, cmd3 tea.Cmd
 		var kanbanModel tea.Model
 		kanbanModel, cmd1 = m.kanban.Update(childSize)
 		m.kanban = kanbanModel.(kanban.Model)
@@ -88,15 +84,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sessionsModel, cmd2 = m.sessions.Update(childSize)
 		m.sessions = sessionsModel.(sessions.Model)
 
-		var notesModel tea.Model
-		notesModel, cmd3 = m.notes.Update(childSize)
-		m.notes = notesModel.(notes.Model)
-
 		var configModel tea.Model
-		configModel, cmd4 = m.config.Update(childSize)
+		configModel, cmd3 = m.config.Update(childSize)
 		m.config = configModel.(config.Model)
 
-		return m, tea.Batch(cmd1, cmd2, cmd3, cmd4)
+		return m, tea.Batch(cmd1, cmd2, cmd3)
 
 	case tea.KeyMsg:
 		// Check for view-switching keys first (suppressed when child captures input).
@@ -113,7 +105,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateActiveChild(msg)
 
 	default:
-		var cmd1, cmd2, cmd3, cmd4 tea.Cmd
+		var cmd1, cmd2, cmd3 tea.Cmd
 		var kanbanModel tea.Model
 		kanbanModel, cmd1 = m.kanban.Update(msg)
 		m.kanban = kanbanModel.(kanban.Model)
@@ -122,15 +114,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sessionsModel, cmd2 = m.sessions.Update(msg)
 		m.sessions = sessionsModel.(sessions.Model)
 
-		var notesModel tea.Model
-		notesModel, cmd3 = m.notes.Update(msg)
-		m.notes = notesModel.(notes.Model)
-
 		var configModel tea.Model
-		configModel, cmd4 = m.config.Update(msg)
+		configModel, cmd3 = m.config.Update(msg)
 		m.config = configModel.(config.Model)
 
-		return m, tea.Batch(cmd1, cmd2, cmd3, cmd4)
+		return m, tea.Batch(cmd1, cmd2, cmd3)
 	}
 }
 
@@ -148,12 +136,6 @@ func (m Model) updateActiveChild(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var model tea.Model
 		model, cmd = m.sessions.Update(msg)
 		m.sessions = model.(sessions.Model)
-		return m, cmd
-	case viewNotes:
-		var cmd tea.Cmd
-		var model tea.Model
-		model, cmd = m.notes.Update(msg)
-		m.notes = model.(notes.Model)
 		return m, cmd
 	case viewConfig:
 		var cmd tea.Cmd
@@ -182,8 +164,6 @@ func (m Model) View() string {
 		b.WriteString(m.kanban.View())
 	case viewSessions:
 		b.WriteString(m.sessions.View())
-	case viewNotes:
-		b.WriteString(m.notes.View())
 	case viewConfig:
 		b.WriteString(m.config.View())
 	}
@@ -199,7 +179,6 @@ func (m Model) renderTabBar() string {
 	}{
 		{viewKanban, "Kanban"},
 		{viewSessions, "Sessions"},
-		{viewNotes, "Notes"},
 		{viewConfig, "Config"},
 	}
 
@@ -220,9 +199,6 @@ func (m Model) renderTabBar() string {
 // isChildCapturingInput returns true when the active child is capturing keyboard input
 // (e.g., text input or modal), so tab-switching keys should be suppressed.
 func (m Model) isChildCapturingInput() bool {
-	if m.active == viewNotes {
-		return m.notes.InputActive()
-	}
 	if m.active == viewSessions {
 		return m.sessions.InputActive()
 	}

@@ -28,7 +28,6 @@ type TicketResponse struct {
 	Body       string     `json:"body"`
 	Repo       string     `json:"repo,omitempty"`
 	Session    string     `json:"session,omitempty"`
-	Tags       []string   `json:"tags,omitempty"`
 	References []string   `json:"references,omitempty"`
 	Status     string     `json:"status"`
 	Created    time.Time  `json:"created"`
@@ -41,7 +40,6 @@ type TicketSummary struct {
 	ID               string     `json:"id"`
 	Type             string     `json:"type"`
 	Title            string     `json:"title"`
-	Tags             []string   `json:"tags,omitempty"`
 	Status           string     `json:"status"`
 	Created          time.Time  `json:"created"`
 	Updated          time.Time  `json:"updated"`
@@ -138,30 +136,6 @@ type ConcludeSessionResponse struct {
 type ResolvePromptResponse struct {
 	Content    string `json:"content"`
 	SourcePath string `json:"source_path"`
-}
-
-// TagCount represents a tag and how many times it appears across tickets.
-type TagCount struct {
-	Name  string `json:"name"`
-	Count int    `json:"count"`
-}
-
-// ListTagsResponse is the response for GET /tags.
-type ListTagsResponse struct {
-	Tags []TagCount `json:"tags"`
-}
-
-// NoteResponse is the response for a single note.
-type NoteResponse struct {
-	ID      string     `json:"id"`
-	Text    string     `json:"text"`
-	Due     *time.Time `json:"due,omitempty"`
-	Created time.Time  `json:"created"`
-}
-
-// ListNotesResponse is a list of notes.
-type ListNotesResponse struct {
-	Notes []NoteResponse `json:"notes"`
 }
 
 // PromptFileInfo describes a single prompt file with its ejection status.

@@ -5,21 +5,20 @@ import (
 	"testing"
 )
 
-func TestRenderTemplate_ArchitectKickoff_WithTags(t *testing.T) {
+func TestRenderTemplate_ArchitectKickoff_Basic(t *testing.T) {
 	tmpl := `# Project: {{.ProjectName}}
 {{.TicketList}}
-{{- if .TopTags}}
+{{- if .Sessions}}
 
-# Tags
+# Recent Conclusions
 
-Reuse existing tags: {{.TopTags}}
+{{.Sessions}}
 {{- end}}`
 
 	vars := ArchitectKickoffVars{
 		ProjectName: "TestProject",
 		TicketList:  "## Backlog\n- [t1] Task 1\n",
 		CurrentDate: "2025-06-01 10:00 UTC",
-		TopTags:     "api, bug, feature",
 	}
 
 	result, err := RenderTemplate(tmpl, vars)
@@ -27,38 +26,14 @@ Reuse existing tags: {{.TopTags}}
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(result, "# Tags") {
-		t.Error("expected tags section to be present")
+	if !strings.Contains(result, "# Project: TestProject") {
+		t.Error("expected project name to be present")
 	}
-	if !strings.Contains(result, "api, bug, feature") {
-		t.Error("expected tags to be present")
+	if !strings.Contains(result, "Task 1") {
+		t.Error("expected ticket list to be present")
 	}
-}
-
-func TestRenderTemplate_ArchitectKickoff_EmptyTags(t *testing.T) {
-	tmpl := `# Project: {{.ProjectName}}
-{{.TicketList}}
-{{- if .TopTags}}
-
-# Tags
-
-Reuse existing tags: {{.TopTags}}
-{{- end}}`
-
-	vars := ArchitectKickoffVars{
-		ProjectName: "TestProject",
-		TicketList:  "## Backlog\n(none)\n",
-		CurrentDate: "2025-06-01 10:00 UTC",
-		TopTags:     "",
-	}
-
-	result, err := RenderTemplate(tmpl, vars)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if strings.Contains(result, "# Tags") {
-		t.Error("expected tags section to be omitted when empty")
+	if strings.Contains(result, "# Recent Conclusions") {
+		t.Error("expected conclusions section to be omitted when empty")
 	}
 }
 
