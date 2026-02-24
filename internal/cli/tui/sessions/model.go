@@ -520,24 +520,23 @@ func (m Model) renderSessionList(height int) string {
 
 	var lines []string
 	for i, c := range sessions {
-		timeStr := timeStyle.Render(c.Created.Local().Format("15:04"))
-
-		typeLabel := typeShortLabel(c.Type)
-		typePart := typeLabelStyle.Render(typeLabel)
-
-		title := sessionTitle(c)
-
-		row := timeStr + "  " + typePart + "  " + title
-
+		var row string
 		if i == m.cursor {
-			row = selectedItemStyle.Render("▸ ") + selectedItemStyle.Render(row)
+			timeRaw := c.Created.Local().Format("15:04")
+			typeRaw := fmt.Sprintf("%-10s", typeShortLabel(c.Type))
+			titleRaw := sessionTitle(c)
+			rawRow := "▸ " + timeRaw + "  " + typeRaw + "  " + titleRaw
+			row = selectedItemStyle.Width(m.width).Render(rawRow)
 		} else {
-			row = "  " + row
+			timeStr := timeStyle.Render(c.Created.Local().Format("15:04"))
+			typePart := typeLabelStyle.Render(typeShortLabel(c.Type))
+			title := sessionTitle(c)
+			row = "  " + timeStr + "  " + typePart + "  " + title
 		}
 		lines = append(lines, row)
 	}
 
-	// Clamp to visible height with scroll
+	// Clamp to visible height with scroll.
 	start := 0
 	if m.cursor >= height {
 		start = m.cursor - height + 1

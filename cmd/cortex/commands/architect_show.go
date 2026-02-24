@@ -3,8 +3,10 @@ package commands
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
 	"github.com/kareemaly/cortex/internal/cli/tui/views"
@@ -29,10 +31,15 @@ var architectShowCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		projectName := filepath.Base(architectPath)
+		if cfg, err := architectconfig.Load(architectPath); err == nil && cfg.Name != "" {
+			projectName = cfg.Name
+		}
+
 		client := sdk.DefaultClient(architectPath)
 		logBuf := tuilog.NewBuffer(tuilog.DefaultCapacity)
 		p := tea.NewProgram(
-			views.New(client, logBuf),
+			views.New(client, logBuf, projectName),
 			tea.WithAltScreen(),
 		)
 		if _, err := p.Run(); err != nil {

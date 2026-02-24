@@ -10,8 +10,9 @@ var (
 
 var (
 	selectedItemStyle = lipgloss.NewStyle().
-				Foreground(accentColor).
-				Bold(true)
+				Bold(true).
+				Foreground(lipgloss.Color("255")).
+				Background(accentColor)
 
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241"))
@@ -49,7 +50,7 @@ var (
 	// Date strip styles
 	activeDateStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("0")).
+			Foreground(lipgloss.Color("255")).
 			Background(accentColor).
 			Padding(0, 1)
 

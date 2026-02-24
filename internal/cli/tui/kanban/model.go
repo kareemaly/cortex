@@ -517,13 +517,6 @@ func (m Model) View() string {
 
 	var b strings.Builder
 
-	// Header.
-	headerLeft := headerStyle.Render("cortex1")
-	headerPadding := max(m.width-lipgloss.Width(headerLeft), 0)
-	header := headerLeft + strings.Repeat(" ", headerPadding)
-	b.WriteString(header)
-	b.WriteString("\n\n")
-
 	// Handle error state.
 	if m.err != nil {
 		errMsg := errorStatusStyle.Render(fmt.Sprintf("Error: %s", m.err))
@@ -546,8 +539,8 @@ func (m Model) View() string {
 	columnWidth := max((m.width-2)/3, 20) // -2 for minimal side margins
 
 	// Calculate available height for columns.
-	// Header (1) + newlines (2) + status bar (1) + help bar (1) + margins (2) = ~7 lines overhead
-	columnHeight := max(m.height-7, 5)
+	// Status bar (1) + help bar (1) + margins (2) = ~4 lines overhead
+	columnHeight := max(m.height-4, 5)
 
 	// Render columns side by side.
 	cols := make([]string, 3)

@@ -14,13 +14,6 @@ var (
 
 // Styles for the kanban board.
 var (
-	// Header style for the title bar.
-	headerStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("255")).
-			Background(lipgloss.Color("62")).
-			Padding(0, 1)
-
 	// Column header styles by status.
 	backlogHeaderStyle = lipgloss.NewStyle().
 				Bold(true).

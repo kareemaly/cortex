@@ -29,6 +29,7 @@ type Model struct {
 	active        viewID
 	width, height int
 	ready         bool
+	projectName   string
 }
 
 // Tab bar styles.
@@ -47,12 +48,13 @@ var (
 )
 
 // New creates a new views wrapper.
-func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
+func New(client *sdk.Client, logBuf *tuilog.Buffer, projectName string) Model {
 	return Model{
-		kanban:   kanban.New(client, logBuf),
-		sessions: sessions.New(client, logBuf),
-		config:   config.New(client, logBuf),
-		active:   viewKanban,
+		kanban:      kanban.New(client, logBuf),
+		sessions:    sessions.New(client, logBuf),
+		config:      config.New(client, logBuf),
+		active:      viewKanban,
+		projectName: projectName,
 	}
 }
 
@@ -69,10 +71,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.ready = true
 
-		// All children get the window size, minus 1 line for tab bar.
+		// All children get the window size, minus 2 lines (tab bar + blank spacer).
 		childSize := tea.WindowSizeMsg{
 			Width:  msg.Width,
-			Height: msg.Height - 1,
+			Height: msg.Height - 2,
 		}
 
 		var cmd1, cmd2, cmd3 tea.Cmd
@@ -155,8 +157,9 @@ func (m Model) View() string {
 
 	var b strings.Builder
 
-	// Tab bar.
+	// Tab bar + blank margin line below it.
 	b.WriteString(m.renderTabBar())
+	b.WriteString("\n\n")
 
 	// Active child view.
 	switch m.active {
@@ -192,8 +195,9 @@ func (m Model) renderTabBar() string {
 	}
 
 	bar := tabBarStyle.Render(strings.Join(parts, ""))
-	padding := max(m.width-lipgloss.Width(bar), 0)
-	return bar + strings.Repeat(" ", padding) + "\n"
+	nameStr := inactiveTabStyle.Render(m.projectName)
+	padding := max(m.width-lipgloss.Width(bar)-lipgloss.Width(nameStr), 0)
+	return bar + strings.Repeat(" ", padding) + nameStr
 }
 
 // isChildCapturingInput returns true when the active child is capturing keyboard input
