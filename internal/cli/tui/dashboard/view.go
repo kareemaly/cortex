@@ -241,6 +241,33 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 	pd := m.projects[r.projectIndex]
 	indent := "    "
 
+	if r.sessionType == "collab" {
+		session := m.findSession(pd, r.sessionID)
+		if session == nil {
+			return indent + "???"
+		}
+
+		name := session.TicketTitle
+		if len(name) > 24 {
+			name = name[:21] + "..."
+		}
+
+		icon := "●"
+		styledIcon := activeIconStyle.Render(icon)
+
+		badge := "collab"
+		badgeStyled := progressBadgeStyle.Render(badge)
+
+		dur := formatDuration(time.Since(session.StartedAt))
+
+		if selected {
+			plain := fmt.Sprintf("%s%s %-24s %-10s %s", indent, icon, name, badge, dur)
+			return selectedStyle.Render(plain)
+		}
+
+		return fmt.Sprintf("%s%s %-24s %-10s %s", indent, styledIcon, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
+	}
+
 	ticket := m.findTicket(pd, r.ticketID)
 	if ticket == nil {
 		return indent + "???"

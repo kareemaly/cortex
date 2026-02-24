@@ -230,6 +230,18 @@ func (m Model) handleFocusCurrentRow() (tea.Model, tea.Cmd) {
 		return m, m.clearStatusAfterDelay()
 	}
 
+	if r.kind == rowSession && r.sessionType == "collab" {
+		session := m.findSession(pd, r.sessionID)
+		if session == nil {
+			m.statusMsg = "Session not found"
+			m.statusIsError = false
+			return m, m.clearStatusAfterDelay()
+		}
+		m.statusMsg = "Focusing collab session..."
+		m.statusIsError = false
+		return m, m.focusCollabSession(pd.project.Path, session.SessionID, session.TicketTitle)
+	}
+
 	m.statusMsg = "Focusing session..."
 	m.statusIsError = false
 	return m, m.focusTicket(pd.project.Path, r.ticketID)
@@ -289,6 +301,22 @@ func (m Model) handleKillSession() (tea.Model, tea.Cmd) {
 	}
 
 	if r.kind == rowSession {
+		if r.sessionType == "collab" {
+			session := m.findSession(pd, r.sessionID)
+			if session == nil {
+				return m, nil
+			}
+			name := session.TicketTitle
+			if len(name) > 30 {
+				name = name[:27] + "..."
+			}
+			m.showKillConfirm = true
+			m.killProjectPath = pd.project.Path
+			m.killSessionID = session.SessionID
+			m.killSessionName = name
+			return m, nil
+		}
+
 		ticket := m.findTicket(pd, r.ticketID)
 		if ticket == nil {
 			return m, nil

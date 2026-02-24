@@ -91,6 +91,8 @@ type SessionListItem struct {
 	Tool        *string   `json:"tool,omitempty"`
 }
 
+// TicketTitle is reused for non-ticket sessions (collab sessions show "Collab: {prompt}")
+
 // ListSessionsResponse is the response from GET /sessions.
 type ListSessionsResponse struct {
 	Sessions []SessionListItem `json:"sessions"`

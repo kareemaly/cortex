@@ -59,7 +59,28 @@ func (m *Model) rebuildRows() {
 				return 0
 			})
 			for _, t := range sessionTickets {
-				rows = append(rows, row{kind: rowSession, projectIndex: i, ticketID: t.ID})
+				rows = append(rows, row{kind: rowSession, projectIndex: i, ticketID: t.ID, sessionType: "ticket"})
+			}
+		}
+
+		if pd.sessions != nil {
+			var collabSessions []sdk.SessionListItem
+			for _, s := range pd.sessions.Sessions {
+				if s.SessionType == "collab" {
+					collabSessions = append(collabSessions, s)
+				}
+			}
+			slices.SortStableFunc(collabSessions, func(a, b sdk.SessionListItem) int {
+				if a.StartedAt.After(b.StartedAt) {
+					return -1
+				}
+				if b.StartedAt.After(a.StartedAt) {
+					return 1
+				}
+				return 0
+			})
+			for _, s := range collabSessions {
+				rows = append(rows, row{kind: rowSession, projectIndex: i, sessionType: "collab", sessionID: s.SessionID})
 			}
 		}
 	}
@@ -95,6 +116,18 @@ func (m Model) findTicket(pd projectData, ticketID string) *sdk.TicketSummary {
 	return nil
 }
 
+func (m Model) findSession(pd projectData, sessionID string) *sdk.SessionListItem {
+	if pd.sessions == nil {
+		return nil
+	}
+	for i := range pd.sessions.Sessions {
+		if pd.sessions.Sessions[i].SessionID == sessionID {
+			return &pd.sessions.Sessions[i]
+		}
+	}
+	return nil
+}
+
 func newestSessionTime(pd projectData) time.Time {
 	var newest time.Time
 	if pd.architect != nil && pd.architect.Session != nil {
@@ -104,6 +137,13 @@ func newestSessionTime(pd projectData) time.Time {
 		for _, t := range pd.tickets.Progress {
 			if t.SessionStartedAt != nil && t.SessionStartedAt.After(newest) {
 				newest = *t.SessionStartedAt
+			}
+		}
+	}
+	if pd.sessions != nil {
+		for _, s := range pd.sessions.Sessions {
+			if s.StartedAt.After(newest) {
+				newest = s.StartedAt
 			}
 		}
 	}

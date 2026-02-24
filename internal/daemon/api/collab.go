@@ -195,3 +195,45 @@ func (h *CollabHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		Message:  "Collab session concluded",
 	})
 }
+
+// Focus handles POST /collab/{id}/focus - focuses the tmux window of a collab session.
+func (h *CollabHandlers) Focus(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetArchitectPath(r.Context())
+	sessionID := chi.URLParam(r, "id")
+
+	// Look up session from session manager by short ID (the key in the session store)
+	if h.deps.SessionManager == nil {
+		writeError(w, http.StatusNotFound, "no_active_session", "no session manager available")
+		return
+	}
+
+	sessStore := h.deps.SessionManager.GetStore(projectPath)
+	sess, err := sessStore.Get(sessionID)
+	if err != nil || sess == nil || sess.TmuxWindow == "" {
+		writeError(w, http.StatusNotFound, "no_active_session", "collab has no active session with a tmux window")
+		return
+	}
+
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	projectCfg, _ := architectconfig.Load(projectPath)
+	tmuxSession := projectCfg.GetTmuxSessionName()
+
+	if err := h.deps.TmuxManager.FocusWindow(tmuxSession, sess.TmuxWindow); err != nil {
+		writeError(w, http.StatusInternalServerError, "focus_error", err.Error())
+		return
+	}
+
+	if err := h.deps.TmuxManager.SwitchClient(tmuxSession); err != nil {
+		h.deps.Logger.Warn("failed to switch tmux client", "session", tmuxSession, "error", err)
+	}
+
+	resp := FocusResponse{
+		Success: true,
+		Window:  sess.TmuxWindow,
+	}
+	_ = json.NewEncoder(w).Encode(resp)
+}

@@ -121,6 +121,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		r.Route("/collab", func(r chi.Router) {
 			r.Post("/spawn", collabHandlers.Spawn)
 			r.Post("/{id}/conclude", collabHandlers.Conclude)
+			r.Post("/{id}/focus", collabHandlers.Focus)
 		})
 	})
 

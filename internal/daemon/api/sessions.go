@@ -61,6 +61,17 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 		if sess.Type == session.SessionTypeArchitect {
 			sessionType = "architect"
 			title = "Architect"
+		} else if sess.Type == session.SessionTypeCollab {
+			sessionType = "collab"
+			if sess.Prompt != "" {
+				if len(sess.Prompt) > 50 {
+					title = "Collab: " + sess.Prompt[:47] + "..."
+				} else {
+					title = "Collab: " + sess.Prompt
+				}
+			} else {
+				title = "Collab"
+			}
 		} else if ticketStore != nil {
 			if t, _, err := ticketStore.Get(sess.TicketID); err == nil {
 				title = t.Title

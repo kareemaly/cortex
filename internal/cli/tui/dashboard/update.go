@@ -70,6 +70,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.projects[idx].tickets = msg.Tickets
 			m.projects[idx].architect = msg.Architect
+			m.projects[idx].sessions = msg.Sessions
 			m.projects[idx].err = nil
 			m.logBuf.Debugf("api", "project detail loaded: %s", filepath.Base(msg.ArchitectPath))
 		}

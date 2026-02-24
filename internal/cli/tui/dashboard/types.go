@@ -25,12 +25,15 @@ type row struct {
 	kind         rowKind
 	projectIndex int
 	ticketID     string
+	sessionType  string
+	sessionID    string
 }
 
 type projectData struct {
 	project   sdk.ArchitectResponse
 	tickets   *sdk.ListAllTicketsResponse
 	architect *sdk.ArchitectStateResponse
+	sessions  *sdk.ListSessionsResponse
 	loading   bool
 	err       error
 }
@@ -98,6 +101,7 @@ type ArchitectDetailLoadedMsg struct {
 	ArchitectPath string
 	Tickets       *sdk.ListAllTicketsResponse
 	Architect     *sdk.ArchitectStateResponse
+	Sessions      *sdk.ListSessionsResponse
 	Err           error
 }
 

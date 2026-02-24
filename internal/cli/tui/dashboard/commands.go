@@ -28,11 +28,13 @@ func (m Model) loadProjectDetail(projectPath string) tea.Cmd {
 		}
 
 		architect, _ := client.GetArchitect()
+		sessions, _ := client.ListSessions()
 
 		return ArchitectDetailLoadedMsg{
 			ArchitectPath: projectPath,
 			Tickets:       tickets,
 			Architect:     architect,
+			Sessions:      sessions,
 		}
 	}
 }
@@ -111,6 +113,20 @@ func (m Model) focusTicket(projectPath, ticketID string) tea.Cmd {
 			return FocusErrorMsg{Err: err}
 		}
 		return FocusSuccessMsg{Name: ticketID[:8]}
+	}
+}
+
+func (m Model) focusCollabSession(projectPath, sessionID, name string) tea.Cmd {
+	return func() tea.Msg {
+		client := sdk.DefaultClient(projectPath)
+		if err := client.FocusCollabSession(sessionID); err != nil {
+			return FocusErrorMsg{Err: err}
+		}
+		displayName := name
+		if len(displayName) > 8 {
+			displayName = displayName[:8]
+		}
+		return FocusSuccessMsg{Name: displayName}
 	}
 }
 
