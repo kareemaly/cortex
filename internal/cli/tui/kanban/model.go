@@ -105,16 +105,6 @@ type SessionDeleteErrorMsg struct {
 	Err error
 }
 
-// PopupOpenedMsg is sent when a ticket popup is successfully opened.
-type PopupOpenedMsg struct {
-	Ticket *sdk.TicketSummary
-}
-
-// PopupErrorMsg is sent when opening a ticket popup fails.
-type PopupErrorMsg struct {
-	Err error
-}
-
 // sseConnectedMsg is sent when the SSE connection is established.
 type sseConnectedMsg struct {
 	ch     <-chan sdk.Event
@@ -243,17 +233,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = fmt.Sprintf("Delete error: %s", msg.Err)
 		m.statusIsError = true
 		m.logBuf.Errorf("delete", "delete failed: %s", msg.Err)
-		return m, m.clearStatusAfterDelay()
-
-	case PopupOpenedMsg:
-		m.statusMsg = fmt.Sprintf("Opened: %s", msg.Ticket.Title)
-		m.statusIsError = false
-		return m, m.clearStatusAfterDelay()
-
-	case PopupErrorMsg:
-		m.statusMsg = fmt.Sprintf("Error: %s", msg.Err)
-		m.statusIsError = true
-		m.logBuf.Errorf("popup", "popup failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
 	case ClearStatusMsg:
@@ -428,17 +407,6 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "No active session"
 			m.statusIsError = false
 			return m, m.clearStatusAfterDelay()
-		}
-		return m, nil
-	}
-
-	// Open ticket detail in tmux popup.
-	if isKey(msg, KeyOpen, KeyEnter) {
-		t := m.columns[m.activeColumn].SelectedTicket()
-		if t != nil {
-			m.statusMsg = fmt.Sprintf("Opening: %s...", t.Title)
-			m.statusIsError = false
-			return m, m.showTicketPopup(t)
 		}
 		return m, nil
 	}
@@ -687,16 +655,6 @@ func (m Model) focusTicket(ticket *sdk.TicketSummary) tea.Cmd {
 			return FocusErrorMsg{Err: err}
 		}
 		return FocusSuccessMsg{Window: ticket.Title}
-	}
-}
-
-// showTicketPopup returns a command to open a ticket detail in a tmux popup.
-func (m Model) showTicketPopup(t *sdk.TicketSummary) tea.Cmd {
-	return func() tea.Msg {
-		if err := m.client.ShowTicketPopup(t.ID); err != nil {
-			return PopupErrorMsg{Err: err}
-		}
-		return PopupOpenedMsg{Ticket: t}
 	}
 }
 
