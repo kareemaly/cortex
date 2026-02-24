@@ -75,17 +75,14 @@ func decode[T any](t *testing.T, resp *http.Response) T {
 // --- Test server setup ---
 
 // setupUnitServer creates a test server suitable for unit tests (no build tag required).
-// Creates a .cortex/ dir with cortex.yaml so ProjectRequired middleware passes.
+// Creates a cortex.yaml at project root so ProjectRequired middleware passes.
 func setupUnitServer(t *testing.T) *unitServer {
 	t.Helper()
 
 	tmpDir := t.TempDir()
 
-	cortexDir := filepath.Join(tmpDir, ".cortex")
-	if err := os.MkdirAll(cortexDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cortexDir, "cortex.yaml"), []byte("name: test\n"), 0644); err != nil {
+	// Write cortex.yaml at project root
+	if err := os.WriteFile(filepath.Join(tmpDir, "cortex.yaml"), []byte("name: test\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -349,11 +346,9 @@ func TestConclude_NotFound(t *testing.T) {
 
 func TestFocus_NoSessionManager(t *testing.T) {
 	tmpDir := t.TempDir()
-	cortexDir := filepath.Join(tmpDir, ".cortex")
-	if err := os.MkdirAll(cortexDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cortexDir, "cortex.yaml"), []byte("name: test\n"), 0644); err != nil {
+
+	// Write cortex.yaml at root
+	if err := os.WriteFile(filepath.Join(tmpDir, "cortex.yaml"), []byte("name: test\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 

@@ -49,7 +49,7 @@ func runEject(cmd *cobra.Command, args []string) error {
 	_, projectRoot, err := projectconfig.LoadFromPath(cwd)
 	if err != nil {
 		if projectconfig.IsProjectNotFound(err) {
-			return fmt.Errorf("not in a cortex project (no .cortex directory found)")
+			return fmt.Errorf("not in a cortex project (no cortex.yaml found)")
 		}
 		return err
 	}

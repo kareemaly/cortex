@@ -9,7 +9,7 @@ import (
 
 func TestPromptsDir(t *testing.T) {
 	got := PromptsDir("/project/root")
-	want := "/project/root/.cortex/prompts"
+	want := "/project/root/prompts"
 	if got != want {
 		t.Errorf("PromptsDir() = %q, want %q", got, want)
 	}
@@ -17,7 +17,7 @@ func TestPromptsDir(t *testing.T) {
 
 func TestArchitectPromptPath(t *testing.T) {
 	got := ArchitectPromptPath("/project/root", StageSystem)
-	want := "/project/root/.cortex/prompts/architect/SYSTEM.md"
+	want := "/project/root/prompts/architect/SYSTEM.md"
 	if got != want {
 		t.Errorf("ArchitectPromptPath() = %q, want %q", got, want)
 	}
@@ -25,7 +25,7 @@ func TestArchitectPromptPath(t *testing.T) {
 
 func TestTicketPromptPath(t *testing.T) {
 	got := TicketPromptPath("/project/root", "work", StageKickoff)
-	want := "/project/root/.cortex/prompts/work/KICKOFF.md"
+	want := "/project/root/prompts/work/KICKOFF.md"
 	if got != want {
 		t.Errorf("TicketPromptPath() = %q, want %q", got, want)
 	}
@@ -33,7 +33,7 @@ func TestTicketPromptPath(t *testing.T) {
 
 func TestValidatePromptFile_Exists(t *testing.T) {
 	tmpDir := t.TempDir()
-	promptsDir := filepath.Join(tmpDir, ".cortex", "prompts")
+	promptsDir := filepath.Join(tmpDir, "prompts")
 	if err := os.MkdirAll(promptsDir, 0755); err != nil {
 		t.Fatal(err)
 	}

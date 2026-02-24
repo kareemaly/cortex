@@ -22,7 +22,7 @@ const projectPathKey contextKey = "projectPath"
 // It validates that:
 // 1. The header is present
 // 2. The path is absolute
-// 3. The path exists and has a .cortex/ directory
+// 3. The path exists and has a cortex.yaml file
 func ProjectRequired() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -46,10 +46,10 @@ func ProjectRequired() func(http.Handler) http.Handler {
 				return
 			}
 
-			// Check .cortex/ directory exists (canonical project marker)
-			cortexDir := filepath.Join(projectPath, ".cortex")
-			if _, err := os.Stat(cortexDir); os.IsNotExist(err) {
-				writeError(w, http.StatusNotFound, "project_not_found", "not a cortex project (no .cortex/ directory)")
+			// Check for cortex.yaml (project marker)
+			cortexYaml := filepath.Join(projectPath, "cortex.yaml")
+			if _, err := os.Stat(cortexYaml); os.IsNotExist(err) {
+				writeError(w, http.StatusNotFound, "project_not_found", "not a cortex project (no cortex.yaml)")
 				return
 			}
 

@@ -72,10 +72,10 @@ func RegisterProjectHandler() http.HandlerFunc {
 			return
 		}
 
-		// Check .cortex directory exists
-		cortexDir := filepath.Join(absPath, ".cortex")
-		if _, err := os.Stat(cortexDir); err != nil {
-			writeError(w, http.StatusBadRequest, "validation_error", "not a cortex project (no .cortex directory)")
+		// Check for cortex.yaml (project marker)
+		cortexYaml := filepath.Join(absPath, "cortex.yaml")
+		if _, err := os.Stat(cortexYaml); os.IsNotExist(err) {
+			writeError(w, http.StatusBadRequest, "validation_error", "not a cortex project (no cortex.yaml)")
 			return
 		}
 
@@ -128,9 +128,9 @@ func ProjectsHandler(storeManager *StoreManager) http.HandlerFunc {
 				Title: entry.Title,
 			}
 
-			// Check if the .cortex directory exists
-			cortexDir := filepath.Join(entry.Path, ".cortex")
-			if _, err := os.Stat(cortexDir); err == nil {
+			// Check if project exists (cortex.yaml)
+			cortexYaml := filepath.Join(entry.Path, "cortex.yaml")
+			if _, err := os.Stat(cortexYaml); err == nil {
 				proj.Exists = true
 
 				// Best-effort ticket counts

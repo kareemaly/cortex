@@ -177,7 +177,7 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Read cortex.yaml content
-	configPath := filepath.Join(projectPath, ".cortex", "cortex.yaml")
+	configPath := projectconfig.ConfigPath(projectPath)
 	configContent := ""
 	if data, readErr := os.ReadFile(configPath); readErr == nil {
 		configContent = string(data)

@@ -52,48 +52,7 @@ func TestPromptResolver_ResolveArchitectPrompt(t *testing.T) {
 		}
 	})
 
-	t.Run("partial override - project SYSTEM, base KICKOFF", func(t *testing.T) {
-		projectRoot := t.TempDir()
-		baseRoot := t.TempDir()
-		createPromptFile(t, projectRoot, "architect", "SYSTEM.md", "project system")
-		createBasePromptFile(t, baseRoot, "architect", "KICKOFF.md", "base kickoff")
-
-		resolver := NewPromptResolver(projectRoot, baseRoot)
-
-		// SYSTEM should come from project
-		systemContent, err := resolver.ResolveArchitectPrompt(StageSystem)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if systemContent != "project system" {
-			t.Errorf("expected 'project system', got %q", systemContent)
-		}
-
-		// KICKOFF should come from base
-		kickoffContent, err := resolver.ResolveArchitectPrompt(StageKickoff)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if kickoffContent != "base kickoff" {
-			t.Errorf("expected 'base kickoff', got %q", kickoffContent)
-		}
-	})
-
-	t.Run("returns error when not found anywhere", func(t *testing.T) {
-		projectRoot := t.TempDir()
-		baseRoot := t.TempDir()
-
-		resolver := NewPromptResolver(projectRoot, baseRoot)
-		_, err := resolver.ResolveArchitectPrompt(StageSystem)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if _, ok := err.(*NotFoundError); !ok {
-			t.Errorf("expected NotFoundError, got %T: %v", err, err)
-		}
-	})
-
-	t.Run("returns error when no base and not in project", func(t *testing.T) {
+	t.Run("returns error when not found", func(t *testing.T) {
 		projectRoot := t.TempDir()
 
 		resolver := NewPromptResolver(projectRoot, "")
@@ -101,8 +60,16 @@ func TestPromptResolver_ResolveArchitectPrompt(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
-		if _, ok := err.(*NotFoundError); !ok {
-			t.Errorf("expected NotFoundError, got %T: %v", err, err)
+
+		notFoundErr, ok := err.(*NotFoundError)
+		if !ok {
+			t.Fatalf("expected *NotFoundError, got %T", err)
+		}
+		if notFoundErr.Role != "architect" {
+			t.Errorf("expected role 'architect', got %q", notFoundErr.Role)
+		}
+		if notFoundErr.Stage != StageSystem {
+			t.Errorf("expected stage %q, got %q", StageSystem, notFoundErr.Stage)
 		}
 	})
 }
@@ -122,53 +89,40 @@ func TestPromptResolver_ResolveTicketPrompt(t *testing.T) {
 		}
 	})
 
-	t.Run("project overrides base for same ticket type", func(t *testing.T) {
+	t.Run("falls back to base when not in project", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
-		createTicketPromptFile(t, projectRoot, "work", "SYSTEM.md", "project system")
-		createBaseTicketPromptFile(t, baseRoot, "work", "SYSTEM.md", "base system")
+		createBaseTicketPromptFile(t, baseRoot, "work", "KICKOFF.md", "base kickoff")
 
 		resolver := NewPromptResolver(projectRoot, baseRoot)
-		content, err := resolver.ResolveTicketPrompt("work", StageSystem)
+		content, err := resolver.ResolveTicketPrompt("work", StageKickoff)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if content != "project system" {
-			t.Errorf("expected 'project system', got %q", content)
+		if content != "base kickoff" {
+			t.Errorf("expected 'base kickoff', got %q", content)
 		}
 	})
 
-	t.Run("different ticket types independent", func(t *testing.T) {
+	t.Run("falls back to work type when requested type not found", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		baseRoot := t.TempDir()
-		createTicketPromptFile(t, projectRoot, "work", "SYSTEM.md", "work system")
-		createBaseTicketPromptFile(t, baseRoot, "investigation", "SYSTEM.md", "investigation system")
+		createTicketPromptFile(t, projectRoot, "work", "KICKOFF.md", "work kickoff")
 
-		resolver := NewPromptResolver(projectRoot, baseRoot)
-
-		workContent, err := resolver.ResolveTicketPrompt("work", StageSystem)
+		resolver := NewPromptResolver(projectRoot, "")
+		content, err := resolver.ResolveTicketPrompt("research", StageKickoff)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if workContent != "work system" {
-			t.Errorf("expected 'work system', got %q", workContent)
-		}
-
-		invContent, err := resolver.ResolveTicketPrompt("investigation", StageSystem)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if invContent != "investigation system" {
-			t.Errorf("expected 'investigation system', got %q", invContent)
+		if content != "work kickoff" {
+			t.Errorf("expected 'work kickoff', got %q", content)
 		}
 	})
 }
 
 // createPromptFile creates a prompt file for architect prompts in a project root.
-// Project roots use the .cortex/prompts/ structure.
 func createPromptFile(t *testing.T, root, role, filename, content string) {
 	t.Helper()
-	dir := filepath.Join(root, ".cortex", "prompts", role)
+	dir := filepath.Join(root, "prompts", role)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("failed to create prompt dir: %v", err)
 	}
@@ -178,10 +132,9 @@ func createPromptFile(t *testing.T, root, role, filename, content string) {
 }
 
 // createTicketPromptFile creates a prompt file for ticket prompts in a project root.
-// Project roots use the .cortex/prompts/ structure.
 func createTicketPromptFile(t *testing.T, root, ticketType, filename, content string) {
 	t.Helper()
-	dir := filepath.Join(root, ".cortex", "prompts", ticketType)
+	dir := filepath.Join(root, "prompts", ticketType)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("failed to create prompt dir: %v", err)
 	}
@@ -191,7 +144,6 @@ func createTicketPromptFile(t *testing.T, root, ticketType, filename, content st
 }
 
 // createBasePromptFile creates a prompt file for architect prompts in a base config directory.
-// Base config directories (like extend targets) use prompts/ directly without .cortex/.
 func createBasePromptFile(t *testing.T, baseRoot, role, filename, content string) {
 	t.Helper()
 	dir := filepath.Join(baseRoot, "prompts", role)
@@ -204,7 +156,6 @@ func createBasePromptFile(t *testing.T, baseRoot, role, filename, content string
 }
 
 // createBaseTicketPromptFile creates a prompt file for ticket prompts in a base config directory.
-// Base config directories (like extend targets) use prompts/ directly without .cortex/.
 func createBaseTicketPromptFile(t *testing.T, baseRoot, ticketType, filename, content string) {
 	t.Helper()
 	dir := filepath.Join(baseRoot, "prompts", ticketType)
@@ -226,16 +177,13 @@ func TestPromptResolver_ResolveArchitectPromptWithPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		expectedPath := filepath.Join(projectRoot, ".cortex", "prompts", "architect", "SYSTEM.md")
+		expectedPath := filepath.Join(projectRoot, "prompts", "architect", "SYSTEM.md")
 		if resolved.SourcePath != expectedPath {
 			t.Errorf("expected source path %q, got %q", expectedPath, resolved.SourcePath)
 		}
-		if resolved.Content != "project system prompt" {
-			t.Errorf("expected content 'project system prompt', got %q", resolved.Content)
-		}
 	})
 
-	t.Run("returns correct source path from base fallback", func(t *testing.T) {
+	t.Run("returns correct source path from base", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		baseRoot := t.TempDir()
 		createBasePromptFile(t, baseRoot, "architect", "SYSTEM.md", "base system prompt")
@@ -305,7 +253,7 @@ func TestPromptResolver_ResolveTicketPromptWithPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		expectedPath := filepath.Join(projectRoot, ".cortex", "prompts", "work", "KICKOFF.md")
+		expectedPath := filepath.Join(projectRoot, "prompts", "work", "KICKOFF.md")
 		if resolved.SourcePath != expectedPath {
 			t.Errorf("expected source path %q, got %q", expectedPath, resolved.SourcePath)
 		}
@@ -325,14 +273,8 @@ func TestPromptResolver_ResolveTicketPromptWithPath(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected *NotFoundError, got %T", err)
 		}
-		if notFoundErr.Role != "work" {
-			t.Errorf("expected role 'work', got %q", notFoundErr.Role)
-		}
 		if notFoundErr.TicketType != "work" {
 			t.Errorf("expected ticket type 'work', got %q", notFoundErr.TicketType)
-		}
-		if notFoundErr.Stage != StageKickoff {
-			t.Errorf("expected stage %q, got %q", StageKickoff, notFoundErr.Stage)
 		}
 	})
 }

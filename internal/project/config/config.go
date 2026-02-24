@@ -101,8 +101,8 @@ func DefaultConfig() *Config {
 	}
 }
 
-// FindProjectRoot walks up from startPath to find a .cortex/ directory.
-// Returns the path containing the .cortex/ directory.
+// FindProjectRoot walks up from startPath to find a cortex.yaml file.
+// Returns the path containing the cortex.yaml file.
 func FindProjectRoot(startPath string) (string, error) {
 	absPath, err := filepath.Abs(startPath)
 	if err != nil {
@@ -111,47 +111,34 @@ func FindProjectRoot(startPath string) (string, error) {
 
 	current := absPath
 	for {
-		cortexDir := filepath.Join(current, ".cortex")
-		info, err := os.Stat(cortexDir)
-		if err == nil && info.IsDir() {
+		cortexYaml := filepath.Join(current, "cortex.yaml")
+		if _, err := os.Stat(cortexYaml); err == nil {
 			return current, nil
 		}
 
 		parent := filepath.Dir(current)
 		if parent == current {
-			// Reached filesystem root
 			return "", &ProjectNotFoundError{StartPath: startPath}
 		}
 		current = parent
 	}
 }
 
-// Load loads configuration from the project root.
-// Tries {projectRoot}/cortex.yaml first, falls back to {projectRoot}/.cortex/cortex.yaml.
-// Returns default config if neither file exists.
+// Load loads configuration from cortex.yaml at the project root.
+// Returns default config if no cortex.yaml exists.
 func Load(projectRoot string) (*Config, error) {
 	absPath, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	// Try cortex.yaml at project root first
 	configPath := filepath.Join(absPath, "cortex.yaml")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Fall back to .cortex/cortex.yaml
-			configPath = filepath.Join(absPath, ".cortex", "cortex.yaml")
-			data, err = os.ReadFile(configPath)
-			if err != nil {
-				if os.IsNotExist(err) {
-					return DefaultConfig(), nil
-				}
-				return nil, err
-			}
-		} else {
-			return nil, err
+			return DefaultConfig(), nil
 		}
+		return nil, err
 	}
 
 	cfg := DefaultConfig()
@@ -180,6 +167,15 @@ func LoadFromPath(path string) (*Config, string, error) {
 	}
 
 	return cfg, projectRoot, nil
+}
+
+// ConfigPath returns the path to cortex.yaml for the given project root.
+func ConfigPath(projectRoot string) string {
+	absPath, err := filepath.Abs(projectRoot)
+	if err != nil {
+		absPath = projectRoot
+	}
+	return filepath.Join(absPath, "cortex.yaml")
 }
 
 // Validate checks that the config is valid.

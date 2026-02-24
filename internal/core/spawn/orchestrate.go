@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
 	"github.com/kareemaly/cortex/internal/session"
@@ -124,7 +123,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 	// 6. Resolve TicketsDir
 	ticketsDir := req.TicketsDir
 	if ticketsDir == "" {
-		ticketsDir = filepath.Join(req.ProjectPath, ".cortex", "tickets")
+		ticketsDir = projectCfg.TicketsPath(req.ProjectPath)
 	}
 
 	// 7. Look up existing session

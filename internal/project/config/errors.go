@@ -2,13 +2,13 @@ package config
 
 import "fmt"
 
-// ProjectNotFoundError indicates no .cortex/ directory was found.
+// ProjectNotFoundError indicates no cortex.yaml was found.
 type ProjectNotFoundError struct {
 	StartPath string
 }
 
 func (e *ProjectNotFoundError) Error() string {
-	return fmt.Sprintf("project not found: no .cortex/ directory found starting from %s", e.StartPath)
+	return fmt.Sprintf("project not found: no cortex.yaml found starting from %s", e.StartPath)
 }
 
 // ConfigParseError indicates the config file could not be parsed.

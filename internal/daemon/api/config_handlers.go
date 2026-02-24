@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	projectconfig "github.com/kareemaly/cortex/internal/project/config"
@@ -37,7 +36,7 @@ type UpdateProjectConfigRequest struct {
 func (h *ConfigHandlers) ReadProjectConfig(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())
 
-	configPath := projectPath + "/.cortex/cortex.yaml"
+	configPath := projectconfig.ConfigPath(projectPath)
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -76,7 +75,7 @@ func (h *ConfigHandlers) UpdateProjectConfig(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	configPath := projectPath + "/.cortex/cortex.yaml"
+	configPath := projectconfig.ConfigPath(projectPath)
 	if err := os.WriteFile(configPath, []byte(req.Content), 0644); err != nil {
 		writeError(w, http.StatusInternalServerError, "write_error", "failed to write project config")
 		return
@@ -172,7 +171,7 @@ func (h *ConfigHandlers) UpdateGlobalConfig(w http.ResponseWriter, r *http.Reque
 func (h *ConfigHandlers) EditProjectConfig(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())
 
-	configPath := filepath.Join(projectPath, ".cortex", "cortex.yaml")
+	configPath := projectconfig.ConfigPath(projectPath)
 	if _, err := os.Stat(configPath); err != nil {
 		if os.IsNotExist(err) {
 			writeError(w, http.StatusNotFound, "not_found", "project config not found")

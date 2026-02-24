@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"path/filepath"
 
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
@@ -184,7 +183,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 // spawnArchitectSession spawns an architect session (new or resumed).
 func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http.Request, projectPath, sessionName string, projectCfg *projectconfig.Config, resume bool) {
-	ticketsDir := filepath.Join(projectPath, ".cortex", "tickets")
+	ticketsDir := projectCfg.TicketsPath(projectPath)
 
 	var sessStore spawn.SessionStoreInterface
 	if h.deps.SessionManager != nil {

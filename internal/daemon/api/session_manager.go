@@ -46,8 +46,8 @@ func (m *SessionManager) GetStore(projectPath string) *session.Store {
 		return store
 	}
 
-	// Session store path: {projectPath}/.cortex/sessions.json
-	sessionsPath := filepath.Join(projectPath, ".cortex", "sessions.json")
+	// Session store path: {projectPath}/.sessions.json (hidden file at root)
+	sessionsPath := filepath.Join(projectPath, ".sessions.json")
 	store = session.NewStore(sessionsPath)
 
 	m.stores[projectPath] = store

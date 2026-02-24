@@ -11,26 +11,25 @@ const (
 	StageKickoff = "KICKOFF"
 )
 
-// PromptsDir returns the path to the prompts directory.
+// PromptsDir returns the path to the prompts directory at project root.
 func PromptsDir(projectRoot string) string {
-	return filepath.Join(projectRoot, ".cortex", "prompts")
+	return filepath.Join(projectRoot, "prompts")
 }
 
 // ArchitectPromptPath returns the path to an architect prompt file by stage.
-// e.g. .cortex/prompts/architect/SYSTEM.md
+// e.g. prompts/architect/SYSTEM.md
 func ArchitectPromptPath(projectRoot, stage string) string {
 	return filepath.Join(PromptsDir(projectRoot), "architect", stage+".md")
 }
 
 // TicketPromptPath returns the path to a ticket prompt file by type and stage.
-// e.g. .cortex/prompts/work/KICKOFF.md
+// e.g. prompts/work/KICKOFF.md
 func TicketPromptPath(projectRoot, ticketType, stage string) string {
 	return filepath.Join(PromptsDir(projectRoot), ticketType, stage+".md")
 }
 
 // BasePromptsDir returns the prompts directory for a cortex config directory.
-// Cortex config directories (like extend targets) have prompts directly under them,
-// without the .cortex/ prefix that project roots have.
+// Cortex config directories (like extend targets) have prompts directly under them.
 func BasePromptsDir(cortexConfigDir string) string {
 	return filepath.Join(cortexConfigDir, "prompts")
 }

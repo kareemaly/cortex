@@ -6,21 +6,16 @@ import (
 	"testing"
 )
 
-// setupTestProject creates a temp directory with a .cortex/ structure.
+// setupTestProject creates a temp directory with cortex.yaml at root.
 func setupTestProject(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-	cortexDir := filepath.Join(dir, ".cortex")
-	if err := os.Mkdir(cortexDir, 0755); err != nil {
-		t.Fatalf("failed to create .cortex dir: %v", err)
-	}
-	return dir
+	return t.TempDir()
 }
 
 // writeConfig writes a cortex.yaml to the test project.
 func writeConfig(t *testing.T, projectRoot, content string) {
 	t.Helper()
-	configPath := filepath.Join(projectRoot, ".cortex", "cortex.yaml")
+	configPath := filepath.Join(projectRoot, "cortex.yaml")
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -28,6 +23,7 @@ func writeConfig(t *testing.T, projectRoot, content string) {
 
 func TestFindProjectRoot(t *testing.T) {
 	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `name: test`)
 
 	t.Run("finds from root", func(t *testing.T) {
 		root, err := FindProjectRoot(projectRoot)
@@ -71,7 +67,7 @@ func TestFindProjectRoot(t *testing.T) {
 }
 
 func TestFindProjectRoot_NotFound(t *testing.T) {
-	// Use a temp directory without .cortex/
+	// Use a temp directory without cortex.yaml
 	dir := t.TempDir()
 
 	_, err := FindProjectRoot(dir)

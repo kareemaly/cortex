@@ -39,7 +39,7 @@ func (r *PromptResolver) ResolveArchitectPrompt(stage string) (string, error) {
 func (r *PromptResolver) ResolveArchitectPromptWithPath(stage string) (*ResolvedPrompt, error) {
 	var searchPaths []string
 
-	// Try project first
+	// Try project prompts/ directory
 	projectPath := ArchitectPromptPath(r.ProjectRoot, stage)
 	searchPaths = append(searchPaths, projectPath)
 	content, err := r.loadIfExists(projectPath)
@@ -87,7 +87,7 @@ func (r *PromptResolver) ResolveTicketPrompt(ticketType, stage string) (string, 
 func (r *PromptResolver) ResolveTicketPromptWithPath(ticketType, stage string) (*ResolvedPrompt, error) {
 	var searchPaths []string
 
-	// Try project first
+	// Try project prompts/ directory
 	projectPath := TicketPromptPath(r.ProjectRoot, ticketType, stage)
 	searchPaths = append(searchPaths, projectPath)
 	content, err := r.loadIfExists(projectPath)
