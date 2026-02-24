@@ -909,7 +909,7 @@ func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDi
 		if companionCmd == "" {
 			companionCmd = fmt.Sprintf("cortex ticket show %s", req.TicketID)
 		}
-		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, req.ArchitectPath)
+		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, workingDir)
 	case AgentTypeArchitect:
 		// Use companion command from config, or default to showing kanban board
 		companionCmd := req.Companion
