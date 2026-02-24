@@ -521,17 +521,24 @@ func (m Model) renderSessionList(height int) string {
 	var lines []string
 	for i, c := range sessions {
 		var row string
+		dur := formatDuration(c.StartedAt, c.ConcludedAt)
 		if i == m.cursor {
-			timeRaw := c.Created.Local().Format("15:04")
+			timeRaw := c.ConcludedAt.Local().Format("15:04")
 			typeRaw := fmt.Sprintf("%-10s", typeShortLabel(c.Type))
 			titleRaw := sessionTitle(c)
 			rawRow := "▸ " + timeRaw + "  " + typeRaw + "  " + titleRaw
+			if dur != "" {
+				rawRow += "  " + dur
+			}
 			row = selectedItemStyle.Width(m.width).Render(rawRow)
 		} else {
-			timeStr := timeStyle.Render(c.Created.Local().Format("15:04"))
+			timeStr := timeStyle.Render(c.ConcludedAt.Local().Format("15:04"))
 			typePart := typeLabelStyle.Render(typeShortLabel(c.Type))
 			title := sessionTitle(c)
 			row = "  " + timeStr + "  " + typePart + "  " + title
+			if dur != "" {
+				row += "  " + dur
+			}
 		}
 		lines = append(lines, row)
 	}
@@ -572,7 +579,7 @@ func (m Model) renderDetailView(height int) string {
 		meta.WriteString(ticketRefStyle.Render(c.Ticket))
 		meta.WriteString("  ")
 	}
-	meta.WriteString(dateStyle.Render(c.Created.Local().Format("Jan 2, 2006 15:04")))
+	meta.WriteString(dateStyle.Render(c.ConcludedAt.Local().Format("Jan 2, 2006 15:04")))
 	header.WriteString(detailMetaStyle.Render(meta.String()))
 	header.WriteString("\n\n")
 
@@ -617,7 +624,7 @@ func groupByDate(conclusions []sdk.ConclusionSummary) []dateGroup {
 	var order []string
 
 	for _, c := range conclusions {
-		local := c.Created.Local()
+		local := c.ConcludedAt.Local()
 		key := local.Format("2006-01-02")
 		if _, exists := byDate[key]; !exists {
 			dayStart := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
@@ -630,7 +637,7 @@ func groupByDate(conclusions []sdk.ConclusionSummary) []dateGroup {
 	// Sort each group newest-first within the day
 	for _, dg := range byDate {
 		sort.SliceStable(dg.sessions, func(i, j int) bool {
-			return dg.sessions[i].Created.After(dg.sessions[j].Created)
+			return dg.sessions[i].ConcludedAt.After(dg.sessions[j].ConcludedAt)
 		})
 	}
 
@@ -753,4 +760,22 @@ func clearStatusAfter(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg {
 		return ClearStatusMsg{}
 	})
+}
+
+// formatDuration returns a human-readable duration string (e.g. "45m", "1h 23m").
+// Returns "" if either time is zero.
+func formatDuration(start, end time.Time) string {
+	if start.IsZero() || end.IsZero() {
+		return ""
+	}
+	d := end.Sub(start).Round(time.Minute)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	if m == 0 {
+		m = 1 // show at least "1m"
+	}
+	return fmt.Sprintf("%dm", m)
 }

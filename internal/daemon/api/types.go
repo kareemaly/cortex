@@ -68,9 +68,10 @@ type SpawnResponse struct {
 
 // ConcludeSessionRequest is the request body for concluding a session.
 type ConcludeSessionRequest struct {
-	Content string `json:"content"`
-	Type    string `json:"type,omitempty"`
-	Repo    string `json:"repo,omitempty"`
+	Content   string `json:"content"`
+	Type      string `json:"type,omitempty"`
+	Repo      string `json:"repo,omitempty"`
+	StartedAt string `json:"started_at,omitempty"`
 }
 
 // FocusResponse is the response for the focus endpoint.
@@ -102,10 +103,11 @@ type ResetPromptRequest struct {
 
 // CreateConclusionRequest is the request body for creating a conclusion.
 type CreateConclusionRequest struct {
-	Type   string `json:"type"`
-	Ticket string `json:"ticket,omitempty"`
-	Repo   string `json:"repo,omitempty"`
-	Body   string `json:"body"`
+	Type      string `json:"type"`
+	Ticket    string `json:"ticket,omitempty"`
+	Repo      string `json:"repo,omitempty"`
+	Body      string `json:"body"`
+	StartedAt string `json:"started_at,omitempty"`
 }
 
 // filterSummaryList converts tickets to summaries with optional query and dueBefore filters.

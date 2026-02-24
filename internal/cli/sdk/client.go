@@ -661,8 +661,11 @@ func (c *Client) GetTicketByID(id string) (*TicketResponse, error) {
 }
 
 // ConcludeSession concludes a ticket session.
-func (c *Client) ConcludeSession(ticketID, content string) (*ConcludeSessionResponse, error) {
+func (c *Client) ConcludeSession(ticketID, content, startedAt string) (*ConcludeSessionResponse, error) {
 	reqBody := map[string]string{"content": content}
+	if startedAt != "" {
+		reqBody["started_at"] = startedAt
+	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)
@@ -693,8 +696,11 @@ func (c *Client) ConcludeSession(ticketID, content string) (*ConcludeSessionResp
 }
 
 // ConcludeArchitectSession concludes the architect session.
-func (c *Client) ConcludeArchitectSession(content string) (*ConcludeSessionResponse, error) {
+func (c *Client) ConcludeArchitectSession(content, startedAt string) (*ConcludeSessionResponse, error) {
 	reqBody := map[string]string{"content": content}
+	if startedAt != "" {
+		reqBody["started_at"] = startedAt
+	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)

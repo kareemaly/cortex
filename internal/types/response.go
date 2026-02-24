@@ -66,12 +66,13 @@ type ListAllTicketsResponse struct {
 
 // ConclusionResponse is the full conclusion response.
 type ConclusionResponse struct {
-	ID      string    `json:"id"`
-	Type    string    `json:"type"`
-	Ticket  string    `json:"ticket,omitempty"`
-	Repo    string    `json:"repo,omitempty"`
-	Body    string    `json:"body"`
-	Created time.Time `json:"created"`
+	ID          string    `json:"id"`
+	Type        string    `json:"type"`
+	Ticket      string    `json:"ticket,omitempty"`
+	Repo        string    `json:"repo,omitempty"`
+	Body        string    `json:"body"`
+	ConcludedAt time.Time `json:"concluded_at"`
+	StartedAt   time.Time `json:"started_at,omitempty"`
 }
 
 // ConclusionSummary is metadata-only (no body) for list responses.
@@ -81,7 +82,8 @@ type ConclusionSummary struct {
 	Ticket      string    `json:"ticket,omitempty"`
 	TicketTitle string    `json:"ticket_title,omitempty"`
 	Repo        string    `json:"repo,omitempty"`
-	Created     time.Time `json:"created"`
+	ConcludedAt time.Time `json:"concluded_at"`
+	StartedAt   time.Time `json:"started_at,omitempty"`
 }
 
 // ListConclusionsResponse is a paginated list of conclusions (metadata only).

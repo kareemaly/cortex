@@ -135,6 +135,7 @@ type SpawnResult struct {
 
 // Spawn creates a new agent session.
 func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, error) {
+	startedAt := time.Now().UTC().Format(time.RFC3339)
 	// Validate request
 	if err := s.validateSpawnRequest(req); err != nil {
 		return nil, err
@@ -205,6 +206,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		TicketsDir:    req.TicketsDir,
 		ArchitectPath: req.ArchitectPath,
 		TmuxSession:   req.TmuxSession,
+		StartedAt:     startedAt,
 	})
 
 	identifier := req.TicketID
@@ -291,8 +293,9 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 			launcherParams.AgentArgs = append([]string{"--agent", "cortex"}, launcherParams.AgentArgs...)
 		}
 		launcherParams.EnvVars = map[string]string{
-			"CORTEX_TICKET_ID": session.ArchitectSessionKey,
-			"CORTEX_ARCHITECT": req.ArchitectPath,
+			"CORTEX_TICKET_ID":  session.ArchitectSessionKey,
+			"CORTEX_ARCHITECT":  req.ArchitectPath,
+			"CORTEX_STARTED_AT": startedAt,
 		}
 	case AgentTypeTicketAgent:
 		launcherParams.EnvVars = map[string]string{
@@ -310,6 +313,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 				}
 				return ""
 			}(),
+			"CORTEX_STARTED_AT": startedAt,
 		}
 	}
 
@@ -365,6 +369,8 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		return nil, &ConfigError{Field: "TicketID", Message: "cannot be empty for ticket agent resume"}
 	}
 
+	startedAt := time.Now().UTC().Format(time.RFC3339)
+
 	// Find cortexd path
 	cortexdPath, err := s.getCortexdPath()
 	if err != nil {
@@ -385,6 +391,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		TicketsDir:    req.TicketsDir,
 		ArchitectPath: req.ArchitectPath,
 		TmuxSession:   req.TmuxSession,
+		StartedAt:     startedAt,
 	})
 
 	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
@@ -397,6 +404,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	if req.ArchitectPath != "" {
 		envVars["CORTEX_ARCHITECT"] = req.ArchitectPath
 	}
+	envVars["CORTEX_STARTED_AT"] = startedAt
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
 		envVars["CORTEX_TICKET_ID"] = req.TicketID

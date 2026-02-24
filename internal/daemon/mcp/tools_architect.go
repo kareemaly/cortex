@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -150,13 +151,18 @@ func (s *Server) handleReadTicket(
 				s.config.Logger.Warn("failed to fetch conclusion for ticket", "ticket_id", input.ID, "conclusion_id", resp.Session, "error", err)
 			}
 		} else {
+			startedAtStr := ""
+			if !conclusion.StartedAt.IsZero() {
+				startedAtStr = conclusion.StartedAt.Format(time.RFC3339)
+			}
 			out.Conclusion = &ConclusionOutput{
-				ID:      conclusion.ID,
-				Type:    conclusion.Type,
-				Ticket:  conclusion.Ticket,
-				Repo:    conclusion.Repo,
-				Body:    conclusion.Body,
-				Created: conclusion.Created.Format(time.RFC3339),
+				ID:          conclusion.ID,
+				Type:        conclusion.Type,
+				Ticket:      conclusion.Ticket,
+				Repo:        conclusion.Repo,
+				Body:        conclusion.Body,
+				ConcludedAt: conclusion.ConcludedAt.Format(time.RFC3339),
+				StartedAt:   startedAtStr,
 			}
 		}
 	}
@@ -487,12 +493,17 @@ func (s *Server) handleListConclusions(
 
 	items := make([]ConclusionListItem, len(resp.Conclusions))
 	for i, c := range resp.Conclusions {
+		startedAtStr := ""
+		if !c.StartedAt.IsZero() {
+			startedAtStr = c.StartedAt.Format(time.RFC3339)
+		}
 		items[i] = ConclusionListItem{
-			ID:      c.ID,
-			Type:    c.Type,
-			Ticket:  c.Ticket,
-			Repo:    c.Repo,
-			Created: c.Created.Format(time.RFC3339),
+			ID:          c.ID,
+			Type:        c.Type,
+			Ticket:      c.Ticket,
+			Repo:        c.Repo,
+			ConcludedAt: c.ConcludedAt.Format(time.RFC3339),
+			StartedAt:   startedAtStr,
 		}
 	}
 
@@ -517,14 +528,19 @@ func (s *Server) handleReadConclusion(
 		return nil, ReadConclusionOutput{}, wrapSDKError(err)
 	}
 
+	startedAtStr := ""
+	if !resp.StartedAt.IsZero() {
+		startedAtStr = resp.StartedAt.Format(time.RFC3339)
+	}
 	return nil, ReadConclusionOutput{
 		Conclusion: ConclusionOutput{
-			ID:      resp.ID,
-			Type:    resp.Type,
-			Ticket:  resp.Ticket,
-			Repo:    resp.Repo,
-			Body:    resp.Body,
-			Created: resp.Created.Format(time.RFC3339),
+			ID:          resp.ID,
+			Type:        resp.Type,
+			Ticket:      resp.Ticket,
+			Repo:        resp.Repo,
+			Body:        resp.Body,
+			ConcludedAt: resp.ConcludedAt.Format(time.RFC3339),
+			StartedAt:   startedAtStr,
 		},
 	}, nil
 }
@@ -539,7 +555,8 @@ func (s *Server) handleArchitectConcludeSession(
 		return nil, ArchitectConcludeOutput{}, NewValidationError("content", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.ConcludeArchitectSession(input.Content)
+	startedAt := os.Getenv("CORTEX_STARTED_AT")
+	resp, err := s.sdkClient.ConcludeArchitectSession(input.Content, startedAt)
 	if err != nil {
 		return nil, ArchitectConcludeOutput{}, wrapSDKError(err)
 	}

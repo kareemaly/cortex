@@ -44,7 +44,7 @@ func (s *Store) emit(eventType events.EventType, payload any) {
 }
 
 // Create creates a new conclusion record.
-func (s *Store) Create(conclusionType string, ticketID, repo, body string) (*Conclusion, error) {
+func (s *Store) Create(conclusionType string, ticketID, repo, body string, startedAt time.Time) (*Conclusion, error) {
 	if body == "" {
 		return nil, &ValidationError{Field: "body", Message: "cannot be empty"}
 	}
@@ -57,11 +57,12 @@ func (s *Store) Create(conclusionType string, ticketID, repo, body string) (*Con
 	now := time.Now().UTC()
 	c := &Conclusion{
 		ConclusionMeta: ConclusionMeta{
-			ID:      uuid.New().String(),
-			Type:    ct,
-			Ticket:  ticketID,
-			Repo:    repo,
-			Created: now,
+			ID:          uuid.New().String(),
+			Type:        ct,
+			Ticket:      ticketID,
+			Repo:        repo,
+			ConcludedAt: now,
+			StartedAt:   startedAt,
 		},
 		Body: body,
 	}
@@ -157,10 +158,10 @@ func (s *Store) ListWithOptions(opts ListOptions) ([]*Conclusion, int, error) {
 		all = append(all, c)
 	}
 
-	// Sort by created descending
+	// Sort by concluded_at descending
 	for i := 0; i < len(all); i++ {
 		for j := i + 1; j < len(all); j++ {
-			if all[j].Created.After(all[i].Created) {
+			if all[j].ConcludedAt.After(all[i].ConcludedAt) {
 				all[i], all[j] = all[j], all[i]
 			}
 		}

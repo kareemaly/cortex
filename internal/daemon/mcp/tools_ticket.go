@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"os"
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/types"
@@ -34,7 +35,8 @@ func (s *Server) handleConcludeSession(
 		return nil, ConcludeSessionOutput{}, NewValidationError("content", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.ConcludeSession(s.session.TicketID, input.Content)
+	startedAt := os.Getenv("CORTEX_STARTED_AT")
+	resp, err := s.sdkClient.ConcludeSession(s.session.TicketID, input.Content, startedAt)
 	if err != nil {
 		return nil, ConcludeSessionOutput{}, wrapSDKError(err)
 	}

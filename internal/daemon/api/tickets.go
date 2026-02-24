@@ -680,11 +680,18 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		repo = t.Repo
 	}
 
+	var startedAt time.Time
+	if req.StartedAt != "" {
+		if parsed, parseErr := time.Parse(time.RFC3339, req.StartedAt); parseErr == nil {
+			startedAt = parsed
+		}
+	}
+
 	var conclusionID string
 	if h.deps.ConclusionStoreManager != nil {
 		conclusionStore, csErr := h.deps.ConclusionStoreManager.GetStore(projectPath)
 		if csErr == nil {
-			conclusion, createErr := conclusionStore.Create(conclusionType, id, repo, req.Content)
+			conclusion, createErr := conclusionStore.Create(conclusionType, id, repo, req.Content, startedAt)
 			if createErr != nil {
 				h.deps.Logger.Warn("failed to create conclusion", "error", createErr)
 			} else {

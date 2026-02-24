@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
@@ -88,11 +89,12 @@ func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
 	summaries := make([]types.ConclusionSummary, len(conclusions))
 	for i, c := range conclusions {
 		summary := types.ConclusionSummary{
-			ID:      c.ID,
-			Type:    string(c.Type),
-			Ticket:  c.Ticket,
-			Repo:    c.Repo,
-			Created: c.Created,
+			ID:          c.ID,
+			Type:        string(c.Type),
+			Ticket:      c.Ticket,
+			Repo:        c.Repo,
+			ConcludedAt: c.ConcludedAt,
+			StartedAt:   c.StartedAt,
 		}
 		if ticketTitles != nil && c.Ticket != "" {
 			summary.TicketTitle = ticketTitles[c.Ticket]
@@ -126,12 +128,13 @@ func (h *ConclusionHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := types.ConclusionResponse{
-		ID:      c.ID,
-		Type:    string(c.Type),
-		Ticket:  c.Ticket,
-		Repo:    c.Repo,
-		Body:    c.Body,
-		Created: c.Created,
+		ID:          c.ID,
+		Type:        string(c.Type),
+		Ticket:      c.Ticket,
+		Repo:        c.Repo,
+		Body:        c.Body,
+		ConcludedAt: c.ConcludedAt,
+		StartedAt:   c.StartedAt,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -163,19 +166,27 @@ func (h *ConclusionHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, err := store.Create(req.Type, req.Ticket, req.Repo, req.Body)
+	var startedAt time.Time
+	if req.StartedAt != "" {
+		if parsed, parseErr := time.Parse(time.RFC3339, req.StartedAt); parseErr == nil {
+			startedAt = parsed
+		}
+	}
+
+	c, err := store.Create(req.Type, req.Ticket, req.Repo, req.Body, startedAt)
 	if err != nil {
 		handleConclusionError(w, err, h.deps.Logger)
 		return
 	}
 
 	resp := types.ConclusionResponse{
-		ID:      c.ID,
-		Type:    string(c.Type),
-		Ticket:  c.Ticket,
-		Repo:    c.Repo,
-		Body:    c.Body,
-		Created: c.Created,
+		ID:          c.ID,
+		Type:        string(c.Type),
+		Ticket:      c.Ticket,
+		Repo:        c.Repo,
+		Body:        c.Body,
+		ConcludedAt: c.ConcludedAt,
+		StartedAt:   c.StartedAt,
 	}
 
 	writeJSON(w, http.StatusCreated, resp)

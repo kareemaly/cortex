@@ -567,8 +567,8 @@ func TestListConclusions_Success(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	rs.setRoute("GET", "/conclusions", http.StatusOK, ListConclusionsResponse{
 		Conclusions: []ConclusionSummary{
-			{ID: "c1", Type: "work", Ticket: "t1", Created: now},
-			{ID: "c2", Type: "research", Created: now},
+			{ID: "c1", Type: "work", Ticket: "t1", ConcludedAt: now},
+			{ID: "c2", Type: "research", ConcludedAt: now},
 		},
 		Total: 2,
 	})
@@ -681,7 +681,7 @@ func TestConcludeArchitectSession(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.ConcludeArchitectSession("summary")
+	resp, err := c.ConcludeArchitectSession("summary", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -701,7 +701,7 @@ func TestConcludeSession_Success(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.ConcludeSession("abc123", "done report")
+	resp, err := c.ConcludeSession("abc123", "done report", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ func TestCreateAndGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := store.Create("work", "ticket-123", "/repo", "# Summary\n\nDid some work.")
+	c, err := store.Create("work", "ticket-123", "/repo", "# Summary\n\nDid some work.", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,11 +51,11 @@ func TestList(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = store.Create("work", "t1", "", "First")
+	_, err = store.Create("work", "t1", "", "First", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = store.Create("research", "t2", "", "Second")
+	_, err = store.Create("research", "t2", "", "Second", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestCreateValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = store.Create("work", "", "", "")
+	_, err = store.Create("work", "", "", "", time.Time{})
 	if err == nil {
 		t.Error("expected error for empty body")
 	}
@@ -102,11 +102,11 @@ func TestListWithOptions_TypeFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = store.Create("work", "t1", "", "Work conclusion")
+	_, err = store.Create("work", "t1", "", "Work conclusion", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = store.Create("research", "t2", "", "Research conclusion")
+	_, err = store.Create("research", "t2", "", "Research conclusion", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestListWithOptions_Pagination(t *testing.T) {
 
 	// Create 5 conclusions with staggered times to ensure deterministic order
 	for i := range 5 {
-		_, err = store.Create("work", "", "", "Conclusion body")
+		_, err = store.Create("work", "", "", "Conclusion body", time.Time{})
 		if err != nil {
 			t.Fatal(err)
 		}

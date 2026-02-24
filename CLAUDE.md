@@ -181,6 +181,10 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 
 Spawn orchestration handles state detection (normal/active/orphaned) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`. Architect and ticket agent sessions are tracked in `.cortex/sessions.json`.
 
+## Development Guidelines
+
+**Breaking changes are acceptable** during the pre-v2 period. All users are internal, so schema changes (YAML fields, JSON API fields, TUI rendering) can be made without backwards compatibility shims.
+
 ## Testing
 
 - Unit: `make test`

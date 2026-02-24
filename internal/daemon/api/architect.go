@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/core/spawn"
@@ -297,7 +298,13 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			h.deps.Logger.Warn("failed to get conclusion store for architect session", "error", err)
 		} else {
-			if _, err := conclusionStore.Create("architect", "", "", req.Content); err != nil {
+			var startedAt time.Time
+			if req.StartedAt != "" {
+				if parsed, parseErr := time.Parse(time.RFC3339, req.StartedAt); parseErr == nil {
+					startedAt = parsed
+				}
+			}
+			if _, err := conclusionStore.Create("architect", "", "", req.Content, startedAt); err != nil {
 				h.deps.Logger.Warn("failed to persist architect session conclusion", "error", err)
 			}
 		}

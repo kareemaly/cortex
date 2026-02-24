@@ -218,21 +218,23 @@ type ReadConclusionInput struct {
 
 // ConclusionListItem is a metadata-only conclusion record for list responses (no body).
 type ConclusionListItem struct {
-	ID      string `json:"id"`
-	Type    string `json:"type"`
-	Ticket  string `json:"ticket,omitempty"`
-	Repo    string `json:"repo,omitempty"`
-	Created string `json:"created"`
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	Ticket      string `json:"ticket,omitempty"`
+	Repo        string `json:"repo,omitempty"`
+	ConcludedAt string `json:"concluded_at"`
+	StartedAt   string `json:"started_at,omitempty"`
 }
 
 // ConclusionOutput is a full conclusion record including the body.
 type ConclusionOutput struct {
-	ID      string `json:"id"`
-	Type    string `json:"type"`
-	Ticket  string `json:"ticket,omitempty"`
-	Repo    string `json:"repo,omitempty"`
-	Body    string `json:"body"`
-	Created string `json:"created"`
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	Ticket      string `json:"ticket,omitempty"`
+	Repo        string `json:"repo,omitempty"`
+	Body        string `json:"body"`
+	ConcludedAt string `json:"concluded_at"`
+	StartedAt   string `json:"started_at,omitempty"`
 }
 
 // ListConclusionsOutput is the output for the listConclusions tool.
