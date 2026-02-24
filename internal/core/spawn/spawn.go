@@ -1011,7 +1011,7 @@ func (s *Spawner) cleanupOnFailure(_ context.Context, agentType AgentType, ticke
 			if err := s.deps.SessionStore.EndArchitect(); err != nil {
 				s.logWarn("cleanup: failed to end architect session", "error", err)
 			}
-		// AgentTypeCollabAgent cleanup handled in SpawnCollab via EndCollab
+			// AgentTypeCollabAgent cleanup handled in SpawnCollab via EndCollab
 		}
 	}
 	for _, path := range tempFiles {

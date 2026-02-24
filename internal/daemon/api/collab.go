@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/tmux"
 	"github.com/kareemaly/cortex/internal/types"
-	"github.com/google/uuid"
 )
 
 // SpawnCollabRequest is the request body for spawning a collab session.
