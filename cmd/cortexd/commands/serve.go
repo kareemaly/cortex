@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/kareemaly/cortex/internal/daemon/api"
@@ -88,6 +89,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 	conclusionStoreManager := api.NewConclusionStoreManager(logger, bus)
 	notesStoreManager := api.NewNotesStoreManager(logger, bus)
 
+	// Get home directory for MCP config path
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
 	// Build dependencies
 	deps := &api.Dependencies{
 		StoreManager:           storeManager,
@@ -97,6 +104,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		TmuxManager:            tmuxManager,
 		Bus:                    bus,
 		Logger:                 logger,
+		DefaultsDir:            filepath.Join(homeDir, ".cortex", "defaults", "main"),
 	}
 
 	// Create and run server

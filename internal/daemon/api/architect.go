@@ -195,6 +195,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 		SessionStore: sessStore,
 		CortexdPath:  h.deps.CortexdPath,
 		Logger:       h.deps.Logger,
+		DefaultsDir:  h.deps.DefaultsDir,
 	})
 
 	architectAgent := string(projectCfg.Architect.Agent)

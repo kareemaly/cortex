@@ -487,6 +487,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		TmuxManager:  h.deps.TmuxManager,
 		Logger:       h.deps.Logger,
 		CortexdPath:  h.deps.CortexdPath,
+		DefaultsDir:  h.deps.DefaultsDir,
 	})
 	if err != nil {
 		switch {

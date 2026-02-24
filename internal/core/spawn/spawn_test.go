@@ -184,7 +184,7 @@ func createTestTicket(id, title, body string) *ticket.Ticket {
 
 func createTestPromptFile(t *testing.T, projectPath, relPath, content string) {
 	t.Helper()
-	path := filepath.Join(projectPath, ".cortex", "prompts", relPath)
+	path := filepath.Join(projectPath, "prompts", relPath)
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1756,14 +1756,10 @@ func extractExportedEnvVar(t *testing.T, script, varName string) string {
 	return sb.String()
 }
 
-// createTestCortexConfig creates .cortex/cortex.yaml in the test directory.
+// createTestCortexConfig creates cortex.yaml at the project root.
 func createTestCortexConfig(t *testing.T, projectPath, yamlContent string) {
 	t.Helper()
-	dir := filepath.Join(projectPath, ".cortex")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "cortex.yaml"), []byte(yamlContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectPath, "cortex.yaml"), []byte(yamlContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 }

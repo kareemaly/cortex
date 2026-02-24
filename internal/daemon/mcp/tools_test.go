@@ -32,7 +32,7 @@ func setupArchitectWithDaemon(t *testing.T, windowExists bool) (*Server, *ticket
 	}
 
 	// Create the prompts directory and default templates for the project
-	ticketPromptDir := filepath.Join(tmpDir, ".cortex", "prompts", "work")
+	ticketPromptDir := filepath.Join(tmpDir, "prompts", "work")
 	if err := os.MkdirAll(ticketPromptDir, 0755); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create prompts dir: %v", err)
@@ -43,7 +43,7 @@ func setupArchitectWithDaemon(t *testing.T, windowExists bool) (*Server, *ticket
 	}
 
 	// Create project config with name (used as tmux session name)
-	configPath := filepath.Join(tmpDir, ".cortex", "cortex.yaml")
+	configPath := filepath.Join(tmpDir, "cortex.yaml")
 	if err := os.WriteFile(configPath, []byte("name: test-session\n"), 0644); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create cortex.yaml: %v", err)
@@ -566,14 +566,13 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 		t.Fatalf("create temp dir: %v", err)
 	}
 
-	// Create .cortex/ directory (project marker)
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".cortex"), 0755); err != nil {
+	// Create cortex.yaml (project marker)
+	if err := os.WriteFile(filepath.Join(tmpDir, "cortex.yaml"), []byte("name: test-project\n"), 0644); err != nil {
 		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("create .cortex dir: %v", err)
+		t.Fatalf("create cortex.yaml: %v", err)
 	}
 
 	// Create a store and ticket via the daemon API infrastructure
-	// Tickets path defaults to {root}/tickets/ (not .cortex/tickets/)
 	store, err := ticket.NewStore(filepath.Join(tmpDir, "tickets"), nil, "")
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
@@ -588,7 +587,7 @@ func setupTicketSession(t *testing.T) (*Server, string, func()) {
 	}
 
 	// Set a session on the ticket
-	sessionsPath := filepath.Join(tmpDir, ".cortex", "sessions.json")
+	sessionsPath := filepath.Join(tmpDir, ".sessions.json")
 	localSessStore := session.NewStore(sessionsPath)
 	_, _, err = localSessStore.Create(tk.ID, "claude", "window")
 	if err != nil {

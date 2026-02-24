@@ -69,8 +69,8 @@ func (h *PromptHandlers) Resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create resolver with fallback to extended base
-	resolver := prompt.NewPromptResolver(projectPath, "")
+	// Create resolver with fallback to defaults
+	resolver := prompt.NewPromptResolver(projectPath, h.deps.DefaultsDir)
 
 	var resolved *prompt.ResolvedPrompt
 	var err error
@@ -103,7 +103,7 @@ func (h *PromptHandlers) Resolve(w http.ResponseWriter, r *http.Request) {
 func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())
 
-	resolver := prompt.NewPromptResolver(projectPath, "")
+	resolver := prompt.NewPromptResolver(projectPath, h.deps.DefaultsDir)
 	projectPromptsDir := prompt.PromptsDir(projectPath)
 
 	groupMap := make(map[string]*types.PromptGroupInfo)
@@ -237,7 +237,7 @@ func (h *PromptHandlers) Eject(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Source doesn't exist (custom type like ticket/research/SYSTEM.md)
 		// Use resolver to get fallback content
-		resolver := prompt.NewPromptResolver(projectPath, extendPath)
+		resolver := prompt.NewPromptResolver(projectPath, h.deps.DefaultsDir)
 		content, resolveErr := resolvePromptByPath(resolver, promptPath)
 		if resolveErr != nil {
 			writeError(w, http.StatusNotFound, "not_found", fmt.Sprintf("source prompt not found: %s", promptPath))

@@ -61,6 +61,7 @@ type Dependencies struct {
 	CortexdPath       string       // optional override for cortexd binary path
 	MCPConfigDir      string       // optional override for MCP config directory
 	SettingsConfigDir string       // optional override for settings config directory
+	DefaultsDir       string       // path to defaults (e.g., ~/.cortex/defaults/main) for prompt fallback
 }
 
 // Spawner handles spawning agent sessions.
@@ -719,8 +720,8 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 		ticketType = ticket.DefaultTicketType
 	}
 
-	// Create prompt resolver with fallback support
-	resolver := prompt.NewPromptResolver(req.ProjectPath, "")
+	// Create prompt resolver with fallback to defaults
+	resolver := prompt.NewPromptResolver(req.ProjectPath, s.deps.DefaultsDir)
 
 	// Load system prompt (MCP tool instructions and workflow)
 	var systemPromptContent string
@@ -782,8 +783,8 @@ func formatTicketReferences(refs []string) string {
 
 // buildArchitectPrompt creates the dynamic architect prompt with ticket list.
 func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
-	// Create prompt resolver with fallback support
-	resolver := prompt.NewPromptResolver(req.ProjectPath, "")
+	// Create prompt resolver with fallback to defaults
+	resolver := prompt.NewPromptResolver(req.ProjectPath, s.deps.DefaultsDir)
 
 	// Load system prompt (MCP tool instructions and workflow)
 	var systemPromptContent string

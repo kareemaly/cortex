@@ -55,6 +55,7 @@ type OrchestrateDeps struct {
 	TmuxManager  TmuxManagerInterface
 	CortexdPath  string       // optional: empty means auto-discover via binpath
 	Logger       *slog.Logger // optional
+	DefaultsDir  string       // path to defaults for prompt fallback
 }
 
 // Orchestrate is the single source of truth for spawning ticket agent sessions.
@@ -145,6 +146,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 		TmuxManager:  deps.TmuxManager,
 		CortexdPath:  deps.CortexdPath,
 		Logger:       deps.Logger,
+		DefaultsDir:  deps.DefaultsDir,
 	})
 
 	buildSpawnReq := func() SpawnRequest {

@@ -54,18 +54,18 @@ func DetectAgentFromExtend(extendPath string) string {
 	return ""
 }
 
-// MigrateProjectConfig reads a project's .cortex/cortex.yaml and migrates it
+// MigrateProjectConfig reads a project's cortex.yaml and migrates it
 // from the legacy format (with extend, ticket, git fields) to the new format
 // with top-level architect, work, and research sections.
 func MigrateProjectConfig(projectPath string) *MigrationResult {
 	result := &MigrationResult{ProjectPath: projectPath}
 
-	configPath := filepath.Join(projectPath, ".cortex", "cortex.yaml")
+	configPath := filepath.Join(projectPath, "cortex.yaml")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			result.Skipped = true
-			result.SkipReason = "no .cortex/cortex.yaml found"
+			result.SkipReason = "no cortex.yaml found"
 			return result
 		}
 		result.Error = err

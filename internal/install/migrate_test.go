@@ -9,10 +9,6 @@ import (
 
 func TestMigrateProjectConfig_LegacyClaude(t *testing.T) {
 	dir := t.TempDir()
-	cortexDir := filepath.Join(dir, ".cortex")
-	if err := os.MkdirAll(cortexDir, 0755); err != nil {
-		t.Fatal(err)
-	}
 
 	oldConfig := `name: myproject
 extend: ~/.cortex/defaults/claude-code
@@ -26,7 +22,7 @@ ticket:
 git:
   worktrees: false
 `
-	if err := os.WriteFile(filepath.Join(cortexDir, "cortex.yaml"), []byte(oldConfig), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "cortex.yaml"), []byte(oldConfig), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -42,7 +38,7 @@ git:
 	}
 
 	// Read back and verify
-	data, err := os.ReadFile(filepath.Join(cortexDir, "cortex.yaml"))
+	data, err := os.ReadFile(filepath.Join(dir, "cortex.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,10 +59,6 @@ git:
 
 func TestMigrateProjectConfig_LegacyOpencode(t *testing.T) {
 	dir := t.TempDir()
-	cortexDir := filepath.Join(dir, ".cortex")
-	if err := os.MkdirAll(cortexDir, 0755); err != nil {
-		t.Fatal(err)
-	}
 
 	oldConfig := `name: myproject
 extend: ~/.cortex/defaults/opencode
@@ -78,7 +70,7 @@ ticket:
 git:
   worktrees: true
 `
-	if err := os.WriteFile(filepath.Join(cortexDir, "cortex.yaml"), []byte(oldConfig), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "cortex.yaml"), []byte(oldConfig), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -94,7 +86,7 @@ git:
 	}
 
 	// Read back and verify new format with opencode agent
-	data, err := os.ReadFile(filepath.Join(cortexDir, "cortex.yaml"))
+	data, err := os.ReadFile(filepath.Join(dir, "cortex.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,10 +110,6 @@ git:
 
 func TestMigrateProjectConfig_AlreadyMigrated(t *testing.T) {
 	dir := t.TempDir()
-	cortexDir := filepath.Join(dir, ".cortex")
-	if err := os.MkdirAll(cortexDir, 0755); err != nil {
-		t.Fatal(err)
-	}
 
 	config := `name: myproject
 architect:
@@ -131,7 +119,7 @@ work:
 research:
   agent: claude
 `
-	if err := os.WriteFile(filepath.Join(cortexDir, "cortex.yaml"), []byte(config), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "cortex.yaml"), []byte(config), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -164,10 +152,6 @@ func TestMigrateProjectConfig_NoConfig(t *testing.T) {
 
 func TestMigrateProjectConfig_CustomPaths(t *testing.T) {
 	dir := t.TempDir()
-	cortexDir := filepath.Join(dir, ".cortex")
-	if err := os.MkdirAll(cortexDir, 0755); err != nil {
-		t.Fatal(err)
-	}
 
 	oldConfig := `name: myproject
 extend: ~/.cortex/defaults/claude-code
@@ -183,7 +167,7 @@ docs:
 tickets:
   path: custom/tickets
 `
-	if err := os.WriteFile(filepath.Join(cortexDir, "cortex.yaml"), []byte(oldConfig), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "cortex.yaml"), []byte(oldConfig), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -196,7 +180,7 @@ tickets:
 	}
 
 	// Read back and verify custom tickets path preserved
-	data, err := os.ReadFile(filepath.Join(cortexDir, "cortex.yaml"))
+	data, err := os.ReadFile(filepath.Join(dir, "cortex.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,10 +192,6 @@ tickets:
 
 func TestMigrateProjectConfig_FallbackToArchitectAgent(t *testing.T) {
 	dir := t.TempDir()
-	cortexDir := filepath.Join(dir, ".cortex")
-	if err := os.MkdirAll(cortexDir, 0755); err != nil {
-		t.Fatal(err)
-	}
 
 	// Config with no recognizable extend path but has architect.agent
 	oldConfig := `name: myproject
@@ -224,7 +204,7 @@ ticket:
 git:
   worktrees: false
 `
-	if err := os.WriteFile(filepath.Join(cortexDir, "cortex.yaml"), []byte(oldConfig), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "cortex.yaml"), []byte(oldConfig), 0644); err != nil {
 		t.Fatal(err)
 	}
 

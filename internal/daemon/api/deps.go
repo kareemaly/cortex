@@ -17,4 +17,5 @@ type Dependencies struct {
 	Bus                    *events.Bus
 	Logger                 *slog.Logger
 	CortexdPath            string // Optional: path to cortexd binary for spawn operations
+	DefaultsDir            string // Path to default prompts (e.g., ~/.cortex/defaults/main)
 }

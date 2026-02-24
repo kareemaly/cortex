@@ -132,7 +132,7 @@ func setupMainDefaults(homeDir string, force bool) ([]SetupItem, error) {
 	return CopyEmbeddedDefaults("main", targetDir, force)
 }
 
-// setupProject creates the project .cortex/ directory and config.
+// setupProject creates the project cortex.yaml and ticket directories.
 // Generates a self-contained cortex.yaml with all agent settings inline.
 func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, error) {
 	absPath, err := filepath.Abs(projectPath)
@@ -140,21 +140,13 @@ func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, err
 		return nil, err
 	}
 
-	cortexDir := filepath.Join(absPath, ".cortex")
-	configPath := filepath.Join(cortexDir, "cortex.yaml")
+	configPath := filepath.Join(absPath, "cortex.yaml")
 
 	var items []SetupItem
 
-	// Create .cortex/ directory first
-	item := ensureDir(cortexDir)
-	items = append(items, item)
-	if item.Error != nil {
-		return items, item.Error
-	}
-
 	// Generate a self-contained config based on agent type
 	configContent := generateProjectConfig(name, agent)
-	item = ensureConfigFile(configPath, configContent, force)
+	item := ensureConfigFile(configPath, configContent, force)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error

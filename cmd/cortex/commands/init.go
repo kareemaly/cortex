@@ -25,8 +25,8 @@ var initCmd = &cobra.Command{
 	Short: "Initialize project",
 	Long: `Initialize Cortex for a project.
 
-Creates the global ~/.cortex/settings.yaml and sets up a project .cortex/
-directory in the current directory. Use --global-only to skip project setup.
+Creates the global ~/.cortex/settings.yaml and sets up a cortex.yaml
+in the current directory. Use --global-only to skip project setup.
 
 The agent is auto-detected from your PATH. If both claude and opencode are
 available, you'll be prompted to choose. Use --agent to skip detection.`,
