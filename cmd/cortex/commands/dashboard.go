@@ -1,0 +1,36 @@
+package commands
+
+import (
+	"fmt"
+	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/tui/dashboard"
+	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
+	"github.com/spf13/cobra"
+)
+
+var dashboardCmd = &cobra.Command{
+	Use:   "dashboard",
+	Short: "Open global dashboard showing all architects",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		ensureDaemon()
+
+		client := sdk.DefaultClient("")
+		logBuf := tuilog.NewBuffer(tuilog.DefaultCapacity)
+		p := tea.NewProgram(
+			dashboard.New(client, logBuf),
+			tea.WithAltScreen(),
+		)
+		if _, err := p.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(dashboardCmd)
+}
