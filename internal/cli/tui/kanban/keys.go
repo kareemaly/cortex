@@ -32,6 +32,7 @@ const (
 	KeyDeleteOrphan Key = "D"
 	KeyYes          Key = "y"
 	KeyNo           Key = "n"
+	KeyOpenEditor   Key = "o"
 )
 
 // isKey checks if a key message matches a key constant.
@@ -46,5 +47,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the kanban board.
 func helpText() string {
-	return "[s]pawn  [f]ocus  [r]efresh  [h/l] columns  [j/k/gg/G] navigate  [!] logs  [q]uit"
+	return "[s]pawn  [o/↵] open  [f]ocus  [r]efresh  [h/l] columns  [j/k/gg/G] navigate  [!] logs  [q]uit"
 }

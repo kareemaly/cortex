@@ -105,6 +105,12 @@ type SessionDeleteErrorMsg struct {
 	Err error
 }
 
+// openEditorMsg is sent when the editor popup was launched successfully.
+type openEditorMsg struct{}
+
+// openEditorErrMsg is sent when launching the editor popup fails.
+type openEditorErrMsg struct{ Err error }
+
 // sseConnectedMsg is sent when the SSE connection is established.
 type sseConnectedMsg struct {
 	ch     <-chan sdk.Event
@@ -218,6 +224,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = fmt.Sprintf("Focus error: %s", msg.Err)
 		m.statusIsError = true
 		m.logBuf.Errorf("focus", "focus failed: %s", msg.Err)
+		return m, m.clearStatusAfterDelay()
+
+	case openEditorMsg:
+		m.statusMsg = "Editor opened"
+		m.statusIsError = false
+		return m, m.clearStatusAfterDelay()
+
+	case openEditorErrMsg:
+		m.statusMsg = msg.Err.Error()
+		m.statusIsError = true
 		return m, m.clearStatusAfterDelay()
 
 	case SessionDeletedMsg:
@@ -415,6 +431,17 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if isKey(msg, KeyRefresh) {
 		m.loading = true
 		return m, m.loadTickets()
+	}
+
+	// Open ticket in editor.
+	if isKey(msg, KeyOpenEditor, KeyEnter) {
+		t := m.columns[m.activeColumn].SelectedTicket()
+		if t != nil {
+			m.statusMsg = "Opening editor..."
+			m.statusIsError = false
+			return m, m.openTicketInEditor(t)
+		}
+		return m, nil
 	}
 
 	return m, nil
@@ -655,6 +682,17 @@ func (m Model) focusTicket(ticket *sdk.TicketSummary) tea.Cmd {
 			return FocusErrorMsg{Err: err}
 		}
 		return FocusSuccessMsg{Window: ticket.Title}
+	}
+}
+
+// openTicketInEditor returns a command to open the ticket's index.md in $EDITOR
+// via a tmux popup.
+func (m Model) openTicketInEditor(ticket *sdk.TicketSummary) tea.Cmd {
+	return func() tea.Msg {
+		if err := m.client.EditTicket(ticket.ID); err != nil {
+			return openEditorErrMsg{Err: fmt.Errorf("open editor: %w", err)}
+		}
+		return openEditorMsg{}
 	}
 }
 
