@@ -89,8 +89,8 @@ func TestNewClient(t *testing.T) {
 	if c.baseURL != "http://example.com" {
 		t.Errorf("expected baseURL %q, got %q", "http://example.com", c.baseURL)
 	}
-	if c.projectPath != "/my/project" {
-		t.Errorf("expected projectPath %q, got %q", "/my/project", c.projectPath)
+	if c.architectPath != "/my/project" {
+		t.Errorf("expected projectPath %q, got %q", "/my/project", c.architectPath)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestDefaultClient(t *testing.T) {
 
 // --- doRequest / project header tests ---
 
-func TestDoRequest_InjectsProjectHeader(t *testing.T) {
+func TestDoRequest_InjectsArchitectHeader(t *testing.T) {
 	srv, rs := newRoutedServer(t)
 	rs.setRoute("GET", "/test", http.StatusOK, map[string]string{"ok": "true"})
 
@@ -116,8 +116,8 @@ func TestDoRequest_InjectsProjectHeader(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 
 	last := rs.lastRequest()
-	if last.Headers.Get(ProjectHeader) != "/my/project" {
-		t.Errorf("expected project header %q, got %q", "/my/project", last.Headers.Get(ProjectHeader))
+	if last.Headers.Get(ArchitectHeader) != "/my/project" {
+		t.Errorf("expected project header %q, got %q", "/my/project", last.Headers.Get(ArchitectHeader))
 	}
 }
 
@@ -134,8 +134,8 @@ func TestDoRequest_EmptyProjectPath(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 
 	last := rs.lastRequest()
-	if last.Headers.Get(ProjectHeader) != "" {
-		t.Errorf("expected empty project header, got %q", last.Headers.Get(ProjectHeader))
+	if last.Headers.Get(ArchitectHeader) != "" {
+		t.Errorf("expected empty project header, got %q", last.Headers.Get(ArchitectHeader))
 	}
 }
 
@@ -206,37 +206,37 @@ func TestHealthWithVersion_BadJSON(t *testing.T) {
 	}
 }
 
-// --- ListProjects ---
+// --- ListArchitects ---
 
-func TestListProjects_Success(t *testing.T) {
+func TestListArchitects_Success(t *testing.T) {
 	srv, rs := newRoutedServer(t)
-	rs.setRoute("GET", "/projects", http.StatusOK, ListProjectsResponse{
-		Projects: []ProjectResponse{
+	rs.setRoute("GET", "/architects", http.StatusOK, ListArchitectsResponse{
+		Architects: []ArchitectResponse{
 			{Path: "/proj1", Title: "Proj 1", Exists: true},
 		},
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.ListProjects()
+	resp, err := c.ListArchitects()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(resp.Projects) != 1 {
-		t.Errorf("expected 1 project, got %d", len(resp.Projects))
+	if len(resp.Architects) != 1 {
+		t.Errorf("expected 1 project, got %d", len(resp.Architects))
 	}
-	if resp.Projects[0].Path != "/proj1" {
-		t.Errorf("expected path /proj1, got %q", resp.Projects[0].Path)
+	if resp.Architects[0].Path != "/proj1" {
+		t.Errorf("expected path /proj1, got %q", resp.Architects[0].Path)
 	}
 }
 
-// --- UnlinkProject ---
+// --- UnlinkArchitect ---
 
-func TestUnlinkProject_Success(t *testing.T) {
+func TestUnlinkArchitect_Success(t *testing.T) {
 	srv, rs := newRoutedServer(t)
-	rs.setRoute("DELETE", "/projects", http.StatusNoContent, nil)
+	rs.setRoute("DELETE", "/architects", http.StatusNoContent, nil)
 
 	c := NewClient(srv.URL, "/p")
-	err := c.UnlinkProject("/proj1")
+	err := c.UnlinkArchitect("/proj1")
 	if err != nil {
 		t.Fatal(err)
 	}

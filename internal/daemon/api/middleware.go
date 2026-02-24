@@ -11,58 +11,58 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// ProjectHeader is the HTTP header name for specifying the project path.
-const ProjectHeader = "X-Cortex-Project"
+// ArchitectHeader is the HTTP header name for specifying the architect path.
+const ArchitectHeader = "X-Cortex-Architect"
 
 type contextKey string
 
-const projectPathKey contextKey = "projectPath"
+const architectPathKey contextKey = "architectPath"
 
-// ProjectRequired returns middleware that requires the X-Cortex-Project header.
+// ArchitectRequired returns middleware that requires the X-Cortex-Architect header.
 // It validates that:
 // 1. The header is present
 // 2. The path is absolute
 // 3. The path exists and has a cortex.yaml file
-func ProjectRequired() func(http.Handler) http.Handler {
+func ArchitectRequired() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			projectPath := r.Header.Get(ProjectHeader)
+			architectPath := r.Header.Get(ArchitectHeader)
 
 			// Check header is present
-			if projectPath == "" {
-				writeError(w, http.StatusBadRequest, "missing_project_header", "X-Cortex-Project header required")
+			if architectPath == "" {
+				writeError(w, http.StatusBadRequest, "missing_architect_header", "X-Cortex-Architect header required")
 				return
 			}
 
 			// Check path is absolute
-			if !filepath.IsAbs(projectPath) {
-				writeError(w, http.StatusBadRequest, "invalid_project_path", "project path must be absolute")
+			if !filepath.IsAbs(architectPath) {
+				writeError(w, http.StatusBadRequest, "invalid_architect_path", "architect path must be absolute")
 				return
 			}
 
 			// Check path exists
-			if _, err := os.Stat(projectPath); os.IsNotExist(err) {
-				writeError(w, http.StatusNotFound, "project_not_found", "project path does not exist")
+			if _, err := os.Stat(architectPath); os.IsNotExist(err) {
+				writeError(w, http.StatusNotFound, "architect_not_found", "architect path does not exist")
 				return
 			}
 
-			// Check for cortex.yaml (project marker)
-			cortexYaml := filepath.Join(projectPath, "cortex.yaml")
+			// Check for cortex.yaml (architect marker)
+			cortexYaml := filepath.Join(architectPath, "cortex.yaml")
 			if _, err := os.Stat(cortexYaml); os.IsNotExist(err) {
-				writeError(w, http.StatusNotFound, "project_not_found", "not a cortex project (no cortex.yaml)")
+				writeError(w, http.StatusNotFound, "architect_not_found", "not a cortex architect (no cortex.yaml)")
 				return
 			}
 
-			// Add project path to context
-			ctx := context.WithValue(r.Context(), projectPathKey, filepath.Clean(projectPath))
+			// Add architect path to context
+			ctx := context.WithValue(r.Context(), architectPathKey, filepath.Clean(architectPath))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// GetProjectPath returns the project path from the request context.
-func GetProjectPath(ctx context.Context) string {
-	if v := ctx.Value(projectPathKey); v != nil {
+// GetArchitectPath returns the architect path from the request context.
+func GetArchitectPath(ctx context.Context) string {
+	if v := ctx.Value(architectPathKey); v != nil {
 		return v.(string)
 	}
 	return ""

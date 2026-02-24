@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kareemaly/cortex/internal/events"
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
@@ -25,7 +25,7 @@ func NewSessionHandlers(deps *Dependencies) *SessionHandlers {
 
 // List handles GET /sessions - lists all active sessions.
 func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	if h.deps.SessionManager == nil {
 		writeJSON(w, http.StatusOK, map[string]any{"sessions": []any{}})
@@ -90,7 +90,7 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	sessStore := h.deps.SessionManager.GetStore(projectPath)
 
@@ -104,7 +104,7 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	// If session is active and tmux is available, kill the window
 	if h.deps.TmuxManager != nil && sess.TmuxWindow != "" {
 		// Load project config for session name
-		projectCfg, err := projectconfig.Load(projectPath)
+		projectCfg, err := architectconfig.Load(projectPath)
 		sessionName := "cortex"
 		if err == nil && projectCfg.Name != "" {
 			sessionName = projectCfg.Name
@@ -128,7 +128,7 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 
 	h.deps.Bus.Emit(events.Event{
 		Type:        events.SessionEnded,
-		ProjectPath: projectPath,
+		ArchitectPath: projectPath,
 		TicketID:    shortID,
 	})
 
@@ -157,7 +157,7 @@ func (h *SessionHandlers) findSession(sessStore *session.Store, id string) (stri
 func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	sessStore := h.deps.SessionManager.GetStore(projectPath)
 
@@ -192,7 +192,7 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load project config for session name
-	projectCfg, err := projectconfig.Load(projectPath)
+	projectCfg, err := architectconfig.Load(projectPath)
 	tmuxSession := "cortex"
 	if err == nil && projectCfg.Name != "" {
 		tmuxSession = projectCfg.Name

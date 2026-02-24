@@ -35,7 +35,7 @@ func parseIntQuery(r *http.Request, key string, defaultVal int) int {
 
 // List handles GET /conclusions - lists conclusions with optional type filter and pagination.
 func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	if h.deps.ConclusionStoreManager == nil {
 		writeJSON(w, http.StatusOK, types.ListConclusionsResponse{Conclusions: []types.ConclusionSummary{}, Total: 0})
@@ -76,7 +76,7 @@ func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /conclusions/{id} - gets a conclusion by ID.
 func (h *ConclusionHandlers) Get(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	if h.deps.ConclusionStoreManager == nil {
 		writeError(w, http.StatusNotFound, "not_found", "conclusion store not available")
@@ -110,7 +110,7 @@ func (h *ConclusionHandlers) Get(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /conclusions - creates a new conclusion.
 func (h *ConclusionHandlers) Create(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	if h.deps.ConclusionStoreManager == nil {
 		writeError(w, http.StatusInternalServerError, "store_error", "conclusion store not available")

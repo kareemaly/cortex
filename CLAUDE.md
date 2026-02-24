@@ -5,9 +5,9 @@ Orchestration layer for AI coding agents. File-based ticket management with MCP 
 ## Quick Start
 
 ```bash
-cortexd &                 # Start daemon (background)
-cortex init               # Initialize project
-cortex architect          # Start architect session
+cortexd &                           # Start daemon (background)
+cortex architect create --name myproject   # Create architect workspace
+cortex architect start              # Start architect session
 ```
 
 ## Build & Test
@@ -37,9 +37,9 @@ Single `cortexd` daemon serves all projects. **All clients communicate exclusive
                                      └──────────────────────┘
 ```
 
-Two-tier agent hierarchy: **Architect** (project-scoped) → **Ticket Agent** (ticket-scoped).
+Two-tier agent hierarchy: **Architect** (architect-scoped) → **Ticket Agent** (ticket-scoped).
 
-Project context: `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
+Architect context: `X-Cortex-Architect` header (HTTP) or `CORTEX_ARCHITECT_PATH` env (MCP).
 
 ## Storage Format
 
@@ -53,10 +53,10 @@ Default ticket path is `{projectRoot}/tickets/` (configurable via `tickets.path`
 ## Critical Implementation Notes
 
 - **HTTP-only communication**: All clients (CLI, TUI, MCP) communicate via HTTP to daemon. No direct filesystem access to ticket store.
-- **Project context**: Always use `X-Cortex-Project` header (HTTP) or `CORTEX_PROJECT_PATH` env (MCP).
+- **Architect context**: Always use `X-Cortex-Architect` header (HTTP) or `CORTEX_ARCHITECT_PATH` env (MCP).
 - **StoreManager**: Single source of truth for ticket state. Located in `internal/daemon/api/store_manager.go`.
-- **ConclusionStoreManager**: Manages conclusion stores per project. Located in `internal/daemon/api/conclusion_store_manager.go`.
-- **SessionManager**: Manages ephemeral session stores per project. Located in `internal/daemon/api/session_manager.go`.
+- **ConclusionStoreManager**: Manages conclusion stores per architect. Located in `internal/daemon/api/conclusion_store_manager.go`.
+- **SessionManager**: Manages ephemeral session stores per architect. Located in `internal/daemon/api/session_manager.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 
 ## Anti-Patterns
@@ -68,15 +68,16 @@ Default ticket path is `{projectRoot}/tickets/` (configurable via `tickets.path`
 | Import `internal/ticket` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
 | Import `internal/core/spawn` in CLI | Call `/tickets/{status}/{id}/spawn` | CLI should not import daemon internals |
 | Access `.cortex/sessions.json` directly | Use SessionManager API | Bypasses locking and event notifications |
+| Import `internal/architect` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
 
 ## Debugging
 
 | Symptom | Check |
 |---------|-------|
 | Daemon not responding | `cortex daemon status`, verify port 4200, check `~/.cortex/logs/` |
-| Ticket not found | Verify `X-Cortex-Project` header matches project path |
-| Session won't spawn | Check `cortex kanban` for state, use `mode=resume` for orphaned |
-| MCP tools not working | Verify `CORTEX_PROJECT_PATH` env, check daemon logs |
+| Ticket not found | Verify `X-Cortex-Architect` header matches architect path |
+| Session won't spawn | Check `cortex architect show` for state, use `mode=resume` for orphaned |
+| MCP tools not working | Verify `CORTEX_ARCHITECT_PATH` env, check daemon logs |
 
 ## Key Paths
 
@@ -90,7 +91,7 @@ Default ticket path is `{projectRoot}/tickets/` (configurable via `tickets.path`
 | Conclusion store | `internal/conclusion/` |
 | SDK client | `internal/cli/sdk/client.go` |
 | Spawn orchestration | `internal/core/spawn/` |
-| Project config | `internal/project/config/` |
+| Architect config | `internal/architect/config/` |
 | Daemon config | `internal/daemon/config/` |
 | Tmux manager | `internal/tmux/` |
 | TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `sessions/`, `config/`, `ticket/`) |
@@ -102,7 +103,7 @@ Default ticket path is `{projectRoot}/tickets/` (configurable via `tickets.path`
 
 ## Configuration
 
-**Project** (`cortex.yaml` or `.cortex/cortex.yaml`): Agent type (`claude`, `opencode`) and args per role. Optional `repos` list and `tickets.path`. See `internal/project/config/config.go` for schema.
+**Architect** (`cortex.yaml` or `.cortex/cortex.yaml`): Agent type (`claude`, `opencode`) and args per role. Optional `repos` list and `tickets.path`. See `internal/architect/config/config.go` for schema.
 
 ```yaml
 name: my-project
@@ -115,20 +116,22 @@ work:
 research:
   agent: claude
 tickets:
-  path: custom/tickets  # optional, defaults to {projectRoot}/tickets
+  path: custom/tickets  # optional, defaults to {architectRoot}/tickets
 ```
 
-**Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, project registry. See `internal/daemon/config/config.go` for schema.
+**Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, architect registry. See `internal/daemon/config/config.go` for schema.
 
-**Project registry**: Global config tracks all projects (`projects` list). Auto-registered on `cortex init`. Used by `GET /projects` endpoint.
+**Architect registry**: Global config tracks all architects (`architects` list). Auto-registered on `cortex architect create`. Used by `GET /architects` endpoint.
 
 ## CLI Commands
 
 | Command | Description |
 |---------|-------------|
-| `cortex init` | Initialize `.cortex/` in current directory, register in global config (`--agent claude\|opencode`) |
-| `cortex architect` | Start/attach architect session (`--mode fresh\|resume` for orphaned) |
-| `cortex project` | Project TUI with tab switching (`tab`/`[`/`]`) |
+| `cortex architect create [--name <n>] [--agent claude\|opencode]` | Create architect workspace in `~/architects/<name>/` |
+| `cortex architect list` | List all registered architects (TUI or table) |
+| `cortex architect start [name] [--mode fresh\|resume]` | Start/attach architect session |
+| `cortex architect show [name]` | Open architect project TUI |
+| `cortex architect delete <name>` | Unlink and optionally delete architect workspace |
 | `cortex ticket <id>` | Ticket detail TUI |
 | `cortex daemon status` | Check daemon status |
 | `cortex upgrade` | Refresh `~/.cortex/defaults/` with latest embedded defaults |
@@ -138,9 +141,9 @@ tickets:
 
 Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/sdk/client.go`.
 
-**Global** (no project header): `GET /health`, `GET /projects`, `POST /projects`, global config (`/config/global`), daemon logs/status (`/daemon/logs`, `/daemon/status`).
+**Global** (no architect header): `GET /health`, `GET /architects`, `POST /architects`, global config (`/config/global`), daemon logs/status (`/daemon/logs`, `/daemon/status`).
 
-**Project-scoped** (requires `X-Cortex-Project`): Ticket CRUD, spawn, move, conclude, architect spawn/conclude, session kill/approve, SSE events, conclusions (`/conclusions`), project config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`, `/prompts/reset`).
+**Architect-scoped** (requires `X-Cortex-Architect`): Ticket CRUD, spawn, move, conclude, architect spawn/conclude, session kill/approve, SSE events, conclusions (`/conclusions`), architect config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`, `/prompts/reset`).
 
 ## MCP Tools
 
@@ -186,3 +189,4 @@ Spawn orchestration handles state detection (normal/active/orphaned) and mode se
 - API tests: `internal/daemon/api/integration_test.go`
 - MCP tests: `internal/daemon/mcp/server_test.go`
 - Config tests: `internal/daemon/config/config_test.go`
+- Architect config tests: `internal/architect/config/config_test.go`

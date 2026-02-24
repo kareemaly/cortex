@@ -33,7 +33,7 @@ func (s *Store) emit(eventType events.EventType, ticketID string, payload any) {
 	}
 	s.bus.Emit(events.Event{
 		Type:        eventType,
-		ProjectPath: s.projectPath,
+		ArchitectPath: s.projectPath,
 		TicketID:    ticketID,
 		Payload:     payload,
 	})

@@ -88,9 +88,9 @@ func runUpgradeDryRunAll(homeDir string) error {
 			fmt.Println("=== Project Migration ===")
 			fmt.Println()
 			for _, r := range results {
-				name := r.ProjectName
+				name := r.ArchitectName
 				if name == "" {
-					name = filepath.Base(r.ProjectPath)
+					name = filepath.Base(r.ArchitectPath)
 				}
 				if r.Error != nil {
 					fmt.Printf("  %s %s — error: %v\n", crossMark(), name, r.Error)
@@ -242,9 +242,9 @@ func runUpgradeApplyAll(homeDir string) error {
 			fmt.Println()
 			fmt.Println("Project migration:")
 			for _, r := range migrationResults {
-				name := r.ProjectName
+				name := r.ArchitectName
 				if name == "" {
-					name = filepath.Base(r.ProjectPath)
+					name = filepath.Base(r.ArchitectPath)
 				}
 				if r.Error != nil {
 					fmt.Printf("  %s %s — error: %v\n", crossMark(), name, r.Error)

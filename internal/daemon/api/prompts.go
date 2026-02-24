@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/prompt"
 	"github.com/kareemaly/cortex/internal/types"
 )
@@ -31,7 +31,7 @@ func NewPromptHandlers(deps *Dependencies) *PromptHandlers {
 //   - stage: "SYSTEM", "KICKOFF", or "APPROVE" (required)
 //   - type: ticket type name (required when role=ticket)
 func (h *PromptHandlers) Resolve(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	// Parse query parameters
 	role := r.URL.Query().Get("role")
@@ -101,7 +101,7 @@ func (h *PromptHandlers) Resolve(w http.ResponseWriter, r *http.Request) {
 // ticket types. This ensures custom ticket types (e.g., "research") appear even
 // when no physical files exist for them in the defaults directory.
 func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	resolver := prompt.NewPromptResolver(projectPath, h.deps.DefaultsDir)
 	projectPromptsDir := prompt.PromptsDir(projectPath)
@@ -177,7 +177,7 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Read cortex.yaml content
-	configPath := projectconfig.ConfigPath(projectPath)
+	configPath := architectconfig.ConfigPath(projectPath)
 	configContent := ""
 	if data, readErr := os.ReadFile(configPath); readErr == nil {
 		configContent = string(data)
@@ -193,7 +193,7 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 
 // Eject handles POST /prompts/eject - copies a prompt from base to project for customization.
 func (h *PromptHandlers) Eject(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	var req EjectPromptRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -277,7 +277,7 @@ func (h *PromptHandlers) Eject(w http.ResponseWriter, r *http.Request) {
 
 // Edit handles POST /prompts/edit - opens an ejected prompt in $EDITOR via tmux popup.
 func (h *PromptHandlers) Edit(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	var req EditPromptRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -317,7 +317,7 @@ func (h *PromptHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 
 	command := fmt.Sprintf("%s %q", editor, filePath)
 
-	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	projectCfg, cfgErr := architectconfig.Load(projectPath)
 	tmuxSession := "cortex"
 	if cfgErr == nil && projectCfg.Name != "" {
 		tmuxSession = projectCfg.Name
@@ -336,7 +336,7 @@ func (h *PromptHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 
 // Reset handles POST /prompts/reset - deletes an ejected prompt so it falls back to the built-in default.
 func (h *PromptHandlers) Reset(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	var req ResetPromptRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

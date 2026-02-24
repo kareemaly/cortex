@@ -44,7 +44,7 @@ func (us *unitServer) makeRequest(t *testing.T, method, path string, body any) *
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set(ProjectHeader, us.projectRoot)
+	req.Header.Set(ArchitectHeader, us.projectRoot)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -141,7 +141,7 @@ func TestSetDueDate_InvalidJSON(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPatch, ts.URL+"/tickets/"+created.ID+"/due-date", bytes.NewReader([]byte("bad json")))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(ProjectHeader, ts.projectRoot)
+	req.Header.Set(ArchitectHeader, ts.projectRoot)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -302,7 +302,7 @@ func TestConclude_InvalidJSON(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/tickets/"+created.ID+"/conclude", bytes.NewReader([]byte("bad")))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(ProjectHeader, ts.projectRoot)
+	req.Header.Set(ArchitectHeader, ts.projectRoot)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -372,7 +372,7 @@ func TestFocus_NoSessionManager(t *testing.T) {
 	created, _ := store.Create("Focus Ticket", "body", "", nil, nil, "")
 
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/tickets/"+created.ID+"/focus", nil)
-	req.Header.Set(ProjectHeader, tmpDir)
+	req.Header.Set(ArchitectHeader, tmpDir)
 	resp, _ := http.DefaultClient.Do(req)
 	defer func() { _ = resp.Body.Close() }()
 
@@ -408,7 +408,7 @@ func TestListAll_DueBeforeInvalidFormat(t *testing.T) {
 	defer ts.Close()
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/tickets?due_before=not-a-date", nil)
-	req.Header.Set(ProjectHeader, ts.projectRoot)
+	req.Header.Set(ArchitectHeader, ts.projectRoot)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -432,7 +432,7 @@ func TestListAll_WithQueryFilter(t *testing.T) {
 	_, _ = ts.store.Create("Beta Ticket", "body2", "", nil, nil, "")
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/tickets?query=alpha", nil)
-	req.Header.Set(ProjectHeader, ts.projectRoot)
+	req.Header.Set(ArchitectHeader, ts.projectRoot)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -502,7 +502,7 @@ func TestListByStatus_DueBeforeInvalidFormat(t *testing.T) {
 	defer ts.Close()
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/tickets/backlog?due_before=bad", nil)
-	req.Header.Set(ProjectHeader, ts.projectRoot)
+	req.Header.Set(ArchitectHeader, ts.projectRoot)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

@@ -120,19 +120,19 @@ type HealthResponse struct {
 	Version string `json:"version"`
 }
 
-// ProjectTicketCounts holds ticket counts by status.
-type ProjectTicketCounts struct {
+// ArchitectTicketCounts holds ticket counts by status.
+type ArchitectTicketCounts struct {
 	Backlog  int `json:"backlog"`
 	Progress int `json:"progress"`
 	Done     int `json:"done"`
 }
 
-// ProjectResponse represents a single project in the API response.
-type ProjectResponse struct {
-	Path   string               `json:"path"`
-	Title  string               `json:"title"`
-	Exists bool                 `json:"exists"`
-	Counts *ProjectTicketCounts `json:"counts,omitempty"`
+// ArchitectResponse represents a single architect in the API response.
+type ArchitectResponse struct {
+	Path   string                 `json:"path"`
+	Title  string                 `json:"title"`
+	Exists bool                   `json:"exists"`
+	Counts *ArchitectTicketCounts `json:"counts,omitempty"`
 }
 
 // ConcludeSessionResponse is the response for concluding a session.

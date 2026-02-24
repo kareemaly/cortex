@@ -6,15 +6,15 @@ import (
 	"path/filepath"
 
 	"github.com/kareemaly/cortex/internal/daemon/config"
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 )
 
 // Options configures the installation.
 type Options struct {
 	// ProjectPath is the path for project setup. If empty, project setup is skipped.
-	ProjectPath string
+	ArchitectPath string
 	// ProjectName overrides auto-detected project name.
-	ProjectName string
+	ArchitectName string
 	// Agent selects which agent defaults to use (claude, opencode). Defaults to claude.
 	Agent string
 	// Force overwrites existing config files.
@@ -33,21 +33,21 @@ func Run(opts Options) (*Result, error) {
 	result.GlobalItems = globalItems
 
 	// Setup project if path is provided
-	if opts.ProjectPath != "" {
-		name := opts.ProjectName
+	if opts.ArchitectPath != "" {
+		name := opts.ArchitectName
 		if name == "" {
-			name = DetectProjectName(opts.ProjectPath)
+			name = DetectArchitectName(opts.ArchitectPath)
 		}
-		result.ProjectName = name
+		result.ArchitectName = name
 
-		projectItems, err := setupProject(opts.ProjectPath, name, opts.Agent, opts.Force)
+		projectItems, err := setupProject(opts.ArchitectPath, name, opts.Agent, opts.Force)
 		if err != nil {
 			return nil, err
 		}
-		result.ProjectItems = projectItems
+		result.ArchitectItems = projectItems
 
 		// Auto-register project in global config (non-fatal)
-		registered, regErr := registerProject(opts.ProjectPath, name)
+		registered, regErr := registerArchitect(opts.ArchitectPath, name)
 		result.Registered = registered
 		result.RegistrationError = regErr
 	}
@@ -59,7 +59,7 @@ func Run(opts Options) (*Result, error) {
 }
 
 // registerProject adds the project to the global settings.yaml registry.
-func registerProject(projectPath, name string) (bool, error) {
+func registerArchitect(projectPath, name string) (bool, error) {
 	absPath, err := filepath.Abs(projectPath)
 	if err != nil {
 		return false, err
@@ -70,7 +70,7 @@ func registerProject(projectPath, name string) (bool, error) {
 		return false, err
 	}
 
-	if !cfg.RegisterProject(absPath, name) {
+	if !cfg.RegisterArchitect(absPath, name) {
 		return false, nil // already registered
 	}
 
@@ -153,9 +153,9 @@ func setupProject(projectPath, name, agent string, force bool) ([]SetupItem, err
 	}
 
 	// Load config to resolve tickets path (respects custom paths from cortex.yaml)
-	cfg, err := projectconfig.Load(absPath)
+	cfg, err := architectconfig.Load(absPath)
 	if err != nil {
-		cfg = projectconfig.DefaultConfig()
+		cfg = architectconfig.DefaultConfig()
 	}
 
 	// Create tickets directory with status subdirs at config-resolved path

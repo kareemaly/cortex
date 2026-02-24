@@ -44,7 +44,7 @@ func runMCP(cmd *cobra.Command, args []string) error {
 	ticketID := mcpTicketID
 
 	// Get optional config from environment
-	projectPath := os.Getenv("CORTEX_PROJECT_PATH")
+	projectPath := os.Getenv("CORTEX_ARCHITECT_PATH")
 	tmuxSession := os.Getenv("CORTEX_TMUX_SESSION")
 	daemonURL := os.Getenv("CORTEX_DAEMON_URL")
 
@@ -52,7 +52,7 @@ func runMCP(cmd *cobra.Command, args []string) error {
 	cfg := &mcp.Config{
 		TicketID:    ticketID,
 		TicketType:  mcpTicketType,
-		ProjectPath: projectPath,
+		ArchitectPath: projectPath,
 		TmuxSession: tmuxSession,
 		DaemonURL:   daemonURL,
 	}

@@ -289,7 +289,7 @@ func (s *Server) handleSpawnSession(
 		return nil, SpawnSessionOutput{}, NewValidationError("mode", "must be 'normal', 'resume', or 'fresh'")
 	}
 
-	projectPath := s.config.ProjectPath
+	projectPath := s.config.ArchitectPath
 
 	// Look up ticket status via daemon API (needed to build the spawn URL)
 	ticketResp, err := s.sdkClient.GetTicketByID(input.TicketID)
@@ -307,7 +307,7 @@ func (s *Server) handleSpawnSession(
 	if err != nil {
 		return nil, SpawnSessionOutput{}, NewInternalError("failed to create request: " + err.Error())
 	}
-	httpReq.Header.Set("X-Cortex-Project", projectPath)
+	httpReq.Header.Set("X-Cortex-Architect", projectPath)
 
 	// Execute request
 	resp, err := http.DefaultClient.Do(httpReq)

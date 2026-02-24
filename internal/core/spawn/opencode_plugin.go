@@ -25,7 +25,7 @@ function send(status: string, tool?: string) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Cortex-Project": PROJECT_PATH,
+      "X-Cortex-Architect": PROJECT_PATH,
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(5000),

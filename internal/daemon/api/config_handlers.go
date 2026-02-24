@@ -7,7 +7,7 @@ import (
 	"os"
 
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -34,9 +34,9 @@ type UpdateProjectConfigRequest struct {
 
 // ReadProjectConfig handles GET /config/project - reads project's cortex.yaml.
 func (h *ConfigHandlers) ReadProjectConfig(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
-	configPath := projectconfig.ConfigPath(projectPath)
+	configPath := architectconfig.ConfigPath(projectPath)
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -55,7 +55,7 @@ func (h *ConfigHandlers) ReadProjectConfig(w http.ResponseWriter, r *http.Reques
 
 // UpdateProjectConfig handles PUT /config/project - updates project's cortex.yaml.
 func (h *ConfigHandlers) UpdateProjectConfig(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
 	var req UpdateProjectConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -69,13 +69,13 @@ func (h *ConfigHandlers) UpdateProjectConfig(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Validate the YAML is parseable as a project config
-	var testCfg projectconfig.Config
+	var testCfg architectconfig.Config
 	if err := yaml.Unmarshal([]byte(req.Content), &testCfg); err != nil {
 		writeError(w, http.StatusBadRequest, "validation_error", "invalid YAML: "+err.Error())
 		return
 	}
 
-	configPath := projectconfig.ConfigPath(projectPath)
+	configPath := architectconfig.ConfigPath(projectPath)
 	if err := os.WriteFile(configPath, []byte(req.Content), 0644); err != nil {
 		writeError(w, http.StatusInternalServerError, "write_error", "failed to write project config")
 		return
@@ -169,9 +169,9 @@ func (h *ConfigHandlers) UpdateGlobalConfig(w http.ResponseWriter, r *http.Reque
 
 // EditProjectConfig handles POST /config/project/edit - opens cortex.yaml in $EDITOR via tmux popup.
 func (h *ConfigHandlers) EditProjectConfig(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetProjectPath(r.Context())
+	projectPath := GetArchitectPath(r.Context())
 
-	configPath := projectconfig.ConfigPath(projectPath)
+	configPath := architectconfig.ConfigPath(projectPath)
 	if _, err := os.Stat(configPath); err != nil {
 		if os.IsNotExist(err) {
 			writeError(w, http.StatusNotFound, "not_found", "project config not found")
@@ -193,7 +193,7 @@ func (h *ConfigHandlers) EditProjectConfig(w http.ResponseWriter, r *http.Reques
 
 	command := fmt.Sprintf("%s %q", editor, configPath)
 
-	projectCfg, cfgErr := projectconfig.Load(projectPath)
+	projectCfg, cfgErr := architectconfig.Load(projectPath)
 	tmuxSession := "cortex"
 	if cfgErr == nil && projectCfg.Name != "" {
 		tmuxSession = projectCfg.Name

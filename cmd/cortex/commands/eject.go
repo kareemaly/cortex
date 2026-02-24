@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	projectconfig "github.com/kareemaly/cortex/internal/project/config"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/prompt"
 )
 
@@ -46,10 +46,10 @@ func runEject(cmd *cobra.Command, args []string) error {
 	}
 
 	// Find project root
-	_, projectRoot, err := projectconfig.LoadFromPath(cwd)
+	_, projectRoot, err := architectconfig.LoadFromPath(cwd)
 	if err != nil {
-		if projectconfig.IsProjectNotFound(err) {
-			return fmt.Errorf("not in a cortex project (no cortex.yaml found)")
+		if architectconfig.IsArchitectNotFound(err) {
+			return fmt.Errorf("not in a cortex architect (no cortex.yaml found)")
 		}
 		return err
 	}

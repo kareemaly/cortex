@@ -220,7 +220,7 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "claude",
 		TmuxSession: "test-session",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
 		TicketID:    "ticket-1",
 		Ticket:      testTicket,
@@ -296,7 +296,7 @@ func TestSpawn_TicketAgent_AlreadyActive(t *testing.T) {
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "claude",
 		TmuxSession: "test-session",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
 		TicketID:    "ticket-1",
 		Ticket:      testTicket,
@@ -343,7 +343,7 @@ func TestSpawn_CleanupOnFailure(t *testing.T) {
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "claude",
 		TmuxSession: "test-session",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
 		TicketID:    "ticket-1",
 		Ticket:      testTicket,
@@ -381,7 +381,7 @@ func TestResume_Success(t *testing.T) {
 	result, err := spawner.Resume(context.Background(), ResumeRequest{
 		AgentType:   AgentTypeTicketAgent,
 		TmuxSession: "test-session",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
 		WindowName:  "test-ticket",
 		TicketID:    "ticket-1",
@@ -476,7 +476,7 @@ func TestFresh_ClearsExisting(t *testing.T) {
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "claude",
 		TmuxSession: "test-session",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
 		TicketID:    "ticket-1",
 		Ticket:      testTicket,
@@ -560,7 +560,7 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 		TicketID:    "ticket-123",
 		TicketType:  "work",
 		TicketsDir:  "/path/to/tickets",
-		ProjectPath: "/path/to/project",
+		ArchitectPath: "/path/to/project",
 		TmuxSession: "dev-session",
 	})
 
@@ -597,7 +597,7 @@ func TestGenerateMCPConfig_WithTicketNoType(t *testing.T) {
 		CortexdPath: "/usr/bin/cortexd",
 		TicketID:    "ticket-123",
 		TicketsDir:  "/path/to/tickets",
-		ProjectPath: "/path/to/project",
+		ArchitectPath: "/path/to/project",
 		TmuxSession: "dev-session",
 	})
 
@@ -658,7 +658,7 @@ func TestWriteLauncherScript(t *testing.T) {
 		AgentArgs:            []string{"--permission-mode", "plan"},
 		EnvVars: map[string]string{
 			"CORTEX_TICKET_ID": "ticket-1",
-			"CORTEX_PROJECT":   "/path/to/project",
+			"CORTEX_ARCHITECT":   "/path/to/project",
 		},
 		CleanupFiles: []string{
 			"/tmp/cortex-mcp-test.json",
@@ -696,8 +696,8 @@ func TestWriteLauncherScript(t *testing.T) {
 	if !containsSubstr(script, "export CORTEX_TICKET_ID=") {
 		t.Error("expected CORTEX_TICKET_ID export")
 	}
-	if !containsSubstr(script, "export CORTEX_PROJECT=") {
-		t.Error("expected CORTEX_PROJECT export")
+	if !containsSubstr(script, "export CORTEX_ARCHITECT=") {
+		t.Error("expected CORTEX_ARCHITECT export")
 	}
 
 	// Verify $(cat) syntax for prompt and system prompt
@@ -1010,7 +1010,7 @@ func TestSpawn_ProjectPathValidation(t *testing.T) {
 	_, err := spawner.Spawn(context.Background(), SpawnRequest{
 		AgentType:   AgentTypeTicketAgent,
 		TmuxSession: "test-session",
-		ProjectPath: "/nonexistent/path/that/does/not/exist",
+		ArchitectPath: "/nonexistent/path/that/does/not/exist",
 		TicketID:    "ticket-1",
 		Ticket:      createTestTicket("ticket-1", "Test", "Body"),
 	})
@@ -1062,7 +1062,7 @@ func TestSpawn_TmuxSessionValidation(t *testing.T) {
 			_, err := spawner.Spawn(context.Background(), SpawnRequest{
 				AgentType:   AgentTypeTicketAgent,
 				TmuxSession: tc.tmuxSession,
-				ProjectPath: tmpDir,
+				ArchitectPath: tmpDir,
 				TicketID:    "ticket-1",
 				Ticket:      createTestTicket("ticket-1", "Test", "Body"),
 			})
@@ -1157,7 +1157,7 @@ func TestOrchestrate_Normal_Normal(t *testing.T) {
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "normal",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1194,7 +1194,7 @@ func TestOrchestrate_Normal_Active(t *testing.T) {
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "normal",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1228,7 +1228,7 @@ func TestOrchestrate_Normal_Orphaned(t *testing.T) {
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "normal",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1251,7 +1251,7 @@ func TestOrchestrate_Resume_Normal(t *testing.T) {
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "resume",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1281,7 +1281,7 @@ func TestOrchestrate_Resume_Active(t *testing.T) {
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "resume",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1311,7 +1311,7 @@ func TestOrchestrate_Resume_Orphaned(t *testing.T) {
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "resume",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1337,7 +1337,7 @@ func TestOrchestrate_Fresh_Normal(t *testing.T) {
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "fresh",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1367,7 +1367,7 @@ func TestOrchestrate_Fresh_Active(t *testing.T) {
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "fresh",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1397,7 +1397,7 @@ func TestOrchestrate_Fresh_Orphaned(t *testing.T) {
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "fresh",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1424,7 +1424,7 @@ func TestOrchestrate_BacklogMovesToProgress(t *testing.T) {
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "normal",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1460,7 +1460,7 @@ func TestOrchestrate_ProgressDoesNotMove(t *testing.T) {
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "normal",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1486,7 +1486,7 @@ func TestOrchestrate_DefaultModeIsNormal(t *testing.T) {
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1509,7 +1509,7 @@ func TestOrchestrate_InvalidMode(t *testing.T) {
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "invalid",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -1533,7 +1533,7 @@ func TestGenerateOpenCodeConfigContent(t *testing.T) {
 				Command: "/usr/bin/cortexd",
 				Args:    []string{"mcp", "--ticket-id", "ticket-123"},
 				Env: map[string]string{
-					"CORTEX_PROJECT_PATH": "/path/to/project",
+					"CORTEX_ARCHITECT_PATH": "/path/to/project",
 					"CORTEX_DAEMON_URL":   "http://127.0.0.1:4200",
 				},
 			},
@@ -1587,8 +1587,8 @@ func TestGenerateOpenCodeConfigContent(t *testing.T) {
 	}
 
 	// Verify environment mapping
-	if mcp.Environment["CORTEX_PROJECT_PATH"] != "/path/to/project" {
-		t.Errorf("expected CORTEX_PROJECT_PATH, got: %v", mcp.Environment)
+	if mcp.Environment["CORTEX_ARCHITECT_PATH"] != "/path/to/project" {
+		t.Errorf("expected CORTEX_ARCHITECT_PATH, got: %v", mcp.Environment)
 	}
 	if mcp.Environment["CORTEX_DAEMON_URL"] != "http://127.0.0.1:4200" {
 		t.Errorf("expected CORTEX_DAEMON_URL, got: %v", mcp.Environment)
@@ -1655,7 +1655,7 @@ func TestWriteLauncherScript_OpenCode(t *testing.T) {
 		AgentArgs:      []string{"--verbose"},
 		EnvVars: map[string]string{
 			"CORTEX_TICKET_ID":        "ticket-1",
-			"CORTEX_PROJECT":          "/path/to/project",
+			"CORTEX_ARCHITECT":          "/path/to/project",
 			"OPENCODE_CONFIG_CONTENT": `{"agent":{"cortex":{"prompt":"test"}},"mcp":{}}`,
 		},
 		CleanupFiles: []string{"/tmp/cortex-prompt-test.txt"},
@@ -1789,7 +1789,7 @@ func TestSpawn_OpenCode_Success(t *testing.T) {
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "opencode",
 		TmuxSession: "test-session",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
 		TicketID:    "ticket-1",
 		Ticket:      testTicket,
@@ -1869,7 +1869,7 @@ func TestSpawn_OpenCode_ConfigContent(t *testing.T) {
 		AgentType:   AgentTypeTicketAgent,
 		Agent:       "opencode",
 		TmuxSession: "test-session",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TicketsDir:  filepath.Join(tmpDir, "tickets"),
 		TicketID:    "ticket-1",
 		Ticket:      testTicket,
@@ -1934,8 +1934,8 @@ func TestSpawn_OpenCode_ConfigContent(t *testing.T) {
 	}
 
 	// Verify environment
-	if mcp.Environment["CORTEX_PROJECT_PATH"] != tmpDir {
-		t.Errorf("expected CORTEX_PROJECT_PATH=%s, got: %s", tmpDir, mcp.Environment["CORTEX_PROJECT_PATH"])
+	if mcp.Environment["CORTEX_ARCHITECT_PATH"] != tmpDir {
+		t.Errorf("expected CORTEX_ARCHITECT_PATH=%s, got: %s", tmpDir, mcp.Environment["CORTEX_ARCHITECT_PATH"])
 	}
 	if mcp.Environment["CORTEX_DAEMON_URL"] != daemonconfig.DefaultDaemonURL {
 		t.Errorf("expected CORTEX_DAEMON_URL=%s, got: %s", daemonconfig.DefaultDaemonURL, mcp.Environment["CORTEX_DAEMON_URL"])
@@ -1949,7 +1949,7 @@ func TestOrchestrate_OpenCode_Normal(t *testing.T) {
 		TicketID:    "ticket-1",
 		Mode:        "normal",
 		Agent:       "opencode",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -2014,7 +2014,7 @@ func TestOrchestrate_OpenCode_Resume_Orphaned(t *testing.T) {
 		TicketID:    "ticket-1",
 		Mode:        "resume",
 		Agent:       "opencode",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 	}, OrchestrateDeps{
 		Store:        store,
@@ -2083,7 +2083,7 @@ work:
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:    "ticket-1",
 		Mode:        "normal",
-		ProjectPath: tmpDir,
+		ArchitectPath: tmpDir,
 		TmuxSession: "test-session",
 		// Agent intentionally omitted — should resolve from config
 	}, OrchestrateDeps{
@@ -2126,7 +2126,7 @@ func TestGenerateOpenCodeConfigContent_MultipleServers(t *testing.T) {
 			"cortex": {
 				Command: "/usr/bin/cortexd",
 				Args:    []string{"mcp", "--ticket-id", "ticket-1"},
-				Env:     map[string]string{"CORTEX_PROJECT_PATH": "/proj"},
+				Env:     map[string]string{"CORTEX_ARCHITECT_PATH": "/proj"},
 			},
 			"memory": {
 				Command: "/usr/bin/memory-server",
@@ -2176,8 +2176,8 @@ func TestGenerateOpenCodeConfigContent_MultipleServers(t *testing.T) {
 			t.Errorf("cortex command[%d]: expected %s, got: %s", i, expected, cortexMCP.Command[i])
 		}
 	}
-	if cortexMCP.Environment["CORTEX_PROJECT_PATH"] != "/proj" {
-		t.Errorf("expected CORTEX_PROJECT_PATH=/proj, got: %s", cortexMCP.Environment["CORTEX_PROJECT_PATH"])
+	if cortexMCP.Environment["CORTEX_ARCHITECT_PATH"] != "/proj" {
+		t.Errorf("expected CORTEX_ARCHITECT_PATH=/proj, got: %s", cortexMCP.Environment["CORTEX_ARCHITECT_PATH"])
 	}
 
 	// Verify memory MCP server
@@ -2238,7 +2238,7 @@ func TestGenerateOpenCodeConfigContent_TicketAgent(t *testing.T) {
 				Command: "/usr/bin/cortexd",
 				Args:    []string{"mcp", "--ticket-id", "ticket-123"},
 				Env: map[string]string{
-					"CORTEX_PROJECT_PATH": "/path/to/project",
+					"CORTEX_ARCHITECT_PATH": "/path/to/project",
 				},
 			},
 		},

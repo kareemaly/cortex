@@ -41,7 +41,7 @@ type HookAction struct {
 type SettingsConfigParams struct {
 	CortexdPath string
 	TicketID    string
-	ProjectPath string
+	ArchitectPath string
 }
 
 // GenerateSettingsConfig creates a Claude settings.json config with hooks.

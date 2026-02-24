@@ -18,7 +18,7 @@ type TicketVars struct {
 
 // ArchitectKickoffVars contains variables for the architect kickoff template.
 type ArchitectKickoffVars struct {
-	ProjectName string
+	ArchitectName string
 	TicketList  string
 	CurrentDate string
 	Sessions    string // recent conclusions list

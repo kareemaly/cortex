@@ -21,20 +21,20 @@ func DaemonURL(port int) string {
 	return fmt.Sprintf("http://localhost:%d", port)
 }
 
-// ProjectEntry represents a registered project in the global config.
-type ProjectEntry struct {
+// ArchitectEntry represents a registered architect in the global config.
+type ArchitectEntry struct {
 	Path  string `yaml:"path"`
 	Title string `yaml:"title,omitempty"`
 }
 
 // Config holds the daemon configuration.
 type Config struct {
-	Port               int            `yaml:"port"`
-	BindAddress        string         `yaml:"bind_address"`
-	LogLevel           string         `yaml:"log_level"`
-	StatusHistoryLimit int            `yaml:"status_history_limit"`
-	GitDiffTool        string         `yaml:"git_diff_tool"`
-	Projects           []ProjectEntry `yaml:"projects,omitempty"`
+	Port               int              `yaml:"port"`
+	BindAddress        string           `yaml:"bind_address"`
+	LogLevel           string           `yaml:"log_level"`
+	StatusHistoryLimit int              `yaml:"status_history_limit"`
+	GitDiffTool        string           `yaml:"git_diff_tool"`
+	Architects         []ArchitectEntry `yaml:"architects,omitempty"`
 }
 
 // DefaultConfig returns a Config with default values.
@@ -105,27 +105,27 @@ func (c *Config) SaveToFile(path string) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// RegisterProject adds a project to the registry if not already present.
-// Returns true if the project was newly added.
-func (c *Config) RegisterProject(absPath, title string) bool {
-	for _, p := range c.Projects {
+// RegisterArchitect adds an architect to the registry if not already present.
+// Returns true if the architect was newly added.
+func (c *Config) RegisterArchitect(absPath, title string) bool {
+	for _, p := range c.Architects {
 		if p.Path == absPath {
 			return false
 		}
 	}
-	c.Projects = append(c.Projects, ProjectEntry{
+	c.Architects = append(c.Architects, ArchitectEntry{
 		Path:  absPath,
 		Title: title,
 	})
 	return true
 }
 
-// UnregisterProject removes a project from the registry.
-// Returns true if the project was found and removed.
-func (c *Config) UnregisterProject(absPath string) bool {
-	for i, p := range c.Projects {
+// UnregisterArchitect removes an architect from the registry.
+// Returns true if the architect was found and removed.
+func (c *Config) UnregisterArchitect(absPath string) bool {
+	for i, p := range c.Architects {
 		if p.Path == absPath {
-			c.Projects = append(c.Projects[:i], c.Projects[i+1:]...)
+			c.Architects = append(c.Architects[:i], c.Architects[i+1:]...)
 			return true
 		}
 	}

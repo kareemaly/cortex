@@ -8,7 +8,7 @@ import (
 
 // DetectProjectName attempts to detect the project name.
 // First tries to extract from git remote origin, falls back to directory name.
-func DetectProjectName(path string) string {
+func DetectArchitectName(path string) string {
 	// Try git remote origin
 	if name := detectFromGitRemote(path); name != "" {
 		return name

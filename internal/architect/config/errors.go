@@ -2,13 +2,13 @@ package config
 
 import "fmt"
 
-// ProjectNotFoundError indicates no cortex.yaml was found.
-type ProjectNotFoundError struct {
+// ArchitectNotFoundError indicates no cortex.yaml was found.
+type ArchitectNotFoundError struct {
 	StartPath string
 }
 
-func (e *ProjectNotFoundError) Error() string {
-	return fmt.Sprintf("project not found: no cortex.yaml found starting from %s", e.StartPath)
+func (e *ArchitectNotFoundError) Error() string {
+	return fmt.Sprintf("architect not found: no cortex.yaml found starting from %s", e.StartPath)
 }
 
 // ConfigParseError indicates the config file could not be parsed.
@@ -35,9 +35,9 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("invalid config: %s: %s", e.Field, e.Message)
 }
 
-// IsProjectNotFound returns true if err is a ProjectNotFoundError.
-func IsProjectNotFound(err error) bool {
-	_, ok := err.(*ProjectNotFoundError)
+// IsArchitectNotFound returns true if err is an ArchitectNotFoundError.
+func IsArchitectNotFound(err error) bool {
+	_, ok := err.(*ArchitectNotFoundError)
 	return ok
 }
 

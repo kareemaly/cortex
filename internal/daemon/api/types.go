@@ -23,8 +23,8 @@ type (
 	ConclusionResponse       = types.ConclusionResponse
 	ListConclusionsResponse  = types.ListConclusionsResponse
 	HealthResponse           = types.HealthResponse
-	ProjectTicketCounts      = types.ProjectTicketCounts
-	ProjectResponse          = types.ProjectResponse
+	ArchitectTicketCounts    = types.ArchitectTicketCounts
+	ArchitectResponse        = types.ArchitectResponse
 	ConcludeSessionResponse  = types.ConcludeSessionResponse
 	ResolvePromptResponse    = types.ResolvePromptResponse
 	PromptFileInfo           = types.PromptFileInfo
