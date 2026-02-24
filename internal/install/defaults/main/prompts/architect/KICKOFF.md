@@ -1,4 +1,4 @@
-# Project: {{.ProjectName}}
+# Project: {{.ArchitectName}}
 
 **Session started**: {{.CurrentDate}}
 
@@ -16,4 +16,8 @@
 # Configured Repos
 
 {{.Repos}}
+{{- end}}
+{{- if .LastConclusionID}}
+
+Start by reading the last architect session conclusion: readConclusion(id: "{{.LastConclusionID}}")
 {{- end}}

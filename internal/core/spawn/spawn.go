@@ -861,6 +861,16 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 		sessionsList = sessionsSB.String()
 	}
 
+	// Get the most recent architect conclusion ID (for kickoff context)
+	var lastConclusionID string
+	archConclusionsResp, archConclusionsErr := client.ListConclusions(sdk.ListConclusionsParams{
+		Type:  "architect",
+		Limit: 1,
+	})
+	if archConclusionsErr == nil && len(archConclusionsResp.Conclusions) > 0 {
+		lastConclusionID = archConclusionsResp.Conclusions[0].ID
+	}
+
 	// Fetch repos from project config (graceful degradation)
 	var reposList string
 	projectCfg, cfgErr := architectconfig.Load(req.ArchitectPath)
@@ -876,11 +886,12 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	kickoffTemplate, kickoffErr := resolver.ResolveArchitectPrompt(prompt.StageKickoff)
 	if kickoffErr == nil {
 		vars := prompt.ArchitectKickoffVars{
-			ArchitectName: req.ArchitectName,
-			TicketList:    ticketList,
-			CurrentDate:   time.Now().Format("2006-01-02 15:04 MST"),
-			Sessions:      sessionsList,
-			Repos:         reposList,
+			ArchitectName:    req.ArchitectName,
+			TicketList:       ticketList,
+			CurrentDate:      time.Now().Format("2006-01-02 15:04 MST"),
+			Sessions:         sessionsList,
+			Repos:            reposList,
+			LastConclusionID: lastConclusionID,
 		}
 		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
 		if renderErr == nil {
