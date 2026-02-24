@@ -119,7 +119,7 @@ func TestSetDueDate_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Due Date Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Due Date Ticket", "body", "", nil, nil, "", "")
 
 	body := SetDueDateRequest{DueDate: "2025-06-01T00:00:00Z"}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
@@ -137,7 +137,7 @@ func TestSetDueDate_InvalidJSON(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
 
 	req, _ := http.NewRequest(http.MethodPatch, ts.URL+"/tickets/"+created.ID+"/due-date", bytes.NewReader([]byte("bad json")))
 	req.Header.Set("Content-Type", "application/json")
@@ -161,7 +161,7 @@ func TestSetDueDate_EmptyDueDate(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
 
 	body := SetDueDateRequest{DueDate: ""}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
@@ -179,7 +179,7 @@ func TestSetDueDate_InvalidFormat(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
 
 	body := SetDueDateRequest{DueDate: "not-a-date"}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
@@ -210,7 +210,7 @@ func TestClearDueDate_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
 
 	resp := ts.makeRequest(t, http.MethodDelete, "/tickets/"+created.ID+"/due-date", nil)
 	defer func() { _ = resp.Body.Close() }()
@@ -239,7 +239,7 @@ func TestGetByID_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Test Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Test Ticket", "body", "", nil, nil, "", "")
 
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/by-id/"+created.ID, nil)
 	defer func() { _ = resp.Body.Close() }()
@@ -271,7 +271,7 @@ func TestConclude_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, "", "")
 
 	body := ConcludeSessionRequest{Content: "done report"}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
@@ -298,7 +298,7 @@ func TestConclude_InvalidJSON(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
 
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/tickets/"+created.ID+"/conclude", bytes.NewReader([]byte("bad")))
 	req.Header.Set("Content-Type", "application/json")
@@ -317,7 +317,7 @@ func TestConclude_EmptyContent(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
 
 	body := ConcludeSessionRequest{Content: ""}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
@@ -369,7 +369,7 @@ func TestFocus_NoSessionManager(t *testing.T) {
 	srv := httptest.NewServer(NewRouter(deps, deps.Logger))
 	defer srv.Close()
 
-	created, _ := store.Create("Focus Ticket", "body", "", nil, nil, "")
+	created, _ := store.Create("Focus Ticket", "body", "", nil, nil, "", "")
 
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/tickets/"+created.ID+"/focus", nil)
 	req.Header.Set(ArchitectHeader, tmpDir)
@@ -388,7 +388,7 @@ func TestFocus_NoActiveSession(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Focus Ticket", "body", "", nil, nil, "")
+	created, _ := ts.store.Create("Focus Ticket", "body", "", nil, nil, "", "")
 
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/focus", nil)
 	defer func() { _ = resp.Body.Close() }()
@@ -428,8 +428,8 @@ func TestListAll_WithQueryFilter(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	_, _ = ts.store.Create("Alpha Ticket", "body1", "", nil, nil, "")
-	_, _ = ts.store.Create("Beta Ticket", "body2", "", nil, nil, "")
+	_, _ = ts.store.Create("Alpha Ticket", "body1", "", nil, nil, "", "")
+	_, _ = ts.store.Create("Beta Ticket", "body2", "", nil, nil, "", "")
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/tickets?query=alpha", nil)
 	req.Header.Set(ArchitectHeader, ts.projectRoot)
@@ -460,6 +460,8 @@ func TestCreate_WithDueDate(t *testing.T) {
 	body := map[string]any{
 		"title":    "Due Date Ticket",
 		"body":     "body",
+		"type":     "research",
+		"path":     ts.projectRoot,
 		"due_date": "2025-12-01T00:00:00Z",
 	}
 

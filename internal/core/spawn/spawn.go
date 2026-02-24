@@ -664,7 +664,26 @@ func getWorkingDirectory(req SpawnRequest) (string, error) {
 		return req.ArchitectPath, nil
 	}
 
-	// Research tickets spawn in project root
+	if req.Ticket.Type == "research" {
+		if req.Ticket.Path != "" {
+			path := req.Ticket.Path
+			if strings.HasPrefix(path, "~/") {
+				if home, err := os.UserHomeDir(); err == nil {
+					path = filepath.Join(home, path[2:])
+				}
+			}
+			// Validate directory exists (no git check required for research paths)
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				return "", &ConfigError{
+					Field:   "Path",
+					Message: fmt.Sprintf("research path directory does not exist: %s", path),
+				}
+			}
+			return path, nil
+		}
+		return req.ArchitectPath, nil
+	}
+
 	return req.ArchitectPath, nil
 }
 

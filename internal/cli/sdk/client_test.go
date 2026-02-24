@@ -373,7 +373,7 @@ func TestCreateTicket_Success(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.CreateTicket("New Ticket", "body", "", "", nil, nil)
+	resp, err := c.CreateTicket("New Ticket", "body", "", "", "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +393,7 @@ func TestCreateTicket_WithAllFields(t *testing.T) {
 
 	c := NewClient(srv.URL, "/p")
 	due := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
-	_, err := c.CreateTicket("T", "B", "bug", "", &due, []string{"ref1"})
+	_, err := c.CreateTicket("T", "B", "bug", "", "", &due, []string{"ref1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +417,7 @@ func TestCreateTicket_Error(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	_, err := c.CreateTicket("", "", "", "", nil, nil)
+	_, err := c.CreateTicket("", "", "", "", "", nil, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}

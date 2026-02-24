@@ -244,13 +244,16 @@ func (c *Client) GetTicket(status, id string) (*TicketResponse, error) {
 }
 
 // CreateTicket creates a new ticket.
-func (c *Client) CreateTicket(title, body, ticketType, repo string, dueDate *time.Time, references []string) (*TicketResponse, error) {
+func (c *Client) CreateTicket(title, body, ticketType, repo, path string, dueDate *time.Time, references []string) (*TicketResponse, error) {
 	reqBody := map[string]any{"title": title, "body": body}
 	if ticketType != "" {
 		reqBody["type"] = ticketType
 	}
 	if repo != "" {
 		reqBody["repo"] = repo
+	}
+	if path != "" {
+		reqBody["path"] = path
 	}
 	if dueDate != nil {
 		reqBody["due_date"] = dueDate.Format(time.RFC3339)

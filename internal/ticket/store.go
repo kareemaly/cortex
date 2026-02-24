@@ -55,7 +55,7 @@ func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, e
 }
 
 // Create creates a new ticket in the backlog.
-func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, references []string, repo string) (*Ticket, error) {
+func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, references []string, repo, path string) (*Ticket, error) {
 	if title == "" {
 		return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
 	}
@@ -71,6 +71,7 @@ func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, refer
 			Title:      title,
 			Type:       ticketType,
 			Repo:       repo,
+			Path:       path,
 			References: references,
 			Due:        dueDate,
 			Created:    now,

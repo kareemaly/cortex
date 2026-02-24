@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,6 +24,12 @@ type RoleConfig struct {
 	Companion string    `yaml:"companion,omitempty"`
 }
 
+// ResearchRoleConfig holds configuration for the research role, extending RoleConfig with paths.
+type ResearchRoleConfig struct {
+	RoleConfig `yaml:",inline"`
+	Paths      []string `yaml:"paths,omitempty"`
+}
+
 // TicketsConfig holds configuration for the ticket storage.
 type TicketsConfig struct {
 	Path string `yaml:"path,omitempty"`
@@ -30,12 +37,12 @@ type TicketsConfig struct {
 
 // Config holds the architect configuration.
 type Config struct {
-	Name      string        `yaml:"name"`
-	Repos     []string      `yaml:"repos,omitempty"`
-	Architect RoleConfig    `yaml:"architect"`
-	Work      RoleConfig    `yaml:"work"`
-	Research  RoleConfig    `yaml:"research"`
-	Tickets   TicketsConfig `yaml:"tickets,omitempty"`
+	Name      string             `yaml:"name"`
+	Repos     []string           `yaml:"repos,omitempty"`
+	Architect RoleConfig         `yaml:"architect"`
+	Work      RoleConfig         `yaml:"work"`
+	Research  ResearchRoleConfig `yaml:"research"`
+	Tickets   TicketsConfig      `yaml:"tickets,omitempty"`
 }
 
 // TicketsPath returns the resolved tickets directory path for the given architect root.
@@ -64,10 +71,20 @@ func (c *Config) RoleConfigForType(ticketType string) (RoleConfig, error) {
 	case "work":
 		return c.Work, nil
 	case "research":
-		return c.Research, nil
+		return c.Research.RoleConfig, nil
 	default:
 		return RoleConfig{}, fmt.Errorf("no configuration found for ticket type %q (valid types: work, research)", ticketType)
 	}
+}
+
+// expandHome expands a leading ~/ to the user's home directory.
+func expandHome(path string) string {
+	if len(path) >= 2 && path[:2] == "~/" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[2:])
+		}
+	}
+	return path
 }
 
 // ValidateRepo checks if a repo is in the architect's repos list.
@@ -76,12 +93,42 @@ func (c *Config) ValidateRepo(repo string) error {
 	if len(c.Repos) == 0 {
 		return nil
 	}
+	expanded := expandHome(repo)
 	for _, r := range c.Repos {
-		if r == repo {
+		if expandHome(r) == expanded {
 			return nil
 		}
 	}
 	return fmt.Errorf("repo %q not in architect repos list", repo)
+}
+
+// ValidateResearchPath checks if a path is allowed for research tickets.
+// Checks exact match against repos and glob match against research.paths.
+// If both repos and research.paths are empty, any path is allowed.
+func (c *Config) ValidateResearchPath(path string) error {
+	expanded := expandHome(path)
+
+	// If no restrictions configured, allow all
+	if len(c.Repos) == 0 && len(c.Research.Paths) == 0 {
+		return nil
+	}
+
+	// Check exact match against repos
+	for _, r := range c.Repos {
+		if expandHome(r) == expanded {
+			return nil
+		}
+	}
+
+	// Check glob match against research.paths
+	for _, glob := range c.Research.Paths {
+		matched, err := doublestar.Match(expandHome(glob), expanded)
+		if err == nil && matched {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("path %q not allowed; must match a configured repo or research.paths entry", path)
 }
 
 // DefaultConfig returns a Config with default values.
@@ -95,8 +142,10 @@ func DefaultConfig() *Config {
 			Agent:     AgentClaude,
 			Companion: "cortex ticket show",
 		},
-		Research: RoleConfig{
-			Agent: AgentClaude,
+		Research: ResearchRoleConfig{
+			RoleConfig: RoleConfig{
+				Agent: AgentClaude,
+			},
 		},
 	}
 }

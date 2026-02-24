@@ -228,7 +228,7 @@ func TestValidate_InvalidWorkAgent(t *testing.T) {
 
 func TestValidate_InvalidResearchAgent(t *testing.T) {
 	cfg := &Config{
-		Research: RoleConfig{Agent: "bad-agent"},
+		Research: ResearchRoleConfig{RoleConfig: RoleConfig{Agent: "bad-agent"}},
 	}
 
 	err := cfg.Validate()
@@ -378,7 +378,7 @@ research:
 func TestRoleConfigForType_InvalidType(t *testing.T) {
 	cfg := &Config{
 		Work:     RoleConfig{Agent: AgentClaude},
-		Research: RoleConfig{Agent: AgentClaude},
+		Research: ResearchRoleConfig{RoleConfig: RoleConfig{Agent: AgentClaude}},
 	}
 
 	_, err := cfg.RoleConfigForType("nonexistent")

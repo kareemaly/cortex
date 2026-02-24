@@ -168,13 +168,38 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		dueDate = &parsed
 	}
 
+	// Validate repo/path based on ticket type
+	projectCfg, _ := architectconfig.Load(projectPath)
+	if projectCfg != nil {
+		switch ticketType {
+		case "work":
+			if req.Repo == "" {
+				writeError(w, http.StatusBadRequest, "missing_repo", "repo is required for work tickets")
+				return
+			}
+			if err := projectCfg.ValidateRepo(req.Repo); err != nil {
+				writeError(w, http.StatusBadRequest, "invalid_repo", err.Error())
+				return
+			}
+		case "research":
+			if req.Path == "" {
+				writeError(w, http.StatusBadRequest, "missing_path", "path is required for research tickets")
+				return
+			}
+			if err := projectCfg.ValidateResearchPath(req.Path); err != nil {
+				writeError(w, http.StatusBadRequest, "invalid_path", err.Error())
+				return
+			}
+		}
+	}
+
 	store, err := h.deps.StoreManager.GetStore(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
 		return
 	}
 
-	t, err := store.Create(req.Title, req.Body, ticketType, dueDate, req.References, req.Repo)
+	t, err := store.Create(req.Title, req.Body, ticketType, dueDate, req.References, req.Repo, req.Path)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return

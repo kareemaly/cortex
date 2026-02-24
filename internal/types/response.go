@@ -27,6 +27,7 @@ type TicketResponse struct {
 	Title      string     `json:"title"`
 	Body       string     `json:"body"`
 	Repo       string     `json:"repo,omitempty"`
+	Path       string     `json:"path,omitempty"`
 	Session    string     `json:"session,omitempty"`
 	References []string   `json:"references,omitempty"`
 	Status     string     `json:"status"`

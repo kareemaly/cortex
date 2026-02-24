@@ -54,6 +54,7 @@ func ticketResponseToOutput(r *types.TicketResponse) TicketOutput {
 		Title:      r.Title,
 		Body:       r.Body,
 		Repo:       r.Repo,
+		Path:       r.Path,
 		Session:    r.Session,
 		References: r.References,
 		Status:     r.Status,

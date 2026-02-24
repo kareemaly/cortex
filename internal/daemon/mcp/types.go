@@ -48,6 +48,7 @@ type CreateWorkTicketInput struct {
 type CreateResearchTicketInput struct {
 	Title      string   `json:"title" jsonschema:"The ticket title (required)"`
 	Body       string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
+	Path       string   `json:"path" jsonschema:"Directory path where the research agent will spawn (required). Must match a configured repo or research.paths glob in cortex.yaml."`
 	DueDate    string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
 	References []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
 }
@@ -101,6 +102,7 @@ type TicketSummary struct {
 	Title   string     `json:"title"`
 	Type    string     `json:"type"`
 	Repo    string     `json:"repo,omitempty"`
+	Path    string     `json:"path,omitempty"`
 	Due     *time.Time `json:"due,omitempty"`
 	Created time.Time  `json:"created"`
 	Updated time.Time  `json:"updated"`
@@ -121,6 +123,7 @@ type TicketOutput struct {
 	Title      string     `json:"title"`
 	Body       string     `json:"body"`
 	Repo       string     `json:"repo,omitempty"`
+	Path       string     `json:"path,omitempty"`
 	Session    string     `json:"session,omitempty"`
 	References []string   `json:"references,omitempty"`
 	Status     string     `json:"status"`

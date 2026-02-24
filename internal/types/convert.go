@@ -31,6 +31,7 @@ func ToTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 		Title:      t.Title,
 		Body:       t.Body,
 		Repo:       t.Repo,
+		Path:       t.Path,
 		Session:    t.Session,
 		References: t.References,
 		Status:     string(status),

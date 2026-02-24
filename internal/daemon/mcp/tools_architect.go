@@ -37,7 +37,7 @@ func (s *Server) registerArchitectTools() {
 	// Create research ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "createResearchTicket",
-		Description: "Create a new research ticket in backlog. No repo required — the agent spawns in the architect project root for read-only exploration.",
+		Description: "Create a new research ticket in backlog. Requires a path field — the agent will spawn in that directory (must match a configured repo or research.paths glob in cortex.yaml).",
 	}, s.handleCreateResearchTicket)
 
 	// Update ticket
@@ -166,7 +166,7 @@ func (s *Server) handleCreateWorkTicket(
 		dueDate = &parsed
 	}
 
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, "work", input.Repo, dueDate, input.References)
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, "work", input.Repo, "", dueDate, input.References)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
@@ -182,6 +182,10 @@ func (s *Server) handleCreateResearchTicket(
 	req *mcp.CallToolRequest,
 	input CreateResearchTicketInput,
 ) (*mcp.CallToolResult, CreateTicketOutput, error) {
+	if input.Path == "" {
+		return nil, CreateTicketOutput{}, NewValidationError("path", "is required for research tickets")
+	}
+
 	// Parse dueDate if provided
 	var dueDate *time.Time
 	if input.DueDate != "" {
@@ -192,7 +196,7 @@ func (s *Server) handleCreateResearchTicket(
 		dueDate = &parsed
 	}
 
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, "research", "", dueDate, input.References)
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, "research", "", input.Path, dueDate, input.References)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}

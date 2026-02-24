@@ -38,6 +38,7 @@ type CreateTicketRequest struct {
 	Body       string   `json:"body"`
 	Type       string   `json:"type,omitempty"`
 	Repo       string   `json:"repo,omitempty"`
+	Path       string   `json:"path,omitempty"`
 	DueDate    *string  `json:"due_date,omitempty"`
 	References []string `json:"references,omitempty"`
 }
