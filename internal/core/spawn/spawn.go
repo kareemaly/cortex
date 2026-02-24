@@ -729,6 +729,9 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 	// Create prompt resolver with fallback to defaults
 	resolver := prompt.NewPromptResolver(req.ProjectPath, s.deps.DefaultsDir)
 
+	// Try to resolve system prompt (optional — used by opencode via instructions file)
+	systemPromptContent, _ := resolver.ResolveTicketPrompt(ticketType, prompt.StageSystem)
+
 	// Load kickoff template
 	kickoffTemplate, err := resolver.ResolveTicketPrompt(ticketType, prompt.StageKickoff)
 	if err != nil {
@@ -736,7 +739,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 		promptText := fmt.Sprintf("# Ticket: %s\n\n%s", req.Ticket.Title, req.Ticket.Body)
 		return &promptInfo{
 			PromptText:          promptText,
-			SystemPromptContent: "",
+			SystemPromptContent: systemPromptContent,
 		}, nil
 	}
 
@@ -757,7 +760,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 
 	return &promptInfo{
 		PromptText:          promptText,
-		SystemPromptContent: "",
+		SystemPromptContent: systemPromptContent,
 	}, nil
 }
 
@@ -830,17 +833,11 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 
 	// Fetch conclusions (graceful degradation)
 	var sessionsList string
-	conclusionsResp, conclusionsErr := client.ListConclusions()
+	conclusionsResp, conclusionsErr := client.ListConclusions(sdk.ListConclusionsParams{Limit: 10})
 	if conclusionsErr == nil && len(conclusionsResp.Conclusions) > 0 {
-		limit := min(10, len(conclusionsResp.Conclusions))
 		var sessionsSB strings.Builder
-		for i := range limit {
-			c := conclusionsResp.Conclusions[i]
-			summary := strings.Split(c.Body, "\n")[0]
-			if len(summary) > 80 {
-				summary = summary[:77] + "..."
-			}
-			sessionsSB.WriteString(fmt.Sprintf("- [%s] %s: %s\n", c.ID, c.Ticket, summary))
+		for _, c := range conclusionsResp.Conclusions {
+			sessionsSB.WriteString(fmt.Sprintf("- [%s] %s (%s)\n", c.ID, c.Ticket, c.Type))
 		}
 		sessionsList = sessionsSB.String()
 	}

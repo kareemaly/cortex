@@ -225,18 +225,30 @@ type ArchitectConcludeOutput struct {
 
 // Conclusion types
 
-// ListConclusionsInput is the input for the listSessions tool (now querying persistent conclusions).
+// ListConclusionsInput is the input for the listConclusions tool.
 type ListConclusionsInput struct {
+	Type        string `json:"type,omitempty" jsonschema:"Filter by type: architect, work, or research."`
+	Limit       int    `json:"limit,omitempty" jsonschema:"Max results to return (default 10)."`
+	Offset      int    `json:"offset,omitempty" jsonschema:"Results to skip for pagination (default 0)."`
 	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project."`
 }
 
-// ReadConclusionInput is the input for the readSession tool.
+// ReadConclusionInput is the input for the readConclusion tool.
 type ReadConclusionInput struct {
-	ID          string `json:"id" jsonschema:"The conclusion/session ID to read"`
+	ID          string `json:"id" jsonschema:"The conclusion ID to read"`
 	ProjectPath string `json:"project_path,omitempty" jsonschema:"Optional absolute path to target a different registered project."`
 }
 
-// ConclusionOutput is a persistent session/conclusion record.
+// ConclusionListItem is a metadata-only conclusion record for list responses (no body).
+type ConclusionListItem struct {
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Ticket  string `json:"ticket,omitempty"`
+	Repo    string `json:"repo,omitempty"`
+	Created string `json:"created"`
+}
+
+// ConclusionOutput is a full conclusion record including the body.
 type ConclusionOutput struct {
 	ID      string `json:"id"`
 	Type    string `json:"type"`
@@ -246,13 +258,13 @@ type ConclusionOutput struct {
 	Created string `json:"created"`
 }
 
-// ListConclusionsOutput is the output for the listSessions tool.
+// ListConclusionsOutput is the output for the listConclusions tool.
 type ListConclusionsOutput struct {
-	Conclusions []ConclusionOutput `json:"conclusions"`
-	Total       int                `json:"total"`
+	Conclusions []ConclusionListItem `json:"conclusions"`
+	Total       int                  `json:"total"`
 }
 
-// ReadConclusionOutput is the output for the readSession tool.
+// ReadConclusionOutput is the output for the readConclusion tool.
 type ReadConclusionOutput struct {
 	Conclusion ConclusionOutput `json:"conclusion"`
 }

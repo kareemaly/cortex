@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kareemaly/cortex/internal/conclusion"
 	"github.com/kareemaly/cortex/internal/types"
 )
 
@@ -18,12 +20,25 @@ func NewConclusionHandlers(deps *Dependencies) *ConclusionHandlers {
 	return &ConclusionHandlers{deps: deps}
 }
 
-// List handles GET /conclusions - lists all conclusions.
+// parseIntQuery parses an integer query parameter, returning defaultVal on missing or invalid input.
+func parseIntQuery(r *http.Request, key string, defaultVal int) int {
+	s := r.URL.Query().Get(key)
+	if s == "" {
+		return defaultVal
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil || v < 0 {
+		return defaultVal
+	}
+	return v
+}
+
+// List handles GET /conclusions - lists conclusions with optional type filter and pagination.
 func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetProjectPath(r.Context())
 
 	if h.deps.ConclusionStoreManager == nil {
-		writeJSON(w, http.StatusOK, types.ListConclusionsResponse{Conclusions: []types.ConclusionResponse{}})
+		writeJSON(w, http.StatusOK, types.ListConclusionsResponse{Conclusions: []types.ConclusionSummary{}, Total: 0})
 		return
 	}
 
@@ -33,25 +48,30 @@ func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conclusions, err := store.List()
+	opts := conclusion.ListOptions{
+		Type:   r.URL.Query().Get("type"),
+		Limit:  parseIntQuery(r, "limit", 0),
+		Offset: parseIntQuery(r, "offset", 0),
+	}
+
+	conclusions, total, err := store.ListWithOptions(opts)
 	if err != nil {
 		handleConclusionError(w, err, h.deps.Logger)
 		return
 	}
 
-	resp := make([]types.ConclusionResponse, len(conclusions))
+	summaries := make([]types.ConclusionSummary, len(conclusions))
 	for i, c := range conclusions {
-		resp[i] = types.ConclusionResponse{
+		summaries[i] = types.ConclusionSummary{
 			ID:      c.ID,
 			Type:    string(c.Type),
 			Ticket:  c.Ticket,
 			Repo:    c.Repo,
-			Body:    c.Body,
 			Created: c.Created,
 		}
 	}
 
-	writeJSON(w, http.StatusOK, types.ListConclusionsResponse{Conclusions: resp})
+	writeJSON(w, http.StatusOK, types.ListConclusionsResponse{Conclusions: summaries, Total: total})
 }
 
 // Get handles GET /conclusions/{id} - gets a conclusion by ID.

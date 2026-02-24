@@ -73,9 +73,19 @@ type ConclusionResponse struct {
 	Created time.Time `json:"created"`
 }
 
-// ListConclusionsResponse is a list of conclusions.
+// ConclusionSummary is metadata-only (no body) for list responses.
+type ConclusionSummary struct {
+	ID      string    `json:"id"`
+	Type    string    `json:"type"`
+	Ticket  string    `json:"ticket,omitempty"`
+	Repo    string    `json:"repo,omitempty"`
+	Created time.Time `json:"created"`
+}
+
+// ListConclusionsResponse is a paginated list of conclusions (metadata only).
 type ListConclusionsResponse struct {
-	Conclusions []ConclusionResponse `json:"conclusions"`
+	Conclusions []ConclusionSummary `json:"conclusions"`
+	Total       int                 `json:"total"`
 }
 
 // ArchitectSessionResponse is the session details in an architect response.

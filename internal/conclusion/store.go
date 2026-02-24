@@ -112,20 +112,27 @@ func (s *Store) Get(id string) (*Conclusion, error) {
 	return s.loadIndex(entityDir)
 }
 
-// List returns all conclusions sorted by created time (newest first).
-func (s *Store) List() ([]*Conclusion, error) {
+// ListOptions controls filtering and pagination for ListWithOptions.
+type ListOptions struct {
+	Type   string // "architect", "work", "research", or "" for all
+	Limit  int    // 0 = no limit
+	Offset int    // items to skip
+}
+
+// ListWithOptions returns filtered+paginated conclusions and the total pre-pagination count.
+func (s *Store) ListWithOptions(opts ListOptions) ([]*Conclusion, int, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	entries, err := os.ReadDir(s.sessionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []*Conclusion{}, nil
+			return []*Conclusion{}, 0, nil
 		}
-		return nil, fmt.Errorf("read sessions directory: %w", err)
+		return nil, 0, fmt.Errorf("read sessions directory: %w", err)
 	}
 
-	var conclusions []*Conclusion
+	var all []*Conclusion
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
@@ -136,19 +143,48 @@ func (s *Store) List() ([]*Conclusion, error) {
 		if err != nil {
 			continue // skip broken entries
 		}
-		conclusions = append(conclusions, c)
+		all = append(all, c)
 	}
 
 	// Sort by created descending
-	for i := 0; i < len(conclusions); i++ {
-		for j := i + 1; j < len(conclusions); j++ {
-			if conclusions[j].Created.After(conclusions[i].Created) {
-				conclusions[i], conclusions[j] = conclusions[j], conclusions[i]
+	for i := 0; i < len(all); i++ {
+		for j := i + 1; j < len(all); j++ {
+			if all[j].Created.After(all[i].Created) {
+				all[i], all[j] = all[j], all[i]
 			}
 		}
 	}
 
-	return conclusions, nil
+	// Apply type filter
+	var filtered []*Conclusion
+	if opts.Type == "" {
+		filtered = all
+	} else {
+		for _, c := range all {
+			if string(c.Type) == opts.Type {
+				filtered = append(filtered, c)
+			}
+		}
+	}
+
+	total := len(filtered)
+
+	// Apply pagination
+	if opts.Offset >= total {
+		return []*Conclusion{}, total, nil
+	}
+	filtered = filtered[opts.Offset:]
+	if opts.Limit > 0 && len(filtered) > opts.Limit {
+		filtered = filtered[:opts.Limit]
+	}
+
+	return filtered, total, nil
+}
+
+// List returns all conclusions sorted by created time (newest first).
+func (s *Store) List() ([]*Conclusion, error) {
+	items, _, err := s.ListWithOptions(ListOptions{})
+	return items, err
 }
 
 // loadIndex reads and parses index.md from the given entity directory.

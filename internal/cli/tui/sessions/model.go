@@ -30,7 +30,7 @@ const (
 
 type Model struct {
 	client      *sdk.Client
-	conclusions []sdk.ConclusionResponse
+	conclusions []sdk.ConclusionSummary
 	cursor      int
 
 	listVP   viewport.Model
@@ -59,7 +59,7 @@ type Model struct {
 }
 
 type ConclusionsLoadedMsg struct {
-	Conclusions []sdk.ConclusionResponse
+	Conclusions []sdk.ConclusionSummary
 }
 
 type ConclusionsErrorMsg struct {
@@ -417,12 +417,12 @@ func (m Model) renderListView(height int) string {
 			currentLine++
 		}
 
-		title := c.Body
-		if len(title) > 60 {
-			title = title[:57] + "..."
+		title := c.Ticket
+		if title == "" {
+			title = c.Type
 		}
 		if title == "" {
-			title = "(empty)"
+			title = c.ID
 		}
 
 		wrapped := wrapToWidth(title, contentWidth)
@@ -523,10 +523,7 @@ func (m Model) renderDetailView(height int) string {
 	m.detailVP.Width = m.width
 	m.detailVP.Height = vpHeight
 
-	body := c.Body
-	if body == "" {
-		body = "(no content)"
-	}
+	body := "(body not available in list view — use the readConclusion MCP tool to view full content)"
 
 	rendered := m.renderMarkdown(body)
 	m.detailVP.SetContent(rendered)
@@ -562,8 +559,8 @@ func (m Model) renderMarkdown(content string) string {
 	return strings.TrimSpace(rendered)
 }
 
-func sortConclusions(conclusions []sdk.ConclusionResponse) []sdk.ConclusionResponse {
-	sorted := make([]sdk.ConclusionResponse, len(conclusions))
+func sortConclusions(conclusions []sdk.ConclusionSummary) []sdk.ConclusionSummary {
+	sorted := make([]sdk.ConclusionSummary, len(conclusions))
 	copy(sorted, conclusions)
 	sort.SliceStable(sorted, func(i, j int) bool {
 		return sorted[i].Created.After(sorted[j].Created)
@@ -606,7 +603,7 @@ func wrapToWidth(text string, maxWidth int) []string {
 
 func (m Model) loadConclusions() tea.Cmd {
 	return func() tea.Msg {
-		resp, err := m.client.ListConclusions()
+		resp, err := m.client.ListConclusions(sdk.ListConclusionsParams{})
 		if err != nil {
 			return ConclusionsErrorMsg{Err: err}
 		}

@@ -590,6 +590,64 @@ func TestApproveSession_Success(t *testing.T) {
 	}
 }
 
+func TestListConclusions_Success(t *testing.T) {
+	srv, rs := newRoutedServer(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	rs.setRoute("GET", "/conclusions", http.StatusOK, ListConclusionsResponse{
+		Conclusions: []ConclusionSummary{
+			{ID: "c1", Type: "work", Ticket: "t1", Created: now},
+			{ID: "c2", Type: "research", Created: now},
+		},
+		Total: 2,
+	})
+
+	c := NewClient(srv.URL, "/p")
+
+	// No params
+	resp, err := c.ListConclusions(ListConclusionsParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Total != 2 {
+		t.Errorf("expected total 2, got %d", resp.Total)
+	}
+	if len(resp.Conclusions) != 2 {
+		t.Errorf("expected 2 conclusions, got %d", len(resp.Conclusions))
+	}
+	if resp.Conclusions[0].ID != "c1" {
+		t.Errorf("expected ID c1, got %q", resp.Conclusions[0].ID)
+	}
+
+	// No query params when all zero
+	last := rs.lastRequest()
+	if strings.Contains(last.Path, "?") {
+		t.Errorf("expected no query params for empty params, got %q", last.Path)
+	}
+
+	// With type filter
+	_, err = c.ListConclusions(ListConclusionsParams{Type: "work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last = rs.lastRequest()
+	if !strings.Contains(last.Path, "type=work") {
+		t.Errorf("expected type=work param, got %q", last.Path)
+	}
+
+	// With pagination
+	_, err = c.ListConclusions(ListConclusionsParams{Limit: 5, Offset: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last = rs.lastRequest()
+	if !strings.Contains(last.Path, "limit=5") {
+		t.Errorf("expected limit=5 param, got %q", last.Path)
+	}
+	if !strings.Contains(last.Path, "offset=10") {
+		t.Errorf("expected offset=10 param, got %q", last.Path)
+	}
+}
+
 func TestListSessions_Success(t *testing.T) {
 	srv, rs := newRoutedServer(t)
 	rs.setRoute("GET", "/sessions", http.StatusOK, ListSessionsResponse{

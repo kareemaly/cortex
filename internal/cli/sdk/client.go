@@ -85,6 +85,7 @@ type (
 	ProjectResponse          = types.ProjectResponse
 	ConcludeSessionResponse  = types.ConcludeSessionResponse
 	ConclusionResponse       = types.ConclusionResponse
+	ConclusionSummary        = types.ConclusionSummary
 	ListConclusionsResponse  = types.ListConclusionsResponse
 	ResolvePromptResponse    = types.ResolvePromptResponse
 	PromptFileInfo           = types.PromptFileInfo
@@ -1020,9 +1021,31 @@ func (c *Client) ListSessions() (*ListSessionsResponse, error) {
 	return &result, nil
 }
 
-// ListConclusions returns all persistent conclusions for the project.
-func (c *Client) ListConclusions() (*ListConclusionsResponse, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/conclusions", nil)
+// ListConclusionsParams controls filtering and pagination for ListConclusions.
+type ListConclusionsParams struct {
+	Type   string
+	Limit  int
+	Offset int
+}
+
+// ListConclusions returns persistent conclusions for the project with optional filtering and pagination.
+func (c *Client) ListConclusions(params ListConclusionsParams) (*ListConclusionsResponse, error) {
+	url := c.baseURL + "/conclusions"
+	var queryParams []string
+	if params.Type != "" {
+		queryParams = append(queryParams, "type="+params.Type)
+	}
+	if params.Limit > 0 {
+		queryParams = append(queryParams, fmt.Sprintf("limit=%d", params.Limit))
+	}
+	if params.Offset > 0 {
+		queryParams = append(queryParams, fmt.Sprintf("offset=%d", params.Offset))
+	}
+	if len(queryParams) > 0 {
+		url += "?" + strings.Join(queryParams, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

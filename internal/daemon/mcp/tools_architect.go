@@ -118,17 +118,17 @@ func (s *Server) registerArchitectTools() {
 		Description: "Remove the due date from a ticket",
 	}, s.handleClearDueDate)
 
-	// List sessions (persistent conclusions)
+	// List conclusions (persistent conclusion records)
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "listSessions",
-		Description: "List all persistent session conclusions",
-	}, s.handleListSessions)
+		Name:        "listConclusions",
+		Description: "List persistent conclusion records (metadata only, no body). Paginated, newest first. Use readConclusion to fetch full body.",
+	}, s.handleListConclusions)
 
-	// Read session (persistent conclusion)
+	// Read conclusion (persistent conclusion record)
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "readSession",
-		Description: "Read a persistent session/conclusion record by ID",
-	}, s.handleReadSession)
+		Name:        "readConclusion",
+		Description: "Read a conclusion record by ID, including the full body.",
+	}, s.handleReadConclusion)
 
 	// Conclude architect session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -587,8 +587,8 @@ func (s *Server) handleClearDueDate(
 	}, nil
 }
 
-// handleListSessions lists all persistent session conclusions.
-func (s *Server) handleListSessions(
+// handleListConclusions lists persistent conclusion records (metadata only, no body).
+func (s *Server) handleListConclusions(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input ListConclusionsInput,
@@ -599,31 +599,39 @@ func (s *Server) handleListSessions(
 
 	client := s.getClientForProject(input.ProjectPath)
 
-	resp, err := client.ListConclusions()
+	limit := input.Limit
+	if limit == 0 {
+		limit = 10
+	}
+
+	resp, err := client.ListConclusions(sdk.ListConclusionsParams{
+		Type:   input.Type,
+		Limit:  limit,
+		Offset: input.Offset,
+	})
 	if err != nil {
 		return nil, ListConclusionsOutput{}, wrapSDKError(err)
 	}
 
-	items := make([]ConclusionOutput, len(resp.Conclusions))
+	items := make([]ConclusionListItem, len(resp.Conclusions))
 	for i, c := range resp.Conclusions {
-		items[i] = ConclusionOutput{
+		items[i] = ConclusionListItem{
 			ID:      c.ID,
 			Type:    c.Type,
 			Ticket:  c.Ticket,
 			Repo:    c.Repo,
-			Body:    c.Body,
 			Created: c.Created.Format(time.RFC3339),
 		}
 	}
 
 	return nil, ListConclusionsOutput{
 		Conclusions: items,
-		Total:       len(items),
+		Total:       resp.Total,
 	}, nil
 }
 
-// handleReadSession reads a persistent session/conclusion record by ID.
-func (s *Server) handleReadSession(
+// handleReadConclusion reads a conclusion record by ID, including full body.
+func (s *Server) handleReadConclusion(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input ReadConclusionInput,
