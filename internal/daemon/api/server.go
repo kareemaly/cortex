@@ -75,6 +75,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Get("/", conclusionHandlers.List)
 			r.Post("/", conclusionHandlers.Create)
 			r.Get("/{id}", conclusionHandlers.Get)
+			r.Post("/{id}/edit", conclusionHandlers.Edit)
 		})
 
 		// Architect routes

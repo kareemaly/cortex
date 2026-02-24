@@ -28,12 +28,20 @@ const (
 	viewDetail
 )
 
-type Model struct {
-	client      *sdk.Client
-	conclusions []sdk.ConclusionSummary
-	cursor      int
+// dateGroup holds sessions for a single calendar date.
+type dateGroup struct {
+	date     time.Time
+	sessions []sdk.ConclusionSummary
+}
 
-	listVP   viewport.Model
+type Model struct {
+	client *sdk.Client
+
+	// Date-grouped state (replaces flat conclusions slice)
+	dateGroups []dateGroup
+	dateIdx    int // index into dateGroups
+	cursor     int // row within dateGroups[dateIdx].sessions
+
 	detailVP viewport.Model
 	mode     viewMode
 
@@ -58,6 +66,8 @@ type Model struct {
 	statusIsError bool
 }
 
+// Message types
+
 type ConclusionsLoadedMsg struct {
 	Conclusions []sdk.ConclusionSummary
 }
@@ -80,6 +90,10 @@ type sseDisconnectedMsg struct{}
 type sseReconnectTickMsg struct{}
 
 type pollTickMsg struct{}
+
+type openEditorMsg struct{}
+
+type openEditorErrMsg struct{ Err error }
 
 func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 	renderer, _ := glamour.NewTermRenderer(
@@ -135,9 +149,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ConclusionsLoadedMsg:
 		m.loading = false
 		m.err = nil
-		m.conclusions = sortConclusions(msg.Conclusions)
-		if m.cursor >= len(m.conclusions) {
-			m.cursor = max(len(m.conclusions)-1, 0)
+		m.dateGroups = groupByDate(msg.Conclusions)
+		// Clamp date index
+		if m.dateIdx >= len(m.dateGroups) {
+			m.dateIdx = max(len(m.dateGroups)-1, 0)
+		}
+		// Clamp cursor
+		if len(m.dateGroups) > 0 {
+			if m.cursor >= len(m.dateGroups[m.dateIdx].sessions) {
+				m.cursor = max(len(m.dateGroups[m.dateIdx].sessions)-1, 0)
+			}
+		} else {
+			m.cursor = 0
 		}
 		m.logBuf.Debug("api", "conclusions loaded")
 		return m, nil
@@ -152,6 +175,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 		m.statusIsError = false
 		return m, nil
+
+	case openEditorMsg:
+		m.statusMsg = "Editor closed"
+		m.statusIsError = false
+		return m, clearStatusAfter(3 * time.Second)
+
+	case openEditorErrMsg:
+		m.statusMsg = fmt.Sprintf("Error: %s", msg.Err)
+		m.statusIsError = true
+		return m, clearStatusAfter(5 * time.Second)
 
 	case sseConnectedMsg:
 		if m.cancelEvents != nil {
@@ -249,10 +282,26 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadConclusions()
 	}
 
+	// Date navigation
+	if isKey(msg, KeyLeft) {
+		if m.dateIdx > 0 {
+			m.dateIdx--
+			m.cursor = 0
+		}
+		return m, nil
+	}
+	if isKey(msg, KeyRight) {
+		if m.dateIdx < len(m.dateGroups)-1 {
+			m.dateIdx++
+			m.cursor = 0
+		}
+		return m, nil
+	}
+
 	if isKey(msg, KeyShiftG) {
 		m.pendingG = false
-		if len(m.conclusions) > 0 {
-			m.cursor = len(m.conclusions) - 1
+		if len(m.dateGroups) > 0 {
+			m.cursor = max(len(m.dateGroups[m.dateIdx].sessions)-1, 0)
 		}
 		return m, nil
 	}
@@ -269,9 +318,18 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	m.pendingG = false
 
+	// Open editor
+	if isKey(msg, KeyOpenEditor, KeyEnter) {
+		if len(m.dateGroups) > 0 && m.cursor >= 0 && m.cursor < len(m.dateGroups[m.dateIdx].sessions) {
+			c := m.dateGroups[m.dateIdx].sessions[m.cursor]
+			return m, m.openConclusionInEditor(c)
+		}
+		return m, nil
+	}
+
 	switch {
 	case isKey(msg, KeyJ, KeyDown):
-		if m.cursor < len(m.conclusions)-1 {
+		if len(m.dateGroups) > 0 && m.cursor < len(m.dateGroups[m.dateIdx].sessions)-1 {
 			m.cursor++
 		}
 	case isKey(msg, KeyK, KeyUp):
@@ -279,16 +337,11 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor--
 		}
 	case isKey(msg, KeyCtrlD):
-		m.cursor = min(m.cursor+10, max(len(m.conclusions)-1, 0))
+		if len(m.dateGroups) > 0 {
+			m.cursor = min(m.cursor+10, max(len(m.dateGroups[m.dateIdx].sessions)-1, 0))
+		}
 	case isKey(msg, KeyCtrlU):
 		m.cursor = max(m.cursor-10, 0)
-
-	case isKey(msg, KeyEnter):
-		if m.cursor >= 0 && m.cursor < len(m.conclusions) {
-			m.mode = viewDetail
-			m.updateDetailViewport()
-		}
-		return m, nil
 	}
 
 	return m, nil
@@ -379,126 +432,131 @@ func (m Model) View() string {
 		b.WriteString("\n")
 	}
 
-	count := statusBarStyle.Render(fmt.Sprintf("%d sessions", len(m.conclusions)))
-	var help string
-	if m.mode == viewDetail {
-		help = count + "  " + helpBarStyle.Render(detailHelpText())
-	} else {
-		help = count + "  " + helpBarStyle.Render(listHelpText())
+	// Status bar
+	var sessionCount int
+	if len(m.dateGroups) > 0 && m.dateIdx < len(m.dateGroups) {
+		sessionCount = len(m.dateGroups[m.dateIdx].sessions)
 	}
+	countStr := statusBarStyle.Render(fmt.Sprintf("%d sessions", sessionCount))
+
+	var helpStr string
+	if m.mode == viewDetail {
+		helpStr = countStr + "  " + helpBarStyle.Render(detailHelpText())
+	} else {
+		openHint := helpBarStyle.Render("o/↵: open")
+		helpStr = countStr + "  " + helpBarStyle.Render(listHelpText()) + "  " + openHint
+	}
+
 	badge := m.logBadge()
 	if badge != "" {
-		help = help + "  " + badge
+		helpStr = helpStr + "  " + badge
 	}
-	b.WriteString(help)
+	b.WriteString(helpStr)
 
 	return b.String()
 }
 
+// renderListView composes date strip + divider + session list.
 func (m Model) renderListView(height int) string {
-	if len(m.conclusions) == 0 {
+	if len(m.dateGroups) == 0 {
 		empty := emptyStyle.Padding(1, 2).Render("No concluded sessions yet.")
 		return lipgloss.NewStyle().Width(m.width).Height(height).Render(empty)
 	}
 
-	var content strings.Builder
-	prefix := "  "
-	cursorPrefix := "▸ "
-	contentWidth := max(m.width-lipgloss.Width(prefix), 10)
+	dateStrip := m.renderDateStrip()
+	stripHeight := strings.Count(dateStrip, "\n") + 1
 
-	conclusionStartLines := make([]int, len(m.conclusions))
-	currentLine := 0
+	divider := dividerStyle.Render(strings.Repeat("─", m.width))
+	dividerHeight := 1
 
-	for i, c := range m.conclusions {
-		conclusionStartLines[i] = currentLine
+	listHeight := max(height-stripHeight-dividerHeight-1, 1)
 
-		if i > 0 {
-			content.WriteString("\n")
-			currentLine++
-		}
+	sessionList := m.renderSessionList(listHeight)
 
-		title := c.Ticket
-		if title == "" {
-			title = c.Type
-		}
-		if title == "" {
-			title = c.ID
-		}
+	return dateStripStyle.Render(dateStrip) + "\n" + divider + "\n" + sessionList
+}
 
-		wrapped := wrapToWidth(title, contentWidth)
-
-		for j, wline := range wrapped {
-			if j == 0 {
-				if i == m.cursor {
-					content.WriteString(cursorPrefix)
-					content.WriteString(selectedItemStyle.Render(wline))
-				} else {
-					content.WriteString(prefix)
-					content.WriteString(wline)
-				}
-			} else {
-				content.WriteString("\n")
-				currentLine++
-				if i == m.cursor {
-					content.WriteString(prefix)
-					content.WriteString(selectedItemStyle.Render(wline))
-				} else {
-					content.WriteString(prefix)
-					content.WriteString(wline)
-				}
-			}
-		}
-
-		content.WriteString("\n")
-		currentLine++
-
-		var meta strings.Builder
-		badge := typeBadgeStyle(c.Type).Render(c.Type)
-		meta.WriteString(badge)
-		meta.WriteString(" ")
-
-		if c.Ticket != "" {
-			meta.WriteString(ticketRefStyle.Render(c.Ticket))
-			meta.WriteString(" ")
-		}
-		meta.WriteString(dateStyle.Render(c.Created.Format("Jan 2, 15:04")))
-		content.WriteString(prefix + meta.String())
-
-		currentLine++
+// renderDateStrip renders the horizontal date strip with active/inactive pills.
+func (m Model) renderDateStrip() string {
+	if len(m.dateGroups) == 0 {
+		return ""
 	}
 
-	m.listVP.Width = m.width
-	m.listVP.Height = height
-
-	savedOffset := m.listVP.YOffset
-	m.listVP.SetContent(content.String())
-	m.listVP.SetYOffset(savedOffset)
-
-	if m.cursor >= 0 && m.cursor < len(conclusionStartLines) {
-		cursorLine := conclusionStartLines[m.cursor]
-		var cursorHeight int
-		if m.cursor+1 < len(conclusionStartLines) {
-			cursorHeight = conclusionStartLines[m.cursor+1] - cursorLine
+	var parts []string
+	for i, dg := range m.dateGroups {
+		label := dg.date.Format("Jan 2")
+		if i == m.dateIdx {
+			parts = append(parts, activeDateStyle.Render(label))
 		} else {
-			cursorHeight = currentLine - cursorLine
-		}
-		if cursorLine < m.listVP.YOffset {
-			m.listVP.SetYOffset(cursorLine)
-		}
-		if cursorLine+cursorHeight > m.listVP.YOffset+height {
-			m.listVP.SetYOffset(cursorLine + cursorHeight - height)
+			parts = append(parts, inactiveDateStyle.Render(label))
 		}
 	}
 
-	return m.listVP.View()
+	strip := strings.Join(parts, " ")
+
+	// Add navigation arrows
+	leftArrow := "◀ "
+	rightArrow := " ▶"
+	if m.dateIdx == 0 {
+		leftArrow = "  "
+	}
+	if m.dateIdx == len(m.dateGroups)-1 {
+		rightArrow = "  "
+	}
+
+	return leftArrow + strip + rightArrow
+}
+
+// renderSessionList renders the session rows for the currently selected date.
+func (m Model) renderSessionList(height int) string {
+	if m.dateIdx >= len(m.dateGroups) {
+		return emptyStyle.Render("No sessions for this date.")
+	}
+
+	sessions := m.dateGroups[m.dateIdx].sessions
+	if len(sessions) == 0 {
+		return emptyStyle.Render("No sessions for this date.")
+	}
+
+	var lines []string
+	for i, c := range sessions {
+		timeStr := timeStyle.Render(c.Created.Local().Format("15:04"))
+
+		typeLabel := typeShortLabel(c.Type)
+		typePart := typeLabelStyle.Render(typeLabel)
+
+		title := sessionTitle(c)
+
+		row := timeStr + "  " + typePart + "  " + title
+
+		if i == m.cursor {
+			row = selectedItemStyle.Render("▸ ") + selectedItemStyle.Render(row)
+		} else {
+			row = "  " + row
+		}
+		lines = append(lines, row)
+	}
+
+	// Clamp to visible height with scroll
+	start := 0
+	if m.cursor >= height {
+		start = m.cursor - height + 1
+	}
+	end := min(start+height, len(lines))
+
+	return strings.Join(lines[start:end], "\n")
 }
 
 func (m Model) renderDetailView(height int) string {
-	if m.cursor < 0 || m.cursor >= len(m.conclusions) {
+	if len(m.dateGroups) == 0 || m.dateIdx >= len(m.dateGroups) {
+		return emptyStyle.Render("No session selected")
+	}
+	sessions := m.dateGroups[m.dateIdx].sessions
+	if m.cursor < 0 || m.cursor >= len(sessions) {
 		return emptyStyle.Render("No session selected")
 	}
 
-	c := m.conclusions[m.cursor]
+	c := sessions[m.cursor]
 
 	var header strings.Builder
 	header.WriteString(detailHeaderStyle.Render("Session Conclusion"))
@@ -507,12 +565,15 @@ func (m Model) renderDetailView(height int) string {
 	var meta strings.Builder
 	meta.WriteString(typeBadgeStyle(c.Type).Render(c.Type))
 	meta.WriteString(" ")
-	if c.Ticket != "" {
+	if c.TicketTitle != "" {
+		meta.WriteString(ticketRefStyle.Render(c.TicketTitle))
+		meta.WriteString("  ")
+	} else if c.Ticket != "" {
 		meta.WriteString("Ticket: ")
 		meta.WriteString(ticketRefStyle.Render(c.Ticket))
 		meta.WriteString("  ")
 	}
-	meta.WriteString(dateStyle.Render(c.Created.Format("Jan 2, 2006 15:04")))
+	meta.WriteString(dateStyle.Render(c.Created.Local().Format("Jan 2, 2006 15:04")))
 	header.WriteString(detailMetaStyle.Render(meta.String()))
 	header.WriteString("\n\n")
 
@@ -524,28 +585,10 @@ func (m Model) renderDetailView(height int) string {
 	m.detailVP.Height = vpHeight
 
 	body := "(body not available in list view — use the readConclusion MCP tool to view full content)"
-
 	rendered := m.renderMarkdown(body)
 	m.detailVP.SetContent(rendered)
 
 	return headerStr + m.detailVP.View()
-}
-
-func (m *Model) updateDetailViewport() {
-	if m.cursor < 0 || m.cursor >= len(m.conclusions) {
-		return
-	}
-
-	renderer, _ := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(m.width-2),
-	)
-	m.mdRenderer = renderer
-
-	vpWidth := m.width
-	vpHeight := max(m.height-8, 3)
-	m.detailVP = viewport.New(vpWidth, vpHeight)
-	m.detailVP.SetContent("")
 }
 
 func (m Model) renderMarkdown(content string) string {
@@ -559,46 +602,77 @@ func (m Model) renderMarkdown(content string) string {
 	return strings.TrimSpace(rendered)
 }
 
-func sortConclusions(conclusions []sdk.ConclusionSummary) []sdk.ConclusionSummary {
-	sorted := make([]sdk.ConclusionSummary, len(conclusions))
-	copy(sorted, conclusions)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i].Created.After(sorted[j].Created)
-	})
-	return sorted
+// openConclusionInEditor returns a Cmd that opens the conclusion's index.md in $EDITOR.
+func (m Model) openConclusionInEditor(c sdk.ConclusionSummary) tea.Cmd {
+	return func() tea.Msg {
+		if err := m.client.EditConclusion(c.ID); err != nil {
+			return openEditorErrMsg{Err: fmt.Errorf("open editor: %w", err)}
+		}
+		return openEditorMsg{}
+	}
 }
 
-func wrapToWidth(text string, maxWidth int) []string {
-	if maxWidth <= 0 {
-		return []string{text}
-	}
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return []string{""}
-	}
+// groupByDate groups conclusions by local calendar date, newest date first.
+func groupByDate(conclusions []sdk.ConclusionSummary) []dateGroup {
+	byDate := make(map[string]*dateGroup)
+	var order []string
 
-	var lines []string
-	var current strings.Builder
-	currentWidth := 0
-
-	for _, word := range words {
-		wordWidth := lipgloss.Width(word)
-		if currentWidth == 0 {
-			current.WriteString(word)
-			currentWidth = wordWidth
-		} else if currentWidth+1+wordWidth <= maxWidth {
-			current.WriteString(" ")
-			current.WriteString(word)
-			currentWidth += 1 + wordWidth
-		} else {
-			lines = append(lines, current.String())
-			current.Reset()
-			current.WriteString(word)
-			currentWidth = wordWidth
+	for _, c := range conclusions {
+		local := c.Created.Local()
+		key := local.Format("2006-01-02")
+		if _, exists := byDate[key]; !exists {
+			dayStart := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
+			byDate[key] = &dateGroup{date: dayStart}
+			order = append(order, key)
 		}
+		byDate[key].sessions = append(byDate[key].sessions, c)
 	}
-	lines = append(lines, current.String())
-	return lines
+
+	// Sort each group newest-first within the day
+	for _, dg := range byDate {
+		sort.SliceStable(dg.sessions, func(i, j int) bool {
+			return dg.sessions[i].Created.After(dg.sessions[j].Created)
+		})
+	}
+
+	// Sort date keys newest date first
+	sort.Slice(order, func(i, j int) bool {
+		return order[i] > order[j]
+	})
+
+	groups := make([]dateGroup, 0, len(order))
+	for _, key := range order {
+		groups = append(groups, *byDate[key])
+	}
+	return groups
+}
+
+// typeShortLabel returns a short human-readable label for a conclusion type.
+func typeShortLabel(t string) string {
+	switch t {
+	case "architect":
+		return "arch"
+	case "research":
+		return "research"
+	case "work":
+		return "work"
+	default:
+		return t
+	}
+}
+
+// sessionTitle returns the display title for a conclusion.
+func sessionTitle(c sdk.ConclusionSummary) string {
+	if c.TicketTitle != "" {
+		return c.TicketTitle
+	}
+	if c.Type == "architect" {
+		return "Architect session"
+	}
+	if c.Ticket != "" {
+		return c.Ticket
+	}
+	return c.ID
 }
 
 func (m Model) loadConclusions() tea.Cmd {
@@ -674,4 +748,10 @@ func (m Model) logBadge() string {
 		parts = append(parts, warnBadgeStyle.Render(fmt.Sprintf("W:%d", wc)))
 	}
 	return strings.Join(parts, " ")
+}
+
+func clearStatusAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return ClearStatusMsg{}
+	})
 }

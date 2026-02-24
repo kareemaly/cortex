@@ -784,6 +784,26 @@ func (c *Client) EditTicket(ticketID string) error {
 	return nil
 }
 
+// EditConclusion opens the conclusion's index.md in $EDITOR via tmux popup.
+func (c *Client) EditConclusion(conclusionID string) error {
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/conclusions/"+conclusionID+"/edit", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
 // Event represents an SSE event from the daemon.
 type Event struct {
 	Type          string `json:"type"`

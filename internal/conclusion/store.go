@@ -99,6 +99,17 @@ func (s *Store) Create(conclusionType string, ticketID, repo, body string) (*Con
 	return c, nil
 }
 
+// IndexPath returns the absolute path to the conclusion's index.md file.
+func (s *Store) IndexPath(id string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entityDir, err := s.findEntityDir(id)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(entityDir, "index.md"), nil
+}
+
 // Get retrieves a conclusion by ID.
 func (s *Store) Get(id string) (*Conclusion, error) {
 	s.mu.RLock()

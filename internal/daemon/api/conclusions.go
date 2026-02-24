@@ -2,10 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/conclusion"
 	"github.com/kareemaly/cortex/internal/types"
 )
@@ -60,15 +63,41 @@ func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Try to resolve ticket titles for work/research conclusions.
+	var ticketTitles map[string]string
+	if h.deps.StoreManager != nil {
+		if ts, tsErr := h.deps.StoreManager.GetStore(projectPath); tsErr == nil {
+			ticketTitles = make(map[string]string)
+			for _, c := range conclusions {
+				if c.Ticket == "" {
+					continue
+				}
+				if _, seen := ticketTitles[c.Ticket]; seen {
+					continue
+				}
+				t, _, err := ts.Get(c.Ticket)
+				if err == nil && t != nil {
+					ticketTitles[c.Ticket] = t.Title
+				} else {
+					ticketTitles[c.Ticket] = "" // not found; cache to avoid re-lookup
+				}
+			}
+		}
+	}
+
 	summaries := make([]types.ConclusionSummary, len(conclusions))
 	for i, c := range conclusions {
-		summaries[i] = types.ConclusionSummary{
+		summary := types.ConclusionSummary{
 			ID:      c.ID,
 			Type:    string(c.Type),
 			Ticket:  c.Ticket,
 			Repo:    c.Repo,
 			Created: c.Created,
 		}
+		if ticketTitles != nil && c.Ticket != "" {
+			summary.TicketTitle = ticketTitles[c.Ticket]
+		}
+		summaries[i] = summary
 	}
 
 	writeJSON(w, http.StatusOK, types.ListConclusionsResponse{Conclusions: summaries, Total: total})
@@ -150,4 +179,55 @@ func (h *ConclusionHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// Edit handles POST /conclusions/{id}/edit - opens the conclusion's index.md in $EDITOR via tmux popup.
+func (h *ConclusionHandlers) Edit(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetArchitectPath(r.Context())
+
+	if h.deps.ConclusionStoreManager == nil {
+		writeError(w, http.StatusInternalServerError, "store_error", "conclusion store not available")
+		return
+	}
+
+	store, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+
+	indexPath, err := store.IndexPath(id)
+	if err != nil {
+		handleConclusionError(w, err, h.deps.Logger)
+		return
+	}
+
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim"
+	}
+	command := fmt.Sprintf("%s %q", editor, indexPath)
+
+	projectCfg, cfgErr := architectconfig.Load(projectPath)
+	tmuxSession := "cortex"
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
+	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, "", command); err != nil {
+		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ExecuteActionResponse{
+		Success: true,
+		Message: "Editor opened",
+	})
 }

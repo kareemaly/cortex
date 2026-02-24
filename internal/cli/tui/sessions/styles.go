@@ -45,6 +45,30 @@ var (
 
 	detailMetaStyle = lipgloss.NewStyle().
 			Foreground(mutedColor)
+
+	// Date strip styles
+	activeDateStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("0")).
+			Background(accentColor).
+			Padding(0, 1)
+
+	inactiveDateStyle = lipgloss.NewStyle().
+				Foreground(mutedColor).
+				Padding(0, 1)
+
+	dateStripStyle = lipgloss.NewStyle().
+			PaddingBottom(1)
+
+	dividerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("238"))
+
+	timeStyle = lipgloss.NewStyle().
+			Foreground(mutedColor)
+
+	typeLabelStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245")).
+			Width(10)
 )
 
 var (
