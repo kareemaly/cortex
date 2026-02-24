@@ -279,7 +279,7 @@ func (s *Server) handleCreateTicket(
 		dueDate = &parsed
 	}
 
-	resp, err := client.CreateTicket(input.Title, input.Body, input.Type, dueDate, input.References, input.Tags)
+	resp, err := client.CreateTicket(input.Title, input.Body, input.Type, input.Repo, dueDate, input.References, input.Tags)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}

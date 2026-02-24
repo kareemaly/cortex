@@ -649,11 +649,17 @@ func getWorkingDirectory(req SpawnRequest) (string, error) {
 
 	if req.Ticket.Type == "work" {
 		if req.Ticket.Repo != "" {
+			repo := req.Ticket.Repo
+			if strings.HasPrefix(repo, "~/") {
+				if home, err := os.UserHomeDir(); err == nil {
+					repo = filepath.Join(home, repo[2:])
+				}
+			}
 			// Validate repo exists and is a git repository
-			if err := validateGitRepository(req.Ticket.Repo); err != nil {
+			if err := validateGitRepository(repo); err != nil {
 				return "", err
 			}
-			return req.Ticket.Repo, nil
+			return repo, nil
 		}
 		return req.ProjectPath, nil
 	}
@@ -723,16 +729,6 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 	// Create prompt resolver with fallback to defaults
 	resolver := prompt.NewPromptResolver(req.ProjectPath, s.deps.DefaultsDir)
 
-	// Load system prompt (MCP tool instructions and workflow)
-	var systemPromptContent string
-	{
-		var err error
-		systemPromptContent, err = resolver.ResolveTicketPrompt(ticketType, prompt.StageSystem)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// Load kickoff template
 	kickoffTemplate, err := resolver.ResolveTicketPrompt(ticketType, prompt.StageKickoff)
 	if err != nil {
@@ -740,7 +736,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 		promptText := fmt.Sprintf("# Ticket: %s\n\n%s", req.Ticket.Title, req.Ticket.Body)
 		return &promptInfo{
 			PromptText:          promptText,
-			SystemPromptContent: systemPromptContent,
+			SystemPromptContent: "",
 		}, nil
 	}
 
@@ -761,7 +757,7 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 
 	return &promptInfo{
 		PromptText:          promptText,
-		SystemPromptContent: systemPromptContent,
+		SystemPromptContent: "",
 	}, nil
 }
 
@@ -844,29 +840,6 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 		topTags = strings.Join(tagNames, ", ")
 	}
 
-	// Fetch notes (graceful degradation)
-	var notesList string
-	notesResp, notesErr := client.ListNotes()
-	if notesErr == nil && len(notesResp.Notes) > 0 {
-		limit := min(20, len(notesResp.Notes))
-		today := time.Now().Truncate(24 * time.Hour)
-		var notesSB strings.Builder
-		for i := range limit {
-			n := notesResp.Notes[i]
-			prefix := "-"
-			dueStr := ""
-			if n.Due != nil {
-				dueDate := n.Due.Truncate(24 * time.Hour)
-				dueStr = fmt.Sprintf(" (due: %s)", n.Due.Format(time.DateOnly))
-				if !dueDate.After(today) {
-					prefix = "- !!"
-				}
-			}
-			notesSB.WriteString(fmt.Sprintf("%s [%s] %s%s\n", prefix, n.ID, n.Text, dueStr))
-		}
-		notesList = notesSB.String()
-	}
-
 	// Fetch conclusions (graceful degradation)
 	var sessionsList string
 	conclusionsResp, conclusionsErr := client.ListConclusions()
@@ -903,7 +876,6 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 			TicketList:  ticketList,
 			CurrentDate: time.Now().Format("2006-01-02 15:04 MST"),
 			TopTags:     topTags,
-			Notes:       notesList,
 			Sessions:    sessionsList,
 			Repos:       reposList,
 		}
