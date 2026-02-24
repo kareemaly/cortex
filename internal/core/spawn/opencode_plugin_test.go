@@ -25,18 +25,36 @@ func TestGenerateOpenCodeStatusPlugin(t *testing.T) {
 		t.Error("expected plugin to contain project path")
 	}
 
-	// Verify event handlers
+	// Verify event handlers present in switch
 	for _, event := range []string{
 		"session.status",
-		"session.idle",
 		"permission.asked",
 		"permission.replied",
-		"tool.execute.before",
-		"tool.execute.after",
 	} {
 		if !strings.Contains(plugin, `"`+event+`"`) {
 			t.Errorf("expected plugin to handle event %q", event)
 		}
+	}
+
+	// Verify deprecated session.idle event is not present
+	if strings.Contains(plugin, `"session.idle"`) {
+		t.Error("expected plugin not to contain deprecated session.idle event")
+	}
+
+	// Verify status?.type is used (not bare status)
+	if !strings.Contains(plugin, "status?.type") {
+		t.Error("expected plugin to access status?.type")
+	}
+
+	// Verify tool hooks are top-level keys, not switch cases
+	if strings.Contains(plugin, `case "tool.execute.before"`) {
+		t.Error("expected tool.execute.before to be a hook key, not a switch case")
+	}
+	if !strings.Contains(plugin, `"tool.execute.before": async`) {
+		t.Error("expected plugin to have tool.execute.before as a hook key")
+	}
+	if !strings.Contains(plugin, `"tool.execute.after": async`) {
+		t.Error("expected plugin to have tool.execute.after as a hook key")
 	}
 
 	// Verify status mappings

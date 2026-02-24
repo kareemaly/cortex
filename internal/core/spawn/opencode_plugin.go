@@ -32,32 +32,29 @@ function send(status: string, tool?: string) {
   }).catch(() => {});
 }
 
-export default async () => ({
-  event: async ({ event }: { event: { type: string; properties?: Record<string, any>; input?: Record<string, any> } }) => {
+export default async (_input: any) => ({
+  event: async ({ event }: { event: { type: string; properties?: Record<string, any> } }) => {
     switch (event.type) {
       case "session.status": {
-        const s = event.properties?.status;
+        const s = event.properties?.status?.type;
         if (s === "busy") send("in_progress");
         else if (s === "idle") send("idle");
         else if (s === "retry") send("error");
         break;
       }
-      case "session.idle":
-        send("idle");
-        break;
       case "permission.asked":
         send("waiting_permission");
         break;
       case "permission.replied":
         send("in_progress");
         break;
-      case "tool.execute.before":
-        send("in_progress", event.input?.tool as string | undefined);
-        break;
-      case "tool.execute.after":
-        send("in_progress");
-        break;
     }
+  },
+  "tool.execute.before": async (hookInput: any) => {
+    send("in_progress", hookInput?.tool as string | undefined);
+  },
+  "tool.execute.after": async () => {
+    send("in_progress");
   },
 });
 `, daemonURL, ticketID, projectPath)
