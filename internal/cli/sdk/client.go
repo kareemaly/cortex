@@ -418,7 +418,7 @@ func (c *Client) ApproveSession(id string) error {
 
 // ListArchitectsResponse is the response from GET /architects.
 type ListArchitectsResponse struct {
-	Architects []ArchitectResponse `json:"projects"`
+	Architects []ArchitectResponse `json:"architects"`
 }
 
 // ListArchitects returns all registered architects from the daemon.
