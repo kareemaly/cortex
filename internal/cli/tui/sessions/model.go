@@ -546,12 +546,6 @@ func (m Model) renderSessionList(height int) string {
 		titleRaw := sessionTitle(c)
 		dur := formatDuration(c.StartedAt, c.ConcludedAt)
 
-		// Truncate title to fit column
-		titleRunes := []rune(titleRaw)
-		if len(titleRunes) > titleWidth {
-			titleRaw = string(titleRunes[:titleWidth-1]) + "…"
-		}
-
 		if i == m.cursor {
 			// Selected: full-width highlight with inline color changes for type
 			gutter := "▸ "

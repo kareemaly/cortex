@@ -97,9 +97,6 @@ func (m Model) View() string {
 
 	if m.showKillConfirm {
 		name := m.killSessionName
-		if len(name) > 30 {
-			name = name[:27] + "..."
-		}
 		confirmMsg := fmt.Sprintf("Kill active session '%s'? [y]es [n]o", name)
 		b.WriteString(warnBadgeStyle.Render(confirmMsg))
 		return b.String()
@@ -248,9 +245,6 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 		}
 
 		name := session.TicketTitle
-		if len(name) > 24 {
-			name = name[:21] + "..."
-		}
 
 		icon := "●"
 		styledIcon := activeIconStyle.Render(icon)
@@ -261,11 +255,11 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 		dur := formatDuration(time.Since(session.StartedAt))
 
 		if selected {
-			plain := fmt.Sprintf("%s%s %-24s %-10s %s", indent, icon, name, badge, dur)
+			plain := fmt.Sprintf("%s%s %s %s %s", indent, icon, name, badge, dur)
 			return selectedStyle.Render(plain)
 		}
 
-		return fmt.Sprintf("%s%s %-24s %-10s %s", indent, styledIcon, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
+		return fmt.Sprintf("%s%s %s %s %s", indent, styledIcon, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
 	}
 
 	ticket := m.findTicket(pd, r.ticketID)
@@ -279,9 +273,6 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 		styledIcon = orphanedIconStyle.Render(icon)
 	}
 	name := ticket.Title
-	if len(name) > 24 {
-		name = name[:21] + "..."
-	}
 
 	badge := ticket.Status
 	if ticket.IsOrphaned {
@@ -298,9 +289,9 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 	}
 
 	if selected {
-		plain := fmt.Sprintf("%s%s %-24s %-10s %s", indent, icon, name, badge, dur)
+		plain := fmt.Sprintf("%s%s %s %s %s", indent, icon, name, badge, dur)
 		return selectedStyle.Render(plain)
 	}
 
-	return fmt.Sprintf("%s%s %-24s %-10s %s", indent, styledIcon, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
+	return fmt.Sprintf("%s%s %s %s %s", indent, styledIcon, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
 }
