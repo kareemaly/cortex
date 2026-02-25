@@ -103,7 +103,10 @@ func MigrateProjectConfig(projectPath string) *MigrationResult {
 	result.DetectedAgent = agent
 
 	// Generate new config
-	newConfig := generateProjectConfig(result.ArchitectName, agent)
+	opts := Options{
+		Agent: agent,
+	}
+	newConfig := generateProjectConfig(opts, result.ArchitectName)
 
 	// Preserve custom tickets path
 	if old.Tickets.Path != "" {

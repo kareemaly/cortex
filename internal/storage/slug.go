@@ -2,6 +2,8 @@ package storage
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 )
@@ -53,6 +55,18 @@ func ShortID(id string) string {
 func DirName(title, id, fallback string) string {
 	slug := GenerateSlug(title, fallback)
 	return fmt.Sprintf("%s-%s", slug, ShortID(id))
+}
+
+// ExpandHome expands a leading ~/ in a path to the user's home directory.
+func ExpandHome(path string) string {
+	if len(path) >= 2 && path[:2] == "~/" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+		return filepath.Join(homeDir, path[2:])
+	}
+	return path
 }
 
 // truncateAtWordBoundary truncates a slug to maxLen without cutting mid-word.

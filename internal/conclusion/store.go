@@ -74,18 +74,18 @@ func (s *Store) Create(conclusionType string, ticketID, repo, body string, start
 		return nil, fmt.Errorf("serialize conclusion: %w", err)
 	}
 
-	if err := s.BaseStore.WriteIndexBytes(entityDir, data); err != nil {
+	if err := s.WriteIndexBytes(entityDir, data); err != nil {
 		return nil, fmt.Errorf("write conclusion: %w", err)
 	}
 
-	s.BaseStore.Emit(events.ConclusionCreated, c.ID, nil)
+	s.Emit(events.ConclusionCreated, c.ID, nil)
 	return c, nil
 }
 
 func (s *Store) IndexPath(id string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	entityDir, err := s.BaseStore.FindEntityDir("conclusion", id)
+	entityDir, err := s.FindEntityDir("conclusion", id)
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +96,7 @@ func (s *Store) Get(id string) (*Conclusion, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	entityDir, err := s.BaseStore.FindEntityDir("conclusion", id)
+	entityDir, err := s.FindEntityDir("conclusion", id)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (s *Store) ListWithOptions(opts ListOptions) ([]*Conclusion, int, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	entityDirs, err := s.BaseStore.ListEntries(s.RootDir())
+	entityDirs, err := s.ListEntries(s.RootDir())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -166,7 +166,7 @@ func (s *Store) List() ([]*Conclusion, error) {
 }
 
 func (s *Store) loadIndex(entityDir string) (*Conclusion, error) {
-	data, err := s.BaseStore.LoadIndexBytes(entityDir)
+	data, err := s.LoadIndexBytes(entityDir)
 	if err != nil {
 		return nil, fmt.Errorf("read index.md: %w", err)
 	}

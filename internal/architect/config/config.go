@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/kareemaly/cortex/internal/storage"
 	"gopkg.in/yaml.v3"
 )
 
@@ -87,25 +88,15 @@ func (c *Config) RoleConfigForType(ticketType string) (RoleConfig, error) {
 	}
 }
 
-// expandHome expands a leading ~/ to the user's home directory.
-func expandHome(path string) string {
-	if len(path) >= 2 && path[:2] == "~/" {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, path[2:])
-		}
-	}
-	return path
-}
-
 // ValidateRepo checks if a repo is in the architect's repos list.
 // If Repos is empty, any repo is allowed.
 func (c *Config) ValidateRepo(repo string) error {
 	if len(c.Repos) == 0 {
 		return nil
 	}
-	expanded := expandHome(repo)
+	expanded := storage.ExpandHome(repo)
 	for _, r := range c.Repos {
-		if expandHome(r) == expanded {
+		if storage.ExpandHome(r) == expanded {
 			return nil
 		}
 	}
@@ -116,7 +107,7 @@ func (c *Config) ValidateRepo(repo string) error {
 // Checks exact match against repos and glob match against research.paths.
 // If both repos and research.paths are empty, any path is allowed.
 func (c *Config) ValidateResearchPath(path string) error {
-	expanded := expandHome(path)
+	expanded := storage.ExpandHome(path)
 
 	// If no restrictions configured, allow all
 	if len(c.Repos) == 0 && len(c.Research.Paths) == 0 {
@@ -125,14 +116,14 @@ func (c *Config) ValidateResearchPath(path string) error {
 
 	// Check exact match against repos
 	for _, r := range c.Repos {
-		if expandHome(r) == expanded {
+		if storage.ExpandHome(r) == expanded {
 			return nil
 		}
 	}
 
 	// Check glob match against research.paths
 	for _, glob := range c.Research.Paths {
-		matched, err := doublestar.Match(expandHome(glob), expanded)
+		matched, err := doublestar.Match(storage.ExpandHome(glob), expanded)
 		if err == nil && matched {
 			return nil
 		}

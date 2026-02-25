@@ -74,7 +74,7 @@ func (s *Store) Create(title, body, ticketType string, dueDate *time.Time, refer
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
-	s.BaseStore.Emit(events.TicketCreated, ticket.ID, nil)
+	s.Emit(events.TicketCreated, ticket.ID, nil)
 	return ticket, nil
 }
 
@@ -156,7 +156,7 @@ func (s *Store) Update(id string, title, body *string, references *[]string) (*T
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
-	s.BaseStore.Emit(events.TicketUpdated, ticket.ID, nil)
+	s.Emit(events.TicketUpdated, ticket.ID, nil)
 	return ticket, nil
 }
 
@@ -182,7 +182,7 @@ func (s *Store) SetSession(id string, sessionID string) (*Ticket, error) {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
-	s.BaseStore.Emit(events.TicketUpdated, ticket.ID, nil)
+	s.Emit(events.TicketUpdated, ticket.ID, nil)
 	return ticket, nil
 }
 
@@ -208,7 +208,7 @@ func (s *Store) SetDueDate(id string, dueDate *time.Time) (*Ticket, error) {
 		return nil, fmt.Errorf("save ticket: %w", err)
 	}
 
-	s.BaseStore.Emit(events.TicketUpdated, ticket.ID, nil)
+	s.Emit(events.TicketUpdated, ticket.ID, nil)
 	return ticket, nil
 }
 
@@ -231,13 +231,13 @@ func (s *Store) Delete(id string) error {
 	}
 
 	s.locks.Delete(id)
-	s.BaseStore.Emit(events.TicketDeleted, id, nil)
+	s.Emit(events.TicketDeleted, id, nil)
 	return nil
 }
 
 func (s *Store) List(status Status) ([]*Ticket, error) {
 	dir := filepath.Join(s.RootDir(), string(status))
-	entityDirs, err := s.BaseStore.ListEntries(dir)
+	entityDirs, err := s.ListEntries(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (s *Store) Move(id string, to Status) error {
 		return fmt.Errorf("save ticket: %w", err)
 	}
 
-	s.BaseStore.Emit(events.TicketMoved, ticket.ID, nil)
+	s.Emit(events.TicketMoved, ticket.ID, nil)
 	return nil
 }
 
@@ -322,11 +322,11 @@ func (s *Store) writeIndex(entityDir string, ticket *Ticket) error {
 		return fmt.Errorf("serialize ticket: %w", err)
 	}
 
-	return s.BaseStore.WriteIndexBytes(entityDir, data)
+	return s.WriteIndexBytes(entityDir, data)
 }
 
 func (s *Store) loadIndex(entityDir string) (*Ticket, error) {
-	data, err := s.BaseStore.LoadIndexBytes(entityDir)
+	data, err := s.LoadIndexBytes(entityDir)
 	if err != nil {
 		return nil, fmt.Errorf("read index.md: %w", err)
 	}
@@ -343,7 +343,7 @@ func (s *Store) loadIndex(entityDir string) (*Ticket, error) {
 }
 
 func (s *Store) findEntityDir(id string, status Status) (string, error) {
-	return s.BaseStore.FindEntityDir("ticket", id, string(status))
+	return s.FindEntityDir("ticket", id, string(status))
 }
 
 func (s *Store) findEntityDirAllStatuses(id string) (string, Status, error) {
