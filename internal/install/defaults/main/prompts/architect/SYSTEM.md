@@ -64,7 +64,7 @@ Break large requests into independent, well-scoped tickets. Each ticket should b
 
 ## Cortex Tools
 
-`listTickets`, `readTicket`, `createWorkTicket`, `createResearchTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `updateDueDate`, `clearDueDate`, `spawnSession`, `listConclusions`, `readConclusion`, `concludeSession`.
+`listTickets`, `readTicket`, `createWorkTicket`, `createResearchTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `updateDueDate`, `clearDueDate`, `spawnSession`, `spawnCollabSession`, `listConclusions`, `readConclusion`, `concludeSession`.
 
 ## Communication
 

@@ -27,7 +27,7 @@ type Session struct {
 // SpawnCollabSessionInput is the input for the spawnCollabSession tool.
 type SpawnCollabSessionInput struct {
 	Repo   string `json:"repo" jsonschema:"Repository path where the collab agent will spawn (required). Must be from the configured repos list in cortex.yaml."`
-	Prompt string `json:"prompt" jsonschema:"Kickoff prompt for the collab session (required). This is the sole context for the agent."`
+	Prompt string `json:"prompt" jsonschema:"Brief question or topic to discuss. Keep it minimal — the collab agent starts in the repo with its own AGENTS.md/CLAUDE.md context."`
 }
 
 // SpawnCollabSessionOutput is the output for the spawnCollabSession tool.
