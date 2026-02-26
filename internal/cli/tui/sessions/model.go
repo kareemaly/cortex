@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
+	"github.com/mattn/go-runewidth"
 )
 
 const (
@@ -543,7 +544,7 @@ func (m Model) renderSessionList(height int) string {
 	for i, c := range sessions {
 		timeRaw := c.ConcludedAt.Local().Format("15:04")
 		typeRaw := typeShortLabel(c.Type)
-		titleRaw := sessionTitle(c)
+		titleRaw := truncateToWidth(sessionTitle(c), titleWidth)
 		dur := formatDuration(c.StartedAt, c.ConcludedAt)
 
 		if i == m.cursor {
@@ -826,4 +827,19 @@ func formatDuration(start, end time.Time) string {
 		m = 1 // show at least "1m"
 	}
 	return fmt.Sprintf("%dm", m)
+}
+
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if runewidth.StringWidth(s) <= maxWidth {
+		return s
+	}
+	for i, r := range s {
+		if runewidth.StringWidth(s[:i])+runewidth.RuneWidth(r) > maxWidth-1 {
+			return s[:i] + "…"
+		}
+	}
+	return s
 }
