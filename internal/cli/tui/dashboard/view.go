@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/mattn/go-runewidth"
 )
 
 func (m Model) View() string {
@@ -244,15 +245,14 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 			return indent + "???"
 		}
 
-		name := session.TicketTitle
+		badge := "collab"
+		dur := formatDuration(time.Since(session.StartedAt))
+		nameWidth := m.width - len(indent) - 2 - 1 - len(badge) - 1 - len(dur)
+		name := truncateToWidth(session.TicketTitle, nameWidth)
 
 		icon := "●"
 		styledIcon := activeIconStyle.Render(icon)
-
-		badge := "collab"
 		badgeStyled := progressBadgeStyle.Render(badge)
-
-		dur := formatDuration(time.Since(session.StartedAt))
 
 		if selected {
 			plain := fmt.Sprintf("%s%s %s %s %s", indent, icon, name, badge, dur)
@@ -288,10 +288,31 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 		dur = formatDuration(time.Since(*ticket.SessionStartedAt))
 	}
 
+	nameWidth := m.width - len(indent) - 2 - 1 - len(badge) - 1 - len(dur)
+	name = truncateToWidth(name, nameWidth)
+
 	if selected {
 		plain := fmt.Sprintf("%s%s %s %s %s", indent, icon, name, badge, dur)
 		return selectedStyle.Render(plain)
 	}
 
 	return fmt.Sprintf("%s%s %s %s %s", indent, styledIcon, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
+}
+
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if idx := strings.Index(s, "\n"); idx >= 0 {
+		s = s[:idx]
+	}
+	if runewidth.StringWidth(s) <= maxWidth {
+		return s
+	}
+	for i, r := range s {
+		if runewidth.StringWidth(s[:i])+runewidth.RuneWidth(r) > maxWidth-1 {
+			return s[:i] + "…"
+		}
+	}
+	return s
 }

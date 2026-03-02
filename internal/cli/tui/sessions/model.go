@@ -833,6 +833,9 @@ func truncateToWidth(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return ""
 	}
+	if idx := strings.Index(s, "\n"); idx >= 0 {
+		s = s[:idx]
+	}
 	if runewidth.StringWidth(s) <= maxWidth {
 		return s
 	}
