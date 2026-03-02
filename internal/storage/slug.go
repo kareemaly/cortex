@@ -10,9 +10,43 @@ import (
 
 const maxSlugLength = 20
 
-// GenerateSlug creates a URL-friendly slug from a title.
-// The slug is lowercase, uses hyphens as separators, and is max 20 characters.
-// If the result would be empty, returns fallback.
+const maxTmuxNameLength = 128
+
+func SanitizeTmuxName(name string) string {
+	if name == "" {
+		return ""
+	}
+
+	var result strings.Builder
+	result.Grow(len(name))
+
+	for i, r := range name {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_':
+			result.WriteRune(r)
+		case r == ' ' || r == '-':
+			if i == 0 {
+				result.WriteRune('_')
+			} else {
+				result.WriteRune('-')
+			}
+		default:
+			if i == 0 {
+				result.WriteRune('_')
+			} else {
+				result.WriteRune('-')
+			}
+		}
+	}
+
+	sanitized := result.String()
+	if len(sanitized) > maxTmuxNameLength {
+		sanitized = sanitized[:maxTmuxNameLength]
+	}
+
+	return sanitized
+}
+
 func GenerateSlug(title, fallback string) string {
 	slug := strings.ToLower(title)
 	slug = strings.ReplaceAll(slug, " ", "-")

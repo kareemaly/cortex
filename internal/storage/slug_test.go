@@ -55,6 +55,65 @@ func TestShortID(t *testing.T) {
 	}
 }
 
+func TestSanitizeTmuxName(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "simple name", input: "myproject", want: "myproject"},
+		{name: "spaces become hyphens", input: "Footprint Management", want: "Footprint-Management"},
+		{name: "multiple spaces", input: "My  Project  Name", want: "My--Project--Name"},
+		{name: "special chars replaced", input: "my@project#name", want: "my-project-name"},
+		{name: "starts with hyphen becomes underscore", input: "-myproject", want: "_myproject"},
+		{name: "starts with space becomes underscore", input: " myproject", want: "_myproject"},
+		{name: "keeps underscores", input: "my_project_name", want: "my_project_name"},
+		{name: "keeps hyphens", input: "my-project-name", want: "my-project-name"},
+		{name: "mixed case preserved", input: "MyProject", want: "MyProject"},
+		{name: "numbers preserved", input: "project123", want: "project123"},
+		{name: "colons replaced", input: "project:name", want: "project-name"},
+		{name: "periods replaced", input: "project.name", want: "project-name"},
+		{name: "empty string", input: "", want: ""},
+		{name: "only special chars", input: "@#$%", want: "_---"},
+		{name: "unicode replaced", input: "café-project", want: "caf--project"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SanitizeTmuxName(tt.input)
+			if got != tt.want {
+				t.Errorf("SanitizeTmuxName(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+			if len(got) > maxTmuxNameLength {
+				t.Errorf("SanitizeTmuxName(%q) = %q (len %d), exceeds max length %d", tt.input, got, len(got), maxTmuxNameLength)
+			}
+		})
+	}
+}
+
+func TestSanitizeTmuxName_Length(t *testing.T) {
+	longName := ""
+	for i := 0; i < 200; i++ {
+		longName += "a"
+	}
+
+	got := SanitizeTmuxName(longName)
+	if len(got) != maxTmuxNameLength {
+		t.Errorf("SanitizeTmuxName() length = %d, want %d", len(got), maxTmuxNameLength)
+	}
+}
+
+func TestSanitizeTmuxName_Consistency(t *testing.T) {
+	input := "Footprint Management"
+
+	first := SanitizeTmuxName(input)
+	second := SanitizeTmuxName(input)
+
+	if first != second {
+		t.Errorf("SanitizeTmuxName is not consistent: first=%q, second=%q", first, second)
+	}
+}
+
 func TestDirName(t *testing.T) {
 	got := DirName("Fix Auth Bug", "a1b2c3d4-e5f6-7890", "ticket")
 	want := "fix-auth-bug-a1b2c3d4"

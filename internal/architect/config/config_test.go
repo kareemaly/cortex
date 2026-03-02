@@ -467,3 +467,30 @@ repos:
 		t.Error("expected error for unknown repo, got nil")
 	}
 }
+
+func TestGetTmuxSessionName(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfgName  string
+		expected string
+	}{
+		{"simple name", "myproject", "myproject"},
+		{"name with spaces", "Footprint Management", "Footprint-Management"},
+		{"name with special chars", "my@project#name", "my-project-name"},
+		{"name with hyphen", "my-project", "my-project"},
+		{"name with underscore", "my_project", "my_project"},
+		{"empty name defaults to cortex", "", "cortex"},
+		{"name starting with hyphen", "-project", "_project"},
+		{"name with multiple spaces", "My  Project  Name", "My--Project--Name"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{Name: tt.cfgName}
+			got := cfg.GetTmuxSessionName()
+			if got != tt.expected {
+				t.Errorf("GetTmuxSessionName() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}

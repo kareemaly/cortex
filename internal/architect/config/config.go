@@ -70,7 +70,7 @@ func (c *Config) SessionsPath(architectRoot string) string {
 // Uses Config.Name if set, otherwise defaults to "cortex".
 func (c *Config) GetTmuxSessionName() string {
 	if c.Name != "" {
-		return c.Name
+		return storage.SanitizeTmuxName(c.Name)
 	}
 	return "cortex"
 }
