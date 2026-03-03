@@ -65,6 +65,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Post("/{id}/focus", ticketHandlers.Focus)
 			r.Post("/{id}/conclude", ticketHandlers.Conclude)
 			r.Post("/{id}/edit", ticketHandlers.Edit)
+			r.Delete("/{id}/queue", ticketHandlers.Dequeue)
 			r.Patch("/{id}/due-date", ticketHandlers.SetDueDate)
 			r.Delete("/{id}/due-date", ticketHandlers.ClearDueDate)
 		})

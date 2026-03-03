@@ -39,6 +39,7 @@ type TicketsConfig struct {
 // Config holds the architect configuration.
 type Config struct {
 	Name      string             `yaml:"name"`
+	Queue     bool               `yaml:"queue,omitempty"`
 	Repos     []string           `yaml:"repos,omitempty"`
 	Architect RoleConfig         `yaml:"architect"`
 	Work      RoleConfig         `yaml:"work"`

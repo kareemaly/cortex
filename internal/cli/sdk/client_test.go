@@ -522,11 +522,19 @@ func TestClearDueDate_Success(t *testing.T) {
 
 func TestSpawnSession_Success(t *testing.T) {
 	srv, rs := newRoutedServer(t)
-	rs.setRoute("POST", "/tickets/backlog/abc123/spawn", http.StatusCreated, SessionResponse{
-		Type:       "ticket",
-		TicketID:   "abc123",
-		Agent:      "claude-code",
-		TmuxWindow: "win-1",
+	rs.setRoute("POST", "/tickets/backlog/abc123/spawn", http.StatusCreated, map[string]interface{}{
+		"session": map[string]interface{}{
+			"type":        "ticket",
+			"ticket_id":   "abc123",
+			"agent":       "claude-code",
+			"tmux_window": "win-1",
+		},
+		"ticket": map[string]interface{}{
+			"id":     "abc123",
+			"type":   "work",
+			"title":  "Test",
+			"status": "progress",
+		},
 	})
 
 	c := NewClient(srv.URL, "/p")
@@ -534,8 +542,8 @@ func TestSpawnSession_Success(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.Agent != "claude-code" {
-		t.Errorf("expected agent claude-code, got %q", resp.Agent)
+	if resp.Session.Agent != "claude-code" {
+		t.Errorf("expected agent claude-code, got %q", resp.Session.Agent)
 	}
 }
 

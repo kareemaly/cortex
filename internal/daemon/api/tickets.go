@@ -13,6 +13,7 @@ import (
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
+	"github.com/kareemaly/cortex/internal/queue"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
@@ -57,24 +58,41 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		dueBefore = &parsed
 	}
 
-	// Load project config to get tmux session name for orphan detection.
-	tmuxSession := ""
 	projectCfg, _ := architectconfig.Load(projectPath)
-	tmuxSession = projectCfg.GetTmuxSessionName()
+	tmuxSession := projectCfg.GetTmuxSessionName()
 
-	resp := ListAllTicketsResponse{
-		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+	var queueStore *queue.Store
+	if h.deps.QueueManager != nil && projectCfg.Queue {
+		queueStore = h.deps.QueueManager.GetStore(projectPath)
 	}
 
-	// Sort by Created descending (most recent first)
+	resp := ListAllTicketsResponse{
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, queueStore),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, nil),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, nil),
+	}
+
 	sortByCreated := func(a, b TicketSummary) int {
 		return b.Created.Compare(a.Created)
 	}
-	slices.SortFunc(resp.Backlog, sortByCreated)
 	slices.SortFunc(resp.Progress, sortByCreated)
 	slices.SortFunc(resp.Done, sortByCreated)
+
+	sortBacklogWithQueue := func(a, b TicketSummary) int {
+		aQueued := a.QueuePosition != nil
+		bQueued := b.QueuePosition != nil
+		if aQueued && bQueued {
+			return *a.QueuePosition - *b.QueuePosition
+		}
+		if aQueued {
+			return -1
+		}
+		if bQueued {
+			return 1
+		}
+		return b.Created.Compare(a.Created)
+	}
+	slices.SortFunc(resp.Backlog, sortBacklogWithQueue)
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -114,19 +132,38 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 		dueBefore = &parsed
 	}
 
-	// Load project config to get tmux session name for orphan detection.
-	tmuxSession := ""
 	projectCfg, _ := architectconfig.Load(projectPath)
-	tmuxSession = projectCfg.GetTmuxSessionName()
+	tmuxSession := projectCfg.GetTmuxSessionName()
 
-	resp := ListTicketsResponse{
-		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+	var queueStore *queue.Store
+	if h.deps.QueueManager != nil && projectCfg.Queue && status == "backlog" {
+		queueStore = h.deps.QueueManager.GetStore(projectPath)
 	}
 
-	// Sort by Created descending (most recent first)
-	slices.SortFunc(resp.Tickets, func(a, b TicketSummary) int {
-		return b.Created.Compare(a.Created)
-	})
+	resp := ListTicketsResponse{
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, queueStore),
+	}
+
+	if status == "backlog" && queueStore != nil && queueStore.IsEnabled() {
+		slices.SortFunc(resp.Tickets, func(a, b TicketSummary) int {
+			aQueued := a.QueuePosition != nil
+			bQueued := b.QueuePosition != nil
+			if aQueued && bQueued {
+				return *a.QueuePosition - *b.QueuePosition
+			}
+			if aQueued {
+				return -1
+			}
+			if bQueued {
+				return 1
+			}
+			return b.Created.Compare(a.Created)
+		})
+	} else {
+		slices.SortFunc(resp.Tickets, func(a, b TicketSummary) int {
+			return b.Created.Compare(a.Created)
+		})
+	}
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -360,7 +397,13 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch the updated ticket
+	if req.To == "done" && h.deps.QueueManager != nil {
+		queueStore := h.deps.QueueManager.GetStore(projectPath)
+		if queueStore.IsEnabled() {
+			_ = queueStore.RemoveFromAllQueues(id)
+		}
+	}
+
 	t, newStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
@@ -463,8 +506,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify ticket exists at expected status (HTTP-specific URL validation)
-	_, actualStatus, err := store.Get(id)
+	t, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -474,13 +516,52 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check tmux is available
 	if h.deps.TmuxManager == nil {
 		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
 		return
 	}
 
-	// Delegate to shared orchestration
+	projectCfg, _ := architectconfig.Load(projectPath)
+	if projectCfg.Queue && t.Type == "work" && t.Repo != "" && h.deps.QueueManager != nil {
+		sessionStore := h.deps.SessionManager.GetStore(projectPath)
+		sessions, _ := sessionStore.List()
+		hasActiveSessionInSameRepo := false
+		for _, sess := range sessions {
+			if sess.Type == "ticket" {
+				sessTicket, _, serr := store.Get(sess.TicketID)
+				if serr == nil && sessTicket.Type == "work" && sessTicket.Repo == t.Repo {
+					hasActiveSessionInSameRepo = true
+					break
+				}
+			}
+		}
+
+		if hasActiveSessionInSameRepo {
+			queueStore := h.deps.QueueManager.GetStore(projectPath)
+			if err := queueStore.SetEnabled(true); err != nil {
+				writeError(w, http.StatusInternalServerError, "queue_error", err.Error())
+				return
+			}
+			if err := queueStore.Enqueue(t.Repo, id); err != nil {
+				writeError(w, http.StatusInternalServerError, "queue_error", err.Error())
+				return
+			}
+			position := queueStore.Position(t.Repo, id)
+			h.deps.Bus.Emit(events.Event{
+				Type:          events.TicketQueued,
+				ArchitectPath: projectPath,
+				TicketID:      id,
+			})
+			resp := SpawnResponse{
+				Queued:   true,
+				Position: position,
+				Ticket:   types.ToTicketResponse(t, actualStatus),
+			}
+			writeJSON(w, http.StatusAccepted, resp)
+			return
+		}
+	}
+
 	sessionStore := h.deps.SessionManager.GetStore(projectPath)
 	result, err := spawn.Orchestrate(r.Context(), spawn.OrchestrateRequest{
 		TicketID:      id,
@@ -514,7 +595,6 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Already active: focus window and return existing session
 	if result.Outcome == spawn.OutcomeAlreadyActive {
 		if result.StateInfo.Session != nil {
 			if err := h.deps.TmuxManager.FocusWindow(result.TmuxSession, result.StateInfo.Session.TmuxWindow); err != nil {
@@ -532,7 +612,6 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Spawned or resumed: look up session from session store
 	sess, _ := sessionStore.GetByTicketID(id)
 	resp := SpawnResponse{
 		Ticket: types.ToTicketResponse(result.Ticket, result.TicketStatus),
@@ -757,5 +836,50 @@ func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ExecuteActionResponse{
 		Success: true,
 		Message: "Editor opened",
+	})
+}
+
+func (h *TicketHandlers) Dequeue(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetArchitectPath(r.Context())
+	id := chi.URLParam(r, "id")
+
+	if h.deps.QueueManager == nil {
+		writeError(w, http.StatusNotFound, "queue_not_enabled", "queue mode is not enabled")
+		return
+	}
+
+	queueStore := h.deps.QueueManager.GetStore(projectPath)
+	if !queueStore.IsEnabled() {
+		writeError(w, http.StatusNotFound, "queue_not_enabled", "queue mode is not enabled")
+		return
+	}
+
+	repo := queueStore.GetTicketRepo(id)
+	if repo == "" {
+		writeError(w, http.StatusNotFound, "not_queued", "ticket is not in queue")
+		return
+	}
+
+	position := queueStore.Position(repo, id)
+	if position == 0 {
+		writeError(w, http.StatusNotFound, "not_queued", "ticket is not in queue")
+		return
+	}
+
+	if err := queueStore.Remove(repo, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "queue_error", err.Error())
+		return
+	}
+
+	h.deps.Bus.Emit(events.Event{
+		Type:          events.TicketDequeued,
+		ArchitectPath: projectPath,
+		TicketID:      id,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"ticket_id": id,
+		"message":   "ticket removed from queue",
 	})
 }

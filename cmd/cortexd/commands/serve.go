@@ -84,26 +84,28 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create session manager and conclusion store manager
 	sessionManager := api.NewSessionManager(logger)
 	conclusionStoreManager := api.NewConclusionStoreManager(logger, bus)
+	queueManager := api.NewQueueManager(logger)
 
-	// Get home directory for MCP config path
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	// Build dependencies
 	deps := &api.Dependencies{
 		StoreManager:           storeManager,
 		ConclusionStoreManager: conclusionStoreManager,
 		SessionManager:         sessionManager,
+		QueueManager:           queueManager,
 		TmuxManager:            tmuxManager,
 		Bus:                    bus,
 		Logger:                 logger,
 		DefaultsDir:            filepath.Join(homeDir, ".cortex", "defaults", "main"),
 	}
+
+	queueWorker := api.NewQueueWorker(deps)
+	queueWorker.Start(ctx)
 
 	// Create and run server
 	server := api.NewServer(cfg.Port, cfg.BindAddress, logger, deps)

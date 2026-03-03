@@ -12,9 +12,10 @@ type Dependencies struct {
 	StoreManager           *StoreManager
 	ConclusionStoreManager *ConclusionStoreManager
 	SessionManager         *SessionManager
+	QueueManager           *QueueManager
 	TmuxManager            *tmux.Manager
 	Bus                    *events.Bus
 	Logger                 *slog.Logger
-	CortexdPath            string // Optional: path to cortexd binary for spawn operations
-	DefaultsDir            string // Path to default prompts (e.g., ~/.cortex/defaults/main)
+	CortexdPath            string
+	DefaultsDir            string
 }

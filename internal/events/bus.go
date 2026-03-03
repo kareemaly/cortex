@@ -17,6 +17,8 @@ const (
 	SessionEnded      EventType = "session_ended"
 	SessionStatus     EventType = "session_status"
 	ConclusionCreated EventType = "conclusion_created"
+	TicketQueued      EventType = "ticket_queued"
+	TicketDequeued    EventType = "ticket_dequeued"
 )
 
 // Event represents a change in the system.
@@ -50,12 +52,23 @@ func (b *Bus) Emit(e Event) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	subs, ok := b.subscribers[e.ArchitectPath]
-	if !ok {
-		return
+	allSubs := make(map[*subscriber]struct{})
+
+	if subs, ok := b.subscribers[e.ArchitectPath]; ok {
+		for sub := range subs {
+			allSubs[sub] = struct{}{}
+		}
 	}
 
-	for sub := range subs {
+	if e.ArchitectPath != "" {
+		if subs, ok := b.subscribers[""]; ok {
+			for sub := range subs {
+				allSubs[sub] = struct{}{}
+			}
+		}
+	}
+
+	for sub := range allSubs {
 		select {
 		case sub.ch <- e:
 		default:

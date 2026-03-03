@@ -95,9 +95,11 @@ var (
 	overdueStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196")) // red
 
-	// Orphaned session style (warning color).
 	orphanedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")) // yellow/orange
+
+	queuePositionStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("99")) // purple/violet
 )
 
 // selectedFgColor is the default foreground color for selected card text.
@@ -134,12 +136,15 @@ func typeBadgeColorCode(ticketType string) string {
 	return typeBadgePalette[sum%len(typeBadgePalette)]
 }
 
-// dueDateColorCode returns the 256-color code for a due date indicator.
 func dueDateColorCode(overdue bool) string {
 	if overdue {
 		return "196"
 	}
 	return "214"
+}
+
+func queuePositionColorCode() string {
+	return "99"
 }
 
 // columnHeaderStyle returns the appropriate header style for a status.

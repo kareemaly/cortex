@@ -66,18 +66,25 @@ type TicketsErrorMsg struct {
 	Err error
 }
 
-// SessionSpawnedMsg is sent when a session is successfully spawned.
 type SessionSpawnedMsg struct {
-	Session *sdk.SessionResponse
-	Ticket  *sdk.TicketSummary
+	Session  *sdk.SessionResponse
+	Ticket   *sdk.TicketSummary
+	Queued   bool
+	Position int
 }
 
-// SessionErrorMsg is sent when spawning a session fails.
 type SessionErrorMsg struct {
 	Err error
 }
 
-// ClearStatusMsg is sent to clear the status message after a delay.
+type DequeueMsg struct {
+	Ticket *sdk.TicketSummary
+}
+
+type DequeueErrorMsg struct {
+	Err error
+}
+
 type ClearStatusMsg struct{}
 
 // OrphanedSessionMsg is sent when spawn encounters an orphaned session.
@@ -196,15 +203,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case SessionSpawnedMsg:
-		m.statusMsg = fmt.Sprintf("Session spawned for: %s", msg.Ticket.Title)
-		m.statusIsError = false
-		m.logBuf.Infof("spawn", "session spawned for: %s", msg.Ticket.Title)
+		if msg.Queued {
+			m.statusMsg = fmt.Sprintf("Queued #%d: %s", msg.Position, msg.Ticket.Title)
+			m.statusIsError = false
+			m.logBuf.Infof("queue", "ticket queued #%d: %s", msg.Position, msg.Ticket.Title)
+		} else {
+			m.statusMsg = fmt.Sprintf("Session spawned for: %s", msg.Ticket.Title)
+			m.statusIsError = false
+			m.logBuf.Infof("spawn", "session spawned for: %s", msg.Ticket.Title)
+		}
 		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
 
 	case SessionErrorMsg:
 		m.statusMsg = fmt.Sprintf("Error: %s", msg.Err)
 		m.statusIsError = true
 		m.logBuf.Errorf("spawn", "spawn failed: %s", msg.Err)
+		return m, m.clearStatusAfterDelay()
+
+	case DequeueMsg:
+		m.statusMsg = fmt.Sprintf("Dequeued: %s", msg.Ticket.Title)
+		m.statusIsError = false
+		m.logBuf.Infof("queue", "dequeued: %s", msg.Ticket.Title)
+		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
+
+	case DequeueErrorMsg:
+		m.statusMsg = fmt.Sprintf("Dequeue error: %s", msg.Err)
+		m.statusIsError = true
+		m.logBuf.Errorf("queue", "dequeue failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
 	case OrphanedSessionMsg:
@@ -407,6 +432,17 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("Spawning session for: %s...", t.Title)
 			m.statusIsError = false
 			return m, m.spawnSession(t)
+		}
+		return m, nil
+	}
+
+	// Dequeue ticket.
+	if isKey(msg, KeyDequeue) {
+		t := m.columns[m.activeColumn].SelectedTicket()
+		if t != nil && t.QueuePosition != nil {
+			m.statusMsg = fmt.Sprintf("Dequeuing: %s...", t.Title)
+			m.statusIsError = false
+			return m, m.dequeueTicket(t)
 		}
 		return m, nil
 	}
@@ -643,32 +679,38 @@ func (m Model) startPollTicker() tea.Cmd {
 	})
 }
 
-// spawnSession returns a command to spawn a session for a ticket.
 func (m Model) spawnSession(ticket *sdk.TicketSummary) tea.Cmd {
 	return func() tea.Msg {
-		session, err := m.client.SpawnSession(ticket.Status, ticket.ID, "normal")
+		result, err := m.client.SpawnSession(ticket.Status, ticket.ID, "normal")
 		if err != nil {
 			if apiErr, ok := err.(*sdk.APIError); ok && apiErr.IsOrphanedSession() {
 				return OrphanedSessionMsg{Ticket: ticket}
 			}
 			return SessionErrorMsg{Err: err}
 		}
-		return SessionSpawnedMsg{Session: session, Ticket: ticket}
+		return SessionSpawnedMsg{Session: result.Session, Ticket: ticket, Queued: result.Queued, Position: result.Position}
 	}
 }
 
-// spawnSessionWithMode returns a command to spawn a session with a specific mode.
 func (m Model) spawnSessionWithMode(ticket *sdk.TicketSummary, mode string) tea.Cmd {
 	return func() tea.Msg {
-		session, err := m.client.SpawnSession(ticket.Status, ticket.ID, mode)
+		result, err := m.client.SpawnSession(ticket.Status, ticket.ID, mode)
 		if err != nil {
 			return SessionErrorMsg{Err: err}
 		}
-		return SessionSpawnedMsg{Session: session, Ticket: ticket}
+		return SessionSpawnedMsg{Session: result.Session, Ticket: ticket, Queued: result.Queued, Position: result.Position}
 	}
 }
 
-// focusTicket returns a command to focus the tmux window for a ticket.
+func (m Model) dequeueTicket(ticket *sdk.TicketSummary) tea.Cmd {
+	return func() tea.Msg {
+		if err := m.client.Dequeue(ticket.ID); err != nil {
+			return DequeueErrorMsg{Err: err}
+		}
+		return DequeueMsg{Ticket: ticket}
+	}
+}
+
 func (m Model) focusTicket(ticket *sdk.TicketSummary) tea.Cmd {
 	return func() tea.Msg {
 		if err := m.client.FocusTicket(ticket.ID); err != nil {

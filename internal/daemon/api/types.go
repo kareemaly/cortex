@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kareemaly/cortex/internal/queue"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
@@ -63,8 +64,10 @@ type SetDueDateRequest struct {
 
 // SpawnResponse is the response for the spawn endpoint.
 type SpawnResponse struct {
-	Session SessionResponse `json:"session"`
-	Ticket  TicketResponse  `json:"ticket"`
+	Session  SessionResponse `json:"session,omitempty"`
+	Ticket   TicketResponse  `json:"ticket"`
+	Queued   bool            `json:"queued,omitempty"`
+	Position int             `json:"position,omitempty"`
 }
 
 // ConcludeSessionRequest is the request body for concluding a session.
@@ -113,36 +116,40 @@ type CreateConclusionRequest struct {
 
 // filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
 // Looks up session from session manager for each ticket.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string) []TicketSummary {
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string, queueStore *queue.Store) []TicketSummary {
 	var summaries []TicketSummary
 
-	// Get the session store for this project
 	var sessStore *session.Store
 	if sessionMgr != nil {
 		sessStore = sessionMgr.GetStore(projectPath)
 	}
 
 	for _, t := range tickets {
-		// Apply query filter if specified
 		if query != "" &&
 			!strings.Contains(strings.ToLower(t.Title), query) &&
 			!strings.Contains(strings.ToLower(t.Body), query) {
 			continue
 		}
-		// Apply dueBefore filter if specified
 		if dueBefore != nil {
 			if t.Due == nil || !t.Due.Before(*dueBefore) {
 				continue
 			}
 		}
 
-		// Look up session for this ticket
 		var sess *session.Session
 		if sessStore != nil {
 			sess, _ = sessStore.GetByTicketID(t.ID)
 		}
 
 		summary := types.ToTicketSummary(t, status, sess, tmuxSession, checker)
+
+		if queueStore != nil && queueStore.IsEnabled() && status == ticket.StatusBacklog && t.Type == "work" && t.Repo != "" {
+			pos := queueStore.Position(t.Repo, t.ID)
+			if pos > 0 {
+				summary.QueuePosition = &pos
+			}
+		}
+
 		summaries = append(summaries, summary)
 	}
 	if summaries == nil {

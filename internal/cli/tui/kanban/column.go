@@ -116,7 +116,17 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 	for i, t := range c.tickets {
 		isSelected := i == c.cursor && isActive
 
-		// Build type badge
+		var queueIndicator string
+		if c.status == "backlog" && t.QueuePosition != nil {
+			if isSelected {
+				queueIndicator = inlineFgColorChange(queuePositionColorCode()) +
+					fmt.Sprintf("[#%d] ", *t.QueuePosition) +
+					inlineFgColorChange(selectedFgColor)
+			} else {
+				queueIndicator = queuePositionStyle.Render(fmt.Sprintf("[#%d] ", *t.QueuePosition))
+			}
+		}
+
 		typeBadge := ""
 		if t.Type != "" {
 			if isSelected {
@@ -152,17 +162,17 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 			}
 		}
 
-		// Word wrap title (account for badge width in first line)
-		badgeWidth := len(typeBadge)
-		if badgeWidth > 0 {
-			// Badge uses ANSI escape codes, so calculate actual visible width
-			badgeWidth = len("[" + t.Type + "] ")
+		badgeWidth := 0
+		if t.QueuePosition != nil && c.status == "backlog" {
+			badgeWidth += len(fmt.Sprintf("[#%d] ", *t.QueuePosition))
+		}
+		if t.Type != "" {
+			badgeWidth += len("[" + t.Type + "] ")
 		}
 		wrappedTitle := wrapText(t.Title, titleWidth-badgeWidth)
-		if typeBadge != "" && len(wrappedTitle) > 0 {
-			wrappedTitle[0] = typeBadge + wrappedTitle[0]
+		if len(wrappedTitle) > 0 {
+			wrappedTitle[0] = queueIndicator + typeBadge + wrappedTitle[0]
 		}
-		// Append due date indicator to first line
 		if dueDateIndicator != "" && len(wrappedTitle) > 0 {
 			wrappedTitle[0] = wrappedTitle[0] + dueDateIndicator
 		}
