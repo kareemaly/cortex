@@ -44,7 +44,7 @@ func (s *Server) registerArchitectTools() {
 	// Update ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
-		Description: "Update ticket title, body, and/or references",
+		Description: "Update ticket fields. Only accepts: id (required), title, body, references. Does NOT support updating type, repo, path, status, due_date, or any other fields.",
 	}, s.handleUpdateTicket)
 
 	// Delete ticket
