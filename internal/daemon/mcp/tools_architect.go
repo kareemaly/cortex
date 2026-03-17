@@ -92,7 +92,7 @@ func (s *Server) registerArchitectTools() {
 	// Conclude architect session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
-		Description: "Conclude the architect session and clean up",
+		Description: "Conclude the architect session and clean up. Include tickets touched, key user requests, decisions, blockers, and next steps.",
 	}, s.handleArchitectConcludeSession)
 
 	// Spawn collab session
@@ -182,6 +182,9 @@ func (s *Server) handleCreateWorkTicket(
 	req *mcp.CallToolRequest,
 	input CreateWorkTicketInput,
 ) (*mcp.CallToolResult, CreateTicketOutput, error) {
+	if input.Title == "" {
+		return nil, CreateTicketOutput{}, NewValidationError("title", "is required")
+	}
 	if input.Repo == "" {
 		return nil, CreateTicketOutput{}, NewValidationError("repo", "is required for work tickets")
 	}
@@ -212,6 +215,9 @@ func (s *Server) handleCreateResearchTicket(
 	req *mcp.CallToolRequest,
 	input CreateResearchTicketInput,
 ) (*mcp.CallToolResult, CreateTicketOutput, error) {
+	if input.Title == "" {
+		return nil, CreateTicketOutput{}, NewValidationError("title", "is required")
+	}
 	if input.Path == "" {
 		return nil, CreateTicketOutput{}, NewValidationError("path", "is required for research tickets")
 	}

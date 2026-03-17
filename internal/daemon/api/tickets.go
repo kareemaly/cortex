@@ -189,6 +189,11 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Title == "" {
+		writeError(w, http.StatusBadRequest, "missing_title", "title is required")
+		return
+	}
+
 	// Parse due date if provided (RFC3339 format)
 	var dueDate *time.Time
 	if req.DueDate != nil && *req.DueDate != "" {

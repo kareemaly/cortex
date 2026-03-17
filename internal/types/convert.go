@@ -50,6 +50,8 @@ func ToTicketSummary(t *ticket.Ticket, status ticket.Status, sess *session.Sessi
 		ID:               t.ID,
 		Type:             t.Type,
 		Title:            t.Title,
+		Repo:             t.Repo,
+		Path:             t.Path,
 		Status:           string(status),
 		Created:          t.Created,
 		Updated:          t.Updated,

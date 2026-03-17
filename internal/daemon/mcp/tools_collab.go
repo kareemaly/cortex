@@ -11,7 +11,7 @@ import (
 func (s *Server) registerCollabTools() {
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
-		Description: "Conclude the collab session and create a conclusion record.",
+		Description: "Conclude the collab session and create a conclusion record. Include the outcome, files changed, commit SHA if any, and follow-up work or blockers.",
 	}, s.handleCollabConcludeSession)
 }
 

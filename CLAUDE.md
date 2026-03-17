@@ -146,7 +146,7 @@ Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/s
 
 ## MCP Tools
 
-Defined in `internal/daemon/mcp/`. Two session types with different tool access:
+Defined in `internal/daemon/mcp/`. Three session types with different tool access:
 
 **Architect** (`tools_architect.go`):
 
@@ -155,22 +155,30 @@ Defined in `internal/daemon/mcp/`. Two session types with different tool access:
 | `listTickets` | List tickets by status (backlog/progress/done), optional search query |
 | `readTicket` | Read full ticket details by ID |
 | `createWorkTicket` | Create a work ticket with title, body, required repo, optional due_date and references |
-| `createResearchTicket` | Create a research ticket with title, body, optional due_date and references (no repo) |
+| `createResearchTicket` | Create a research ticket with title, body, required path, optional due_date and references |
 | `updateTicket` | Update ticket title, body, and/or references |
 | `deleteTicket` | Delete ticket by ID |
 | `moveTicket` | Move ticket to different status |
 | `updateDueDate` | Set or update ticket due date |
 | `clearDueDate` | Remove due date from ticket |
 | `spawnSession` | Spawn agent session for ticket (modes: normal, resume, fresh) |
-| `listSessions` | List persistent conclusions (session records) |
-| `readSession` | Read a conclusion by ID |
+| `spawnCollabSession` | Spawn a ticketless collab session in a repo with a kickoff prompt |
+| `listConclusions` | List persistent conclusion records (session records metadata) |
+| `readConclusion` | Read a conclusion record by ID |
 | `concludeSession` | Conclude the architect session and clean up |
 
 **Ticket Agent** (`tools_ticket.go`):
 
 | Tool | Description |
 |------|-------------|
+| `readTicket` | Read full ticket details by ID, typically for referenced ticket context |
 | `concludeSession` | Complete work, create conclusion record, move ticket to done |
+
+**Collab Session** (`tools_collab.go`):
+
+| Tool | Description |
+|------|-------------|
+| `concludeSession` | Conclude the collab session and create a conclusion record |
 
 ## Agent Workflow
 

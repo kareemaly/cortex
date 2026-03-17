@@ -115,7 +115,7 @@ type ClearDueDateInput struct {
 
 // ConcludeSessionInput is the input for the concludeSession tool.
 type ConcludeSessionInput struct {
-	Content string `json:"content" jsonschema:"Complete summary of work done, decisions made, and files changed"`
+	Content string `json:"content" jsonschema:"Session conclusion summary. For architect sessions, include tickets touched, key user requests, decisions, blockers, and next steps. For ticket or collab sessions, include outcome, files changed, commit SHA if any, and follow-up work or blockers."`
 }
 
 // MCP-specific output types (structurally different from shared types)
@@ -197,7 +197,6 @@ type MoveTicketOutput struct {
 type SpawnSessionOutput struct {
 	Success    bool   `json:"success"`
 	TicketID   string `json:"ticket_id,omitempty"`
-	SessionID  string `json:"session_id,omitempty"`
 	TmuxWindow string `json:"tmux_window,omitempty"`
 	State      string `json:"state,omitempty"`
 	Message    string `json:"message,omitempty"`

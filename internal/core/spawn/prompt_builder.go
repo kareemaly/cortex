@@ -43,10 +43,23 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 
 	resolver := prompt.NewPromptResolver(req.ArchitectPath, s.deps.DefaultsDir)
 
-	systemPromptContent, _ := resolver.ResolveTicketPrompt(ticketType, prompt.StageSystem)
+	s.logWarn("buildTicketAgentPrompt: resolving prompts",
+		"ticketType", ticketType,
+		"architectPath", req.ArchitectPath,
+		"defaultsDir", s.deps.DefaultsDir)
+
+	systemPromptContent, systemErr := resolver.ResolveTicketPrompt(ticketType, prompt.StageSystem)
+	s.logWarn("buildTicketAgentPrompt: system prompt resolved",
+		"systemPromptLen", len(systemPromptContent),
+		"systemErr", systemErr)
 
 	kickoffTemplate, err := resolver.ResolveTicketPrompt(ticketType, prompt.StageKickoff)
+	s.logWarn("buildTicketAgentPrompt: kickoff template resolved",
+		"kickoffTemplateLen", len(kickoffTemplate),
+		"err", err)
+
 	if err != nil {
+		s.logWarn("buildTicketAgentPrompt: using fallback prompt due to error", "err", err)
 		promptText := fmt.Sprintf("# Ticket: %s\n\n%s", req.Ticket.Title, req.Ticket.Body)
 		return &promptInfo{
 			PromptText:          promptText,

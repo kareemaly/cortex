@@ -42,6 +42,8 @@ type TicketSummary struct {
 	ID               string     `json:"id"`
 	Type             string     `json:"type"`
 	Title            string     `json:"title"`
+	Repo             string     `json:"repo,omitempty"`
+	Path             string     `json:"path,omitempty"`
 	Status           string     `json:"status"`
 	Created          time.Time  `json:"created"`
 	Updated          time.Time  `json:"updated"`
