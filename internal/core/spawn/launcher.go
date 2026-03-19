@@ -108,7 +108,7 @@ func buildClaudeCommand(params LauncherParams) string {
 
 	// Add prompt via $(cat file)
 	if params.PromptFilePath != "" {
-		parts = append(parts, fmt.Sprintf("\"$(cat %s)\"", shellQuote(params.PromptFilePath)))
+		parts = append(parts, fmt.Sprintf("\"$(cat %s)\"", params.PromptFilePath))
 	}
 
 	// Add system prompt via $(cat file)
@@ -117,7 +117,7 @@ func buildClaudeCommand(params LauncherParams) string {
 		if params.ReplaceSystemPrompt {
 			flag = "--system-prompt"
 		}
-		parts = append(parts, flag, fmt.Sprintf("\"$(cat %s)\"", shellQuote(params.SystemPromptFilePath)))
+		parts = append(parts, flag, fmt.Sprintf("\"$(cat %s)\"", params.SystemPromptFilePath))
 	}
 
 	// Add MCP config
@@ -160,7 +160,7 @@ func buildOpenCodeCommand(params LauncherParams) string {
 
 	// Add prompt via $(cat file)
 	if params.PromptFilePath != "" {
-		parts = append(parts, "--prompt", fmt.Sprintf("\"$(cat %s)\"", shellQuote(params.PromptFilePath)))
+		parts = append(parts, "--prompt", fmt.Sprintf("\"$(cat %s)\"", params.PromptFilePath))
 	}
 
 	// Add extra agent args
