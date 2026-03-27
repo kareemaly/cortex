@@ -2,7 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,7 +19,7 @@ import (
 
 // SpawnCollabRequest is the request body for spawning a collab session.
 type SpawnCollabRequest struct {
-	Repo    string `json:"repo"`
+	Path    string `json:"path"`
 	Prompt  string `json:"prompt"`
 	Mode    string `json:"mode,omitempty"`
 	Variant string `json:"variant,omitempty"`
@@ -41,8 +45,8 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Repo == "" {
-		writeError(w, http.StatusBadRequest, "validation_error", "repo cannot be empty")
+	if req.Path == "" {
+		writeError(w, http.StatusBadRequest, "validation_error", "path cannot be empty")
 		return
 	}
 	if req.Prompt == "" {
@@ -50,16 +54,22 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate path exists
+	expandedPath := req.Path
+	if strings.HasPrefix(expandedPath, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			expandedPath = filepath.Join(home, expandedPath[2:])
+		}
+	}
+	if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
+		writeError(w, http.StatusBadRequest, "validation_error", fmt.Sprintf("path %q does not exist", req.Path))
+		return
+	}
+
 	// Load project config
 	projectCfg, err := architectconfig.Load(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
-		return
-	}
-
-	// Validate repo
-	if err := projectCfg.ValidateRepo(req.Repo); err != nil {
-		writeError(w, http.StatusBadRequest, "validation_error", err.Error())
 		return
 	}
 
@@ -74,7 +84,14 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	// Resolve variant — required
 	variantName := req.Variant
 	if variantName == "" {
-		writeError(w, http.StatusBadRequest, "variant_required", "variant is required — set 'variant' in the request body (see GET /config/variants for available names)")
+		names := projectCfg.VariantNames()
+		var msg string
+		if len(names) > 0 {
+			msg = fmt.Sprintf("--variant is required, choose one of: %s", strings.Join(names, ", "))
+		} else {
+			msg = "--variant is required — add an 'agents' map to cortex.yaml first"
+		}
+		writeError(w, http.StatusBadRequest, "variant_required", msg)
 		return
 	}
 	av, avErr := projectCfg.ResolveVariant(variantName)
@@ -106,7 +123,7 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	result, err := spawner.SpawnCollab(r.Context(), spawn.CollabSpawnRequest{
 		CollabID:      collabID,
-		Repo:          req.Repo,
+		Repo:          expandedPath,
 		Prompt:        req.Prompt,
 		ArchitectPath: projectPath,
 		TmuxSession:   sessionName,

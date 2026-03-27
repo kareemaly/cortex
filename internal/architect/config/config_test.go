@@ -438,23 +438,3 @@ func TestGetTmuxSessionName(t *testing.T) {
 		})
 	}
 }
-
-func TestLoad_WithResearchPaths(t *testing.T) {
-	projectRoot := setupTestProject(t)
-	writeConfig(t, projectRoot, `
-name: test
-research:
-  paths:
-    - ~/projects/**
-    - /opt/code/**
-`)
-
-	cfg, err := Load(projectRoot)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(cfg.Research.Paths) != 2 {
-		t.Fatalf("expected 2 research paths, got %d", len(cfg.Research.Paths))
-	}
-}

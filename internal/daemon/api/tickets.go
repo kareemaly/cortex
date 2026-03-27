@@ -183,9 +183,9 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	if ticketType == "" {
 		ticketType = "work"
 	}
-	if ticketType != "work" && ticketType != "research" {
+	if ticketType != "work" {
 		writeError(w, http.StatusBadRequest, "invalid_type",
-			fmt.Sprintf("invalid ticket type %q, valid types: work, research", ticketType))
+			fmt.Sprintf("invalid ticket type %q, valid types: work", ticketType))
 		return
 	}
 
@@ -216,15 +216,6 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := projectCfg.ValidateRepo(req.Repo); err != nil {
 				writeError(w, http.StatusBadRequest, "invalid_repo", err.Error())
-				return
-			}
-		case "research":
-			if req.Path == "" {
-				writeError(w, http.StatusBadRequest, "missing_path", "path is required for research tickets")
-				return
-			}
-			if err := projectCfg.ValidateResearchPath(req.Path); err != nil {
-				writeError(w, http.StatusBadRequest, "invalid_path", err.Error())
 				return
 			}
 		}
@@ -531,7 +522,14 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve variant — required
 	if variantName == "" {
-		writeError(w, http.StatusBadRequest, "variant_required", "variant is required — pass ?variant=<name> (see GET /config/variants for available names)")
+		names := projectCfg.VariantNames()
+		var msg string
+		if len(names) > 0 {
+			msg = fmt.Sprintf("--variant is required, choose one of: %s", strings.Join(names, ", "))
+		} else {
+			msg = "--variant is required — add an 'agents' map to cortex.yaml first"
+		}
+		writeError(w, http.StatusBadRequest, "variant_required", msg)
 		return
 	}
 	av, avErr := projectCfg.ResolveVariant(variantName)

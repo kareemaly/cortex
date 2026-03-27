@@ -26,8 +26,8 @@ type Session struct {
 
 // SpawnCollabSessionInput is the input for the spawnCollabSession tool.
 type SpawnCollabSessionInput struct {
-	Repo    string `json:"repo" jsonschema:"Repository path where the collab agent will spawn (required). Must be from the configured repos list in cortex.yaml."`
-	Prompt  string `json:"prompt" jsonschema:"Brief question or topic to discuss. Keep it minimal — the collab agent starts in the repo with its own AGENTS.md/CLAUDE.md context."`
+	Path    string `json:"path" jsonschema:"Any valid filesystem path where the collab agent will spawn (required). The path must exist on disk."`
+	Prompt  string `json:"prompt" jsonschema:"Brief question or topic to discuss. Keep it minimal — the collab agent starts in the directory with its own AGENTS.md/CLAUDE.md context."`
 	Variant string `json:"variant" jsonschema:"Agent variant name from the agents map in cortex.yaml (required). Use listVariants to see available names."`
 }
 
@@ -65,15 +65,6 @@ type CreateWorkTicketInput struct {
 	Title      string   `json:"title" jsonschema:"The ticket title (required)"`
 	Body       string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
 	Repo       string   `json:"repo" jsonschema:"Repository path for this ticket (required). Must be from the configured repos list in cortex.yaml."`
-	DueDate    string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
-	References []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
-}
-
-// CreateResearchTicketInput is the input for the createResearchTicket tool.
-type CreateResearchTicketInput struct {
-	Title      string   `json:"title" jsonschema:"The ticket title (required)"`
-	Body       string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Path       string   `json:"path" jsonschema:"Directory path where the research agent will spawn (required). Must match a configured repo or research.paths glob in cortex.yaml."`
 	DueDate    string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
 	References []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
 }

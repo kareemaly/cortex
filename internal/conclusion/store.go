@@ -33,7 +33,7 @@ func (s *Store) Create(conclusionType string, ticketID, repo, body string, start
 	}
 
 	ct := ConclusionType(conclusionType)
-	if ct != TypeArchitect && ct != TypeWork && ct != TypeResearch && ct != TypeCollab {
+	if ct != TypeArchitect && ct != TypeWork && ct != TypeCollab {
 		ct = TypeWork
 	}
 

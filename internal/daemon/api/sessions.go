@@ -195,7 +195,7 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 
 	// Check tmux manager is available
 	if h.deps.TmuxManager == nil {
-		writeError(w, http.StatusInternalServerError, "tmux_unavailable", "tmux is not available")
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
 		return
 	}
 

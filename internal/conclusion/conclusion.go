@@ -12,7 +12,6 @@ type ConclusionType string
 const (
 	TypeArchitect ConclusionType = "architect"
 	TypeWork      ConclusionType = "work"
-	TypeResearch  ConclusionType = "research"
 	TypeCollab    ConclusionType = "collab"
 )
 

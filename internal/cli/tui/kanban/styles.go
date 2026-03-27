@@ -119,7 +119,6 @@ var typeBadgePalette = []string{"196", "39", "35", "214", "141", "208", "49", "2
 // Known type colors — matches sessions tab colors.
 var knownTypeColors = map[string]string{
 	"work":      "82",  // green
-	"research":  "39",  // cyan
 	"architect": "141", // purple
 	"collab":    "214", // amber
 }

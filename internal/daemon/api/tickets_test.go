@@ -460,8 +460,8 @@ func TestCreate_WithDueDate(t *testing.T) {
 	body := map[string]any{
 		"title":    "Due Date Ticket",
 		"body":     "body",
-		"type":     "research",
-		"path":     ts.projectRoot,
+		"type":     "work",
+		"repo":     ts.projectRoot,
 		"due_date": "2025-12-01T00:00:00Z",
 	}
 

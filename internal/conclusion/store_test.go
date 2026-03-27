@@ -55,17 +55,12 @@ func TestList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = store.Create("research", "t2", "", "Second", time.Time{}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	list, err := store.List()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 2 {
-		t.Errorf("expected 2 conclusions, got %d", len(list))
+	if len(list) != 1 {
+		t.Errorf("expected 1 conclusion, got %d", len(list))
 	}
 }
 
@@ -106,11 +101,6 @@ func TestListWithOptions_TypeFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = store.Create("research", "t2", "", "Research conclusion", time.Time{}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	workList, total, err := store.ListWithOptions(ListOptions{Type: "work"})
 	if err != nil {
 		t.Fatal(err)
@@ -123,20 +113,6 @@ func TestListWithOptions_TypeFilter(t *testing.T) {
 	}
 	if workList[0].Type != TypeWork {
 		t.Errorf("expected type work, got %s", workList[0].Type)
-	}
-
-	researchList, total, err := store.ListWithOptions(ListOptions{Type: "research"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 1 {
-		t.Errorf("expected total 1, got %d", total)
-	}
-	if len(researchList) != 1 {
-		t.Fatalf("expected 1 research conclusion, got %d", len(researchList))
-	}
-	if researchList[0].Type != TypeResearch {
-		t.Errorf("expected type research, got %s", researchList[0].Type)
 	}
 }
 

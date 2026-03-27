@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
@@ -96,7 +98,14 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve variant — required
 	if variantName == "" {
-		writeError(w, http.StatusBadRequest, "variant_required", "variant is required — pass ?variant=<name> (see GET /config/variants for available names)")
+		names := projectCfg.VariantNames()
+		var msg string
+		if len(names) > 0 {
+			msg = fmt.Sprintf("--variant is required, choose one of: %s", strings.Join(names, ", "))
+		} else {
+			msg = "--variant is required — add an 'agents' map to cortex.yaml first"
+		}
+		writeError(w, http.StatusBadRequest, "variant_required", msg)
 		return
 	}
 	av, err := projectCfg.ResolveVariant(variantName)
@@ -156,7 +165,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		case "normal":
 			// Return 409 — client should choose fresh or resume
 			writeError(w, http.StatusConflict, "session_orphaned",
-				"architect session was orphaned (tmux window closed). Use mode=fresh to start over or mode=resume to continue")
+				"session orphaned — use --mode=resume to continue or --mode=fresh to restart")
 			return
 		case "fresh":
 			// End old session, then spawn new
@@ -185,7 +194,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	case spawn.StateNormal:
 		if mode != "normal" && mode != "" {
 			writeError(w, http.StatusBadRequest, "invalid_mode",
-				"cannot use mode '"+mode+"' when no existing architect session exists")
+				"no existing session — --mode="+mode+" requires an active or orphaned session")
 			return
 		}
 		// Fall through to spawn below

@@ -84,7 +84,6 @@ var (
 
 var (
 	architectColor = lipgloss.Color("141")
-	researchColor  = lipgloss.Color("39")
 	workColor      = lipgloss.Color("82")
 	collabColor    = lipgloss.Color("214") // amber/yellow
 )
@@ -94,8 +93,6 @@ func typeColor(sessionType string) lipgloss.Color {
 	switch sessionType {
 	case "architect":
 		return architectColor
-	case "research":
-		return researchColor
 	case "work":
 		return workColor
 	case "collab":
@@ -110,8 +107,6 @@ func typeColorCode(sessionType string) string {
 	switch sessionType {
 	case "architect":
 		return "141"
-	case "research":
-		return "39"
 	case "work":
 		return "82"
 	case "collab":

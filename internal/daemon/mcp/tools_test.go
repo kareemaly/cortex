@@ -305,43 +305,6 @@ func TestHandleReadTicketNotFound(t *testing.T) {
 	}
 }
 
-func TestHandleCreateResearchTicket(t *testing.T) {
-	server, _, _, cleanup := setupArchitectWithDaemon(t, true)
-	defer cleanup()
-
-	_, output, err := server.handleCreateResearchTicket(context.Background(), nil, CreateResearchTicketInput{
-		Title: "New Ticket",
-		Body:  "Description",
-		Path:  server.config.ArchitectPath,
-	})
-	if err != nil {
-		t.Fatalf("handleCreateResearchTicket failed: %v", err)
-	}
-
-	if output.Ticket.ID == "" {
-		t.Error("ticket ID should not be empty")
-	}
-	if output.Ticket.Title != "New Ticket" {
-		t.Errorf("title = %q, want %q", output.Ticket.Title, "New Ticket")
-	}
-	if output.Ticket.Status != "backlog" {
-		t.Errorf("status = %q, want %q", output.Ticket.Status, "backlog")
-	}
-}
-
-func TestHandleCreateResearchTicketEmptyTitle(t *testing.T) {
-	server, _, _, cleanup := setupArchitectWithDaemon(t, true)
-	defer cleanup()
-
-	_, _, err := server.handleCreateResearchTicket(context.Background(), nil, CreateResearchTicketInput{
-		Title: "",
-	})
-
-	if err == nil {
-		t.Error("expected error for empty title")
-	}
-}
-
 func TestHandleUpdateTicket(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()

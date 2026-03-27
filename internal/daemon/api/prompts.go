@@ -149,7 +149,7 @@ func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ticket prompts: known types
-	ticketTypes := []string{"research", "work"}
+	ticketTypes := []string{"work"}
 
 	for _, typeName := range ticketTypes {
 		for _, stage := range []string{prompt.StageSystem, prompt.StageKickoff} {

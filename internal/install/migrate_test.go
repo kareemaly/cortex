@@ -114,8 +114,6 @@ architect:
   agent: claude
 work:
   agent: claude
-research:
-  agent: claude
 `
 	if err := os.WriteFile(filepath.Join(dir, "cortex.yaml"), []byte(config), 0644); err != nil {
 		t.Fatal(err)

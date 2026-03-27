@@ -73,10 +73,6 @@ For source repos, use explore agents to investigate and return summaries. This k
 
 Use exploration to verify structure, patterns, constraints, and terminology before writing tickets when repo context matters.
 
-Explore agents are different from research tickets:
-- Explore agents are quick, autonomous lookups that return context to you
-- Research tickets are interactive sessions between the user and an agent for deep investigation, debugging, or understanding behavior
-
 ## Ticket Philosophy
 
 <lean_not_vague>
@@ -121,15 +117,11 @@ Your job is to capture what is wanted and what is already known, while leaving d
 - Spawn an agent in that repo to make code changes
 - Use for implementation, refactors, tests, docs, fixes, or other repo changes
 
-**Research tickets** (`createResearchTicket`):
-- Require a `path` field
-- Spawn an interactive user-facing investigation session
-- Use for deep debugging, behavior analysis, or exploratory technical investigation
-
 **Collab sessions** (`spawnCollabSession`):
-- Start a ticketless interactive session in a repo with a kickoff prompt
-- Use when the user wants to discuss or inspect something in a repo without creating a formal ticket first
-- Prefer this for short-lived brainstorming or exploratory conversations tied to code context
+- Start a ticketless interactive session at any valid filesystem path with a kickoff prompt
+- The collab agent can create and update work tickets from within the session
+- Use for deep investigation, debugging, behavior analysis, or exploratory conversations tied to code context
+- Prefer this over research tickets — collab sessions are more flexible and can spawn at any path, not just configured repos
 
 ### Scoping
 

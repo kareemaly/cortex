@@ -50,16 +50,19 @@ func validateGitRepository(repoPath string) error {
 func getWorkingDirectory(req SpawnRequest) (string, error) {
 	if req.AgentType == AgentTypeCollabAgent {
 		if req.Repo != "" {
-			repo := req.Repo
-			if strings.HasPrefix(repo, "~/") {
+			path := req.Repo
+			if strings.HasPrefix(path, "~/") {
 				if home, err := os.UserHomeDir(); err == nil {
-					repo = filepath.Join(home, repo[2:])
+					path = filepath.Join(home, path[2:])
 				}
 			}
-			if err := validateGitRepository(repo); err != nil {
-				return "", err
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				return "", &ConfigError{
+					Field:   "Path",
+					Message: fmt.Sprintf("collab path directory does not exist: %s", path),
+				}
 			}
-			return repo, nil
+			return path, nil
 		}
 		return req.ArchitectPath, nil
 	}
@@ -84,25 +87,6 @@ func getWorkingDirectory(req SpawnRequest) (string, error) {
 				return "", err
 			}
 			return repo, nil
-		}
-		return req.ArchitectPath, nil
-	}
-
-	if req.Ticket.Type == "research" {
-		if req.Ticket.Path != "" {
-			path := req.Ticket.Path
-			if strings.HasPrefix(path, "~/") {
-				if home, err := os.UserHomeDir(); err == nil {
-					path = filepath.Join(home, path[2:])
-				}
-			}
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				return "", &ConfigError{
-					Field:   "Path",
-					Message: fmt.Sprintf("research path directory does not exist: %s", path),
-				}
-			}
-			return path, nil
 		}
 		return req.ArchitectPath, nil
 	}

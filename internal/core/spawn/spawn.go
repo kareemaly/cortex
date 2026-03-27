@@ -545,11 +545,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		}
 		err = s.deps.TmuxManager.SpawnArchitect(req.TmuxSession, req.WindowName, launchCmd, companionCmd, workingDir, workingDir)
 	case AgentTypeTicketAgent:
-		companionCmd := req.Companion
-		if req.TicketType == "research" {
-			companionCmd = ""
-		}
-		windowIndex, err = s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, companionCmd, workingDir, workingDir)
+		windowIndex, err = s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, req.Companion, workingDir, workingDir)
 	}
 	if err != nil {
 		for _, path := range allTempFiles {
@@ -609,12 +605,7 @@ func (s *Spawner) getCortexdPath() (string, error) {
 func (s *Spawner) spawnInTmux(req SpawnRequest, windowName, launchCmd, workingDir string) (int, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		// Use companion command from config; suppress companion for research tickets
-		companionCmd := req.Companion
-		if req.Ticket != nil && req.Ticket.Type == "research" {
-			companionCmd = ""
-		}
-		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, companionCmd, workingDir, workingDir)
+		return s.deps.TmuxManager.SpawnAgent(req.TmuxSession, windowName, launchCmd, req.Companion, workingDir, workingDir)
 	case AgentTypeArchitect:
 		// Use companion command from config, or default to showing kanban board
 		companionCmd := req.Companion

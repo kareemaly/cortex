@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/kareemaly/cortex/internal/storage"
 	"gopkg.in/yaml.v3"
 )
@@ -25,11 +24,6 @@ type AgentVariant struct {
 	Args  []string  `yaml:"args,omitempty"`
 }
 
-// ResearchRoleConfig holds configuration for the research role.
-type ResearchRoleConfig struct {
-	Paths []string `yaml:"paths,omitempty"`
-}
-
 // Config holds the architect configuration.
 type Config struct {
 	Name      string                  `yaml:"name"`
@@ -37,7 +31,6 @@ type Config struct {
 	Repos     []string                `yaml:"repos,omitempty"`
 	Companion string                  `yaml:"companion,omitempty"`
 	Agents    map[string]AgentVariant `yaml:"agents,omitempty"`
-	Research  ResearchRoleConfig      `yaml:"research,omitempty"`
 }
 
 // TicketsPath returns the tickets directory path for the given architect root.
@@ -97,35 +90,6 @@ func (c *Config) ValidateRepo(repo string) error {
 		}
 	}
 	return fmt.Errorf("repo %q not in architect repos list", repo)
-}
-
-// ValidateResearchPath checks if a path is allowed for research tickets.
-// Checks exact match against repos and glob match against research.paths.
-// If both repos and research.paths are empty, any path is allowed.
-func (c *Config) ValidateResearchPath(path string) error {
-	expanded := storage.ExpandHome(path)
-
-	// If no restrictions configured, allow all
-	if len(c.Repos) == 0 && len(c.Research.Paths) == 0 {
-		return nil
-	}
-
-	// Check exact match against repos
-	for _, r := range c.Repos {
-		if storage.ExpandHome(r) == expanded {
-			return nil
-		}
-	}
-
-	// Check glob match against research.paths
-	for _, glob := range c.Research.Paths {
-		matched, err := doublestar.Match(storage.ExpandHome(glob), expanded)
-		if err == nil && matched {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("path %q not allowed; must match a configured repo or research.paths entry", path)
 }
 
 // DefaultConfig returns a Config with default values.

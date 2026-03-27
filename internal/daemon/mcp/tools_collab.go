@@ -10,6 +10,16 @@ import (
 // registerCollabTools registers all tools available to collab sessions.
 func (s *Server) registerCollabTools() {
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "createWorkTicket",
+		Description: "Create a new work ticket in backlog. Requires a repo field — the agent will spawn in that repo directory.",
+	}, s.handleCreateWorkTicket)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "updateTicket",
+		Description: "Update ticket fields. Only accepts: id (required), title, body, references. Does NOT support updating type, repo, path, status, due_date, or any other fields.",
+	}, s.handleUpdateTicket)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
 		Description: "Conclude the collab session and create a conclusion record. Include the outcome, files changed, commit SHA if any, and follow-up work or blockers.",
 	}, s.handleCollabConcludeSession)

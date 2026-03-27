@@ -109,7 +109,7 @@ func TestPromptResolver_ResolveTicketPrompt(t *testing.T) {
 		createTicketPromptFile(t, projectRoot, "work", "KICKOFF.md", "work kickoff")
 
 		resolver := NewPromptResolver(projectRoot, "")
-		content, err := resolver.ResolveTicketPrompt("research", StageKickoff)
+		content, err := resolver.ResolveTicketPrompt("unknown", StageKickoff)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

@@ -35,12 +35,6 @@ func (s *Server) registerArchitectTools() {
 		Description: "Create a new work ticket in backlog. Requires a repo field — the agent will spawn in that repo directory.",
 	}, s.handleCreateWorkTicket)
 
-	// Create research ticket
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "createResearchTicket",
-		Description: "Create a new research ticket in backlog. Requires a path field — the agent will spawn in that directory (must match a configured repo or research.paths glob in cortex.yaml).",
-	}, s.handleCreateResearchTicket)
-
 	// Update ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
@@ -104,7 +98,7 @@ func (s *Server) registerArchitectTools() {
 	// Spawn collab session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "spawnCollabSession",
-		Description: "Spawn a ticketless collab session with a repo and a kickoff prompt. The agent starts immediately in the repo with the given prompt as context.",
+		Description: "Spawn a ticketless collab session at any valid filesystem path with a kickoff prompt. The agent starts immediately in the directory with the given prompt as context.",
 	}, s.handleSpawnCollabSession)
 }
 
@@ -206,39 +200,6 @@ func (s *Server) handleCreateWorkTicket(
 	}
 
 	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, "work", input.Repo, "", dueDate, input.References)
-	if err != nil {
-		return nil, CreateTicketOutput{}, wrapSDKError(err)
-	}
-
-	return nil, CreateTicketOutput{
-		Ticket: ticketResponseToOutput(resp),
-	}, nil
-}
-
-// handleCreateResearchTicket creates a new research ticket via the daemon HTTP API.
-func (s *Server) handleCreateResearchTicket(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	input CreateResearchTicketInput,
-) (*mcp.CallToolResult, CreateTicketOutput, error) {
-	if input.Title == "" {
-		return nil, CreateTicketOutput{}, NewValidationError("title", "is required")
-	}
-	if input.Path == "" {
-		return nil, CreateTicketOutput{}, NewValidationError("path", "is required for research tickets")
-	}
-
-	// Parse dueDate if provided
-	var dueDate *time.Time
-	if input.DueDate != "" {
-		parsed, err := time.Parse(time.RFC3339, input.DueDate)
-		if err != nil {
-			return nil, CreateTicketOutput{}, NewValidationError("due_date", "must be in RFC3339 format")
-		}
-		dueDate = &parsed
-	}
-
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, "research", "", input.Path, dueDate, input.References)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
@@ -572,8 +533,8 @@ func (s *Server) handleSpawnCollabSession(
 	req *mcp.CallToolRequest,
 	input SpawnCollabSessionInput,
 ) (*mcp.CallToolResult, SpawnCollabSessionOutput, error) {
-	if input.Repo == "" {
-		return nil, SpawnCollabSessionOutput{}, NewValidationError("repo", "cannot be empty")
+	if input.Path == "" {
+		return nil, SpawnCollabSessionOutput{}, NewValidationError("path", "cannot be empty")
 	}
 	if input.Prompt == "" {
 		return nil, SpawnCollabSessionOutput{}, NewValidationError("prompt", "cannot be empty")
@@ -582,14 +543,7 @@ func (s *Server) handleSpawnCollabSession(
 		return nil, SpawnCollabSessionOutput{}, NewValidationError("variant", "is required — use listVariants to see available names")
 	}
 
-	// Validate repo against architect config
-	if s.projectConfig != nil {
-		if err := s.projectConfig.ValidateRepo(input.Repo); err != nil {
-			return nil, SpawnCollabSessionOutput{}, NewValidationError("repo", err.Error())
-		}
-	}
-
-	resp, err := s.sdkClient.SpawnCollabSession(input.Repo, input.Prompt, "normal", input.Variant)
+	resp, err := s.sdkClient.SpawnCollabSession(input.Path, input.Prompt, "normal", input.Variant)
 	if err != nil {
 		return nil, SpawnCollabSessionOutput{}, wrapSDKError(err)
 	}

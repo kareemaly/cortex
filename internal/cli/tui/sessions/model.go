@@ -699,8 +699,6 @@ func typeShortLabel(t string) string {
 	switch t {
 	case "architect":
 		return "arch"
-	case "research":
-		return "research"
 	case "work":
 		return "work"
 	case "collab":
