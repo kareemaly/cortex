@@ -33,10 +33,15 @@ type SpawnResult struct {
 	Position int
 }
 
-func (c *Client) SpawnSession(status, id, mode string) (*SpawnResult, error) {
+func (c *Client) SpawnSession(status, id, mode, variant string) (*SpawnResult, error) {
 	url := c.baseURL + "/tickets/" + status + "/" + id + "/spawn"
+	sep := "?"
 	if mode != "" {
-		url += "?mode=" + mode
+		url += sep + "mode=" + mode
+		sep = "&"
+	}
+	if variant != "" {
+		url += sep + "variant=" + variant
 	}
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)

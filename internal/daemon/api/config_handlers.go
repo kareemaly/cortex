@@ -209,3 +209,21 @@ func (h *ConfigHandlers) EditProjectConfig(w http.ResponseWriter, r *http.Reques
 		Message: "Opened in editor",
 	})
 }
+
+// VariantsResponse is the response for GET /config/variants.
+type VariantsResponse struct {
+	Variants []string `json:"variants"`
+}
+
+// GetVariants handles GET /config/variants - returns sorted agent variant names.
+func (h *ConfigHandlers) GetVariants(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetArchitectPath(r.Context())
+
+	cfg, err := architectconfig.Load(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, VariantsResponse{Variants: cfg.VariantNames()})
+}

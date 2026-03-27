@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/kareemaly/cortex/internal/storage"
@@ -18,17 +19,15 @@ const (
 	AgentOpenCode AgentType = "opencode"
 )
 
-// RoleConfig holds configuration for a specific role (architect or ticket type).
-type RoleConfig struct {
-	Agent     AgentType `yaml:"agent"`
-	Args      []string  `yaml:"args"`
-	Companion string    `yaml:"companion,omitempty"`
+// AgentVariant is a named agent configuration used in the top-level agents map.
+type AgentVariant struct {
+	Agent AgentType `yaml:"agent"`
+	Args  []string  `yaml:"args,omitempty"`
 }
 
-// ResearchRoleConfig holds configuration for the research role, extending RoleConfig with paths.
+// ResearchRoleConfig holds configuration for the research role.
 type ResearchRoleConfig struct {
-	RoleConfig `yaml:",inline"`
-	Paths      []string `yaml:"paths,omitempty"`
+	Paths []string `yaml:"paths,omitempty"`
 }
 
 // TicketsConfig holds configuration for the ticket storage.
@@ -38,14 +37,13 @@ type TicketsConfig struct {
 
 // Config holds the architect configuration.
 type Config struct {
-	Name      string             `yaml:"name"`
-	Queue     bool               `yaml:"queue,omitempty"`
-	Repos     []string           `yaml:"repos,omitempty"`
-	Architect RoleConfig         `yaml:"architect"`
-	Work      RoleConfig         `yaml:"work"`
-	Research  ResearchRoleConfig `yaml:"research"`
-	Collab    RoleConfig         `yaml:"collab,omitempty"`
-	Tickets   TicketsConfig      `yaml:"tickets,omitempty"`
+	Name      string                  `yaml:"name"`
+	Queue     bool                    `yaml:"queue,omitempty"`
+	Repos     []string                `yaml:"repos,omitempty"`
+	Companion string                  `yaml:"companion,omitempty"`
+	Agents    map[string]AgentVariant `yaml:"agents,omitempty"`
+	Research  ResearchRoleConfig      `yaml:"research,omitempty"`
+	Tickets   TicketsConfig           `yaml:"tickets,omitempty"`
 }
 
 // TicketsPath returns the resolved tickets directory path for the given architect root.
@@ -76,17 +74,28 @@ func (c *Config) GetTmuxSessionName() string {
 	return "cortex"
 }
 
-// RoleConfigForType returns the RoleConfig for a given ticket type.
-// Returns an error if the ticket type is not "work" or "research".
-func (c *Config) RoleConfigForType(ticketType string) (RoleConfig, error) {
-	switch ticketType {
-	case "work":
-		return c.Work, nil
-	case "research":
-		return c.Research.RoleConfig, nil
-	default:
-		return RoleConfig{}, fmt.Errorf("no configuration found for ticket type %q (valid types: work, research)", ticketType)
+// ResolveVariant looks up a named variant from the agents map.
+// Returns an error if the agents map is empty or the name is not found.
+func (c *Config) ResolveVariant(name string) (AgentVariant, error) {
+	if len(c.Agents) == 0 {
+		return AgentVariant{}, fmt.Errorf("no agents configured in cortex.yaml — add an 'agents' map with at least one named variant")
 	}
+	v, ok := c.Agents[name]
+	if !ok {
+		return AgentVariant{}, fmt.Errorf("unknown agent variant %q (available: %v)", name, c.VariantNames())
+	}
+	return v, nil
+}
+
+// VariantNames returns the sorted list of agent variant names.
+// Returns an empty slice if the agents map is nil or empty.
+func (c *Config) VariantNames() []string {
+	names := make([]string, 0, len(c.Agents))
+	for name := range c.Agents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // ValidateRepo checks if a repo is in the architect's repos list.
@@ -134,24 +143,10 @@ func (c *Config) ValidateResearchPath(path string) error {
 }
 
 // DefaultConfig returns a Config with default values.
+// The agents map is intentionally empty; ResolveVariant("default") synthesizes
+// a built-in default of {agent: claude} when no agents are configured.
 func DefaultConfig() *Config {
-	return &Config{
-		Architect: RoleConfig{
-			Agent:     AgentClaude,
-			Companion: "cortex architect show",
-		},
-		Work: RoleConfig{
-			Agent: AgentClaude,
-		},
-		Research: ResearchRoleConfig{
-			RoleConfig: RoleConfig{
-				Agent: AgentClaude,
-			},
-		},
-		Collab: RoleConfig{
-			Agent: AgentClaude,
-		},
-	}
+	return &Config{}
 }
 
 // FindArchitectRoot walks up from startPath to find a cortex.yaml file.
@@ -233,37 +228,13 @@ func ConfigPath(architectRoot string) string {
 
 // Validate checks that the config is valid.
 func (c *Config) Validate() error {
-	// Validate architect agent type
-	if c.Architect.Agent != "" && c.Architect.Agent != AgentClaude && c.Architect.Agent != AgentOpenCode {
-		return &ValidationError{
-			Field:   "architect.agent",
-			Message: "must be 'claude' or 'opencode'",
+	for name, variant := range c.Agents {
+		if variant.Agent != "" && variant.Agent != AgentClaude && variant.Agent != AgentOpenCode {
+			return &ValidationError{
+				Field:   fmt.Sprintf("agents.%s.agent", name),
+				Message: "must be 'claude' or 'opencode'",
+			}
 		}
 	}
-
-	// Validate work agent type
-	if c.Work.Agent != "" && c.Work.Agent != AgentClaude && c.Work.Agent != AgentOpenCode {
-		return &ValidationError{
-			Field:   "work.agent",
-			Message: "must be 'claude' or 'opencode'",
-		}
-	}
-
-	// Validate research agent type
-	if c.Research.Agent != "" && c.Research.Agent != AgentClaude && c.Research.Agent != AgentOpenCode {
-		return &ValidationError{
-			Field:   "research.agent",
-			Message: "must be 'claude' or 'opencode'",
-		}
-	}
-
-	// Validate collab agent type
-	if c.Collab.Agent != "" && c.Collab.Agent != AgentClaude && c.Collab.Agent != AgentOpenCode {
-		return &ValidationError{
-			Field:   "collab.agent",
-			Message: "must be 'claude' or 'opencode'",
-		}
-	}
-
 	return nil
 }

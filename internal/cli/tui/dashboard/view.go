@@ -20,6 +20,14 @@ func (m Model) View() string {
 		return m.logViewer.View()
 	}
 
+	// Centered popup overlays — rendered before any content.
+	if m.showVariantSelector {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.variantSelector.View())
+	}
+	if m.showArchitectModeModal {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderArchitectModeModal())
+	}
+
 	var b strings.Builder
 
 	headerLeft := headerStyle.Render("Cortex Dashboard")
@@ -103,16 +111,6 @@ func (m Model) View() string {
 		return b.String()
 	}
 
-	if m.showArchitectModeModal {
-		title := filepath.Base(m.architectModeProjectPath)
-		prompt := fmt.Sprintf("Orphaned architect for '%s'", title)
-		options := "[r]esume  [f]resh  [esc] cancel"
-		b.WriteString(warnBadgeStyle.Render(prompt))
-		b.WriteString("\n")
-		b.WriteString(helpBarStyle.Render(options))
-		return b.String()
-	}
-
 	if m.statusMsg != "" {
 		style := statusBarStyle
 		if m.statusIsError {
@@ -132,6 +130,28 @@ func (m Model) View() string {
 	b.WriteString(help)
 
 	return b.String()
+}
+
+var dashModalBorderStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(lipgloss.Color("214")).
+	Padding(1, 2)
+
+var dashModalTitleStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("255")).
+	MarginBottom(1)
+
+var dashModalHelpStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("240")).
+	MarginTop(1)
+
+func (m Model) renderArchitectModeModal() string {
+	title := filepath.Base(m.architectModeProjectPath)
+	content := dashModalTitleStyle.Render("Orphaned Architect") + "\n" +
+		lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Render("\""+title+"\"") + "\n" +
+		dashModalHelpStyle.Render("[r] resume   [f] fresh   [esc] cancel")
+	return dashModalBorderStyle.Render(content)
 }
 
 func (m Model) logBadge() string {

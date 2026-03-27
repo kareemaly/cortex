@@ -6,6 +6,7 @@ import (
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
+	"github.com/kareemaly/cortex/internal/cli/tui/variant"
 )
 
 const (
@@ -84,6 +85,11 @@ type Model struct {
 	showArchitectModeModal   bool
 	architectModeProjectPath string
 
+	showVariantSelector bool
+	variantSelector     variant.Model
+	pendingSpawnPath    string
+	pendingSpawnMode    string
+
 	logBuf        *tuilog.Buffer
 	logViewer     tuilog.Viewer
 	showLogViewer bool
@@ -154,3 +160,9 @@ type PollTickMsg struct{}
 type ClearStatusMsg struct{}
 
 type TickMsg struct{}
+
+// VariantsLoadedMsg is sent when agent variants are fetched successfully.
+type VariantsLoadedMsg struct{ Variants []string }
+
+// VariantsErrorMsg is sent when fetching agent variants fails.
+type VariantsErrorMsg struct{ Err error }

@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
+	"github.com/kareemaly/cortex/internal/cli/tui/variant"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -205,6 +206,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case TickMsg:
 		return m, m.tickDuration()
+
+	case VariantsLoadedMsg:
+		if len(msg.Variants) == 1 {
+			return m, m.spawnArchitectWithVariant(m.pendingSpawnPath, m.pendingSpawnMode, msg.Variants[0])
+		}
+		m.variantSelector = variant.New("Select agent variant", msg.Variants)
+		m.showVariantSelector = true
+		return m, nil
+
+	case VariantsErrorMsg:
+		m.statusMsg = fmt.Sprintf("Error loading variants: %s", msg.Err)
+		m.statusIsError = true
+		m.pendingSpawnPath = ""
+		m.pendingSpawnMode = ""
+		return m, m.clearStatusAfterDelay()
+
+	case variant.SelectedMsg:
+		m.showVariantSelector = false
+		path := m.pendingSpawnPath
+		mode := m.pendingSpawnMode
+		m.pendingSpawnPath = ""
+		m.pendingSpawnMode = ""
+		return m, m.spawnArchitectWithVariant(path, mode, msg.Name)
+
+	case variant.CancelledMsg:
+		m.showVariantSelector = false
+		m.pendingSpawnPath = ""
+		m.pendingSpawnMode = ""
+		m.statusMsg = "Spawn cancelled"
+		m.statusIsError = false
+		return m, m.clearStatusAfterDelay()
 	}
 
 	return m, nil

@@ -15,9 +15,10 @@ import (
 
 // SpawnCollabRequest is the request body for spawning a collab session.
 type SpawnCollabRequest struct {
-	Repo   string `json:"repo"`
-	Prompt string `json:"prompt"`
-	Mode   string `json:"mode,omitempty"`
+	Repo    string `json:"repo"`
+	Prompt  string `json:"prompt"`
+	Mode    string `json:"mode,omitempty"`
+	Variant string `json:"variant,omitempty"`
 }
 
 // CollabHandlers provides HTTP handlers for collab session operations.
@@ -70,12 +71,23 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	sessionName := projectCfg.GetTmuxSessionName()
 
-	collabID := uuid.New().String()
-
-	collabAgent := string(projectCfg.Collab.Agent)
+	// Resolve variant — required
+	variantName := req.Variant
+	if variantName == "" {
+		writeError(w, http.StatusBadRequest, "variant_required", "variant is required — set 'variant' in the request body (see GET /config/variants for available names)")
+		return
+	}
+	av, avErr := projectCfg.ResolveVariant(variantName)
+	if avErr != nil {
+		writeError(w, http.StatusBadRequest, "invalid_variant", avErr.Error())
+		return
+	}
+	collabAgent := string(av.Agent)
 	if collabAgent == "" {
 		collabAgent = "claude"
 	}
+
+	collabID := uuid.New().String()
 
 	ticketsDir := projectCfg.TicketsPath(projectPath)
 
@@ -99,8 +111,8 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		ArchitectPath: projectPath,
 		TmuxSession:   sessionName,
 		Agent:         collabAgent,
-		Companion:     projectCfg.Collab.Companion,
-		AgentArgs:     projectCfg.Collab.Args,
+		Companion:     projectCfg.Companion,
+		AgentArgs:     av.Args,
 		TicketsDir:    ticketsDir,
 	})
 	if err != nil {

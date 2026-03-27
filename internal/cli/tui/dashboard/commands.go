@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -90,18 +91,39 @@ func (m Model) startPollTicker() tea.Cmd {
 	})
 }
 
-func (m Model) spawnArchitect(projectPath string) tea.Cmd {
+func (m Model) loadVariants(projectPath string) tea.Cmd {
 	return func() tea.Msg {
 		client := sdk.DefaultClient(projectPath)
-		_, err := client.SpawnArchitect("")
+		variants, err := client.GetVariants()
+		if err != nil {
+			return VariantsErrorMsg{Err: err}
+		}
+		return VariantsLoadedMsg{Variants: variants}
+	}
+}
+
+// loadVariantsAutoSelect fetches variants and immediately picks the first one,
+// skipping the selector popup. Used for re-attaching to an already-active session
+// where the variant choice is irrelevant.
+func (m Model) loadVariantsAutoSelect(projectPath, mode string) tea.Cmd {
+	return func() tea.Msg {
+		client := sdk.DefaultClient(projectPath)
+		variants, err := client.GetVariants()
+		if err != nil {
+			return VariantsErrorMsg{Err: err}
+		}
+		if len(variants) == 0 {
+			return VariantsErrorMsg{Err: fmt.Errorf("no agent variants configured in cortex.yaml")}
+		}
+		_, err = client.SpawnArchitect(mode, variants[0])
 		return SpawnArchitectMsg{ArchitectPath: projectPath, Err: err}
 	}
 }
 
-func (m Model) spawnArchitectWithMode(projectPath, mode string) tea.Cmd {
+func (m Model) spawnArchitectWithVariant(projectPath, mode, variantName string) tea.Cmd {
 	return func() tea.Msg {
 		client := sdk.DefaultClient(projectPath)
-		_, err := client.SpawnArchitect(mode)
+		_, err := client.SpawnArchitect(mode, variantName)
 		return SpawnArchitectMsg{ArchitectPath: projectPath, Err: err}
 	}
 }

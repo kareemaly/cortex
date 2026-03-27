@@ -114,10 +114,15 @@ func (c *Client) GetArchitect() (*ArchitectStateResponse, error) {
 }
 
 // SpawnArchitect spawns or reattaches to an architect session.
-func (c *Client) SpawnArchitect(mode string) (*ArchitectSpawnResponse, error) {
+func (c *Client) SpawnArchitect(mode, variant string) (*ArchitectSpawnResponse, error) {
 	url := c.baseURL + "/architect/spawn"
+	sep := "?"
 	if mode != "" {
-		url += "?mode=" + mode
+		url += sep + "mode=" + mode
+		sep = "&"
+	}
+	if variant != "" {
+		url += sep + "variant=" + variant
 	}
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)

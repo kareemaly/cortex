@@ -26,8 +26,9 @@ type Session struct {
 
 // SpawnCollabSessionInput is the input for the spawnCollabSession tool.
 type SpawnCollabSessionInput struct {
-	Repo   string `json:"repo" jsonschema:"Repository path where the collab agent will spawn (required). Must be from the configured repos list in cortex.yaml."`
-	Prompt string `json:"prompt" jsonschema:"Brief question or topic to discuss. Keep it minimal — the collab agent starts in the repo with its own AGENTS.md/CLAUDE.md context."`
+	Repo    string `json:"repo" jsonschema:"Repository path where the collab agent will spawn (required). Must be from the configured repos list in cortex.yaml."`
+	Prompt  string `json:"prompt" jsonschema:"Brief question or topic to discuss. Keep it minimal — the collab agent starts in the repo with its own AGENTS.md/CLAUDE.md context."`
+	Variant string `json:"variant" jsonschema:"Agent variant name from the agents map in cortex.yaml (required). Use listVariants to see available names."`
 }
 
 // SpawnCollabSessionOutput is the output for the spawnCollabSession tool.
@@ -100,6 +101,15 @@ type MoveTicketInput struct {
 type SpawnSessionInput struct {
 	TicketID string `json:"ticket_id" jsonschema:"The ticket ID to spawn a session for"`
 	Mode     string `json:"mode,omitempty" jsonschema:"Spawn mode: 'normal' (default), 'resume', or 'fresh'"`
+	Variant  string `json:"variant" jsonschema:"Agent variant name from the agents map in cortex.yaml (required). Use listVariants to see available names."`
+}
+
+// ListVariantsInput is the input for the listVariants tool (no parameters needed).
+type ListVariantsInput struct{}
+
+// ListVariantsOutput is the output for the listVariants tool.
+type ListVariantsOutput struct {
+	Variants []string `json:"variants"`
 }
 
 // UpdateDueDateInput is the input for the updateDueDate tool.

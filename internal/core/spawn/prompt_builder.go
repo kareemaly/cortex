@@ -154,13 +154,19 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	}
 
 	var reposList string
+	var variantsList string
 	projectCfg, cfgErr := architectconfig.Load(req.ArchitectPath)
-	if cfgErr == nil && len(projectCfg.Repos) > 0 {
-		var reposSB strings.Builder
-		for _, repo := range projectCfg.Repos {
-			reposSB.WriteString(fmt.Sprintf("- %s\n", repo))
+	if cfgErr == nil {
+		if len(projectCfg.Repos) > 0 {
+			var reposSB strings.Builder
+			for _, repo := range projectCfg.Repos {
+				reposSB.WriteString(fmt.Sprintf("- %s\n", repo))
+			}
+			reposList = reposSB.String()
 		}
-		reposList = reposSB.String()
+		if names := projectCfg.VariantNames(); len(names) > 0 {
+			variantsList = strings.Join(names, ", ")
+		}
 	}
 
 	kickoffTemplate, kickoffErr := resolver.ResolveArchitectPrompt(prompt.StageKickoff)
@@ -172,6 +178,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 			Sessions:         sessionsList,
 			Repos:            reposList,
 			LastConclusionID: lastConclusionID,
+			Variants:         variantsList,
 		}
 		rendered, renderErr := prompt.RenderTemplate(kickoffTemplate, vars)
 		if renderErr == nil {

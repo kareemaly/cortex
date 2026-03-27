@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	architectStartMode   string
-	architectStartDetach bool
+	architectStartMode    string
+	architectStartDetach  bool
+	architectStartVariant string
 )
 
 var architectStartCmd = &cobra.Command{
@@ -24,6 +25,7 @@ var architectStartCmd = &cobra.Command{
 func init() {
 	architectStartCmd.Flags().StringVar(&architectStartMode, "mode", "", "Session mode: normal, fresh, or resume")
 	architectStartCmd.Flags().BoolVar(&architectStartDetach, "detach", false, "Start in detached mode")
+	architectStartCmd.Flags().StringVar(&architectStartVariant, "variant", "", "Agent variant to use (must match an entry in cortex.yaml agents map)")
 	architectCmd.AddCommand(architectStartCmd)
 }
 
@@ -48,7 +50,7 @@ func runArchitectStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Try to spawn architect
-	resp, err := client.SpawnArchitect(architectStartMode)
+	resp, err := client.SpawnArchitect(architectStartMode, architectStartVariant)
 	if err != nil {
 		apiErr, ok := err.(*sdk.APIError)
 		if ok && apiErr.IsOrphanedSession() {

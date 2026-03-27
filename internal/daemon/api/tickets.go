@@ -503,6 +503,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	mode := r.URL.Query().Get("mode")
+	variantName := r.URL.Query().Get("variant")
 	projectPath := GetArchitectPath(r.Context())
 
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -527,6 +528,21 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	projectCfg, _ := architectconfig.Load(projectPath)
+
+	// Resolve variant — required
+	if variantName == "" {
+		writeError(w, http.StatusBadRequest, "variant_required", "variant is required — pass ?variant=<name> (see GET /config/variants for available names)")
+		return
+	}
+	av, avErr := projectCfg.ResolveVariant(variantName)
+	if avErr != nil {
+		writeError(w, http.StatusBadRequest, "invalid_variant", avErr.Error())
+		return
+	}
+	resolvedAgent := string(av.Agent)
+	if resolvedAgent == "" {
+		resolvedAgent = "claude"
+	}
 	if projectCfg.Queue && t.Type == "work" && t.Repo != "" && h.deps.QueueManager != nil {
 		sessionStore := h.deps.SessionManager.GetStore(projectPath)
 		sessions, _ := sessionStore.List()
@@ -571,6 +587,9 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	result, err := spawn.Orchestrate(r.Context(), spawn.OrchestrateRequest{
 		TicketID:      id,
 		Mode:          mode,
+		Agent:         resolvedAgent,
+		AgentArgs:     av.Args,
+		Companion:     projectCfg.Companion,
 		ArchitectPath: projectPath,
 	}, spawn.OrchestrateDeps{
 		Store:        store,

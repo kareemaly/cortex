@@ -2047,11 +2047,12 @@ func TestOrchestrate_OpenCode_Resume_Orphaned(t *testing.T) {
 func TestOrchestrate_OpenCode_AgentFromConfig(t *testing.T) {
 	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
 
-	// Create cortex.yaml with opencode as the agent for work tickets
+	// Agent is now pre-resolved by the API handler and passed explicitly.
 	createTestCortexConfig(t, tmpDir, `
 name: test-project
-work:
-  agent: opencode
+agents:
+  opencode-variant:
+    agent: opencode
 `)
 
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
@@ -2059,7 +2060,7 @@ work:
 		Mode:          "normal",
 		ArchitectPath: tmpDir,
 		TmuxSession:   "test-session",
-		// Agent intentionally omitted — should resolve from config
+		Agent:         "opencode",
 	}, OrchestrateDeps{
 		Store:        store,
 		SessionStore: sessStore,

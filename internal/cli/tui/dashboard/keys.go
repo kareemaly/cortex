@@ -86,6 +86,10 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.showVariantSelector {
+		return m.handleVariantSelectorKey(msg)
+	}
+
 	if m.showArchitectModeModal {
 		return m.handleArchitectModeKey(msg)
 	}
@@ -218,7 +222,7 @@ func (m Model) handleFocusCurrentRow() (tea.Model, tea.Cmd) {
 		if pd.architect != nil && pd.architect.State == "active" {
 			m.statusMsg = "Focusing architect..."
 			m.statusIsError = false
-			return m, m.spawnArchitect(pd.project.Path)
+			return m, m.loadVariantsAutoSelect(pd.project.Path, "normal")
 		}
 		if pd.architect != nil && pd.architect.State == "orphaned" {
 			m.showArchitectModeModal = true
@@ -266,9 +270,11 @@ func (m Model) handleSpawnArchitect() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	m.pendingSpawnPath = pd.project.Path
+	m.pendingSpawnMode = "normal"
 	m.statusMsg = "Spawning architect..."
 	m.statusIsError = false
-	return m, m.spawnArchitect(pd.project.Path)
+	return m, m.loadVariants(pd.project.Path)
 }
 
 func (m Model) handleUnlinkArchitect() (tea.Model, tea.Cmd) {
@@ -363,18 +369,20 @@ func (m Model) handleArchitectModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case isKey(msg, KeyRefresh):
 		m.showArchitectModeModal = false
-		path := m.architectModeProjectPath
+		m.pendingSpawnPath = m.architectModeProjectPath
+		m.pendingSpawnMode = "resume"
 		m.architectModeProjectPath = ""
 		m.statusMsg = "Resuming architect..."
 		m.statusIsError = false
-		return m, m.spawnArchitectWithMode(path, "resume")
+		return m, m.loadVariants(m.pendingSpawnPath)
 	case isKey(msg, KeyFocus):
 		m.showArchitectModeModal = false
-		path := m.architectModeProjectPath
+		m.pendingSpawnPath = m.architectModeProjectPath
+		m.pendingSpawnMode = "fresh"
 		m.architectModeProjectPath = ""
 		m.statusMsg = "Starting fresh architect..."
 		m.statusIsError = false
-		return m, m.spawnArchitectWithMode(path, "fresh")
+		return m, m.loadVariants(m.pendingSpawnPath)
 	case isKey(msg, KeyEscape):
 		m.showArchitectModeModal = false
 		m.architectModeProjectPath = ""
@@ -383,4 +391,10 @@ func (m Model) handleArchitectModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.clearStatusAfterDelay()
 	}
 	return m, nil
+}
+
+func (m Model) handleVariantSelectorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.variantSelector, cmd = m.variantSelector.Update(msg)
+	return m, cmd
 }

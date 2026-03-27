@@ -67,7 +67,6 @@ func TestFindArchitectRoot(t *testing.T) {
 }
 
 func TestFindArchitectRoot_NotFound(t *testing.T) {
-	// Use a temp directory without cortex.yaml
 	dir := t.TempDir()
 
 	_, err := FindArchitectRoot(dir)
@@ -79,22 +78,22 @@ func TestFindArchitectRoot_NotFound(t *testing.T) {
 	}
 }
 
-func TestLoad_FullConfig(t *testing.T) {
+func TestLoad_NewAgentsSchema(t *testing.T) {
 	projectRoot := setupTestProject(t)
 	writeConfig(t, projectRoot, `
 name: my-project
-architect:
-  agent: opencode
-  args:
-    - "--verbose"
-work:
-  agent: opencode
-  args:
-    - "--budget=50000"
-research:
-  agent: claude
-  args:
-    - "--fast"
+companion: lazygit
+agents:
+  default:
+    agent: claude
+    args:
+      - "--dangerously-skip-permissions"
+  sonnet:
+    agent: claude
+    args:
+      - "--model"
+      - "claude-sonnet-4-6"
+      - "--dangerously-skip-permissions"
 `)
 
 	cfg, err := Load(projectRoot)
@@ -105,28 +104,33 @@ research:
 	if cfg.Name != "my-project" {
 		t.Errorf("expected name 'my-project', got %q", cfg.Name)
 	}
-	if cfg.Architect.Agent != AgentOpenCode {
-		t.Errorf("expected architect agent 'opencode', got %q", cfg.Architect.Agent)
+	if cfg.Companion != "lazygit" {
+		t.Errorf("expected companion 'lazygit', got %q", cfg.Companion)
 	}
-	if len(cfg.Architect.Args) != 1 || cfg.Architect.Args[0] != "--verbose" {
-		t.Errorf("expected architect args [--verbose], got %v", cfg.Architect.Args)
+	if len(cfg.Agents) != 2 {
+		t.Fatalf("expected 2 agents, got %d", len(cfg.Agents))
 	}
-	workRole, err := cfg.RoleConfigForType("work")
+
+	def, err := cfg.ResolveVariant("default")
 	if err != nil {
-		t.Fatalf("unexpected error getting work role: %v", err)
+		t.Fatalf("unexpected error resolving default: %v", err)
 	}
-	if workRole.Agent != AgentOpenCode {
-		t.Errorf("expected work agent 'opencode', got %q", workRole.Agent)
+	if def.Agent != AgentClaude {
+		t.Errorf("expected default agent 'claude', got %q", def.Agent)
 	}
-	if len(workRole.Args) != 1 || workRole.Args[0] != "--budget=50000" {
-		t.Errorf("expected work args [--budget=50000], got %v", workRole.Args)
+	if len(def.Args) != 1 || def.Args[0] != "--dangerously-skip-permissions" {
+		t.Errorf("unexpected default args: %v", def.Args)
 	}
-	researchRole, err := cfg.RoleConfigForType("research")
+
+	sonnet, err := cfg.ResolveVariant("sonnet")
 	if err != nil {
-		t.Fatalf("unexpected error getting research role: %v", err)
+		t.Fatalf("unexpected error resolving sonnet: %v", err)
 	}
-	if researchRole.Agent != AgentClaude {
-		t.Errorf("expected research agent 'claude', got %q", researchRole.Agent)
+	if sonnet.Agent != AgentClaude {
+		t.Errorf("expected sonnet agent 'claude', got %q", sonnet.Agent)
+	}
+	if len(sonnet.Args) != 3 {
+		t.Fatalf("expected 3 sonnet args, got %d", len(sonnet.Args))
 	}
 }
 
@@ -144,31 +148,25 @@ name: minimal
 	if cfg.Name != "minimal" {
 		t.Errorf("expected name 'minimal', got %q", cfg.Name)
 	}
-	// Should have defaults
-	if cfg.Architect.Agent != AgentClaude {
-		t.Errorf("expected default architect agent 'claude', got %q", cfg.Architect.Agent)
-	}
-	workRole, err := cfg.RoleConfigForType("work")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if workRole.Agent != AgentClaude {
-		t.Errorf("expected default work agent 'claude', got %q", workRole.Agent)
+	// Minimal config with no agents map: ResolveVariant errors
+	_, err = cfg.ResolveVariant("default")
+	if err == nil {
+		t.Fatal("expected error when agents map is empty, got nil")
 	}
 }
 
 func TestLoad_NoConfigFile(t *testing.T) {
 	projectRoot := setupTestProject(t)
-	// Don't write any config file
 
 	cfg, err := Load(projectRoot)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should return defaults
-	if cfg.Architect.Agent != AgentClaude {
-		t.Errorf("expected default architect agent 'claude', got %q", cfg.Architect.Agent)
+	// No config file → no agents map → ResolveVariant errors
+	_, err = cfg.ResolveVariant("default")
+	if err == nil {
+		t.Fatal("expected error when no agents configured, got nil")
 	}
 }
 
@@ -189,47 +187,106 @@ name: [invalid yaml
 	}
 }
 
-func TestValidate_InvalidArchitectAgent(t *testing.T) {
+func TestResolveVariant_HappyPath(t *testing.T) {
 	cfg := &Config{
-		Architect: RoleConfig{Agent: "invalid-agent"},
+		Agents: map[string]AgentVariant{
+			"default": {Agent: AgentClaude, Args: []string{"--dangerously-skip-permissions"}},
+			"fast":    {Agent: AgentOpenCode},
+		},
 	}
 
-	err := cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	v, err := cfg.ResolveVariant("default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	valErr, ok := err.(*ValidationError)
-	if !ok {
-		t.Errorf("expected ValidationError, got %T", err)
+	if v.Agent != AgentClaude {
+		t.Errorf("expected 'claude', got %q", v.Agent)
+	}
+	if len(v.Args) != 1 {
+		t.Errorf("expected 1 arg, got %d", len(v.Args))
 	}
 
-	if valErr.Field != "architect.agent" {
-		t.Errorf("expected field 'architect.agent', got %q", valErr.Field)
+	v2, err := cfg.ResolveVariant("fast")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if v2.Agent != AgentOpenCode {
+		t.Errorf("expected 'opencode', got %q", v2.Agent)
 	}
 }
 
-func TestValidate_InvalidWorkAgent(t *testing.T) {
+func TestResolveVariant_UnknownName(t *testing.T) {
 	cfg := &Config{
-		Work: RoleConfig{Agent: "bad-agent"},
+		Agents: map[string]AgentVariant{
+			"default": {Agent: AgentClaude},
+		},
 	}
 
-	err := cfg.Validate()
+	_, err := cfg.ResolveVariant("nonexistent")
 	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	valErr, ok := err.(*ValidationError)
-	if !ok {
-		t.Errorf("expected ValidationError, got %T", err)
-	}
-
-	if valErr.Field != "work.agent" {
-		t.Errorf("expected field 'work.agent', got %q", valErr.Field)
+		t.Fatal("expected error for unknown variant, got nil")
 	}
 }
 
-func TestValidate_InvalidResearchAgent(t *testing.T) {
+func TestResolveVariant_EmptyMapErrors(t *testing.T) {
+	cfg := &Config{}
+
+	for _, name := range []string{"default", "sonnet", ""} {
+		_, err := cfg.ResolveVariant(name)
+		if err == nil {
+			t.Errorf("expected error for variant %q on empty agents map, got nil", name)
+		}
+	}
+}
+
+func TestVariantNames_Sorted(t *testing.T) {
 	cfg := &Config{
-		Research: ResearchRoleConfig{RoleConfig: RoleConfig{Agent: "bad-agent"}},
+		Agents: map[string]AgentVariant{
+			"sonnet":  {Agent: AgentClaude},
+			"default": {Agent: AgentClaude},
+			"alpha":   {Agent: AgentClaude},
+		},
+	}
+
+	names := cfg.VariantNames()
+	if len(names) != 3 {
+		t.Fatalf("expected 3 names, got %d", len(names))
+	}
+	if names[0] != "alpha" || names[1] != "default" || names[2] != "sonnet" {
+		t.Errorf("expected sorted [alpha default sonnet], got %v", names)
+	}
+}
+
+func TestVariantNames_EmptyMapReturnsEmpty(t *testing.T) {
+	cfg := &Config{}
+
+	names := cfg.VariantNames()
+	if len(names) != 0 {
+		t.Errorf("expected empty slice, got %v", names)
+	}
+}
+
+func TestVariantNames_Populated(t *testing.T) {
+	cfg := &Config{
+		Agents: map[string]AgentVariant{
+			"sonnet":  {Agent: AgentClaude},
+			"default": {Agent: AgentClaude},
+		},
+	}
+	names := cfg.VariantNames()
+	if len(names) != 2 {
+		t.Fatalf("expected 2 names, got %d", len(names))
+	}
+	if names[0] != "default" || names[1] != "sonnet" {
+		t.Errorf("expected sorted [default sonnet], got %v", names)
+	}
+}
+
+func TestValidate_InvalidAgentInMap(t *testing.T) {
+	cfg := &Config{
+		Agents: map[string]AgentVariant{
+			"bad": {Agent: "invalid-agent"},
+		},
 	}
 
 	err := cfg.Validate()
@@ -240,9 +297,22 @@ func TestValidate_InvalidResearchAgent(t *testing.T) {
 	if !ok {
 		t.Errorf("expected ValidationError, got %T", err)
 	}
+	if valErr.Field != "agents.bad.agent" {
+		t.Errorf("expected field 'agents.bad.agent', got %q", valErr.Field)
+	}
+}
 
-	if valErr.Field != "research.agent" {
-		t.Errorf("expected field 'research.agent', got %q", valErr.Field)
+func TestValidate_ValidAgents(t *testing.T) {
+	cfg := &Config{
+		Agents: map[string]AgentVariant{
+			"default": {Agent: AgentClaude},
+			"oc":      {Agent: AgentOpenCode},
+			"noagent": {},
+		},
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
 	}
 }
 
@@ -279,132 +349,6 @@ func TestLoadFromPath_NotFound(t *testing.T) {
 	}
 	if !IsArchitectNotFound(err) {
 		t.Errorf("expected ArchitectNotFoundError, got %T", err)
-	}
-}
-
-func TestNestedConfig_ArchitectAndWork(t *testing.T) {
-	projectRoot := setupTestProject(t)
-	writeConfig(t, projectRoot, `
-name: test
-architect:
-  agent: claude
-  args:
-    - "--budget=150000"
-    - "--verbose"
-work:
-  agent: claude
-  args:
-    - "--budget=50000"
-`)
-
-	cfg, err := Load(projectRoot)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(cfg.Architect.Args) != 2 {
-		t.Fatalf("expected 2 architect args, got %d", len(cfg.Architect.Args))
-	}
-	if cfg.Architect.Args[0] != "--budget=150000" {
-		t.Errorf("expected --budget=150000, got %q", cfg.Architect.Args[0])
-	}
-	if cfg.Architect.Args[1] != "--verbose" {
-		t.Errorf("expected --verbose, got %q", cfg.Architect.Args[1])
-	}
-
-	workRole, err := cfg.RoleConfigForType("work")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(workRole.Args) != 1 {
-		t.Fatalf("expected 1 work arg, got %d", len(workRole.Args))
-	}
-	if workRole.Args[0] != "--budget=50000" {
-		t.Errorf("expected --budget=50000, got %q", workRole.Args[0])
-	}
-}
-
-func TestNestedConfig_NoArgs(t *testing.T) {
-	projectRoot := setupTestProject(t)
-	writeConfig(t, projectRoot, `
-name: test
-`)
-
-	cfg, err := Load(projectRoot)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(cfg.Architect.Args) != 0 {
-		t.Errorf("expected empty architect args, got %v", cfg.Architect.Args)
-	}
-}
-
-func TestNestedConfig_WorkAndResearch(t *testing.T) {
-	projectRoot := setupTestProject(t)
-	writeConfig(t, projectRoot, `
-name: test
-work:
-  agent: claude
-  args:
-    - "--budget=50000"
-research:
-  agent: opencode
-  args:
-    - "--fast"
-`)
-
-	cfg, err := Load(projectRoot)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	workRole, err := cfg.RoleConfigForType("work")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if workRole.Agent != AgentClaude {
-		t.Errorf("expected work agent 'claude', got %q", workRole.Agent)
-	}
-
-	researchRole, err := cfg.RoleConfigForType("research")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if researchRole.Agent != AgentOpenCode {
-		t.Errorf("expected research agent 'opencode', got %q", researchRole.Agent)
-	}
-}
-
-func TestRoleConfigForType_InvalidType(t *testing.T) {
-	cfg := &Config{
-		Work:     RoleConfig{Agent: AgentClaude},
-		Research: ResearchRoleConfig{RoleConfig: RoleConfig{Agent: AgentClaude}},
-	}
-
-	_, err := cfg.RoleConfigForType("nonexistent")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestRoleConfigForType_DefaultConfig(t *testing.T) {
-	cfg := DefaultConfig()
-
-	workRole, err := cfg.RoleConfigForType("work")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if workRole.Agent != AgentClaude {
-		t.Errorf("expected default work agent 'claude', got %q", workRole.Agent)
-	}
-
-	researchRole, err := cfg.RoleConfigForType("research")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if researchRole.Agent != AgentClaude {
-		t.Errorf("expected default research agent 'claude', got %q", researchRole.Agent)
 	}
 }
 
@@ -492,5 +436,25 @@ func TestGetTmuxSessionName(t *testing.T) {
 				t.Errorf("GetTmuxSessionName() = %q, want %q", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestLoad_WithResearchPaths(t *testing.T) {
+	projectRoot := setupTestProject(t)
+	writeConfig(t, projectRoot, `
+name: test
+research:
+  paths:
+    - ~/projects/**
+    - /opt/code/**
+`)
+
+	cfg, err := Load(projectRoot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(cfg.Research.Paths) != 2 {
+		t.Fatalf("expected 2 research paths, got %d", len(cfg.Research.Paths))
 	}
 }

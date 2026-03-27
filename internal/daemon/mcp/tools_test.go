@@ -44,7 +44,7 @@ func setupArchitectWithDaemon(t *testing.T, windowExists bool) (*Server, *ticket
 
 	// Create project config with name (used as tmux session name)
 	configPath := filepath.Join(tmpDir, "cortex.yaml")
-	if err := os.WriteFile(configPath, []byte("name: test-session\n"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("name: test-session\nagents:\n  default:\n    agent: claude\n"), 0644); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("create cortex.yaml: %v", err)
 	}
@@ -436,6 +436,7 @@ func TestHandleSpawnSession(t *testing.T) {
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
+		Variant:  "default",
 	})
 	if err != nil {
 		t.Fatalf("handleSpawnSession failed: %v", err)
@@ -463,6 +464,7 @@ func TestHandleSpawnSessionEmptyTicketID(t *testing.T) {
 
 	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: "",
+		Variant:  "default",
 	})
 	if err == nil {
 		t.Error("expected error for empty ticket_id")
@@ -475,6 +477,7 @@ func TestHandleSpawnSessionTicketNotFound(t *testing.T) {
 
 	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: "nonexistent-ticket",
+		Variant:  "default",
 	})
 	if err == nil {
 		t.Error("expected error for nonexistent ticket")
@@ -497,6 +500,7 @@ func TestHandleSpawnSessionActiveSession(t *testing.T) {
 
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
+		Variant:  "default",
 	})
 
 	// Should return STATE_CONFLICT error for active session
@@ -537,6 +541,7 @@ func TestHandleSpawnSessionAutoMovesToProgress(t *testing.T) {
 	// Spawn a session
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
+		Variant:  "default",
 	})
 	if err != nil {
 		t.Fatalf("handleSpawnSession failed: %v", err)
@@ -668,6 +673,7 @@ func TestHandleSpawnSession_StateNormal_ModeNormal(t *testing.T) {
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 		Mode:     "normal",
+		Variant:  "default",
 	})
 	if err != nil {
 		t.Fatalf("handleSpawnSession failed: %v", err)
@@ -687,6 +693,7 @@ func TestHandleSpawnSession_StateNormal_ModeResume(t *testing.T) {
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 		Mode:     "resume",
+		Variant:  "default",
 	})
 
 	if err == nil {
@@ -713,6 +720,7 @@ func TestHandleSpawnSession_StateNormal_ModeFresh(t *testing.T) {
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 		Mode:     "fresh",
+		Variant:  "default",
 	})
 
 	if err == nil {
@@ -745,6 +753,7 @@ func TestHandleSpawnSession_StateActive_AllModes(t *testing.T) {
 			_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 				TicketID: created.ID,
 				Mode:     mode,
+				Variant:  "default",
 			})
 
 			if err == nil {
@@ -774,6 +783,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeNormal(t *testing.T) {
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 		Mode:     "normal",
+		Variant:  "default",
 	})
 
 	if err == nil {
@@ -801,6 +811,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeResume(t *testing.T) {
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 		Mode:     "resume",
+		Variant:  "default",
 	})
 	if err != nil {
 		t.Fatalf("handleSpawnSession failed: %v", err)
@@ -821,6 +832,7 @@ func TestHandleSpawnSession_StateOrphaned_ModeFresh(t *testing.T) {
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 		Mode:     "fresh",
+		Variant:  "default",
 	})
 	if err != nil {
 		t.Fatalf("handleSpawnSession failed: %v", err)
@@ -843,6 +855,7 @@ func TestHandleSpawnSession_InvalidMode(t *testing.T) {
 	_, _, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 		Mode:     "invalid",
+		Variant:  "default",
 	})
 
 	if err == nil {
@@ -867,6 +880,7 @@ func TestHandleSpawnSession_DefaultMode(t *testing.T) {
 	_, output, err := server.handleSpawnSession(context.Background(), nil, SpawnSessionInput{
 		TicketID: created.ID,
 		Mode:     "", // empty mode
+		Variant:  "default",
 	})
 	if err != nil {
 		t.Fatalf("handleSpawnSession failed: %v", err)

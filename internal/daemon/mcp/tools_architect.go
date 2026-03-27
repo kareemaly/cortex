@@ -59,10 +59,16 @@ func (s *Server) registerArchitectTools() {
 		Description: "Move a ticket to a different status",
 	}, s.handleMoveTicket)
 
+	// List variants
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "listVariants",
+		Description: "List available agent variant names from the agents map in cortex.yaml. Use the returned names as the variant parameter in spawnSession and spawnCollabSession.",
+	}, s.handleListVariants)
+
 	// Spawn session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "spawnSession",
-		Description: "Spawn a new agent session for a ticket",
+		Description: "Spawn a new agent session for a ticket. Use listVariants to see available agent variant names, then pass the chosen name as the variant parameter.",
 	}, s.handleSpawnSession)
 
 	// Update due date
@@ -323,6 +329,9 @@ func (s *Server) handleSpawnSession(
 	if input.TicketID == "" {
 		return nil, SpawnSessionOutput{}, NewValidationError("ticket_id", "cannot be empty")
 	}
+	if input.Variant == "" {
+		return nil, SpawnSessionOutput{}, NewValidationError("variant", "is required — use listVariants to see available names")
+	}
 
 	// Validate mode if provided
 	if input.Mode != "" && input.Mode != "normal" && input.Mode != "resume" && input.Mode != "fresh" {
@@ -338,9 +347,9 @@ func (s *Server) handleSpawnSession(
 	}
 
 	// Build HTTP request to daemon
-	url := fmt.Sprintf("%s/tickets/%s/%s/spawn", s.config.DaemonURL, ticketResp.Status, input.TicketID)
+	url := fmt.Sprintf("%s/tickets/%s/%s/spawn?variant=%s", s.config.DaemonURL, ticketResp.Status, input.TicketID, input.Variant)
 	if input.Mode != "" {
-		url += "?mode=" + input.Mode
+		url += "&mode=" + input.Mode
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
@@ -569,6 +578,9 @@ func (s *Server) handleSpawnCollabSession(
 	if input.Prompt == "" {
 		return nil, SpawnCollabSessionOutput{}, NewValidationError("prompt", "cannot be empty")
 	}
+	if input.Variant == "" {
+		return nil, SpawnCollabSessionOutput{}, NewValidationError("variant", "is required — use listVariants to see available names")
+	}
 
 	// Validate repo against architect config
 	if s.projectConfig != nil {
@@ -577,7 +589,7 @@ func (s *Server) handleSpawnCollabSession(
 		}
 	}
 
-	resp, err := s.sdkClient.SpawnCollabSession(input.Repo, input.Prompt, "normal")
+	resp, err := s.sdkClient.SpawnCollabSession(input.Repo, input.Prompt, "normal", input.Variant)
 	if err != nil {
 		return nil, SpawnCollabSessionOutput{}, wrapSDKError(err)
 	}
@@ -610,4 +622,16 @@ func (s *Server) handleArchitectConcludeSession(
 		Success: resp.Success,
 		Message: resp.Message,
 	}, nil
+}
+
+// handleListVariants returns the available agent variant names from the project config.
+func (s *Server) handleListVariants(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input ListVariantsInput,
+) (*mcp.CallToolResult, ListVariantsOutput, error) {
+	if s.projectConfig == nil {
+		return nil, ListVariantsOutput{Variants: []string{}}, nil
+	}
+	return nil, ListVariantsOutput{Variants: s.projectConfig.VariantNames()}, nil
 }

@@ -1,6 +1,7 @@
 package sdk
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -23,4 +24,31 @@ func (c *Client) EditProjectConfigInEditor() error {
 	}
 
 	return nil
+}
+
+// GetVariants returns the sorted list of agent variant names for the project.
+func (c *Client) GetVariants() ([]string, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/config/variants", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result struct {
+		Variants []string `json:"variants"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result.Variants, nil
 }

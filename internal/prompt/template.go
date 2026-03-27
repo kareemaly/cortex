@@ -24,6 +24,7 @@ type ArchitectKickoffVars struct {
 	Sessions         string // recent conclusions list
 	Repos            string // configured repo list
 	LastConclusionID string // ID of most recent architect conclusion, empty if none
+	Variants         string // comma-separated agent variant names, empty if none configured
 }
 
 // TicketsVars contains status-specific ticket lists for architect templates.

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/cli/tui/tuilog"
+	"github.com/kareemaly/cortex/internal/cli/tui/variant"
 )
 
 // SSE reconnection constants.
@@ -38,6 +39,13 @@ type Model struct {
 
 	// Delete confirmation modal state
 	showDeleteModal bool
+
+	// Variant selector state
+	showVariantSelector bool
+	variantSelector     variant.Model
+	pendingSpawnTicket  *sdk.TicketSummary
+	pendingSpawnMode    string
+	pendingSpawnVariant string
 
 	// Vim navigation state
 	pendingG bool // tracking 'g' key for 'gg' sequence
@@ -135,6 +143,12 @@ type sseReconnectTickMsg struct{}
 
 // pollTickMsg is sent periodically as a safety-net data refresh.
 type pollTickMsg struct{}
+
+// variantsLoadedMsg is sent when agent variants are fetched successfully.
+type variantsLoadedMsg struct{ variants []string }
+
+// variantsErrMsg is sent when fetching agent variants fails.
+type variantsErrMsg struct{ err error }
 
 // New creates a new kanban model with the given client and log buffer.
 func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
@@ -318,6 +332,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pollTickMsg:
 		return m, tea.Batch(m.loadTickets(), m.startPollTicker())
+
+	case variantsLoadedMsg:
+		if len(msg.variants) == 1 {
+			m.pendingSpawnVariant = msg.variants[0]
+			return m, m.spawnSessionWithVariant(m.pendingSpawnTicket, m.pendingSpawnMode, msg.variants[0])
+		}
+		m.variantSelector = variant.New("Select agent variant", msg.variants)
+		m.showVariantSelector = true
+		return m, nil
+
+	case variantsErrMsg:
+		m.statusMsg = fmt.Sprintf("Error loading variants: %s", msg.err)
+		m.statusIsError = true
+		m.pendingSpawnTicket = nil
+		m.pendingSpawnMode = ""
+		return m, m.clearStatusAfterDelay()
+
+	case variant.SelectedMsg:
+		m.showVariantSelector = false
+		ticket := m.pendingSpawnTicket
+		mode := m.pendingSpawnMode
+		m.pendingSpawnVariant = msg.Name // preserve for potential orphan re-spawn
+		m.pendingSpawnTicket = nil
+		m.pendingSpawnMode = ""
+		return m, m.spawnSessionWithVariant(ticket, mode, msg.Name)
+
+	case variant.CancelledMsg:
+		m.showVariantSelector = false
+		m.pendingSpawnTicket = nil
+		m.pendingSpawnMode = ""
+		m.statusMsg = "Spawn cancelled"
+		m.statusIsError = false
+		return m, m.clearStatusAfterDelay()
 	}
 
 	return m, nil
@@ -344,6 +391,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Modal state takes priority.
+	if m.showVariantSelector {
+		return m.handleVariantSelectorKey(msg)
+	}
 	if m.showDeleteModal {
 		return m.handleDeleteModalKey(msg)
 	}
@@ -429,9 +479,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if isKey(msg, KeySpawn) {
 		t := m.columns[m.activeColumn].SelectedTicket()
 		if t != nil {
+			m.pendingSpawnTicket = t
+			m.pendingSpawnMode = "normal"
 			m.statusMsg = fmt.Sprintf("Spawning session for: %s...", t.Title)
 			m.statusIsError = false
-			return m, m.spawnSession(t)
+			return m, m.loadVariants()
 		}
 		return m, nil
 	}
@@ -488,15 +540,23 @@ func (m Model) handleOrphanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case isKey(msg, KeyRefresh): // 'r' for resume
 		m.showOrphanModal = false
-		m.statusMsg = fmt.Sprintf("Resuming session for: %s...", m.orphanedTicket.Title)
+		ticket := m.orphanedTicket
+		variantName := m.pendingSpawnVariant
+		m.orphanedTicket = nil
+		m.pendingSpawnVariant = ""
+		m.statusMsg = fmt.Sprintf("Resuming session for: %s...", ticket.Title)
 		m.statusIsError = false
-		return m, m.spawnSessionWithMode(m.orphanedTicket, "resume")
+		return m, m.spawnSessionWithVariant(ticket, "resume", variantName)
 
 	case isKey(msg, KeyFresh): // 'f' for fresh
 		m.showOrphanModal = false
-		m.statusMsg = fmt.Sprintf("Starting fresh session for: %s...", m.orphanedTicket.Title)
+		ticket := m.orphanedTicket
+		variantName := m.pendingSpawnVariant
+		m.orphanedTicket = nil
+		m.pendingSpawnVariant = ""
+		m.statusMsg = fmt.Sprintf("Starting fresh session for: %s...", ticket.Title)
 		m.statusIsError = false
-		return m, m.spawnSessionWithMode(m.orphanedTicket, "fresh")
+		return m, m.spawnSessionWithVariant(ticket, "fresh", variantName)
 
 	case isKey(msg, KeyDeleteOrphan): // 'D' for delete
 		m.showOrphanModal = false
@@ -584,32 +644,37 @@ func (m Model) View() string {
 		cols[i] = m.columns[i].View(columnWidth, i == m.activeColumn, columnHeight)
 	}
 	columnsView := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+
+	// All modals render as centered overlays.
+	if m.showVariantSelector {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.variantSelector.View())
+	}
+	if m.showOrphanModal {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderOrphanModal())
+	}
+	if m.showDeleteModal {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderDeleteModal())
+	}
+
 	b.WriteString(columnsView)
 	b.WriteString("\n")
 
-	// Status bar / Modal.
-	if m.showDeleteModal {
-		b.WriteString(m.renderDeleteModal())
-	} else if m.showOrphanModal {
-		b.WriteString(m.renderOrphanModal())
+	if m.statusMsg != "" {
+		style := statusBarStyle
+		if m.statusIsError {
+			style = errorStatusStyle
+		}
+		b.WriteString(style.Render(m.statusMsg))
+		b.WriteString("\n")
 	} else {
-		if m.statusMsg != "" {
-			style := statusBarStyle
-			if m.statusIsError {
-				style = errorStatusStyle
-			}
-			b.WriteString(style.Render(m.statusMsg))
-			b.WriteString("\n")
-		} else {
-			b.WriteString("\n")
-		}
-		help := helpBarStyle.Render(helpText())
-		badge := m.logBadge()
-		if badge != "" {
-			help = help + "  " + badge
-		}
-		b.WriteString(help)
+		b.WriteString("\n")
 	}
+	help := helpBarStyle.Render(helpText())
+	badge := m.logBadge()
+	if badge != "" {
+		help = help + "  " + badge
+	}
+	b.WriteString(help)
 
 	return b.String()
 }
@@ -679,9 +744,21 @@ func (m Model) startPollTicker() tea.Cmd {
 	})
 }
 
-func (m Model) spawnSession(ticket *sdk.TicketSummary) tea.Cmd {
+// loadVariants fetches available agent variants from the daemon.
+func (m Model) loadVariants() tea.Cmd {
 	return func() tea.Msg {
-		result, err := m.client.SpawnSession(ticket.Status, ticket.ID, "normal")
+		variants, err := m.client.GetVariants()
+		if err != nil {
+			return variantsErrMsg{err: err}
+		}
+		return variantsLoadedMsg{variants: variants}
+	}
+}
+
+// spawnSessionWithVariant spawns a session using a resolved variant name.
+func (m Model) spawnSessionWithVariant(ticket *sdk.TicketSummary, mode, variantName string) tea.Cmd {
+	return func() tea.Msg {
+		result, err := m.client.SpawnSession(ticket.Status, ticket.ID, mode, variantName)
 		if err != nil {
 			if apiErr, ok := err.(*sdk.APIError); ok && apiErr.IsOrphanedSession() {
 				return OrphanedSessionMsg{Ticket: ticket}
@@ -692,14 +769,11 @@ func (m Model) spawnSession(ticket *sdk.TicketSummary) tea.Cmd {
 	}
 }
 
-func (m Model) spawnSessionWithMode(ticket *sdk.TicketSummary, mode string) tea.Cmd {
-	return func() tea.Msg {
-		result, err := m.client.SpawnSession(ticket.Status, ticket.ID, mode)
-		if err != nil {
-			return SessionErrorMsg{Err: err}
-		}
-		return SessionSpawnedMsg{Session: result.Session, Ticket: ticket, Queued: result.Queued, Position: result.Position}
-	}
+// handleVariantSelectorKey delegates key events to the variant selector popup.
+func (m Model) handleVariantSelectorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.variantSelector, cmd = m.variantSelector.Update(msg)
+	return m, cmd
 }
 
 func (m Model) dequeueTicket(ticket *sdk.TicketSummary) tea.Cmd {
@@ -755,24 +829,40 @@ func (m Model) logBadge() string {
 	return strings.Join(parts, " ")
 }
 
-// renderOrphanModal renders the orphaned session modal prompt.
+var modalBorderStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(lipgloss.Color("214")).
+	Padding(1, 2)
+
+var modalTitleStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("255")).
+	MarginBottom(1)
+
+var modalHelpStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("240")).
+	MarginTop(1)
+
+// renderOrphanModal renders the orphaned session modal as a popup box.
 func (m Model) renderOrphanModal() string {
 	title := m.orphanedTicket.Title
-	if len(title) > 30 {
-		title = title[:27] + "..."
+	if len(title) > 40 {
+		title = title[:37] + "..."
 	}
-	prompt := fmt.Sprintf("Orphaned session found for \"%s\"", title)
-	options := "r resume  f fresh  D delete  c cancel"
-	return statusBarStyle.Render(prompt) + "\n" + helpBarStyle.Render(options)
+	content := modalTitleStyle.Render("Orphaned Session") + "\n" +
+		lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Render("\""+title+"\"") + "\n" +
+		modalHelpStyle.Render("[r] resume   [f] fresh   [D] delete   [esc] cancel")
+	return modalBorderStyle.Render(content)
 }
 
-// renderDeleteModal renders the delete confirmation modal prompt.
+// renderDeleteModal renders the delete confirmation modal as a popup box.
 func (m Model) renderDeleteModal() string {
 	title := m.orphanedTicket.Title
-	if len(title) > 30 {
-		title = title[:27] + "..."
+	if len(title) > 40 {
+		title = title[:37] + "..."
 	}
-	prompt := fmt.Sprintf("Delete orphaned session for \"%s\"?", title)
-	options := "y yes  n no"
-	return statusBarStyle.Render(prompt) + "\n" + helpBarStyle.Render(options)
+	content := modalTitleStyle.Render("Delete Session?") + "\n" +
+		lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Render("\""+title+"\"") + "\n" +
+		modalHelpStyle.Render("[y] yes   [n] back")
+	return modalBorderStyle.Render(content)
 }

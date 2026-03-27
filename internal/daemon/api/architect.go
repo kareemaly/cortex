@@ -86,10 +86,22 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	if mode == "" {
 		mode = "normal"
 	}
+	variantName := r.URL.Query().Get("variant")
 
 	sessionName, sess, projectCfg, err := h.getSessionAndConfig(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
+		return
+	}
+
+	// Resolve variant — required
+	if variantName == "" {
+		writeError(w, http.StatusBadRequest, "variant_required", "variant is required — pass ?variant=<name> (see GET /config/variants for available names)")
+		return
+	}
+	av, err := projectCfg.ResolveVariant(variantName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_variant", err.Error())
 		return
 	}
 
@@ -105,6 +117,11 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		h.deps.Logger.Error("failed to detect architect state", "error", err)
 		writeError(w, http.StatusInternalServerError, "state_error", "failed to detect architect session state")
 		return
+	}
+
+	agent := string(av.Agent)
+	if agent == "" {
+		agent = "claude"
 	}
 
 	switch stateInfo.State {
@@ -158,7 +175,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 					h.deps.Logger.Warn("failed to end orphaned architect session for resume", "error", endErr)
 				}
 			}
-			h.spawnArchitectSession(w, r, projectPath, sessionName, projectCfg, true)
+			h.spawnArchitectSession(w, r, projectPath, sessionName, projectCfg, agent, av.Args, "cortex architect show", true)
 			return
 		default:
 			writeError(w, http.StatusBadRequest, "invalid_mode", "mode must be 'normal', 'fresh', or 'resume'")
@@ -175,11 +192,11 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Spawn a new architect session
-	h.spawnArchitectSession(w, r, projectPath, sessionName, projectCfg, false)
+	h.spawnArchitectSession(w, r, projectPath, sessionName, projectCfg, agent, av.Args, "cortex architect show", false)
 }
 
 // spawnArchitectSession spawns an architect session (new or resumed).
-func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http.Request, projectPath, sessionName string, projectCfg *architectconfig.Config, resume bool) {
+func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http.Request, projectPath, sessionName string, projectCfg *architectconfig.Config, agent string, agentArgs []string, companion string, resume bool) {
 	ticketsDir := projectCfg.TicketsPath(projectPath)
 
 	var sessStore spawn.SessionStoreInterface
@@ -195,35 +212,30 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 		DefaultsDir:  h.deps.DefaultsDir,
 	})
 
-	architectAgent := string(projectCfg.Architect.Agent)
-	if architectAgent == "" {
-		architectAgent = "claude"
-	}
-
 	var result *spawn.SpawnResult
 	var err error
 
 	if resume {
 		result, err = spawner.Resume(r.Context(), spawn.ResumeRequest{
 			AgentType:     spawn.AgentTypeArchitect,
-			Agent:         architectAgent,
+			Agent:         agent,
 			TmuxSession:   sessionName,
 			ArchitectPath: projectPath,
 			TicketsDir:    ticketsDir,
 			WindowName:    "architect",
-			Companion:     projectCfg.Architect.Companion,
-			AgentArgs:     projectCfg.Architect.Args,
+			Companion:     companion,
+			AgentArgs:     agentArgs,
 		})
 	} else {
 		result, err = spawner.Spawn(r.Context(), spawn.SpawnRequest{
 			AgentType:     spawn.AgentTypeArchitect,
-			Agent:         architectAgent,
+			Agent:         agent,
 			TmuxSession:   sessionName,
 			ArchitectPath: projectPath,
 			TicketsDir:    ticketsDir,
 			ArchitectName: sessionName,
-			Companion:     projectCfg.Architect.Companion,
-			AgentArgs:     projectCfg.Architect.Args,
+			Companion:     companion,
+			AgentArgs:     agentArgs,
 		})
 	}
 

@@ -538,7 +538,7 @@ func TestSpawnSession_Success(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.SpawnSession("backlog", "abc123", "")
+	resp, err := c.SpawnSession("backlog", "abc123", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -671,7 +671,7 @@ func TestSpawnArchitect_Success(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.SpawnArchitect("")
+	resp, err := c.SpawnArchitect("", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,8 +19,10 @@ type OrchestrateStore interface {
 // OrchestrateRequest contains parameters for orchestrating a spawn operation.
 type OrchestrateRequest struct {
 	TicketID      string
-	Mode          string // "normal", "resume", "fresh" (validated internally; defaults to "normal")
-	Agent         string // optional: falls back to project config, then "claude"
+	Mode          string   // "normal", "resume", "fresh" (validated internally; defaults to "normal")
+	Agent         string   // pre-resolved by API handler; falls back to "claude"
+	AgentArgs     []string // pre-resolved by API handler
+	Companion     string   // pre-resolved by API handler
 	ArchitectPath string
 	TicketsDir    string // optional: derived from ProjectPath if empty
 	TmuxSession   string // optional: derived from project config name if empty
@@ -88,26 +90,13 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 		return nil, &ConfigError{Field: "ProjectPath", Message: "failed to load project config: " + err.Error()}
 	}
 
-	// 4. Resolve ticket type and agent config
+	// 4. Get ticket
 	t, ticketStatus, err := deps.Store.Get(req.TicketID)
 	if err != nil {
 		return nil, err
 	}
 
-	ticketType := t.Type
-	if ticketType == "" {
-		ticketType = ticket.DefaultTicketType
-	}
-
-	ticketRoleCfg, ticketCfgErr := projectCfg.RoleConfigForType(ticketType)
-	if ticketCfgErr != nil {
-		return nil, &ConfigError{Field: "ticket." + ticketType, Message: ticketCfgErr.Error()}
-	}
-
 	agent := req.Agent
-	if agent == "" {
-		agent = string(ticketRoleCfg.Agent)
-	}
 	if agent == "" {
 		agent = "claude"
 	}
@@ -158,8 +147,8 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 			TicketsDir:    ticketsDir,
 			TicketID:      req.TicketID,
 			Ticket:        t,
-			Companion:     ticketRoleCfg.Companion,
-			AgentArgs:     ticketRoleCfg.Args,
+			Companion:     req.Companion,
+			AgentArgs:     req.AgentArgs,
 		}
 	}
 
@@ -218,9 +207,9 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				TicketsDir:    ticketsDir,
 				WindowName:    stateInfo.Session.TmuxWindow,
 				TicketID:      req.TicketID,
-				TicketType:    ticketType,
-				Companion:     ticketRoleCfg.Companion,
-				AgentArgs:     ticketRoleCfg.Args,
+				TicketType:    t.Type,
+				Companion:     req.Companion,
+				AgentArgs:     req.AgentArgs,
 			})
 			outcome = OutcomeResumed
 		case "fresh":

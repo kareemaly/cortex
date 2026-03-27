@@ -116,6 +116,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		r.Get("/config/project", configHandlers.ReadProjectConfig)
 		r.Put("/config/project", configHandlers.UpdateProjectConfig)
 		r.Post("/config/project/edit", configHandlers.EditProjectConfig)
+		r.Get("/config/variants", configHandlers.GetVariants)
 
 		// Collab routes
 		collabHandlers := NewCollabHandlers(deps)
