@@ -6,7 +6,7 @@ Orchestration layer for AI coding agents. File-based ticket management with MCP 
 
 ```bash
 cortexd &                           # Start daemon (background)
-cortex architect create --name myproject   # Create architect workspace
+cortex init myproject               # Create architect workspace
 cortex architect start              # Start architect session
 ```
 
@@ -48,7 +48,7 @@ Tickets and conclusions use **YAML frontmatter + markdown body** stored as `inde
 - **Tickets**: `tickets/{status}/{slug}-{shortid}/index.md` (statuses: backlog, progress, done)
 - **Conclusions**: `sessions/{slug}-{shortid}/index.md` (persistent session records)
 
-Default ticket path is `{projectRoot}/tickets/` (configurable via `tickets.path` in `cortex.yaml`). Sessions are ephemeral and stored in `.cortex/sessions.json`.
+Ticket path is always `{projectRoot}/tickets/`. Sessions are ephemeral and stored in `.cortex/sessions.json`.
 
 ## Critical Implementation Notes
 
@@ -103,31 +103,30 @@ Default ticket path is `{projectRoot}/tickets/` (configurable via `tickets.path`
 
 ## Configuration
 
-**Architect** (`cortex.yaml` or `.cortex/cortex.yaml`): Agent type (`claude`, `opencode`) and args per role. Optional `repos` list and `tickets.path`. See `internal/architect/config/config.go` for schema.
+**Architect** (`cortex.yaml`): Named agent variants, optional `repos` list, optional `companion`. See `internal/architect/config/config.go` for schema.
 
 ```yaml
 name: my-project
 repos:
   - /path/to/repo
-architect:
-  agent: claude
-work:
-  agent: claude
-research:
-  agent: claude
-tickets:
-  path: custom/tickets  # optional, defaults to {architectRoot}/tickets
+agents:
+  claude:
+    agent: claude
+    args: []
+  claude-plan:
+    agent: claude
+    args: ["--permission-mode", "plan"]
 ```
 
 **Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, architect registry. See `internal/daemon/config/config.go` for schema.
 
-**Architect registry**: Global config tracks all architects (`architects` list). Auto-registered on `cortex architect create`. Used by `GET /architects` endpoint.
+**Architect registry**: Global config tracks all architects (`architects` list). Auto-registered on `cortex init`. Used by `GET /architects` endpoint.
 
 ## CLI Commands
 
 | Command | Description |
 |---------|-------------|
-| `cortex architect create [--name <n>] [--agent claude\|opencode]` | Create architect workspace in `~/architects/<name>/` |
+| `cortex init <name> [--agent claude\|opencode]` | Initialize architect workspace in `./<name>/` |
 | `cortex architect list` | List all registered architects (TUI or table) |
 | `cortex architect start [name] [--mode fresh\|resume]` | Start/attach architect session |
 | `cortex architect show [name]` | Open architect project TUI |

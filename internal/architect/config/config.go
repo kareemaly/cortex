@@ -30,11 +30,6 @@ type ResearchRoleConfig struct {
 	Paths []string `yaml:"paths,omitempty"`
 }
 
-// TicketsConfig holds configuration for the ticket storage.
-type TicketsConfig struct {
-	Path string `yaml:"path,omitempty"`
-}
-
 // Config holds the architect configuration.
 type Config struct {
 	Name      string                  `yaml:"name"`
@@ -43,19 +38,10 @@ type Config struct {
 	Companion string                  `yaml:"companion,omitempty"`
 	Agents    map[string]AgentVariant `yaml:"agents,omitempty"`
 	Research  ResearchRoleConfig      `yaml:"research,omitempty"`
-	Tickets   TicketsConfig           `yaml:"tickets,omitempty"`
 }
 
-// TicketsPath returns the resolved tickets directory path for the given architect root.
-// If Tickets.Path is set, resolves it relative to the architect root (or absolute).
-// Otherwise defaults to {architectRoot}/tickets.
+// TicketsPath returns the tickets directory path for the given architect root.
 func (c *Config) TicketsPath(architectRoot string) string {
-	if c.Tickets.Path != "" {
-		if filepath.IsAbs(c.Tickets.Path) {
-			return c.Tickets.Path
-		}
-		return filepath.Join(architectRoot, c.Tickets.Path)
-	}
 	return filepath.Join(architectRoot, "tickets")
 }
 

@@ -147,7 +147,7 @@ func copyEmbeddedDir(embedFS embed.FS, srcDir, dstDir string, force bool) ([]Set
 	var items []SetupItem
 
 	// Create the target directory first
-	item := ensureDir(dstDir)
+	item := EnsureDir(dstDir)
 	items = append(items, item)
 	if item.Error != nil {
 		return items, item.Error
@@ -172,7 +172,7 @@ func copyEmbeddedDir(embedFS embed.FS, srcDir, dstDir string, force bool) ([]Set
 		dstPath := filepath.Join(dstDir, relPath)
 
 		if d.IsDir() {
-			item := ensureDir(dstPath)
+			item := EnsureDir(dstPath)
 			items = append(items, item)
 			if item.Error != nil {
 				return item.Error
@@ -186,7 +186,7 @@ func copyEmbeddedDir(embedFS embed.FS, srcDir, dstDir string, force bool) ([]Set
 			return err
 		}
 
-		item := ensureConfigFile(dstPath, string(content), force)
+		item := EnsureConfigFile(dstPath, string(content), force)
 		items = append(items, item)
 		if item.Error != nil {
 			return item.Error

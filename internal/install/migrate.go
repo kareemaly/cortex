@@ -36,9 +36,6 @@ type legacyConfig struct {
 	Docs struct {
 		Path string `yaml:"path,omitempty"`
 	} `yaml:"docs,omitempty"`
-	Tickets struct {
-		Path string `yaml:"path,omitempty"`
-	} `yaml:"tickets,omitempty"`
 }
 
 // DetectAgentFromExtend returns the agent type based on the extend path.
@@ -56,7 +53,7 @@ func DetectAgentFromExtend(extendPath string) string {
 
 // MigrateProjectConfig reads a project's cortex.yaml and migrates it
 // from the legacy format (with extend, ticket, git fields) to the new format
-// with top-level architect, work, and research sections.
+// with top-level agents map.
 func MigrateProjectConfig(projectPath string) *MigrationResult {
 	result := &MigrationResult{ArchitectPath: projectPath}
 
@@ -102,16 +99,8 @@ func MigrateProjectConfig(projectPath string) *MigrationResult {
 	}
 	result.DetectedAgent = agent
 
-	// Generate new config
-	opts := Options{
-		Agent: agent,
-	}
-	newConfig := generateProjectConfig(opts, result.ArchitectName)
-
-	// Preserve custom tickets path
-	if old.Tickets.Path != "" {
-		newConfig += "tickets:\n  path: " + old.Tickets.Path + "\n"
-	}
+	// Generate new config with agents variant format
+	newConfig := generateMigratedConfig(result.ArchitectName, agent)
 
 	// Write the migrated config
 	if err := os.WriteFile(configPath, []byte(newConfig), 0644); err != nil {
@@ -121,6 +110,39 @@ func MigrateProjectConfig(projectPath string) *MigrationResult {
 
 	result.Migrated = true
 	return result
+}
+
+// generateMigratedConfig produces a cortex.yaml in the new agents variant format.
+func generateMigratedConfig(name, agent string) string {
+	var sb strings.Builder
+
+	sb.WriteString("name: ")
+	sb.WriteString(name)
+	sb.WriteString("\nrepos: []\n")
+
+	sb.WriteString("\nagents:\n")
+
+	sb.WriteString("  ")
+	sb.WriteString(agent)
+	sb.WriteString(":\n")
+	sb.WriteString("    agent: ")
+	sb.WriteString(agent)
+	sb.WriteString("\n    args: []\n")
+
+	sb.WriteString("  ")
+	sb.WriteString(agent)
+	sb.WriteString("-plan:\n")
+	sb.WriteString("    agent: ")
+	sb.WriteString(agent)
+	sb.WriteString("\n")
+
+	if agent == "claude" {
+		sb.WriteString("    args: [\"--permission-mode\", \"plan\"]\n")
+	} else {
+		sb.WriteString("    args: [\"--agent\", \"plan\"]\n")
+	}
+
+	return sb.String()
 }
 
 // MigrateAllProjects loads the global config and migrates all registered projects.

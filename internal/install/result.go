@@ -32,20 +32,3 @@ type SetupItem struct {
 	Status ItemStatus
 	Error  error
 }
-
-// DependencyResult represents the result of checking a dependency.
-type DependencyResult struct {
-	Name      string
-	Available bool
-	Path      string
-}
-
-// Result holds the complete installation result.
-type Result struct {
-	GlobalItems       []SetupItem
-	ArchitectItems    []SetupItem
-	Dependencies      []DependencyResult
-	ArchitectName     string
-	Registered        bool
-	RegistrationError error
-}

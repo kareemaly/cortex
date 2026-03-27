@@ -37,7 +37,6 @@ git:
 		t.Errorf("expected agent 'claude', got %q", result.DetectedAgent)
 	}
 
-	// Read back and verify
 	data, err := os.ReadFile(filepath.Join(dir, "cortex.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -46,11 +45,11 @@ git:
 	if !strings.Contains(content, "name: myproject") {
 		t.Error("migrated config should preserve project name")
 	}
-	if !strings.Contains(content, "work:\n  agent: claude") {
-		t.Error("migrated config should have work section with claude agent")
+	if !strings.Contains(content, "claude:\n    agent: claude") {
+		t.Error("migrated config should have claude variant")
 	}
-	if !strings.Contains(content, "research:\n  agent: claude") {
-		t.Error("migrated config should have research section with claude agent")
+	if !strings.Contains(content, "claude-plan:\n    agent: claude") {
+		t.Error("migrated config should have claude-plan variant")
 	}
 	if strings.Contains(content, "extend:") {
 		t.Error("migrated config should not contain extend field")
@@ -85,7 +84,6 @@ git:
 		t.Errorf("expected agent 'opencode', got %q", result.DetectedAgent)
 	}
 
-	// Read back and verify new format with opencode agent
 	data, err := os.ReadFile(filepath.Join(dir, "cortex.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -94,17 +92,17 @@ git:
 	if !strings.Contains(content, "name: myproject") {
 		t.Error("migrated config should preserve project name")
 	}
-	if !strings.Contains(content, "work:\n  agent: opencode") {
-		t.Error("migrated config should have work section with opencode agent")
+	if !strings.Contains(content, "opencode:\n    agent: opencode") {
+		t.Error("migrated config should have opencode variant")
 	}
-	if !strings.Contains(content, "research:\n  agent: opencode") {
-		t.Error("migrated config should have research section with opencode agent")
+	if !strings.Contains(content, "opencode-plan:\n    agent: opencode") {
+		t.Error("migrated config should have opencode-plan variant")
 	}
 	if strings.Contains(content, "extend:") {
 		t.Error("migrated config should not contain extend field")
 	}
 	if strings.Contains(content, "worktrees:") {
-		t.Error("migrated config should not contain worktrees field (no longer supported)")
+		t.Error("migrated config should not contain worktrees field")
 	}
 }
 
@@ -179,21 +177,20 @@ tickets:
 		t.Fatal("expected migration to succeed")
 	}
 
-	// Read back and verify custom tickets path preserved
+	// tickets.path is no longer preserved — tickets always at {root}/tickets
 	data, err := os.ReadFile(filepath.Join(dir, "cortex.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	content := string(data)
-	if !strings.Contains(content, "path: custom/tickets") {
-		t.Error("migrated config should preserve custom tickets path")
+	if strings.Contains(content, "tickets:") {
+		t.Error("migrated config should not contain tickets section")
 	}
 }
 
 func TestMigrateProjectConfig_FallbackToArchitectAgent(t *testing.T) {
 	dir := t.TempDir()
 
-	// Config with no recognizable extend path but has architect.agent
 	oldConfig := `name: myproject
 extend: /some/custom/path
 architect:

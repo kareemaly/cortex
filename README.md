@@ -14,11 +14,11 @@ Cortex turns your AI coding assistant into a managed development team. An archit
 # Install (latest stable)
 curl -fsSL https://github.com/kareemaly/cortex/releases/latest/download/install.sh | bash
 
-# Initialize in your project
-cd your-project && cortex init
+# Initialize a new architect workspace
+cortex init myproject
 
 # Start the architect
-cortex architect
+cd myproject && cortex architect start
 ```
 
 The architect will guide you through creating and managing tickets.
@@ -57,9 +57,10 @@ The architect will guide you through creating and managing tickets.
 
 | Command | Description |
 |---------|-------------|
-| `cortex init` | Initialize project with `.cortex/` directory |
-| `cortex architect` | Start or attach to architect session |
-| `cortex project` | Project TUI |
+| `cortex init <name>` | Initialize architect workspace |
+| `cortex architect start [name]` | Start or attach to architect session |
+| `cortex architect list` | List registered architects |
+| `cortex architect show [name]` | Project TUI |
 | `cortex daemon status` | Check daemon status |
 | `cortex upgrade` | Refresh embedded defaults |
 | `cortex eject <path>` | Customize a default prompt |
@@ -68,25 +69,26 @@ The architect will guide you through creating and managing tickets.
 
 ### Project Config
 
-`.cortex/cortex.yaml` - project-specific settings:
+`cortex.yaml` - project-specific settings:
 
 ```yaml
 name: my-project
-extend: ~/.cortex/defaults/claude-code
-architect:
-  agent: claude  # Options: claude, opencode
-  args: ["--allowedTools", "mcp__cortex__*"]
-ticket:
-  work:     # Default implementation workflow
+repos:
+  - ~/projects/my-repo
+
+agents:
+  claude:
+    agent: claude
+    args: []
+  claude-plan:
     agent: claude
     args: ["--permission-mode", "plan"]
-  debug:    # Root cause analysis workflow
-    agent: opencode  # Mix agents per workflow
-  research: # Read-only exploration workflow
-    agent: claude
-git:
-  worktrees: false  # Enable git worktrees for ticket isolation
 ```
+
+After running `cortex init`, edit `cortex.yaml` to:
+- Add your repos under `repos:`
+- Customize agent variants under `agents:`
+- Set `companion: lazygit` for side-by-side git UI
 
 ### Global Config
 
@@ -103,25 +105,23 @@ log_level: info
 Use `cortex eject` to copy default prompts for customization:
 
 ```bash
-cortex eject ticket/work/SYSTEM.md    # Customize ticket workflow
-cortex eject architect/SYSTEM.md      # Customize architect behavior
+cortex eject work/KICKOFF.md        # Customize ticket workflow
+cortex eject architect/SYSTEM.md    # Customize architect behavior
 ```
 
-Ejected prompts go to `.cortex/prompts/`.
-
-See [CONFIG_DOCS.md](internal/install/defaults/claude-code/CONFIG_DOCS.md) for full configuration reference.
+Ejected prompts go to `<project>/prompts/`. Un-ejected prompts fall back to `~/.cortex/defaults/main/prompts/`.
 
 ## How It Works
 
-1. **Initialize** - `cortex init` creates `.cortex/` with config and ticket storage
+1. **Initialize** - `cortex init` creates the workspace with config and ticket storage
 2. **Daemon starts** - `cortexd` launches automatically, serves all projects on port 4200
 3. **Architect session** - AI agent with MCP tools for ticket management
 4. **Worker sessions** - Each ticket gets a dedicated tmux window with scoped MCP tools
 5. **Review cycle** - Workers request review, architect approves
 
 The daemon handles:
-- Ticket storage (JSON files in `.cortex/tickets/`)
-- Documentation storage (Markdown with YAML frontmatter in `.cortex/docs/`)
+- Ticket storage (YAML frontmatter + markdown in `tickets/`)
+- Session records (persistent conclusion records in `sessions/`)
 - Tmux session orchestration
 - MCP server for AI agents
 - SSE events for real-time updates

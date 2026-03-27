@@ -53,7 +53,7 @@ func (m Model) View() string {
 	}
 
 	if len(m.projects) == 0 {
-		b.WriteString(loadingStyle.Render("No projects registered. Use 'cortex architect create' in a project directory."))
+		b.WriteString(loadingStyle.Render("No projects registered. Use 'cortex init <name>' to create one."))
 		b.WriteString("\n\n")
 		b.WriteString(helpBarStyle.Render("[r]efresh  [q]uit"))
 		return b.String()

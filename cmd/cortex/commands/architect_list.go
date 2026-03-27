@@ -20,7 +20,7 @@ var architectListCmd = &cobra.Command{
 		}
 
 		if len(resp.Architects) == 0 {
-			fmt.Println("No architects registered. Use 'cortex architect create' to create one.")
+			fmt.Println("No architects registered. Use 'cortex init <name>' to create one.")
 			return nil
 		}
 
