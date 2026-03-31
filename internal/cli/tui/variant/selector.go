@@ -37,6 +37,10 @@ var (
 			Foreground(lipgloss.Color("255")).
 			MarginBottom(1)
 
+	filterStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("250")).
+			MarginBottom(1)
+
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")).
 			MarginTop(1)
@@ -47,6 +51,7 @@ type Model struct {
 	variants []string
 	cursor   int
 	title    string
+	filter   string
 }
 
 // New creates a new variant selector.
@@ -58,25 +63,65 @@ func New(title string, variants []string) Model {
 	}
 }
 
+// filtered returns the variants that match the current filter (case-insensitive).
+func (m Model) filtered() []string {
+	if m.filter == "" {
+		return m.variants
+	}
+	q := strings.ToLower(m.filter)
+	var out []string
+	for _, v := range m.variants {
+		if strings.Contains(strings.ToLower(v), q) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// clampCursor ensures the cursor stays within bounds of the filtered list.
+func (m *Model) clampCursor(n int) {
+	if n <= 0 {
+		m.cursor = 0
+		return
+	}
+	if m.cursor >= n {
+		m.cursor = n - 1
+	}
+}
+
 // Update handles keyboard input for the selector.
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		filtered := m.filtered()
+		n := len(filtered)
+
 		switch msg.String() {
 		case "j", "down":
-			if m.cursor < len(m.variants)-1 {
-				m.cursor++
+			if n > 0 {
+				m.cursor = (m.cursor + 1) % n
 			}
 		case "k", "up":
-			if m.cursor > 0 {
-				m.cursor--
+			if n > 0 {
+				m.cursor = (m.cursor - 1 + n) % n
 			}
 		case "enter", " ":
-			if len(m.variants) > 0 {
-				return m, func() tea.Msg { return SelectedMsg{Name: m.variants[m.cursor]} }
+			if n > 0 {
+				return m, func() tea.Msg { return SelectedMsg{Name: filtered[m.cursor]} }
 			}
 		case "esc", "q":
 			return m, func() tea.Msg { return CancelledMsg{} }
+		case "backspace", "ctrl+h":
+			if len(m.filter) > 0 {
+				m.filter = m.filter[:len([]rune(m.filter))-1]
+				m.clampCursor(len(m.filtered()))
+			}
+		default:
+			// Append printable runes to filter.
+			if len(msg.Runes) > 0 {
+				m.filter += string(msg.Runes)
+				m.cursor = 0
+			}
 		}
 	}
 	return m, nil
@@ -84,6 +129,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 // View renders the selector as a popup box.
 func (m Model) View() string {
+	filtered := m.filtered()
+
 	if len(m.variants) == 0 {
 		return selectorBorderStyle.Render(
 			titleStyle.Render(m.title) + "\n" +
@@ -96,16 +143,26 @@ func (m Model) View() string {
 	sb.WriteString(titleStyle.Render(m.title))
 	sb.WriteString("\n")
 
-	for i, name := range m.variants {
-		if i == m.cursor {
-			sb.WriteString(selectedItemStyle.Render(fmt.Sprintf("▶ %s", name)))
-		} else {
-			sb.WriteString(normalItemStyle.Render(fmt.Sprintf("  %s", name)))
-		}
+	if m.filter != "" {
+		sb.WriteString(filterStyle.Render(fmt.Sprintf("Filter: %s▌", m.filter)))
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(helpStyle.Render("↑/k up  ↓/j down  enter select  esc cancel"))
+	if len(filtered) == 0 {
+		sb.WriteString(normalItemStyle.Render("(no matches)"))
+		sb.WriteString("\n")
+	} else {
+		for i, name := range filtered {
+			if i == m.cursor {
+				sb.WriteString(selectedItemStyle.Render(fmt.Sprintf("▶ %s", name)))
+			} else {
+				sb.WriteString(normalItemStyle.Render(fmt.Sprintf("  %s", name)))
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	sb.WriteString(helpStyle.Render("type to filter  ↑/k ↓/j  enter select  esc cancel"))
 
 	return selectorBorderStyle.Render(sb.String())
 }

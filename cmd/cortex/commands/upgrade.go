@@ -65,6 +65,15 @@ func runUpgradeDryRunAll(homeDir string) error {
 	fmt.Println("Dry run - no changes will be made")
 	fmt.Println()
 
+	// Check if agents need populating
+	settingsPath := filepath.Join(homeDir, ".cortex", "settings.yaml")
+	if install.AgentsEmpty(settingsPath) && install.DetectAgents().AgentCount() > 0 {
+		fmt.Println("=== Global Agents ===")
+		fmt.Println()
+		fmt.Println("  + ~/.cortex/settings.yaml agents (will populate)")
+		fmt.Println()
+	}
+
 	for _, configName := range defaultConfigs {
 		targetDir := fmt.Sprintf("%s/.cortex/defaults/%s", homeDir, configName)
 		fmt.Printf("=== %s ===\n\n", configName)
@@ -147,8 +156,12 @@ func runUpgradeApplyAll(homeDir string) error {
 		}
 	}
 
+	// Check if global agents need populating
+	settingsPath, settingsErr := install.GlobalAgentsConfigPath()
+	agentsNeedPopulating := settingsErr == nil && install.AgentsEmpty(settingsPath) && install.DetectAgents().AgentCount() > 0
+
 	// If no changes, exit early
-	if totalUpdates == 0 && totalCreates == 0 {
+	if totalUpdates == 0 && totalCreates == 0 && !agentsNeedPopulating {
 		fmt.Println("All defaults are already up to date.")
 		return nil
 	}
@@ -197,6 +210,11 @@ func runUpgradeApplyAll(homeDir string) error {
 		}
 	}
 
+	if agentsNeedPopulating {
+		fmt.Printf("  + ~/.cortex/settings.yaml agents (will populate)\n")
+		fmt.Println()
+	}
+
 	fmt.Printf("Summary: %d to update, %d to create, %d unchanged\n", totalUpdates, totalCreates, totalUnchanged)
 	fmt.Println()
 
@@ -223,6 +241,16 @@ func runUpgradeApplyAll(homeDir string) error {
 	}
 
 	fmt.Printf("Upgraded %d files.\n", totalUpdates+totalCreates)
+
+	// Populate global agent variants if missing
+	if agentsNeedPopulating {
+		populated, err := install.EnsureGlobalAgents(settingsPath)
+		if err != nil {
+			fmt.Printf("  Warning: failed to populate agents in settings.yaml: %v\n", err)
+		} else if populated {
+			fmt.Println("  + Populated agent variants in ~/.cortex/settings.yaml")
+		}
+	}
 
 	// Migrate project configs before removing legacy directories
 	migrationResults, migErr := install.MigrateAllProjects()

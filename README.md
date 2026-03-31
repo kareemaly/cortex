@@ -67,6 +67,38 @@ The architect will guide you through creating and managing tickets.
 
 ## Configuration
 
+### Global Config
+
+`~/.cortex/settings.yaml` - daemon settings and default agent variants (auto-populated on first `cortex init`):
+
+```yaml
+port: 4200
+bind_address: 127.0.0.1  # use 0.0.0.0 for remote VM deployments
+log_level: info
+
+agents:
+  claude-opus:
+    agent: claude
+    args: ["--dangerously-skip-permissions"]
+  claude-opus-plan:
+    agent: claude
+    args: ["--allow-dangerously-skip-permissions", "--permission-mode", "plan"]
+  claude-sonnet:
+    agent: claude
+    args: ["--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]
+  claude-sonnet-plan:
+    agent: claude
+    args: ["--allow-dangerously-skip-permissions", "--permission-mode", "plan", "--model", "claude-sonnet-4-6"]
+  opencode:
+    agent: opencode
+    args: []
+  opencode-plan:
+    agent: opencode
+    args: ["--agent", "plan"]
+```
+
+Global agents are inherited by every architect project. To add or override variants for a specific project, define them in `cortex.yaml` — project-level entries take precedence over global ones.
+
 ### Project Config
 
 `cortex.yaml` - project-specific settings:
@@ -76,29 +108,17 @@ name: my-project
 repos:
   - ~/projects/my-repo
 
-agents:
-  claude:
-    agent: claude
-    args: []
-  claude-plan:
-    agent: claude
-    args: ["--permission-mode", "plan"]
+# Optional: add project-specific agent variants or override global ones
+# agents:
+#   my-variant:
+#     agent: claude
+#     args: ["--dangerously-skip-permissions", "--model", "claude-opus-4-5"]
 ```
 
 After running `cortex init`, edit `cortex.yaml` to:
 - Add your repos under `repos:`
-- Customize agent variants under `agents:`
 - Set `companion: lazygit` for side-by-side git UI
-
-### Global Config
-
-`~/.cortex/settings.yaml` - daemon settings:
-
-```yaml
-port: 4200
-bind_address: 127.0.0.1  # use 0.0.0.0 for remote VM deployments
-log_level: info
-```
+- Optionally add project-specific agent variants under `agents:`
 
 ### Customizing Prompts
 

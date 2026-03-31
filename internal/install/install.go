@@ -42,6 +42,11 @@ git_diff_tool: ` + gitDiffTool + `
 		return items, item.Error
 	}
 
+	// Auto-populate agent variants if none are configured yet.
+	if _, err := EnsureGlobalAgents(configPath); err != nil {
+		return items, err
+	}
+
 	mainItems, err := setupMainDefaults(homeDir, force)
 	if err != nil {
 		return append(items, mainItems...), err
@@ -71,6 +76,55 @@ func RegisterArchitect(projectPath, name string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// GlobalAgentsConfigPath returns the path to ~/.cortex/settings.yaml.
+func GlobalAgentsConfigPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".cortex", "settings.yaml"), nil
+}
+
+// AgentsEmpty reports whether settings.yaml exists but has no agents configured.
+func AgentsEmpty(configPath string) bool {
+	cfg, err := config.LoadFromFile(configPath)
+	if err != nil {
+		return false
+	}
+	return len(cfg.Agents) == 0
+}
+
+// EnsureGlobalAgents populates the agents map in settings.yaml if it is empty.
+// Returns true if agents were populated, false if already present or no agents detected.
+func EnsureGlobalAgents(configPath string) (bool, error) {
+	cfg, err := config.LoadFromFile(configPath)
+	if err != nil {
+		return false, err
+	}
+	if len(cfg.Agents) > 0 {
+		return false, nil
+	}
+
+	detected := DetectAgents()
+	if !detected.ClaudeAvailable && !detected.OpenCodeAvailable {
+		return false, nil
+	}
+
+	cfg.Agents = make(map[string]config.AgentVariant)
+	if detected.ClaudeAvailable {
+		for k, v := range DefaultClaudeVariants() {
+			cfg.Agents[k] = v
+		}
+	}
+	if detected.OpenCodeAvailable {
+		for k, v := range DefaultOpenCodeVariants() {
+			cfg.Agents[k] = v
+		}
+	}
+
+	return true, cfg.SaveToFile(configPath)
 }
 
 func setupMainDefaults(homeDir string, force bool) ([]SetupItem, error) {

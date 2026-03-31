@@ -219,7 +219,7 @@ type VariantsResponse struct {
 func (h *ConfigHandlers) GetVariants(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 
-	cfg, err := architectconfig.Load(projectPath)
+	cfg, err := mergeProjectConfig(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
 		return

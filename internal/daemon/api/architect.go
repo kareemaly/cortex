@@ -25,7 +25,7 @@ func NewArchitectHandlers(deps *Dependencies) *ArchitectHandlers {
 
 // getSessionAndConfig is a helper that loads project config and retrieves the architect session.
 func (h *ArchitectHandlers) getSessionAndConfig(projectPath string) (sessionName string, sess *session.Session, projectCfg *architectconfig.Config, err error) {
-	projectCfg, err = architectconfig.Load(projectPath)
+	projectCfg, err = mergeProjectConfig(projectPath)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -103,7 +103,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		if len(names) > 0 {
 			msg = fmt.Sprintf("--variant is required, choose one of: %s", strings.Join(names, ", "))
 		} else {
-			msg = "--variant is required — add an 'agents' map to cortex.yaml first"
+			msg = "--variant is required — run 'cortex init' to populate defaults in ~/.cortex/settings.yaml"
 		}
 		writeError(w, http.StatusBadRequest, "variant_required", msg)
 		return

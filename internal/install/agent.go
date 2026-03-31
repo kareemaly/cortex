@@ -1,6 +1,10 @@
 package install
 
-import "os/exec"
+import (
+	"os/exec"
+
+	"github.com/kareemaly/cortex/internal/daemon/config"
+)
 
 // AgentAvailability holds the results of checking for available agents.
 type AgentAvailability struct {
@@ -45,4 +49,40 @@ func (a AgentAvailability) AgentCount() int {
 		count++
 	}
 	return count
+}
+
+// DefaultClaudeVariants returns the standard set of Claude agent variants.
+func DefaultClaudeVariants() map[string]config.AgentVariant {
+	return map[string]config.AgentVariant{
+		"claude-opus": {
+			Agent: "claude",
+			Args:  []string{"--dangerously-skip-permissions"},
+		},
+		"claude-opus-plan": {
+			Agent: "claude",
+			Args:  []string{"--allow-dangerously-skip-permissions", "--permission-mode", "plan"},
+		},
+		"claude-sonnet": {
+			Agent: "claude",
+			Args:  []string{"--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"},
+		},
+		"claude-sonnet-plan": {
+			Agent: "claude",
+			Args:  []string{"--allow-dangerously-skip-permissions", "--permission-mode", "plan", "--model", "claude-sonnet-4-6"},
+		},
+	}
+}
+
+// DefaultOpenCodeVariants returns the standard set of OpenCode agent variants.
+func DefaultOpenCodeVariants() map[string]config.AgentVariant {
+	return map[string]config.AgentVariant{
+		"opencode": {
+			Agent: "opencode",
+			Args:  []string{},
+		},
+		"opencode-plan": {
+			Agent: "opencode",
+			Args:  []string{"--agent", "plan"},
+		},
+	}
 }

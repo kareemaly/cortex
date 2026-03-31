@@ -69,6 +69,8 @@ Ticket path is always `{projectRoot}/tickets/`. Sessions are ephemeral and store
 | Import `internal/core/spawn` in CLI | Call `/tickets/{status}/{id}/spawn` | CLI should not import daemon internals |
 | Access `.cortex/sessions.json` directly | Use SessionManager API | Bypasses locking and event notifications |
 | Import `internal/architect` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
+| Call `architectconfig.Load()` in MCP tools | Call the daemon HTTP API via SDK client | MCP is a dumb client — all config resolution (including global agent merge) lives in the daemon |
+| Call `architectconfig.Load()` directly to resolve variants | Use `mergeProjectConfig()` in `internal/daemon/api/config_merge.go` | Direct load misses global agents from `~/.cortex/settings.yaml`; only the daemon merges project + global |
 
 ## Debugging
 
@@ -103,22 +105,18 @@ Ticket path is always `{projectRoot}/tickets/`. Sessions are ephemeral and store
 
 ## Configuration
 
-**Architect** (`cortex.yaml`): Named agent variants, optional `repos` list, optional `companion`. See `internal/architect/config/config.go` for schema.
+**Architect** (`cortex.yaml`): Optional `repos` list, optional `companion`, optional per-project agent overrides. See `internal/architect/config/config.go` for schema.
 
 ```yaml
 name: my-project
 repos:
   - /path/to/repo
-agents:
-  claude:
-    agent: claude
-    args: []
-  claude-plan:
-    agent: claude
-    args: ["--permission-mode", "plan"]
+# agents: only needed for project-specific overrides; global variants live in settings.yaml
 ```
 
-**Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, architect registry. See `internal/daemon/config/config.go` for schema.
+**Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, architect registry, and **default agent variants** (auto-populated on `cortex init`/`cortex upgrade`). See `internal/daemon/config/config.go` for schema.
+
+Agent variant resolution always merges global (`settings.yaml`) + project (`cortex.yaml`) — project keys win. Use `mergeProjectConfig()` (`internal/daemon/api/config_merge.go`) everywhere variants are needed.
 
 **Architect registry**: Global config tracks all architects (`architects` list). Auto-registered on `cortex init`. Used by `GET /architects` endpoint.
 
@@ -126,7 +124,7 @@ agents:
 
 | Command | Description |
 |---------|-------------|
-| `cortex init <name> [--agent claude\|opencode]` | Initialize architect workspace in `./<name>/` |
+| `cortex init <name>` | Initialize architect workspace in `./<name>/` |
 | `cortex architect list` | List all registered architects (TUI or table) |
 | `cortex architect start [name] [--mode fresh\|resume]` | Start/attach architect session |
 | `cortex architect show [name]` | Open architect project TUI |

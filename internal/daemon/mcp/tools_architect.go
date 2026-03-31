@@ -578,14 +578,15 @@ func (s *Server) handleArchitectConcludeSession(
 	}, nil
 }
 
-// handleListVariants returns the available agent variant names from the project config.
+// handleListVariants returns the available agent variant names via the daemon HTTP API.
 func (s *Server) handleListVariants(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input ListVariantsInput,
 ) (*mcp.CallToolResult, ListVariantsOutput, error) {
-	if s.projectConfig == nil {
-		return nil, ListVariantsOutput{Variants: []string{}}, nil
+	variants, err := s.sdkClient.GetVariants()
+	if err != nil {
+		return nil, ListVariantsOutput{}, wrapSDKError(err)
 	}
-	return nil, ListVariantsOutput{Variants: s.projectConfig.VariantNames()}, nil
+	return nil, ListVariantsOutput{Variants: variants}, nil
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/tmux"
@@ -62,12 +61,11 @@ type Config struct {
 
 // Server is the MCP server for ticket management.
 type Server struct {
-	mcpServer     *mcp.Server
-	sdkClient     *sdk.Client
-	session       *Session
-	config        *Config
-	projectConfig *config.Config
-	tmuxManager   *tmux.Manager
+	mcpServer   *mcp.Server
+	sdkClient   *sdk.Client
+	session     *Session
+	config      *Config
+	tmuxManager *tmux.Manager
 }
 
 // NewServer creates a new MCP server with the given configuration.
@@ -98,7 +96,6 @@ func NewServer(cfg *Config) (*Server, error) {
 	}
 
 	var sdkClient *sdk.Client
-	var projectCfg *config.Config
 
 	switch session.Type {
 	case SessionTypeTicket, SessionTypeCollab:
@@ -112,12 +109,6 @@ func NewServer(cfg *Config) (*Server, error) {
 		// Architect sessions route all operations through the daemon HTTP API
 		if cfg.ArchitectPath == "" {
 			return nil, fmt.Errorf("MCP server requires CORTEX_ARCHITECT_PATH to be set")
-		}
-
-		var err error
-		projectCfg, err = config.Load(cfg.ArchitectPath)
-		if err != nil {
-			return nil, err
 		}
 
 		if cfg.DaemonURL == "" {
@@ -134,12 +125,11 @@ func NewServer(cfg *Config) (*Server, error) {
 	}, nil)
 
 	s := &Server{
-		mcpServer:     mcpServer,
-		sdkClient:     sdkClient,
-		session:       session,
-		config:        cfg,
-		projectConfig: projectCfg,
-		tmuxManager:   cfg.TmuxManager,
+		mcpServer:   mcpServer,
+		sdkClient:   sdkClient,
+		session:     session,
+		config:      cfg,
+		tmuxManager: cfg.TmuxManager,
 	}
 
 	// Register tools based on session type

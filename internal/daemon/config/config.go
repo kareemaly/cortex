@@ -22,14 +22,21 @@ type ArchitectEntry struct {
 	Title string `yaml:"title,omitempty"`
 }
 
+// AgentVariant is a named agent configuration stored in the global agents map.
+type AgentVariant struct {
+	Agent string   `yaml:"agent"`
+	Args  []string `yaml:"args,omitempty"`
+}
+
 // Config holds the daemon configuration.
 type Config struct {
-	Port               int              `yaml:"port"`
-	BindAddress        string           `yaml:"bind_address"`
-	LogLevel           string           `yaml:"log_level"`
-	StatusHistoryLimit int              `yaml:"status_history_limit"`
-	GitDiffTool        string           `yaml:"git_diff_tool"`
-	Architects         []ArchitectEntry `yaml:"architects,omitempty"`
+	Port               int                       `yaml:"port"`
+	BindAddress        string                    `yaml:"bind_address"`
+	LogLevel           string                    `yaml:"log_level"`
+	StatusHistoryLimit int                       `yaml:"status_history_limit"`
+	GitDiffTool        string                    `yaml:"git_diff_tool"`
+	Architects         []ArchitectEntry          `yaml:"architects,omitempty"`
+	Agents             map[string]AgentVariant   `yaml:"agents,omitempty"`
 }
 
 // DefaultConfig returns a Config with default values.

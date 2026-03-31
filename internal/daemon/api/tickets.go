@@ -518,7 +518,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectCfg, _ := architectconfig.Load(projectPath)
+	projectCfg, _ := mergeProjectConfig(projectPath)
 
 	// Resolve variant — required
 	if variantName == "" {
@@ -527,7 +527,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		if len(names) > 0 {
 			msg = fmt.Sprintf("--variant is required, choose one of: %s", strings.Join(names, ", "))
 		} else {
-			msg = "--variant is required — add an 'agents' map to cortex.yaml first"
+			msg = "--variant is required — run 'cortex init' to populate defaults in ~/.cortex/settings.yaml"
 		}
 		writeError(w, http.StatusBadRequest, "variant_required", msg)
 		return

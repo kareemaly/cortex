@@ -4,16 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/kareemaly/cortex/internal/install"
 	"github.com/spf13/cobra"
 )
 
-var (
-	initForce bool
-	initAgent string
-)
+var initForce bool
 
 var initCmd = &cobra.Command{
 	Use:   "init <name>",
@@ -21,17 +17,16 @@ var initCmd = &cobra.Command{
 	Long: `Initialize a new Cortex architect workspace.
 
 Creates the global ~/.cortex/ directory if needed, scaffolds a project directory
-with ticket storage, generates cortex.yaml with agent variants, and registers the
-architect with the daemon.
+with ticket storage, generates cortex.yaml, and registers the architect with the daemon.
 
-The agent is auto-detected from your PATH (prefers claude). Use --agent to override.`,
+Agent variants are auto-detected and stored in ~/.cortex/settings.yaml. Add project-specific
+overrides in cortex.yaml if needed.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runInit,
 }
 
 func init() {
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing config files")
-	initCmd.Flags().StringVarP(&initAgent, "agent", "a", "", "Agent type: claude, opencode (auto-detected if not set)")
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -48,22 +43,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	globalItems, err := install.SetupGlobal(initForce)
 	if err != nil {
 		return fmt.Errorf("global setup failed: %w", err)
-	}
-
-	// Detect agent
-	agent := initAgent
-	if agent == "" {
-		detected := install.DetectAgents()
-		if detected.ClaudeAvailable {
-			agent = "claude"
-		} else if detected.OpenCodeAvailable {
-			agent = "opencode"
-		} else {
-			return fmt.Errorf("no supported agent found in PATH (install claude or opencode)")
-		}
-	}
-	if agent != "claude" && agent != "opencode" {
-		return fmt.Errorf("unsupported agent %q (must be claude or opencode)", agent)
 	}
 
 	// Create project directories
@@ -83,7 +62,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Generate cortex.yaml
-	configContent := generateConfig(name, agent)
+	configContent := generateConfig(name)
 	configPath := filepath.Join(projectPath, "cortex.yaml")
 	item := install.EnsureConfigFile(configPath, configContent, initForce)
 	if item.Error != nil {
@@ -110,7 +89,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Warning: failed to register architect: %v\n", regErr)
 	}
 
-	fmt.Printf("\nArchitect %q initialized with %s agent.\n", name, agent)
+	fmt.Printf("\nArchitect %q initialized.\n", name)
 	fmt.Println("\nNext steps:")
 	fmt.Printf("  1. Edit %s to add your repos\n", configPath)
 	fmt.Printf("  2. Run: cd %s && cortex architect start\n", name)
@@ -128,34 +107,6 @@ func printItem(item install.SetupItem) {
 	}
 }
 
-func generateConfig(name, agent string) string {
-	var sb strings.Builder
-
-	sb.WriteString("name: ")
-	sb.WriteString(name)
-	sb.WriteString("\nrepos: []\n")
-
-	sb.WriteString("\nagents:\n")
-
-	sb.WriteString("  ")
-	sb.WriteString(agent)
-	sb.WriteString(":\n")
-	sb.WriteString("    agent: ")
-	sb.WriteString(agent)
-	sb.WriteString("\n    args: []\n")
-
-	sb.WriteString("  ")
-	sb.WriteString(agent)
-	sb.WriteString("-plan:\n")
-	sb.WriteString("    agent: ")
-	sb.WriteString(agent)
-	sb.WriteString("\n")
-
-	if agent == "claude" {
-		sb.WriteString("    args: [\"--permission-mode\", \"plan\"]\n")
-	} else {
-		sb.WriteString("    args: [\"--agent\", \"plan\"]\n")
-	}
-
-	return sb.String()
+func generateConfig(name string) string {
+	return "name: " + name + "\nrepos: []\n"
 }

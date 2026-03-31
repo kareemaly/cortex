@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/storage"
 	"gopkg.in/yaml.v3"
 )
@@ -57,13 +58,32 @@ func (c *Config) GetTmuxSessionName() string {
 // Returns an error if the agents map is empty or the name is not found.
 func (c *Config) ResolveVariant(name string) (AgentVariant, error) {
 	if len(c.Agents) == 0 {
-		return AgentVariant{}, fmt.Errorf("no agents configured in cortex.yaml — add an 'agents' map with at least one named variant")
+		return AgentVariant{}, fmt.Errorf("no agents configured — run 'cortex init' to populate defaults in ~/.cortex/settings.yaml")
 	}
 	v, ok := c.Agents[name]
 	if !ok {
 		return AgentVariant{}, fmt.Errorf("unknown agent variant %q (available: %v)", name, c.VariantNames())
 	}
 	return v, nil
+}
+
+// MergeAgents merges global agent variants into this config's agents map.
+// Global entries are used as a base; project-level entries win on conflict.
+func (c *Config) MergeAgents(global map[string]daemonconfig.AgentVariant) {
+	if len(global) == 0 {
+		return
+	}
+	if c.Agents == nil {
+		c.Agents = make(map[string]AgentVariant)
+	}
+	for k, v := range global {
+		if _, exists := c.Agents[k]; !exists {
+			c.Agents[k] = AgentVariant{
+				Agent: AgentType(v.Agent),
+				Args:  v.Args,
+			}
+		}
+	}
 }
 
 // VariantNames returns the sorted list of agent variant names.
