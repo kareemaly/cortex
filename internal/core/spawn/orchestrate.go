@@ -104,7 +104,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 	// 5. Resolve TmuxSession: request > project config name
 	tmuxSession := req.TmuxSession
 	if tmuxSession == "" {
-		tmuxSession = projectCfg.Name
+		tmuxSession = projectCfg.GetTmuxSessionName()
 	}
 	if tmuxSession == "" {
 		return nil, &ConfigError{Field: "TmuxSession", Message: "tmux session name is required (set in project config or pass explicitly)"}
