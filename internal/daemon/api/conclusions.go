@@ -195,6 +195,74 @@ func (h *ConclusionHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
+// EditByTicket handles POST /tickets/{id}/conclusion/edit - finds the most recent conclusion for a ticket and opens it.
+func (h *ConclusionHandlers) EditByTicket(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetArchitectPath(r.Context())
+	ticketID := chi.URLParam(r, "id")
+
+	if h.deps.ConclusionStoreManager == nil {
+		writeError(w, http.StatusNotFound, "not_found", "no conclusion found for ticket")
+		return
+	}
+
+	store, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	conclusions, _, err := store.ListWithOptions(conclusion.ListOptions{})
+	if err != nil {
+		handleConclusionError(w, err, h.deps.Logger)
+		return
+	}
+
+	var match *conclusion.Conclusion
+	for _, c := range conclusions { // ListWithOptions returns newest-first
+		if c.Ticket == ticketID {
+			match = c
+			break
+		}
+	}
+	if match == nil {
+		writeError(w, http.StatusNotFound, "not_found", "no conclusion found for ticket")
+		return
+	}
+
+	indexPath, err := store.IndexPath(match.ID)
+	if err != nil {
+		handleConclusionError(w, err, h.deps.Logger)
+		return
+	}
+
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim"
+	}
+	command := fmt.Sprintf("%s %q", editor, indexPath)
+
+	projectCfg, cfgErr := architectconfig.Load(projectPath)
+	tmuxSession := "cortex"
+	if cfgErr == nil && projectCfg.Name != "" {
+		tmuxSession = projectCfg.Name
+	}
+
+	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, "", command); err != nil {
+		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ExecuteActionResponse{
+		Success: true,
+		Message: "Editor opened",
+	})
+}
+
 // Edit handles POST /conclusions/{id}/edit - opens the conclusion's index.md in $EDITOR via tmux popup.
 func (h *ConclusionHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())

@@ -22,6 +22,7 @@ const (
 	KeyLeft       Key = "left"
 	KeyRight      Key = "right"
 	KeyOpenEditor Key = "o"
+	KeyOpenTicket Key = "t"
 )
 
 func isKey(msg tea.KeyMsg, keys ...Key) bool {
@@ -34,7 +35,7 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 }
 
 func listHelpText() string {
-	return "←/→ dates  j/k navigate  o/↵ open  r refresh  ! logs  q quit"
+	return "←/→ dates  j/k navigate  o/↵ open  t ticket  r refresh  ! logs  q quit"
 }
 
 func detailHelpText() string {

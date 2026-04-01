@@ -50,6 +50,15 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 		eventHandlers := NewEventHandlers(deps)
 		r.Get("/events", eventHandlers.Stream)
 
+		// Conclusion routes (declared before ticket routes so it can be referenced in ticket route group)
+		conclusionHandlers := NewConclusionHandlers(deps)
+		r.Route("/conclusions", func(r chi.Router) {
+			r.Get("/", conclusionHandlers.List)
+			r.Post("/", conclusionHandlers.Create)
+			r.Get("/{id}", conclusionHandlers.Get)
+			r.Post("/{id}/edit", conclusionHandlers.Edit)
+		})
+
 		// Ticket routes
 		ticketHandlers := NewTicketHandlers(deps)
 		r.Route("/tickets", func(r chi.Router) {
@@ -65,18 +74,10 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Post("/{id}/focus", ticketHandlers.Focus)
 			r.Post("/{id}/conclude", ticketHandlers.Conclude)
 			r.Post("/{id}/edit", ticketHandlers.Edit)
+			r.Post("/{id}/conclusion/edit", conclusionHandlers.EditByTicket)
 			r.Delete("/{id}/queue", ticketHandlers.Dequeue)
 			r.Patch("/{id}/due-date", ticketHandlers.SetDueDate)
 			r.Delete("/{id}/due-date", ticketHandlers.ClearDueDate)
-		})
-
-		// Conclusion routes
-		conclusionHandlers := NewConclusionHandlers(deps)
-		r.Route("/conclusions", func(r chi.Router) {
-			r.Get("/", conclusionHandlers.List)
-			r.Post("/", conclusionHandlers.Create)
-			r.Get("/{id}", conclusionHandlers.Get)
-			r.Post("/{id}/edit", conclusionHandlers.Edit)
 		})
 
 		// Architect routes

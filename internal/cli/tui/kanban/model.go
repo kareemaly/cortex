@@ -532,6 +532,19 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Open conclusion for done ticket.
+	if isKey(msg, KeyOpenConclusion) {
+		if m.activeColumn == 2 {
+			t := m.columns[m.activeColumn].SelectedTicket()
+			if t != nil {
+				m.statusMsg = "Opening conclusion..."
+				m.statusIsError = false
+				return m, m.openConclusionInEditor(t)
+			}
+		}
+		return m, nil
+	}
+
 	return m, nil
 }
 
@@ -800,6 +813,16 @@ func (m Model) openTicketInEditor(ticket *sdk.TicketSummary) tea.Cmd {
 	return func() tea.Msg {
 		if err := m.client.EditTicket(ticket.ID); err != nil {
 			return openEditorErrMsg{Err: fmt.Errorf("open editor: %w", err)}
+		}
+		return openEditorMsg{}
+	}
+}
+
+// openConclusionInEditor returns a command to open the conclusion for a done ticket in $EDITOR via tmux popup.
+func (m Model) openConclusionInEditor(ticket *sdk.TicketSummary) tea.Cmd {
+	return func() tea.Msg {
+		if err := m.client.EditTicketConclusion(ticket.ID); err != nil {
+			return openEditorErrMsg{Err: fmt.Errorf("open conclusion: %w", err)}
 		}
 		return openEditorMsg{}
 	}

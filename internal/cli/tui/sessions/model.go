@@ -328,6 +328,17 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Open ticket for conclusion.
+	if isKey(msg, KeyOpenTicket) {
+		if len(m.dateGroups) > 0 && m.cursor >= 0 && m.cursor < len(m.dateGroups[m.dateIdx].sessions) {
+			c := m.dateGroups[m.dateIdx].sessions[m.cursor]
+			if c.Ticket != "" {
+				return m, m.openTicketInEditor(c)
+			}
+		}
+		return m, nil
+	}
+
 	switch {
 	case isKey(msg, KeyJ, KeyDown):
 		if len(m.dateGroups) > 0 && m.cursor < len(m.dateGroups[m.dateIdx].sessions)-1 {
@@ -654,6 +665,16 @@ func (m Model) openConclusionInEditor(c sdk.ConclusionSummary) tea.Cmd {
 	return func() tea.Msg {
 		if err := m.client.EditConclusion(c.ID); err != nil {
 			return openEditorErrMsg{Err: fmt.Errorf("open editor: %w", err)}
+		}
+		return openEditorMsg{}
+	}
+}
+
+// openTicketInEditor returns a Cmd that opens the ticket's index.md in $EDITOR.
+func (m Model) openTicketInEditor(c sdk.ConclusionSummary) tea.Cmd {
+	return func() tea.Msg {
+		if err := m.client.EditTicket(c.Ticket); err != nil {
+			return openEditorErrMsg{Err: fmt.Errorf("open ticket: %w", err)}
 		}
 		return openEditorMsg{}
 	}
