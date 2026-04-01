@@ -87,4 +87,9 @@ var (
 	// Orphaned session icon style (warning color).
 	orphanedIconStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("214")) // yellow/orange
+
+	// Group header style.
+	groupHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("75"))
 )

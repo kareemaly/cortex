@@ -78,9 +78,11 @@ func (m Model) View() string {
 
 		switch r.kind {
 		case rowProject:
-			b.WriteString(m.renderProjectRow(r.projectIndex, selected))
+			b.WriteString(m.renderProjectRow(r, selected))
 		case rowSession:
 			b.WriteString(m.renderSessionRow(r, selected))
+		case rowGroup:
+			b.WriteString(m.renderGroupRow(r, selected))
 		}
 
 		if i < endIdx-1 {
@@ -170,8 +172,12 @@ func (m Model) logBadge() string {
 	return strings.Join(parts, " ")
 }
 
-func (m Model) renderProjectRow(projectIdx int, selected bool) string {
-	pd := m.projects[projectIdx]
+func (m Model) renderProjectRow(r row, selected bool) string {
+	pd := m.projects[r.projectIndex]
+	indent := ""
+	if r.groupName != "" {
+		indent = "  "
+	}
 
 	architectActive := pd.architect != nil && pd.architect.State == "active"
 	architectOrphaned := pd.architect != nil && pd.architect.State == "orphaned"
@@ -209,7 +215,7 @@ func (m Model) renderProjectRow(projectIdx int, selected bool) string {
 	}
 
 	if !pd.project.Exists {
-		line := fmt.Sprintf("%s %s (stale)", indicator, title)
+		line := fmt.Sprintf("%s%s %s (stale)", indent, indicator, title)
 		if selected {
 			return selectedStyle.Render(line)
 		}
@@ -217,17 +223,38 @@ func (m Model) renderProjectRow(projectIdx int, selected bool) string {
 	}
 
 	if selected {
-		plainLine := fmt.Sprintf("%s %s%s %s", indicator, title, archBadge, counts)
+		plainLine := fmt.Sprintf("%s%s %s%s %s", indent, indicator, title, archBadge, counts)
 		return selectedStyle.Render(plainLine)
 	}
 
 	if architectOrphaned {
-		return orphanedIconStyle.Render(indicator) + " " + projectStyle.Render(title) + orphanedIconStyle.Render(archBadge) + " " + countsStyle.Render(counts)
+		return indent + orphanedIconStyle.Render(indicator) + " " + projectStyle.Render(title) + orphanedIconStyle.Render(archBadge) + " " + countsStyle.Render(counts)
 	}
 	if architectActive {
-		return activeIconStyle.Render(indicator) + " " + projectStyle.Render(title) + activeIconStyle.Render(archBadge) + " " + countsStyle.Render(counts)
+		return indent + activeIconStyle.Render(indicator) + " " + projectStyle.Render(title) + activeIconStyle.Render(archBadge) + " " + countsStyle.Render(counts)
 	}
-	return mutedStyleRender.Render(indicator) + " " + dimmedProjectStyle.Render(title) + " " + countsStyle.Render(counts)
+	return indent + mutedStyleRender.Render(indicator) + " " + dimmedProjectStyle.Render(title) + " " + countsStyle.Render(counts)
+}
+
+func (m Model) renderGroupRow(r row, selected bool) string {
+	chevron := "▾"
+	suffix := ""
+	if m.collapsedGroups[r.groupName] {
+		chevron = "▸"
+		// Count architects in this group.
+		count := 0
+		for _, pd := range m.projects {
+			if pd.project.Group == r.groupName {
+				count++
+			}
+		}
+		suffix = fmt.Sprintf(" (%d)", count)
+	}
+	line := fmt.Sprintf("%s %s%s", chevron, r.groupName, suffix)
+	if selected {
+		return selectedStyle.Render(line)
+	}
+	return groupHeaderStyle.Render(line)
 }
 
 func architectSessionIcon(arch *sdk.ArchitectStateResponse) string {
@@ -258,6 +285,9 @@ func architectStatusBadge(sess *sdk.ArchitectSessionResponse) string {
 func (m Model) renderSessionRow(r row, selected bool) string {
 	pd := m.projects[r.projectIndex]
 	indent := "    "
+	if r.groupName != "" {
+		indent = "      "
+	}
 
 	if r.sessionType == "collab" {
 		session := m.findSession(pd, r.sessionID)

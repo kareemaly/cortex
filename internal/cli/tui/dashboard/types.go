@@ -20,6 +20,7 @@ type rowKind int
 const (
 	rowProject rowKind = iota
 	rowSession
+	rowGroup
 )
 
 type row struct {
@@ -28,6 +29,7 @@ type row struct {
 	ticketID     string
 	sessionType  string
 	sessionID    string
+	groupName    string
 }
 
 type projectData struct {
@@ -54,11 +56,12 @@ func (pd projectData) isActive() bool {
 }
 
 type Model struct {
-	globalClient *sdk.Client
-	projects     []projectData
-	rows         []row
-	cursor       int
-	scrollOffset int
+	globalClient    *sdk.Client
+	projects        []projectData
+	rows            []row
+	cursor          int
+	scrollOffset    int
+	collapsedGroups map[string]bool
 
 	sseContexts map[string]context.CancelFunc
 	sseChannels map[string]<-chan sdk.Event

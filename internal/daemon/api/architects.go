@@ -126,6 +126,7 @@ func ArchitectsHandler(storeManager *StoreManager) http.HandlerFunc {
 			arch := ArchitectResponse{
 				Path:  entry.Path,
 				Title: entry.Title,
+				Group: entry.Group,
 			}
 
 			// Check if architect exists (cortex.yaml)

@@ -11,13 +11,14 @@ import (
 
 func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 	return Model{
-		globalClient: client,
-		loading:      true,
-		sseContexts:  make(map[string]context.CancelFunc),
-		sseChannels:  make(map[string]<-chan sdk.Event),
-		sseBackoffs:  make(map[string]time.Duration),
-		logBuf:       logBuf,
-		logViewer:    tuilog.NewViewer(logBuf),
+		globalClient:    client,
+		loading:         true,
+		sseContexts:     make(map[string]context.CancelFunc),
+		sseChannels:     make(map[string]<-chan sdk.Event),
+		sseBackoffs:     make(map[string]time.Duration),
+		collapsedGroups: make(map[string]bool),
+		logBuf:          logBuf,
+		logViewer:       tuilog.NewViewer(logBuf),
 	}
 }
 

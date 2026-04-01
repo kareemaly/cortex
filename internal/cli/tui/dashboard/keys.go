@@ -31,6 +31,7 @@ const (
 	KeyYes     Key = "y"
 	KeyNo      Key = "n"
 	KeyEscape  Key = "esc"
+	KeySpace   Key = "space"
 )
 
 func isKey(msg tea.KeyMsg, keys ...Key) bool {
@@ -43,7 +44,7 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 }
 
 func helpText() string {
-	return "[enter/f] focus  [s]pawn architect  [x] kill  [u]nlink  [r]efresh  [j/k/gg/G] navigate  [!] logs  [q]uit"
+	return "[enter/f] focus  [s]pawn  [x] kill  [u]nlink  [r]efresh  [j/k/gg/G] nav  [space/enter] toggle group  [!] logs  [q]uit"
 }
 
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -170,19 +171,38 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if isKey(msg, KeySpace) {
+		if len(m.rows) > 0 && m.rows[m.cursor].kind == rowGroup {
+			return m.handleToggleGroup()
+		}
+		return m, nil
+	}
+
 	if isKey(msg, KeyEnter, KeyL, KeyFocus) {
+		if len(m.rows) > 0 && m.rows[m.cursor].kind == rowGroup {
+			return m.handleToggleGroup()
+		}
 		return m.handleFocusCurrentRow()
 	}
 
 	if isKey(msg, KeySpawn) {
+		if len(m.rows) > 0 && m.rows[m.cursor].kind == rowGroup {
+			return m, nil
+		}
 		return m.handleSpawnArchitect()
 	}
 
 	if isKey(msg, KeyKill) {
+		if len(m.rows) > 0 && m.rows[m.cursor].kind == rowGroup {
+			return m, nil
+		}
 		return m.handleKillSession()
 	}
 
 	if isKey(msg, KeyUnlink) {
+		if len(m.rows) > 0 && m.rows[m.cursor].kind == rowGroup {
+			return m, nil
+		}
 		return m.handleUnlinkArchitect()
 	}
 
@@ -203,6 +223,19 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadProjects()
 	}
 
+	return m, nil
+}
+
+func (m Model) handleToggleGroup() (tea.Model, tea.Cmd) {
+	if m.cursor < 0 || m.cursor >= len(m.rows) {
+		return m, nil
+	}
+	groupName := m.rows[m.cursor].groupName
+	m.collapsedGroups[groupName] = !m.collapsedGroups[groupName]
+	m.rebuildRows()
+	if m.cursor >= len(m.rows) {
+		m.cursor = len(m.rows) - 1
+	}
 	return m, nil
 }
 

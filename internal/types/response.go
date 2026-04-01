@@ -152,6 +152,7 @@ type ArchitectTicketCounts struct {
 type ArchitectResponse struct {
 	Path   string                 `json:"path"`
 	Title  string                 `json:"title"`
+	Group  string                 `json:"group,omitempty"`
 	Exists bool                   `json:"exists"`
 	Counts *ArchitectTicketCounts `json:"counts,omitempty"`
 }

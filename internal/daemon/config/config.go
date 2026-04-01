@@ -20,6 +20,7 @@ const (
 type ArchitectEntry struct {
 	Path  string `yaml:"path"`
 	Title string `yaml:"title,omitempty"`
+	Group string `yaml:"group,omitempty"`
 }
 
 // AgentVariant is a named agent configuration stored in the global agents map.
