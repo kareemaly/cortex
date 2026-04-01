@@ -7,13 +7,15 @@ import (
 
 // TicketVars contains variables available for ticket prompt templates.
 type TicketVars struct {
-	ProjectPath string
-	TicketID    string
-	TicketTitle string
-	TicketBody  string
-	Comments    string // pre-formatted comments block
-	References  string // pre-formatted references block
-	Repo        string // repo path for work tickets, empty for research
+	ProjectPath   string
+	TicketID      string
+	TicketTitle   string
+	TicketBody    string
+	Comments      string // pre-formatted comments block
+	References    string // pre-formatted references block
+	Repo          string // repo path for work tickets, empty for research
+	ArchitectName string // architect name from config
+	Repos         string // formatted list of other repos in the ecosystem (excluding current repo)
 }
 
 // ArchitectKickoffVars contains variables for the architect kickoff template.

@@ -8,6 +8,7 @@ import (
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/prompt"
+	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -73,7 +74,12 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 		TicketTitle: req.Ticket.Title,
 		TicketBody:  req.Ticket.Body,
 		References:  formatTicketReferences(req.Ticket.References),
-		Repo:        req.Ticket.Repo,
+		Repo:        storage.ExpandHome(req.Ticket.Repo),
+	}
+
+	if cfg, cfgErr := architectconfig.Load(req.ArchitectPath); cfgErr == nil {
+		vars.ArchitectName = cfg.Name
+		vars.Repos = formatOtherRepos(cfg.Repos, req.Ticket.Repo)
 	}
 
 	promptText, err := prompt.RenderTemplate(kickoffTemplate, vars)
@@ -209,6 +215,27 @@ func formatTicketReferences(refs []string) string {
 		}
 		sb.WriteString("- ")
 		sb.WriteString(ref)
+	}
+	return sb.String()
+}
+
+// formatOtherRepos formats repos into a bulleted markdown list, excluding the current ticket's repo.
+// All paths are expanded to absolute paths.
+func formatOtherRepos(repos []string, currentRepo string) string {
+	expandedCurrent := storage.ExpandHome(currentRepo)
+	var sb strings.Builder
+	first := true
+	for _, repo := range repos {
+		expanded := storage.ExpandHome(repo)
+		if expanded == expandedCurrent {
+			continue
+		}
+		if !first {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("- ")
+		sb.WriteString(expanded)
+		first = false
 	}
 	return sb.String()
 }
