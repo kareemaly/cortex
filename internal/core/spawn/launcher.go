@@ -90,6 +90,8 @@ func buildLauncherScript(params LauncherParams, cleanupFiles []string) string {
 	switch params.AgentType {
 	case "opencode":
 		command = buildOpenCodeCommand(params)
+	case "codex":
+		command = buildCodexCommand(params)
 	default:
 		// Default to claude
 		command = buildClaudeCommand(params)
@@ -164,6 +166,26 @@ func buildOpenCodeCommand(params LauncherParams) string {
 	}
 
 	// Add extra agent args
+	for _, arg := range params.AgentArgs {
+		parts = append(parts, shellQuote(arg))
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// buildCodexCommand builds the codex CLI command string.
+// Codex receives its configuration via CODEX_HOME (set as an env var in the launcher script).
+// The kickoff prompt is passed as a positional argument, and variant args follow.
+func buildCodexCommand(params LauncherParams) string {
+	var parts []string
+	parts = append(parts, "codex")
+
+	// Kickoff prompt as positional arg (codex uses positional, not --prompt)
+	if params.PromptFilePath != "" {
+		parts = append(parts, fmt.Sprintf("\"$(cat %s)\"", params.PromptFilePath))
+	}
+
+	// Extra variant args (e.g., --dangerously-bypass-approvals-and-sandbox, --model)
 	for _, arg := range params.AgentArgs {
 		parts = append(parts, shellQuote(arg))
 	}

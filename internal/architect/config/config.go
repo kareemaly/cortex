@@ -17,6 +17,7 @@ type AgentType string
 const (
 	AgentClaude   AgentType = "claude"
 	AgentOpenCode AgentType = "opencode"
+	AgentCodex    AgentType = "codex"
 )
 
 // AgentVariant is a named agent configuration used in the top-level agents map.
@@ -199,10 +200,10 @@ func ConfigPath(architectRoot string) string {
 // Validate checks that the config is valid.
 func (c *Config) Validate() error {
 	for name, variant := range c.Agents {
-		if variant.Agent != "" && variant.Agent != AgentClaude && variant.Agent != AgentOpenCode {
+		if variant.Agent != "" && variant.Agent != AgentClaude && variant.Agent != AgentOpenCode && variant.Agent != AgentCodex {
 			return &ValidationError{
 				Field:   fmt.Sprintf("agents.%s.agent", name),
-				Message: "must be 'claude' or 'opencode'",
+				Message: "must be 'claude', 'opencode', or 'codex'",
 			}
 		}
 	}

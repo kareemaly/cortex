@@ -307,6 +307,7 @@ func TestValidate_ValidAgents(t *testing.T) {
 		Agents: map[string]AgentVariant{
 			"default": {Agent: AgentClaude},
 			"oc":      {Agent: AgentOpenCode},
+			"cx":      {Agent: AgentCodex},
 			"noagent": {},
 		},
 	}

@@ -229,9 +229,9 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		return nil, err
 	}
 
-	// Generate and write settings config (hooks) - skip for OpenCode (it doesn't support --settings)
+	// Generate and write settings config (hooks) - skip for OpenCode and Codex (they don't support --settings)
 	var settingsPath string
-	if req.Agent != "opencode" {
+	if req.Agent != "opencode" && req.Agent != "codex" {
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
 			CortexdPath:   cortexdPath,
 			TicketID:      req.TicketID,
@@ -276,6 +276,16 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	var openCodeConfigJSON string
 	if req.Agent == "opencode" {
 		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, pInfo.SystemPromptContent, req.AgentType, systemPromptFilePath)
+		if err != nil {
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath))
+			return nil, err
+		}
+	}
+
+	// Generate Codex config dir if needed
+	var codexConfigDir string
+	if req.Agent == "codex" {
+		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, pInfo.SystemPromptContent, req.AgentType, identifier)
 		if err != nil {
 			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath))
 			return nil, err
@@ -335,6 +345,12 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 
 	if openCodeConfigJSON != "" {
 		launcherParams.EnvVars["OPENCODE_CONFIG_CONTENT"] = openCodeConfigJSON
+	}
+
+	// Set CODEX_HOME for codex agents
+	if codexConfigDir != "" {
+		launcherParams.EnvVars["CODEX_HOME"] = codexConfigDir
+		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
 	}
 
 	// Inject OpenCode status plugin for agent status reporting
@@ -429,9 +445,9 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		envVars["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
 	}
 
-	// Generate and write settings config (hooks) - skip for OpenCode (it doesn't support --settings)
+	// Generate and write settings config (hooks) - skip for OpenCode and Codex (they don't support --settings)
 	var settingsPath string
-	if req.Agent != "opencode" {
+	if req.Agent != "opencode" && req.Agent != "codex" {
 		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
 			CortexdPath:   cortexdPath,
 			TicketID:      identifier,
@@ -451,6 +467,18 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	var openCodeConfigJSON string
 	if req.Agent == "opencode" {
 		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, "", req.AgentType, "")
+		if err != nil {
+			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
+				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
+			}
+			return nil, err
+		}
+	}
+
+	// Generate Codex config dir for resume (empty system prompt -- resume has no prompts)
+	var codexConfigDir string
+	if req.Agent == "codex" {
+		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, "", req.AgentType, identifier)
 		if err != nil {
 			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
 				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
@@ -482,6 +510,12 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 	if openCodeConfigJSON != "" {
 		launcherParams.EnvVars["OPENCODE_CONFIG_CONTENT"] = openCodeConfigJSON
+	}
+
+	// Set CODEX_HOME for codex agents
+	if codexConfigDir != "" {
+		launcherParams.EnvVars["CODEX_HOME"] = codexConfigDir
+		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
 	}
 
 	// Inject OpenCode status plugin for agent status reporting

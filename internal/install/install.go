@@ -108,7 +108,7 @@ func EnsureGlobalAgents(configPath string) (bool, error) {
 	}
 
 	detected := DetectAgents()
-	if !detected.ClaudeAvailable && !detected.OpenCodeAvailable {
+	if !detected.ClaudeAvailable && !detected.OpenCodeAvailable && !detected.CodexAvailable {
 		return false, nil
 	}
 
@@ -120,6 +120,11 @@ func EnsureGlobalAgents(configPath string) (bool, error) {
 	}
 	if detected.OpenCodeAvailable {
 		for k, v := range DefaultOpenCodeVariants() {
+			cfg.Agents[k] = v
+		}
+	}
+	if detected.CodexAvailable {
+		for k, v := range DefaultCodexVariants() {
 			cfg.Agents[k] = v
 		}
 	}
