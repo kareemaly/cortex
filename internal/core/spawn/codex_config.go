@@ -29,6 +29,14 @@ func WriteCodexConfigDir(mcpConfig *ClaudeMCPConfig, systemPrompt string, agentT
 		return "", fmt.Errorf("write codex config.toml: %w", err)
 	}
 
+	// Symlink host auth.json so the user isn't prompted to log in on each spawn.
+	// Use a symlink (not a copy) so token refreshes flow back to the real file and
+	// credentials never get written to /tmp. Silently skip if the file doesn't exist.
+	hostAuth := filepath.Join(os.Getenv("HOME"), ".codex", "auth.json")
+	if _, err := os.Stat(hostAuth); err == nil {
+		_ = os.Symlink(hostAuth, filepath.Join(dir, "auth.json"))
+	}
+
 	return dir, nil
 }
 
