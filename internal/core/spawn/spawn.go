@@ -387,6 +387,11 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}, nil
 	}
 
+	// Start rollout tailer for live status reporting on codex sessions.
+	if req.Agent == "codex" && codexConfigDir != "" {
+		StartCodexTailer(codexConfigDir, launcherParams.EnvVars["CORTEX_TICKET_ID"], req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+	}
+
 	return &SpawnResult{
 		Success:     true,
 		TmuxWindow:  windowName,
@@ -591,6 +596,11 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 			Success: false,
 			Message: "failed to spawn agent in tmux: " + err.Error(),
 		}, nil
+	}
+
+	// Start rollout tailer for live status reporting on codex sessions.
+	if req.Agent == "codex" && codexConfigDir != "" {
+		StartCodexTailer(codexConfigDir, envVars["CORTEX_TICKET_ID"], req.ArchitectPath, daemonconfig.DefaultDaemonURL)
 	}
 
 	return &SpawnResult{
