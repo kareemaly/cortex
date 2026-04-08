@@ -15,11 +15,15 @@ func WriteCodexConfigDir(mcpConfig *ClaudeMCPConfig, systemPrompt string, agentT
 		return "", fmt.Errorf("create codex config dir: %w", err)
 	}
 
-	// Write system prompt file (may be empty for resume)
-	systemPromptPath := filepath.Join(dir, "cortex-system.md")
-	if err := os.WriteFile(systemPromptPath, []byte(systemPrompt), 0600); err != nil {
-		os.RemoveAll(dir)
-		return "", fmt.Errorf("write codex system prompt: %w", err)
+	// Only write system prompt file when content is non-empty.
+	// Collab sessions have no system prompt; codex rejects an empty instructions file.
+	var systemPromptPath string
+	if strings.TrimSpace(systemPrompt) != "" {
+		systemPromptPath = filepath.Join(dir, "cortex-system.md")
+		if err := os.WriteFile(systemPromptPath, []byte(systemPrompt), 0600); err != nil {
+			os.RemoveAll(dir)
+			return "", fmt.Errorf("write codex system prompt: %w", err)
+		}
 	}
 
 	// Build and write config.toml
@@ -46,12 +50,14 @@ func WriteCodexConfigDir(mcpConfig *ClaudeMCPConfig, systemPrompt string, agentT
 func buildCodexConfigTOML(mcpConfig *ClaudeMCPConfig, systemPromptPath string, agentType AgentType) string {
 	var sb strings.Builder
 
-	if agentType == AgentTypeTicketAgent {
-		// Additive layer on top of codex's built-in instructions
-		fmt.Fprintf(&sb, "developer_instructions_file = %q\n\n", systemPromptPath)
-	} else {
-		// Full replace of codex's built-in instructions
-		fmt.Fprintf(&sb, "model_instructions_file = %q\n\n", systemPromptPath)
+	if systemPromptPath != "" {
+		if agentType == AgentTypeTicketAgent {
+			// Additive layer on top of codex's built-in instructions
+			fmt.Fprintf(&sb, "developer_instructions_file = %q\n\n", systemPromptPath)
+		} else {
+			// Full replace of codex's built-in instructions
+			fmt.Fprintf(&sb, "model_instructions_file = %q\n\n", systemPromptPath)
+		}
 	}
 
 	// MCP servers — codex expects `command` as a string and `args` as an array
