@@ -112,29 +112,6 @@ func inlineFgColorChange(colorCode string) string {
 	return "\x1b[38;5;" + colorCode + "m"
 }
 
-// typeBadgePalette is a fixed palette of visually distinct ANSI 256-colors
-// used as fallback for unknown ticket types.
-var typeBadgePalette = []string{"196", "39", "35", "214", "141", "208", "49", "220"}
-
-// Known type colors — matches sessions tab colors.
-var knownTypeColors = map[string]string{
-	"work":      "82",  // green
-	"architect": "141", // purple
-	"collab":    "214", // amber
-}
-
-// typeBadgeColorCode returns the 256-color code for a ticket type badge.
-func typeBadgeColorCode(ticketType string) string {
-	if code, ok := knownTypeColors[ticketType]; ok {
-		return code
-	}
-	var sum int
-	for _, b := range ticketType {
-		sum += int(b)
-	}
-	return typeBadgePalette[sum%len(typeBadgePalette)]
-}
-
 func dueDateColorCode(overdue bool) string {
 	if overdue {
 		return "196"
@@ -158,10 +135,4 @@ func columnHeaderStyle(status string) lipgloss.Style {
 	default:
 		return backlogHeaderStyle
 	}
-}
-
-// typeBadgeStyle returns the appropriate style for a ticket type badge.
-func typeBadgeStyle(ticketType string) lipgloss.Style {
-	colorCode := typeBadgeColorCode(ticketType)
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(colorCode))
 }

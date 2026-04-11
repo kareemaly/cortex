@@ -127,18 +127,6 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 			}
 		}
 
-		typeBadge := ""
-		if t.Type != "" {
-			if isSelected {
-				// Use raw ANSI foreground-only change to preserve outer background
-				typeBadge = inlineFgColorChange(typeBadgeColorCode(t.Type)) +
-					"[" + t.Type + "] " +
-					inlineFgColorChange(selectedFgColor)
-			} else {
-				typeBadge = typeBadgeStyle(t.Type).Render("[" + t.Type + "] ")
-			}
-		}
-
 		// Build due date indicator
 		dueDateIndicator := ""
 		if t.Due != nil && c.status == "backlog" {
@@ -166,12 +154,9 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 		if t.QueuePosition != nil && c.status == "backlog" {
 			badgeWidth += len(fmt.Sprintf("[#%d] ", *t.QueuePosition))
 		}
-		if t.Type != "" {
-			badgeWidth += len("[" + t.Type + "] ")
-		}
 		wrappedTitle := wrapText(t.Title, titleWidth-badgeWidth)
 		if len(wrappedTitle) > 0 {
-			wrappedTitle[0] = queueIndicator + typeBadge + wrappedTitle[0]
+			wrappedTitle[0] = queueIndicator + wrappedTitle[0]
 		}
 		if dueDateIndicator != "" && len(wrappedTitle) > 0 {
 			wrappedTitle[0] = wrappedTitle[0] + dueDateIndicator
