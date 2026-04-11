@@ -6,7 +6,7 @@ Orchestration layer for AI coding agents. File-based ticket management with MCP 
 
 ## What is Cortex?
 
-Cortex turns your AI coding assistant into a managed development team. An architect agent breaks down work into tickets, spawns worker agents in isolated tmux sessions, reviews their output, and approves changes—all through a kanban-style workflow.
+Cortex turns your AI coding assistant into a managed development team. An architect agent breaks down work into tickets and spawns worker agents in isolated tmux sessions—all through a kanban-style workflow.
 
 ## Quick Start
 
@@ -39,19 +39,17 @@ The architect will guide you through creating and managing tickets.
 │   Architect                                                     │
 │   ├── Creates tickets in backlog                                │
 │   ├── Spawns worker agents for tickets                          │
-│   ├── Reviews completed work                                    │
-│   └── Approves → ticket moves to done                           │
+│   └── Reads session conclusions when work is done               │
 │                                                                 │
 │   Worker Agent (per ticket)                                     │
 │   ├── Runs in isolated tmux window                              │
 │   ├── Implements the ticket                                     │
-│   ├── Calls requestReview when done                             │
-│   └── Waits for architect approval                              │
+│   └── Calls concludeSession when done → ticket moves to done    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Ticket lifecycle**: `backlog → progress → review → done`
+**Ticket lifecycle**: `backlog → progress → done`
 
 ## Commands
 
@@ -137,7 +135,7 @@ Ejected prompts go to `<project>/prompts/`. Un-ejected prompts fall back to `~/.
 2. **Daemon starts** - `cortexd` launches automatically, serves all projects on port 4200
 3. **Architect session** - AI agent with MCP tools for ticket management
 4. **Worker sessions** - Each ticket gets a dedicated tmux window with scoped MCP tools
-5. **Review cycle** - Workers request review, architect approves
+5. **Conclusion** - Workers call `concludeSession` when done; the ticket moves to done and a session record is created
 
 The daemon handles:
 - Ticket storage (YAML frontmatter + markdown in `tickets/`)

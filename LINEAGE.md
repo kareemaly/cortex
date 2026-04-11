@@ -70,7 +70,7 @@ An orchestration layer for AI coding workflows:
 | Heavy prompt templates | MCP tools define behavior |
 | Events table | Git history + daemon.log |
 | Machines table | Git handles multi-machine |
-| Complex session states | Simple: backlog → progress → review → done |
+| Complex session states | Simple: backlog → progress → done |
 
 ## Evolution
 

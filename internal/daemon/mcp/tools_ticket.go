@@ -20,7 +20,7 @@ func (s *Server) registerTicketTools() {
 	// Conclude session tool
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
-		Description: "Conclude the session and mark the ticket as done. Include the outcome, files changed, commit SHA if any, and follow-up work or blockers. Call this after all reviews are approved.",
+		Description: "Conclude the session and mark the ticket as done. Include the outcome, files changed, commit SHA if any, and follow-up work or blockers.",
 	}, s.handleConcludeSession)
 }
 
