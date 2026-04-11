@@ -272,6 +272,24 @@ type ReadConclusionOutput struct {
 	Conclusion ConclusionOutput `json:"conclusion"`
 }
 
+// SearchInput is the input for the search tool.
+type SearchInput struct {
+	Query string `json:"query" jsonschema:"Search term — case-insensitive substring matched against ticket title+body and conclusion body (required)."`
+	Limit int    `json:"limit,omitempty" jsonschema:"Max results to return (default 25)."`
+}
+
+// SearchResultItem is one entry in search results — either a ticket (with optional nested conclusion) or a bare ticketless conclusion.
+type SearchResultItem struct {
+	Ticket     *TicketOutput     `json:"ticket,omitempty"`
+	Conclusion *ConclusionOutput `json:"conclusion,omitempty"`
+}
+
+// SearchOutput is the output for the search tool.
+type SearchOutput struct {
+	Results []SearchResultItem `json:"results"`
+	Total   int                `json:"total"`
+}
+
 // ticketSummaryResponseToMCP maps a shared TicketSummary (from the HTTP API)
 // to the MCP-specific TicketSummary with enriched fields.
 func ticketSummaryResponseToMCP(s *types.TicketSummary) TicketSummary {

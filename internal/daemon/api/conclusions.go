@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -52,16 +53,47 @@ func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	opts := conclusion.ListOptions{
-		Type:   r.URL.Query().Get("type"),
-		Limit:  parseIntQuery(r, "limit", 0),
-		Offset: parseIntQuery(r, "offset", 0),
+	query := strings.ToLower(r.URL.Query().Get("query"))
+
+	var opts conclusion.ListOptions
+	if query != "" {
+		// Load all so we can filter by body text, then paginate manually.
+		opts = conclusion.ListOptions{Type: r.URL.Query().Get("type")}
+	} else {
+		opts = conclusion.ListOptions{
+			Type:   r.URL.Query().Get("type"),
+			Limit:  parseIntQuery(r, "limit", 0),
+			Offset: parseIntQuery(r, "offset", 0),
+		}
 	}
 
 	conclusions, total, err := store.ListWithOptions(opts)
 	if err != nil {
 		handleConclusionError(w, err, h.deps.Logger)
 		return
+	}
+
+	if query != "" {
+		filtered := conclusions[:0]
+		for _, c := range conclusions {
+			if strings.Contains(strings.ToLower(c.Body), query) {
+				filtered = append(filtered, c)
+			}
+		}
+		conclusions = filtered
+		total = len(conclusions)
+		offset := parseIntQuery(r, "offset", 0)
+		limit := parseIntQuery(r, "limit", 0)
+		if offset > 0 {
+			if offset >= len(conclusions) {
+				conclusions = nil
+			} else {
+				conclusions = conclusions[offset:]
+			}
+		}
+		if limit > 0 && len(conclusions) > limit {
+			conclusions = conclusions[:limit]
+		}
 	}
 
 	// Try to resolve ticket titles for work/research conclusions.

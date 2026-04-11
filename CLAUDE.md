@@ -152,7 +152,6 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 | `listTickets` | List tickets by status (backlog/progress/done), optional search query |
 | `readTicket` | Read full ticket details by ID |
 | `createWorkTicket` | Create a work ticket with title, body, required repo, optional due_date and references |
-| `createResearchTicket` | Create a research ticket with title, body, required path, optional due_date and references |
 | `updateTicket` | Update ticket title, body, and/or references |
 | `deleteTicket` | Delete ticket by ID |
 | `moveTicket` | Move ticket to different status |
@@ -160,8 +159,10 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 | `clearDueDate` | Remove due date from ticket |
 | `spawnSession` | Spawn agent session for ticket (modes: normal, resume, fresh) |
 | `spawnCollabSession` | Spawn a ticketless collab session in a repo with a kickoff prompt |
+| `search` | Search across all tickets and conclusions by case-insensitive substring query |
 | `listConclusions` | List persistent conclusion records (session records metadata) |
 | `readConclusion` | Read a conclusion record by ID |
+| `listVariants` | List available agent variants |
 | `concludeSession` | Conclude the architect session and clean up |
 
 **Ticket Agent** (`tools_ticket.go`):

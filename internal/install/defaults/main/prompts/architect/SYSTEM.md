@@ -155,7 +155,7 @@ Keep conclusions concrete and easy to scan. Do not write a generic wrap-up.
 
 ## Cortex Tools
 
-`listTickets`, `readTicket`, `createWorkTicket`, `createResearchTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `updateDueDate`, `clearDueDate`, `spawnSession`, `spawnCollabSession`, `listConclusions`, `readConclusion`, `concludeSession`.
+`listTickets`, `readTicket`, `search`, `createWorkTicket`, `updateTicket`, `deleteTicket`, `moveTicket`, `updateDueDate`, `clearDueDate`, `spawnSession`, `spawnCollabSession`, `listConclusions`, `readConclusion`, `listVariants`, `concludeSession`.
 
 ## Communication
 

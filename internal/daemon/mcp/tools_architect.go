@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -88,6 +89,12 @@ func (s *Server) registerArchitectTools() {
 		Name:        "readConclusion",
 		Description: "Read a conclusion record by ID, including the full body.",
 	}, s.handleReadConclusion)
+
+	// Search across tickets and conclusions
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "search",
+		Description: "Search across all tickets (all statuses) and conclusions by a case-insensitive substring query. Returns tickets in readTicket shape (with conclusion nested if done) and bare ticketless conclusions. Results sorted newest-updated first.",
+	}, s.handleSearch)
 
 	// Conclude architect session
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -589,4 +596,137 @@ func (s *Server) handleListVariants(
 		return nil, ListVariantsOutput{}, wrapSDKError(err)
 	}
 	return nil, ListVariantsOutput{Variants: variants}, nil
+}
+
+// handleSearch searches across all tickets (all statuses) and conclusions.
+func (s *Server) handleSearch(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input SearchInput,
+) (*mcp.CallToolResult, SearchOutput, error) {
+	if input.Query == "" {
+		return nil, SearchOutput{}, NewValidationError("query", "cannot be empty")
+	}
+
+	limit := 25
+	if input.Limit > 0 {
+		limit = input.Limit
+	}
+
+	// 1. All tickets matching query (title+body, server-side filtered).
+	allTickets, err := s.sdkClient.ListAllTickets(input.Query, nil)
+	if err != nil {
+		return nil, SearchOutput{}, wrapSDKError(err)
+	}
+
+	// 2. All conclusions whose body matches the query (server-side filtered).
+	allConclusions, err := s.sdkClient.ListConclusions(sdk.ListConclusionsParams{Query: input.Query, Limit: 0})
+	if err != nil {
+		return nil, SearchOutput{}, wrapSDKError(err)
+	}
+
+	// 3. Build a unique set of ticket IDs to fetch — start from direct ticket matches.
+	ticketIDSet := make(map[string]bool)
+	for _, t := range allTickets.Backlog {
+		ticketIDSet[t.ID] = true
+	}
+	for _, t := range allTickets.Progress {
+		ticketIDSet[t.ID] = true
+	}
+	for _, t := range allTickets.Done {
+		ticketIDSet[t.ID] = true
+	}
+
+	// 4. Process conclusion matches: ticketed ones add parent; ticketless are bare conclusions.
+	var bareConclusions []types.ConclusionSummary
+	for _, c := range allConclusions.Conclusions {
+		if c.Ticket != "" {
+			// Always include parent ticket, even if title/body didn't match.
+			ticketIDSet[c.Ticket] = true
+		} else {
+			bareConclusions = append(bareConclusions, c)
+		}
+	}
+
+	// resultWithTime pairs a SearchResultItem with a timestamp for sorting.
+	type resultWithTime struct {
+		item SearchResultItem
+		t    time.Time
+	}
+	var combined []resultWithTime
+
+	// 5. Fetch full ticket details and nest conclusion when available.
+	for ticketID := range ticketIDSet {
+		resp, err := s.sdkClient.GetTicketByID(ticketID)
+		if err != nil {
+			// Ticket may have been deleted between listing and fetching — skip.
+			continue
+		}
+		out := ticketResponseToOutput(resp)
+		if resp.Session != "" {
+			conclusion, err := s.sdkClient.GetConclusion(resp.Session)
+			if err == nil {
+				startedAtStr := ""
+				if !conclusion.StartedAt.IsZero() {
+					startedAtStr = conclusion.StartedAt.Format(time.RFC3339)
+				}
+				out.Conclusion = &ConclusionOutput{
+					ID:          conclusion.ID,
+					Type:        conclusion.Type,
+					Ticket:      conclusion.Ticket,
+					Repo:        conclusion.Repo,
+					Body:        conclusion.Body,
+					ConcludedAt: conclusion.ConcludedAt.Format(time.RFC3339),
+					StartedAt:   startedAtStr,
+				}
+			}
+		}
+		combined = append(combined, resultWithTime{
+			item: SearchResultItem{Ticket: &out},
+			t:    resp.Updated,
+		})
+	}
+
+	// 6. Fetch full bodies for bare ticketless conclusions.
+	for _, bc := range bareConclusions {
+		resp, err := s.sdkClient.GetConclusion(bc.ID)
+		if err != nil {
+			continue
+		}
+		startedAtStr := ""
+		if !resp.StartedAt.IsZero() {
+			startedAtStr = resp.StartedAt.Format(time.RFC3339)
+		}
+		cOut := ConclusionOutput{
+			ID:          resp.ID,
+			Type:        resp.Type,
+			Ticket:      resp.Ticket,
+			Repo:        resp.Repo,
+			Body:        resp.Body,
+			ConcludedAt: resp.ConcludedAt.Format(time.RFC3339),
+			StartedAt:   startedAtStr,
+		}
+		combined = append(combined, resultWithTime{
+			item: SearchResultItem{Conclusion: &cOut},
+			t:    resp.ConcludedAt,
+		})
+	}
+
+	// 7. Sort newest-updated first.
+	sort.Slice(combined, func(i, j int) bool {
+		return combined[i].t.After(combined[j].t)
+	})
+
+	// 8. Apply limit.
+	total := len(combined)
+	if len(combined) > limit {
+		combined = combined[:limit]
+	}
+
+	results := make([]SearchResultItem, len(combined))
+	for i, r := range combined {
+		results[i] = r.item
+	}
+
+	return nil, SearchOutput{Results: results, Total: total}, nil
 }

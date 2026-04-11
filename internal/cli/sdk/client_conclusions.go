@@ -46,6 +46,7 @@ func (c *Client) ConcludeSession(ticketID, content, startedAt string) (*Conclude
 // ListConclusionsParams controls filtering and pagination for ListConclusions.
 type ListConclusionsParams struct {
 	Type   string
+	Query  string
 	Limit  int
 	Offset int
 }
@@ -56,6 +57,9 @@ func (c *Client) ListConclusions(params ListConclusionsParams) (*ListConclusions
 	var queryParams []string
 	if params.Type != "" {
 		queryParams = append(queryParams, "type="+params.Type)
+	}
+	if params.Query != "" {
+		queryParams = append(queryParams, "query="+params.Query)
 	}
 	if params.Limit > 0 {
 		queryParams = append(queryParams, fmt.Sprintf("limit=%d", params.Limit))
