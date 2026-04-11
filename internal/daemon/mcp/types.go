@@ -230,7 +230,7 @@ type ArchitectConcludeOutput struct {
 
 // ListConclusionsInput is the input for the listConclusions tool.
 type ListConclusionsInput struct {
-	Type   string `json:"type,omitempty" jsonschema:"Filter by type: architect, work, or research."`
+	Type   string `json:"type,omitempty" jsonschema:"Filter by type: architect, work, or collab."`
 	Limit  int    `json:"limit,omitempty" jsonschema:"Max results to return (default 10)."`
 	Offset int    `json:"offset,omitempty" jsonschema:"Results to skip for pagination (default 0)."`
 }

@@ -7,8 +7,8 @@ import (
 
 // NotFoundError indicates a prompt file was not found.
 type NotFoundError struct {
-	Role        string   // "architect" or ticket type (work, research)
-	TicketType  string   // for ticket prompts only (deprecated, kept for compatibility)
+	Role        string   // "architect" or "work"
+	TicketType  string   // for ticket prompts only
 	Stage       string   // SYSTEM, KICKOFF
 	SearchPaths []string // all paths checked
 }

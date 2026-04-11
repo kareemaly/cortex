@@ -111,31 +111,6 @@ func (r *PromptResolver) ResolveTicketPromptWithPath(ticketType, stage string) (
 		}
 	}
 
-	// Fall back to "work" type if the requested type was not found
-	if ticketType != "work" {
-		workProjectPath := TicketPromptPath(r.ProjectRoot, "work", stage)
-		searchPaths = append(searchPaths, workProjectPath)
-		content, err = r.loadIfExists(workProjectPath)
-		if err != nil {
-			return nil, err
-		}
-		if content != "" {
-			return &ResolvedPrompt{Content: content, SourcePath: workProjectPath}, nil
-		}
-
-		if r.BaseRoot != "" {
-			workBasePath := BaseTicketPromptPath(r.BaseRoot, "work", stage)
-			searchPaths = append(searchPaths, workBasePath)
-			content, err = r.loadIfExists(workBasePath)
-			if err != nil {
-				return nil, err
-			}
-			if content != "" {
-				return &ResolvedPrompt{Content: content, SourcePath: workBasePath}, nil
-			}
-		}
-	}
-
 	// Not found in any location
 	return nil, &NotFoundError{
 		Role:        ticketType,

@@ -97,9 +97,7 @@ func (h *PromptHandlers) Resolve(w http.ResponseWriter, r *http.Request) {
 }
 
 // List handles GET /prompts - lists all prompt files with ejection status.
-// Uses the prompt resolver to enumerate prompts, driven by the project config's
-// ticket types. This ensures custom ticket types (e.g., "research") appear even
-// when no physical files exist for them in the defaults directory.
+// Uses the prompt resolver to enumerate prompts.
 func (h *PromptHandlers) List(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 
@@ -235,8 +233,7 @@ func (h *PromptHandlers) Eject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Source doesn't exist (custom type like ticket/research/SYSTEM.md)
-		// Use resolver to get fallback content
+		// Source doesn't exist on disk — use the resolver to get fallback content.
 		resolver := prompt.NewPromptResolver(projectPath, h.deps.DefaultsDir)
 		content, resolveErr := resolvePromptByPath(resolver, promptPath)
 		if resolveErr != nil {
@@ -393,7 +390,7 @@ func removeEmptyParents(dir, root string) {
 	}
 }
 
-// resolvePromptByPath parses a prompt path (e.g. "ticket/research/SYSTEM.md")
+// resolvePromptByPath parses a prompt path (e.g. "ticket/work/SYSTEM.md")
 // and uses the resolver to get the content with fallback.
 func resolvePromptByPath(resolver *prompt.PromptResolver, promptPath string) (string, error) {
 	parts := strings.Split(filepath.ToSlash(promptPath), "/")

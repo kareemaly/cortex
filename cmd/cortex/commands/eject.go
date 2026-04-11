@@ -24,7 +24,7 @@ directory for local customization. The prompt path is relative to the prompts di
 Examples:
   cortex eject work/KICKOFF.md
   cortex eject architect/KICKOFF.md
-  cortex eject research/KICKOFF.md --force`,
+  cortex eject architect/SYSTEM.md --force`,
 	Args: cobra.ExactArgs(1),
 	RunE: runEject,
 }

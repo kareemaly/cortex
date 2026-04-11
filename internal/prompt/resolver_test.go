@@ -104,19 +104,6 @@ func TestPromptResolver_ResolveTicketPrompt(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to work type when requested type not found", func(t *testing.T) {
-		projectRoot := t.TempDir()
-		createTicketPromptFile(t, projectRoot, "work", "KICKOFF.md", "work kickoff")
-
-		resolver := NewPromptResolver(projectRoot, "")
-		content, err := resolver.ResolveTicketPrompt("unknown", StageKickoff)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if content != "work kickoff" {
-			t.Errorf("expected 'work kickoff', got %q", content)
-		}
-	})
 }
 
 // createPromptFile creates a prompt file for architect prompts in a project root.

@@ -11,9 +11,8 @@ type TicketVars struct {
 	TicketID      string
 	TicketTitle   string
 	TicketBody    string
-	Comments      string // pre-formatted comments block
 	References    string // pre-formatted references block
-	Repo          string // repo path for work tickets, empty for research
+	Repo          string // repo path for the ticket
 	ArchitectName string // architect name from config
 	Repos         string // formatted list of other repos in the ecosystem (excluding current repo)
 }

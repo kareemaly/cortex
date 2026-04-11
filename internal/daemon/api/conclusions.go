@@ -96,7 +96,7 @@ func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Try to resolve ticket titles for work/research conclusions.
+	// Try to resolve ticket titles for work conclusions.
 	var ticketTitles map[string]string
 	if h.deps.StoreManager != nil {
 		if ts, tsErr := h.deps.StoreManager.GetStore(projectPath); tsErr == nil {

@@ -11,7 +11,7 @@ var (
 // Column widths for aligned rendering.
 const (
 	colTime     = 7  // "15:04" + padding
-	colType     = 10 // "research" + padding
+	colType     = 10 // "architect" + padding
 	colDuration = 8  // " 1h 23m"
 	colGutter   = 2  // left gutter for cursor indicator
 )

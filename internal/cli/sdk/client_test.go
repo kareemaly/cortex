@@ -575,7 +575,7 @@ func TestListConclusions_Success(t *testing.T) {
 	rs.setRoute("GET", "/conclusions", http.StatusOK, ListConclusionsResponse{
 		Conclusions: []ConclusionSummary{
 			{ID: "c1", Type: "work", Ticket: "t1", ConcludedAt: now},
-			{ID: "c2", Type: "research", ConcludedAt: now},
+			{ID: "c2", Type: "collab", ConcludedAt: now},
 		},
 		Total: 2,
 	})
