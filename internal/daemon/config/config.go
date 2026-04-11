@@ -31,23 +31,19 @@ type AgentVariant struct {
 
 // Config holds the daemon configuration.
 type Config struct {
-	Port               int                       `yaml:"port"`
-	BindAddress        string                    `yaml:"bind_address"`
-	LogLevel           string                    `yaml:"log_level"`
-	StatusHistoryLimit int                       `yaml:"status_history_limit"`
-	GitDiffTool        string                    `yaml:"git_diff_tool"`
-	Architects         []ArchitectEntry          `yaml:"architects,omitempty"`
-	Agents             map[string]AgentVariant   `yaml:"agents,omitempty"`
+	Port        int                     `yaml:"port"`
+	BindAddress string                  `yaml:"bind_address"`
+	LogLevel    string                  `yaml:"log_level"`
+	Architects  []ArchitectEntry        `yaml:"architects,omitempty"`
+	Agents      map[string]AgentVariant `yaml:"agents,omitempty"`
 }
 
 // DefaultConfig returns a Config with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		Port:               DefaultPort,
-		BindAddress:        "127.0.0.1",
-		LogLevel:           "info",
-		StatusHistoryLimit: 10,
-		GitDiffTool:        "diff",
+		Port:        DefaultPort,
+		BindAddress: "127.0.0.1",
+		LogLevel:    "info",
 	}
 }
 
