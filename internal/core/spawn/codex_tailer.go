@@ -81,7 +81,7 @@ func runCodexTailer(codexHome, ticketID, architectPath, daemonURL string) {
 		if err != nil {
 			return
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	// Phase 1: wait for the rollout file to appear under codexHome/sessions/*/*/*/rollout-*.jsonl
@@ -104,7 +104,7 @@ func runCodexTailer(codexHome, ticketID, architectPath, daemonURL string) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	newScanner := func() *bufio.Scanner {
 		s := bufio.NewScanner(f)

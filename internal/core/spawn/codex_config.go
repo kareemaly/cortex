@@ -21,7 +21,7 @@ func WriteCodexConfigDir(mcpConfig *ClaudeMCPConfig, systemPrompt string, agentT
 	if strings.TrimSpace(systemPrompt) != "" {
 		systemPromptPath = filepath.Join(dir, "cortex-system.md")
 		if err := os.WriteFile(systemPromptPath, []byte(systemPrompt), 0600); err != nil {
-			os.RemoveAll(dir)
+			_ = os.RemoveAll(dir)
 			return "", fmt.Errorf("write codex system prompt: %w", err)
 		}
 	}
@@ -29,7 +29,7 @@ func WriteCodexConfigDir(mcpConfig *ClaudeMCPConfig, systemPrompt string, agentT
 	// Build and write config.toml
 	toml := buildCodexConfigTOML(mcpConfig, systemPromptPath, agentType)
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(toml), 0600); err != nil {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir)
 		return "", fmt.Errorf("write codex config.toml: %w", err)
 	}
 
