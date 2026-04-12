@@ -71,19 +71,19 @@ func DefaultClaudeVariants() map[string]config.AgentVariant {
 	return map[string]config.AgentVariant{
 		"claude-opus": {
 			Agent: "claude",
-			Args:  []string{"--dangerously-skip-permissions"},
+			Args:  []string{"--permission-mode", "auto"},
 		},
 		"claude-opus-plan": {
 			Agent: "claude",
-			Args:  []string{"--allow-dangerously-skip-permissions", "--permission-mode", "plan"},
+			Args:  []string{"--permission-mode", "plan"},
 		},
 		"claude-sonnet": {
 			Agent: "claude",
-			Args:  []string{"--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"},
+			Args:  []string{"--permission-mode", "auto", "--model", "claude-sonnet-4-6"},
 		},
 		"claude-sonnet-plan": {
 			Agent: "claude",
-			Args:  []string{"--allow-dangerously-skip-permissions", "--permission-mode", "plan", "--model", "claude-sonnet-4-6"},
+			Args:  []string{"--permission-mode", "plan", "--model", "claude-sonnet-4-6"},
 		},
 	}
 }
@@ -107,7 +107,7 @@ func DefaultCodexVariants() map[string]config.AgentVariant {
 	return map[string]config.AgentVariant{
 		"codex": {
 			Agent: "codex",
-			Args:  []string{"--dangerously-bypass-approvals-and-sandbox", "--model", "gpt-5.4"},
+			Args:  []string{"--full-auto", "--model", "gpt-5.4"},
 		},
 		"codex-plan": {
 			Agent: "codex",
