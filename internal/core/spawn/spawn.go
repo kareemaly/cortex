@@ -6,12 +6,17 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kareemaly/cortex/internal/binpath"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
+
+// newClaudeSessionID generates a UUID for a fresh claude-code session. Stored
+// as a package-level var so tests can substitute a deterministic generator.
+var newClaudeSessionID = func() string { return uuid.New().String() }
 
 // AgentType represents the type of agent being spawned.
 type AgentType string
@@ -50,14 +55,13 @@ type TmuxManagerInterface interface {
 
 // Dependencies contains the external dependencies for the Spawner.
 type Dependencies struct {
-	Store             StoreInterface
-	SessionStore      SessionStoreInterface
-	TmuxManager       TmuxManagerInterface
-	Logger            *slog.Logger // optional logger for warnings
-	CortexdPath       string       // optional override for cortexd binary path
-	MCPConfigDir      string       // optional override for MCP config directory
-	SettingsConfigDir string       // optional override for settings config directory
-	DefaultsDir       string       // path to defaults (e.g., ~/.cortex/defaults/main) for prompt fallback
+	Store        StoreInterface
+	SessionStore SessionStoreInterface
+	TmuxManager  TmuxManagerInterface
+	Logger       *slog.Logger // optional logger for warnings
+	CortexdPath  string       // optional override for cortexd binary path
+	MCPConfigDir string       // optional override for MCP config directory
+	DefaultsDir  string       // path to defaults (e.g., ~/.cortex/defaults/main) for prompt fallback
 }
 
 // Spawner handles spawning agent sessions.
@@ -130,7 +134,6 @@ type SpawnResult struct {
 	TmuxWindow    string
 	WindowIndex   int
 	MCPConfigPath string
-	SettingsPath  string
 	Message       string
 }
 
@@ -229,26 +232,10 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		return nil, err
 	}
 
-	// Generate and write settings config (hooks) - skip for OpenCode and Codex (they don't support --settings)
-	var settingsPath string
-	if req.Agent != "opencode" && req.Agent != "codex" {
-		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
-			CortexdPath:   cortexdPath,
-			TicketID:      req.TicketID,
-			ArchitectPath: req.ArchitectPath,
-		})
-
-		settingsPath, err = WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
-		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath})
-			return nil, err
-		}
-	}
-
 	// Load and build prompt
 	pInfo, err := s.buildPrompt(req)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath})
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath})
 		return &SpawnResult{
 			Success: false,
 			Message: err.Error(),
@@ -258,7 +245,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	// Write prompt to temp file
 	promptFilePath, err := WritePromptFile(pInfo.PromptText, identifier, "prompt", s.deps.MCPConfigDir)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath})
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath})
 		return nil, err
 	}
 
@@ -267,7 +254,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	if pInfo.SystemPromptContent != "" {
 		systemPromptFilePath, err = WritePromptFile(pInfo.SystemPromptContent, identifier, "sysprompt", s.deps.MCPConfigDir)
 		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, settingsPath, promptFilePath})
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, promptFilePath})
 			return nil, err
 		}
 	}
@@ -277,7 +264,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	if req.Agent == "opencode" {
 		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, pInfo.SystemPromptContent, req.AgentType, systemPromptFilePath)
 		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath))
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, promptFilePath, systemPromptFilePath))
 			return nil, err
 		}
 	}
@@ -287,19 +274,27 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	if req.Agent == "codex" {
 		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, pInfo.SystemPromptContent, req.AgentType, identifier)
 		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath))
+			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, promptFilePath, systemPromptFilePath))
 			return nil, err
 		}
 	}
 
+	// For claude, generate a fresh session UUID and pass it to the CLI via
+	// --session-id. Knowing the UUID up front lets the transcript tailer
+	// compute the exact transcript path without polling the projects dir.
+	var claudeSessionID string
+	if req.Agent == "claude" {
+		claudeSessionID = newClaudeSessionID()
+	}
+
 	// Build launcher params based on agent type
-	tempFiles := nonEmptyStrings(mcpConfigPath, settingsPath, promptFilePath, systemPromptFilePath)
+	tempFiles := nonEmptyStrings(mcpConfigPath, promptFilePath, systemPromptFilePath)
 	launcherParams := LauncherParams{
 		AgentType:            req.Agent,
 		PromptFilePath:       promptFilePath,
 		SystemPromptFilePath: systemPromptFilePath,
 		MCPConfigPath:        mcpConfigPath,
-		SettingsPath:         settingsPath,
+		SessionID:            claudeSessionID,
 		AgentArgs:            req.AgentArgs,
 		CleanupFiles:         tempFiles,
 	}
@@ -313,13 +308,11 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID":  session.ArchitectSessionKey,
-			"CORTEX_ARCHITECT":  req.ArchitectPath,
 			"CORTEX_STARTED_AT": startedAt,
 		}
 	case AgentTypeTicketAgent:
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_TICKET_ID": req.TicketID,
-			"CORTEX_ARCHITECT": req.ArchitectPath,
 			"CORTEX_TICKET_TYPE": func() string {
 				if req.Ticket != nil {
 					return req.Ticket.Type
@@ -337,7 +330,6 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	case AgentTypeCollabAgent:
 		launcherParams.EnvVars = map[string]string{
 			"CORTEX_COLLAB_ID":  req.CollabID,
-			"CORTEX_ARCHITECT":  req.ArchitectPath,
 			"CORTEX_REPO":       req.Repo,
 			"CORTEX_STARTED_AT": startedAt,
 		}
@@ -353,19 +345,19 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
 	}
 
-	// Inject OpenCode status plugin for agent status reporting
+	// Inject OpenCode status plugin — the plugin appends JSONL status events
+	// to a per-spawn file, which the daemon's shared status tailer reads.
+	var opencodeStatusFile string
 	if req.Agent == "opencode" {
-		pluginContent := GenerateOpenCodeStatusPlugin(
-			daemonconfig.DefaultDaemonURL,
-			launcherParams.EnvVars["CORTEX_TICKET_ID"],
-			req.ArchitectPath,
-		)
+		opencodeStatusFile = OpenCodeStatusFilePath(identifier, s.deps.MCPConfigDir)
+		pluginContent := GenerateOpenCodeStatusPlugin(opencodeStatusFile)
 		pluginDir, pluginErr := WriteOpenCodePluginDir(pluginContent, identifier)
 		if pluginErr != nil {
 			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles)
 			return nil, pluginErr
 		}
 		launcherParams.CleanupDirs = []string{pluginDir}
+		launcherParams.CleanupFiles = append(launcherParams.CleanupFiles, opencodeStatusFile)
 		launcherParams.EnvVars["OPENCODE_CONFIG_DIR"] = pluginDir
 	}
 
@@ -387,9 +379,24 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}, nil
 	}
 
-	// Start rollout tailer for live status reporting on codex sessions.
-	if req.Agent == "codex" && codexConfigDir != "" {
-		StartCodexTailer(codexConfigDir, launcherParams.EnvVars["CORTEX_TICKET_ID"], req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+	// Start the live status tailer for the spawned agent. All three agents
+	// share the same daemon-side transport; they only differ in where the
+	// transcript lives and how lines are parsed.
+	ticketIDForStatus := launcherParams.EnvVars["CORTEX_TICKET_ID"]
+	switch req.Agent {
+	case "codex":
+		if codexConfigDir != "" {
+			StartCodexTailer(codexConfigDir, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+		}
+	case "claude":
+		if claudeSessionID != "" {
+			transcriptPath := ClaudeTranscriptPath(workingDir, claudeSessionID)
+			StartClaudeTailer(transcriptPath, mcpConfigPath, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+		}
+	case "opencode":
+		if opencodeStatusFile != "" {
+			StartOpenCodeTailer(opencodeStatusFile, mcpConfigPath, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+		}
 	}
 
 	return &SpawnResult{
@@ -438,9 +445,6 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 	// Determine env vars based on agent type
 	envVars := map[string]string{}
-	if req.ArchitectPath != "" {
-		envVars["CORTEX_ARCHITECT"] = req.ArchitectPath
-	}
 	envVars["CORTEX_STARTED_AT"] = startedAt
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
@@ -448,24 +452,6 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		envVars["CORTEX_TICKET_TYPE"] = req.TicketType
 	case AgentTypeArchitect:
 		envVars["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
-	}
-
-	// Generate and write settings config (hooks) - skip for OpenCode and Codex (they don't support --settings)
-	var settingsPath string
-	if req.Agent != "opencode" && req.Agent != "codex" {
-		settingsConfig := GenerateSettingsConfig(SettingsConfigParams{
-			CortexdPath:   cortexdPath,
-			TicketID:      identifier,
-			ArchitectPath: req.ArchitectPath,
-		})
-
-		settingsPath, err = WriteSettingsConfig(settingsConfig, identifier, s.deps.SettingsConfigDir)
-		if err != nil {
-			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
-				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
-			}
-			return nil, err
-		}
 	}
 
 	// Generate OpenCode config content for resume (empty system prompt -- resume has no prompts)
@@ -493,11 +479,10 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	}
 
 	// Build launcher script for resume (no prompt files needed)
-	tempFiles := nonEmptyStrings(mcpConfigPath, settingsPath)
+	tempFiles := nonEmptyStrings(mcpConfigPath)
 	launcherParams := LauncherParams{
 		AgentType:     req.Agent,
 		MCPConfigPath: mcpConfigPath,
-		SettingsPath:  settingsPath,
 		Resume:        req.SessionID == "",
 		ResumeID:      req.SessionID,
 		AgentArgs:     req.AgentArgs,
@@ -523,14 +508,11 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
 	}
 
-	// Inject OpenCode status plugin for agent status reporting
+	// Inject OpenCode status plugin for agent status reporting.
+	var opencodeStatusFile string
 	if req.Agent == "opencode" {
-		ticketID := envVars["CORTEX_TICKET_ID"]
-		pluginContent := GenerateOpenCodeStatusPlugin(
-			daemonconfig.DefaultDaemonURL,
-			ticketID,
-			req.ArchitectPath,
-		)
+		opencodeStatusFile = OpenCodeStatusFilePath(identifier, s.deps.MCPConfigDir)
+		pluginContent := GenerateOpenCodeStatusPlugin(opencodeStatusFile)
 		pluginDir, pluginErr := WriteOpenCodePluginDir(pluginContent, identifier)
 		if pluginErr != nil {
 			for _, path := range tempFiles {
@@ -541,6 +523,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 			return nil, pluginErr
 		}
 		launcherParams.CleanupDirs = []string{pluginDir}
+		launcherParams.CleanupFiles = append(launcherParams.CleanupFiles, opencodeStatusFile)
 		launcherParams.EnvVars["OPENCODE_CONFIG_DIR"] = pluginDir
 	}
 
@@ -598,9 +581,25 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		}, nil
 	}
 
-	// Start rollout tailer for live status reporting on codex sessions.
-	if req.Agent == "codex" && codexConfigDir != "" {
-		StartCodexTailer(codexConfigDir, envVars["CORTEX_TICKET_ID"], req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+	// Start the live status tailer for the resumed agent. Mirrors the Spawn
+	// switch above so all three agents share the same daemon-side transport.
+	ticketIDForStatus := envVars["CORTEX_TICKET_ID"]
+	switch req.Agent {
+	case "codex":
+		if codexConfigDir != "" {
+			StartCodexTailer(codexConfigDir, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+		}
+	case "claude":
+		// Bare --resume doesn't tell claude which prior session UUID to
+		// reuse, so we have no transcript path to tail. Skip silently.
+		if req.SessionID != "" {
+			transcriptPath := ClaudeTranscriptPath(workingDir, req.SessionID)
+			StartClaudeTailer(transcriptPath, mcpConfigPath, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+		}
+	case "opencode":
+		if opencodeStatusFile != "" {
+			StartOpenCodeTailer(opencodeStatusFile, mcpConfigPath, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+		}
 	}
 
 	return &SpawnResult{

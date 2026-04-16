@@ -6,30 +6,30 @@ import (
 	"path/filepath"
 )
 
-// GenerateOpenCodeStatusPlugin returns a TypeScript plugin string that pushes
-// agent status updates to the Cortex daemon's POST /agent/status endpoint.
-// Values are baked in via string interpolation because the plugin runs in Bun,
-// not a shell (no env var expansion).
-func GenerateOpenCodeStatusPlugin(daemonURL, ticketID, projectPath string) string {
+// GenerateOpenCodeStatusPlugin returns a TypeScript plugin string that
+// appends JSONL status events to statusFilePath. The cortex daemon's shared
+// status tailer reads that file and forwards the events to /agent/status —
+// matching the claude and codex tailers, so all three agents share one
+// transport.
+//
+// The plugin runs in Bun inside opencode; fs calls use node:fs. Values are
+// baked in via string interpolation (no env var lookups at runtime).
+func GenerateOpenCodeStatusPlugin(statusFilePath string) string {
 	return fmt.Sprintf(`// Cortex status plugin — auto-generated, do not edit.
-// Pushes OpenCode agent status to the Cortex daemon.
+// Appends JSONL status events to a file the cortex daemon tails.
 
-const DAEMON_URL = %q;
-const TICKET_ID = %q;
-const PROJECT_PATH = %q;
+import { appendFileSync } from "node:fs";
 
-function send(status: string, tool?: string) {
-  const body: Record<string, string> = { ticket_id: TICKET_ID, status };
-  if (tool) body.tool = tool;
-  fetch(DAEMON_URL + "/agent/status", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Cortex-Architect": PROJECT_PATH,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(5000),
-  }).catch(() => {});
+const STATUS_FILE = %q;
+
+function emit(status: string, tool?: string) {
+  const payload: Record<string, string> = { status };
+  if (tool) payload.tool = tool;
+  try {
+    appendFileSync(STATUS_FILE, JSON.stringify(payload) + "\n");
+  } catch {
+    // Fire-and-forget: the file may have been cleaned up already.
+  }
 }
 
 export default async (_input: any) => ({
@@ -37,27 +37,27 @@ export default async (_input: any) => ({
     switch (event.type) {
       case "session.status": {
         const s = event.properties?.status?.type;
-        if (s === "busy") send("in_progress");
-        else if (s === "idle") send("idle");
-        else if (s === "retry") send("error");
+        if (s === "busy") emit("in_progress");
+        else if (s === "idle") emit("idle");
+        else if (s === "retry") emit("error");
         break;
       }
       case "permission.asked":
-        send("waiting_permission");
+        emit("waiting_permission");
         break;
       case "permission.replied":
-        send("in_progress");
+        emit("in_progress");
         break;
     }
   },
   "tool.execute.before": async (hookInput: any) => {
-    send("in_progress", hookInput?.tool as string | undefined);
+    emit("in_progress", hookInput?.tool as string | undefined);
   },
   "tool.execute.after": async () => {
-    send("in_progress");
+    emit("in_progress");
   },
 });
-`, daemonURL, ticketID, projectPath)
+`, statusFilePath)
 }
 
 // WriteOpenCodePluginDir creates a temporary directory with the status plugin
@@ -89,4 +89,14 @@ func WriteOpenCodePluginDir(pluginContent, identifier string) (string, error) {
 	}
 
 	return tmpDir, nil
+}
+
+// OpenCodeStatusFilePath returns the JSONL file path for an opencode status
+// tailer. The cortex plugin appends to this file; the daemon tailer reads it.
+// configDir defaults to os.TempDir() when empty.
+func OpenCodeStatusFilePath(identifier, configDir string) string {
+	if configDir == "" {
+		configDir = os.TempDir()
+	}
+	return filepath.Join(configDir, fmt.Sprintf("cortex-opencode-status-%s.jsonl", identifier))
 }

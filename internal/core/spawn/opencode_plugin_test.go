@@ -8,24 +8,29 @@ import (
 )
 
 func TestGenerateOpenCodeStatusPlugin(t *testing.T) {
-	plugin := GenerateOpenCodeStatusPlugin(
-		"http://localhost:4200",
-		"ticket-abc123",
-		"/home/user/project",
-	)
+	plugin := GenerateOpenCodeStatusPlugin("/tmp/cortex-opencode-status-test.jsonl")
 
-	// Verify baked-in values
-	if !strings.Contains(plugin, `"http://localhost:4200"`) {
-		t.Error("expected plugin to contain daemon URL")
-	}
-	if !strings.Contains(plugin, `"ticket-abc123"`) {
-		t.Error("expected plugin to contain ticket ID")
-	}
-	if !strings.Contains(plugin, `"/home/user/project"`) {
-		t.Error("expected plugin to contain project path")
+	// Verify baked-in status file path.
+	if !strings.Contains(plugin, `"/tmp/cortex-opencode-status-test.jsonl"`) {
+		t.Error("expected plugin to contain status file path")
 	}
 
-	// Verify event handlers present in switch
+	// Verify plugin uses fs.appendFile, not HTTP — this is the whole point of
+	// the tailer-based refactor: one file-tailing transport for every agent.
+	if !strings.Contains(plugin, "appendFileSync") {
+		t.Error("expected plugin to append to a file via appendFileSync")
+	}
+	if strings.Contains(plugin, "fetch(") {
+		t.Error("expected plugin NOT to use fetch() — status flows through the file tailer now")
+	}
+	if strings.Contains(plugin, "/agent/status") {
+		t.Error("expected plugin NOT to reference /agent/status directly")
+	}
+	if strings.Contains(plugin, "X-Cortex-Architect") {
+		t.Error("expected plugin NOT to set X-Cortex-Architect — the tailer does that")
+	}
+
+	// Event handlers still present.
 	for _, event := range []string{
 		"session.status",
 		"permission.asked",
@@ -35,18 +40,12 @@ func TestGenerateOpenCodeStatusPlugin(t *testing.T) {
 			t.Errorf("expected plugin to handle event %q", event)
 		}
 	}
-
-	// Verify deprecated session.idle event is not present
 	if strings.Contains(plugin, `"session.idle"`) {
 		t.Error("expected plugin not to contain deprecated session.idle event")
 	}
-
-	// Verify status?.type is used (not bare status)
 	if !strings.Contains(plugin, "status?.type") {
 		t.Error("expected plugin to access status?.type")
 	}
-
-	// Verify tool hooks are top-level keys, not switch cases
 	if strings.Contains(plugin, `case "tool.execute.before"`) {
 		t.Error("expected tool.execute.before to be a hook key, not a switch case")
 	}
@@ -57,33 +56,11 @@ func TestGenerateOpenCodeStatusPlugin(t *testing.T) {
 		t.Error("expected plugin to have tool.execute.after as a hook key")
 	}
 
-	// Verify status mappings
-	if !strings.Contains(plugin, `"in_progress"`) {
-		t.Error("expected plugin to map to in_progress status")
-	}
-	if !strings.Contains(plugin, `"idle"`) {
-		t.Error("expected plugin to map to idle status")
-	}
-	if !strings.Contains(plugin, `"error"`) {
-		t.Error("expected plugin to map to error status")
-	}
-	if !strings.Contains(plugin, `"waiting_permission"`) {
-		t.Error("expected plugin to map to waiting_permission status")
-	}
-
-	// Verify fire-and-forget with timeout
-	if !strings.Contains(plugin, "AbortSignal.timeout(5000)") {
-		t.Error("expected plugin to use AbortSignal.timeout(5000)")
-	}
-
-	// Verify X-Cortex-Architect header
-	if !strings.Contains(plugin, "X-Cortex-Architect") {
-		t.Error("expected plugin to send X-Cortex-Architect header")
-	}
-
-	// Verify POST to /agent/status
-	if !strings.Contains(plugin, "/agent/status") {
-		t.Error("expected plugin to POST to /agent/status")
+	// Status mappings still present.
+	for _, want := range []string{`"in_progress"`, `"idle"`, `"error"`, `"waiting_permission"`} {
+		if !strings.Contains(plugin, want) {
+			t.Errorf("expected plugin to emit status %s", want)
+		}
 	}
 }
 

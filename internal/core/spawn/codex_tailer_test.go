@@ -77,16 +77,13 @@ func TestParseRolloutLine(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := parseRolloutLine([]byte(tc.line))
-			if got != tc.expected {
-				t.Errorf("parseRolloutLine(%q) = %q, want %q", tc.line[:min(len(tc.line), 80)], got, tc.expected)
+			if got.Status != tc.expected {
+				preview := tc.line
+				if len(preview) > 80 {
+					preview = preview[:80]
+				}
+				t.Errorf("parseRolloutLine(%q).Status = %q, want %q", preview, got.Status, tc.expected)
 			}
 		})
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

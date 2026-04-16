@@ -14,7 +14,6 @@ type LauncherParams struct {
 	SystemPromptFilePath string            // path to system prompt temp file (empty if none)
 	ReplaceSystemPrompt  bool              // if true, use --system-prompt (full replace); otherwise --append-system-prompt
 	MCPConfigPath        string            // path to MCP config file
-	SettingsPath         string            // path to settings config file
 	Resume               bool              // if true, emit bare --resume (resume most recent conversation)
 	ResumeID             string            // claude session ID to resume (specific conversation)
 	SessionID            string            // session ID for --session-id flag
@@ -125,11 +124,6 @@ func buildClaudeCommand(params LauncherParams) string {
 	// Add MCP config
 	if params.MCPConfigPath != "" {
 		parts = append(parts, "--mcp-config", shellQuote(params.MCPConfigPath))
-	}
-
-	// Add settings config
-	if params.SettingsPath != "" {
-		parts = append(parts, "--settings", shellQuote(params.SettingsPath))
 	}
 
 	// Add resume flag

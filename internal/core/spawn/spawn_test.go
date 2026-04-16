@@ -666,16 +666,13 @@ func TestWriteLauncherScript(t *testing.T) {
 		PromptFilePath:       "/tmp/cortex-prompt-test.txt",
 		SystemPromptFilePath: "/tmp/cortex-sysprompt-test.txt",
 		MCPConfigPath:        "/tmp/cortex-mcp-test.json",
-		SettingsPath:         "/tmp/cortex-settings-test.json",
 		SessionID:            "session-abc",
 		AgentArgs:            []string{"--permission-mode", "plan"},
 		EnvVars: map[string]string{
 			"CORTEX_TICKET_ID": "ticket-1",
-			"CORTEX_ARCHITECT": "/path/to/project",
 		},
 		CleanupFiles: []string{
 			"/tmp/cortex-mcp-test.json",
-			"/tmp/cortex-settings-test.json",
 			"/tmp/cortex-prompt-test.txt",
 			"/tmp/cortex-sysprompt-test.txt",
 		},
@@ -709,9 +706,6 @@ func TestWriteLauncherScript(t *testing.T) {
 	if !containsSubstr(script, "export CORTEX_TICKET_ID=") {
 		t.Error("expected CORTEX_TICKET_ID export")
 	}
-	if !containsSubstr(script, "export CORTEX_ARCHITECT=") {
-		t.Error("expected CORTEX_ARCHITECT export")
-	}
 
 	// Verify $(cat) syntax for prompt and system prompt
 	if !containsSubstr(script, "\"$(cat") {
@@ -725,8 +719,8 @@ func TestWriteLauncherScript(t *testing.T) {
 	if !containsSubstr(script, "--mcp-config") {
 		t.Error("expected --mcp-config flag")
 	}
-	if !containsSubstr(script, "--settings") {
-		t.Error("expected --settings flag")
+	if containsSubstr(script, "--settings") {
+		t.Error("claude no longer uses --settings (hooks replaced by transcript tailer)")
 	}
 	if !containsSubstr(script, "'--permission-mode' 'plan'") {
 		t.Error("expected '--permission-mode' 'plan' via AgentArgs")
@@ -750,10 +744,9 @@ func TestWriteLauncherScript_Resume(t *testing.T) {
 
 	params := LauncherParams{
 		MCPConfigPath: "/tmp/cortex-mcp-test.json",
-		SettingsPath:  "/tmp/cortex-settings-test.json",
 		ResumeID:      "session-to-resume",
 		AgentArgs:     []string{"--permission-mode", "plan"},
-		CleanupFiles:  []string{"/tmp/cortex-mcp-test.json", "/tmp/cortex-settings-test.json"},
+		CleanupFiles:  []string{"/tmp/cortex-mcp-test.json"},
 	}
 
 	path, err := WriteLauncherScript(params, "resume-test", tmpDir)
@@ -783,9 +776,8 @@ func TestWriteLauncherScript_BareResume(t *testing.T) {
 
 	params := LauncherParams{
 		MCPConfigPath: "/tmp/cortex-mcp-test.json",
-		SettingsPath:  "/tmp/cortex-settings-test.json",
 		Resume:        true, // bare --resume, no ResumeID
-		CleanupFiles:  []string{"/tmp/cortex-mcp-test.json", "/tmp/cortex-settings-test.json"},
+		CleanupFiles:  []string{"/tmp/cortex-mcp-test.json"},
 	}
 
 	path, err := WriteLauncherScript(params, "bare-resume-test", tmpDir)
@@ -818,12 +810,10 @@ func TestWriteLauncherScript_Architect(t *testing.T) {
 		SystemPromptFilePath: "/tmp/cortex-sysprompt-arch.txt",
 		ReplaceSystemPrompt:  true,
 		MCPConfigPath:        "/tmp/cortex-mcp-arch.json",
-		SettingsPath:         "/tmp/cortex-settings-arch.json",
 		AgentArgs:            []string{"--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"},
 		SessionID:            "arch-session",
 		CleanupFiles: []string{
 			"/tmp/cortex-mcp-arch.json",
-			"/tmp/cortex-settings-arch.json",
 			"/tmp/cortex-prompt-arch.txt",
 			"/tmp/cortex-sysprompt-arch.txt",
 		},
@@ -1629,7 +1619,6 @@ func TestWriteLauncherScript_OpenCode(t *testing.T) {
 		AgentArgs:      []string{"--verbose"},
 		EnvVars: map[string]string{
 			"CORTEX_TICKET_ID":        "ticket-1",
-			"CORTEX_ARCHITECT":        "/path/to/project",
 			"OPENCODE_CONFIG_CONTENT": `{"agent":{"cortex":{"prompt":"test"}},"mcp":{}}`,
 		},
 		CleanupFiles: []string{"/tmp/cortex-prompt-test.txt"},
