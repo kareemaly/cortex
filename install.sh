@@ -301,9 +301,6 @@ main() {
             codesign --force --sign - "${install_dir}/cortex" 2>/dev/null || true
             codesign --force --sign - "${install_dir}/cortexd" 2>/dev/null || true
         fi
-        # Remove Gatekeeper quarantine flag set by curl/wget on downloaded files
-        xattr -d com.apple.quarantine "${install_dir}/cortex" 2>/dev/null || true
-        xattr -d com.apple.quarantine "${install_dir}/cortexd" 2>/dev/null || true
     fi
 
     # Verify installation

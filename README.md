@@ -46,7 +46,7 @@ Cortex is built for engineers who live in the terminal. Every agent runs in a tm
 - **Go 1.21+** (only for building from source)
 - Linux or macOS
 
-> **macOS note:** The binaries distributed via GitHub Releases are not Apple-notarized. On first run, macOS may show an "unidentified developer" Gatekeeper warning. The install script automatically removes the quarantine flag (`xattr -d com.apple.quarantine`) after placing the binaries, so you should not see this warning if you used the curl installer.
+> **macOS note:** The binaries distributed via GitHub Releases are not Apple-notarized. On first run, macOS will show an "unidentified developer" Gatekeeper warning. Open **System Settings → Privacy & Security** and click *Allow Anyway* for `cortex` and `cortexd`, or run `xattr -d com.apple.quarantine $(which cortex cortexd)` if you've reviewed the binaries and want to bypass the prompt. The installer does not strip the quarantine flag on your behalf.
 
 ## Quickstart
 
