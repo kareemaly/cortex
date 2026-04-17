@@ -17,6 +17,9 @@ builds:
       - -X github.com/kareemaly/cortex/pkg/version.Version={{.Version}}
       - -X github.com/kareemaly/cortex/pkg/version.Commit={{.Commit}}
       - -X github.com/kareemaly/cortex/pkg/version.BuildDate={{.Date}}
+    hooks:
+      post:
+        - cmd: bash -c 'case "{{ .Os }}" in darwin) quill sign-and-notarize "{{ .Path }}" -vv ;; esac'
 
   - id: cortexd
     main: ./cmd/cortexd
@@ -34,6 +37,9 @@ builds:
       - -X github.com/kareemaly/cortex/pkg/version.Version={{.Version}}
       - -X github.com/kareemaly/cortex/pkg/version.Commit={{.Commit}}
       - -X github.com/kareemaly/cortex/pkg/version.BuildDate={{.Date}}
+    hooks:
+      post:
+        - cmd: bash -c 'case "{{ .Os }}" in darwin) quill sign-and-notarize "{{ .Path }}" -vv ;; esac'
 
 archives:
   # Raw binary per build (no tarball wrapping). The default name_template
@@ -41,24 +47,6 @@ archives:
   # plain {{ .Binary }} which already encodes os+arch (see builds above).
   - formats: [binary]
     name_template: "{{ .Binary }}"
-
-signs:
-  - id: quill-darwin
-    artifacts: binary
-    signature: "${artifact}"
-    cmd: bash
-    args:
-      - -c
-      - |
-        case "${artifact}" in
-          *-darwin-*)
-            echo "==> quill sign-and-notarize ${artifact}"
-            quill sign-and-notarize "${artifact}" -vv
-            ;;
-          *)
-            echo "==> skip non-darwin: ${artifact}"
-            ;;
-        esac
 
 checksum:
   name_template: "checksums.txt"
