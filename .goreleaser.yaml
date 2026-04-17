@@ -44,9 +44,6 @@ archives:
 
 signs:
   - id: quill-darwin
-    ids:
-      - cortex
-      - cortexd
     artifacts: binary
     signature: "${artifact}"
     cmd: bash
