@@ -42,6 +42,27 @@ archives:
   - formats: [binary]
     name_template: "{{ .Binary }}"
 
+signs:
+  - id: quill-darwin
+    ids:
+      - cortex
+      - cortexd
+    artifacts: binary
+    signature: "${artifact}"
+    cmd: bash
+    args:
+      - -c
+      - |
+        case "${artifact}" in
+          *-darwin-*)
+            echo "==> quill sign-and-notarize ${artifact}"
+            quill sign-and-notarize "${artifact}" -vv
+            ;;
+          *)
+            echo "==> skip non-darwin: ${artifact}"
+            ;;
+        esac
+
 checksum:
   name_template: "checksums.txt"
 

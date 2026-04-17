@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,6 +22,26 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Install quill
+        run: |
+          curl -sSfL https://get.anchore.io/quill | sh -s -- -b /usr/local/bin v0.7.1
+          quill version
+
+      - name: Materialize signing inputs
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          AC_API_KEY: ${{ secrets.AC_API_KEY }}
+        run: |
+          set +x
+          umask 077
+          printf '%s' "$MACOS_CERTIFICATE" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          printf '%s' "$AC_API_KEY" > "$RUNNER_TEMP/notary_key.p8"
+          {
+            echo "QUILL_SIGN_P12=$RUNNER_TEMP/cert.p12"
+            echo "QUILL_NOTARY_KEY=$RUNNER_TEMP/notary_key.p8"
+            echo "QUILL_LOG_FILE=$RUNNER_TEMP/quill.log"
+          } >> "$GITHUB_ENV"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -30,3 +50,16 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QUILL_SIGN_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          QUILL_NOTARY_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          QUILL_NOTARY_ISSUER: ${{ secrets.AC_API_ISSUER }}
+
+      - name: Cleanup signing inputs
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/quill.log" ]; then
+            echo "::group::quill.log"
+            cat "$RUNNER_TEMP/quill.log"
+            echo "::endgroup::"
+          fi
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary_key.p8"

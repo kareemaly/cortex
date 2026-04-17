@@ -291,18 +291,6 @@ main() {
         chmod +x "${install_dir}/cortex" "${install_dir}/cortexd"
     fi
 
-    # Code sign on macOS
-    if [[ "$os" == "darwin" ]]; then
-        info "Code signing binaries (macOS)..."
-        if needs_sudo "$install_dir"; then
-            sudo codesign --force --sign - "${install_dir}/cortex" 2>/dev/null || true
-            sudo codesign --force --sign - "${install_dir}/cortexd" 2>/dev/null || true
-        else
-            codesign --force --sign - "${install_dir}/cortex" 2>/dev/null || true
-            codesign --force --sign - "${install_dir}/cortexd" 2>/dev/null || true
-        fi
-    fi
-
     # Verify installation
     success "Installation complete!"
     echo ""
