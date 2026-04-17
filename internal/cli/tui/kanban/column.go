@@ -162,8 +162,8 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 			wrappedTitle[0] = wrappedTitle[0] + dueDateIndicator
 		}
 
-		// Format creation date
-		dateStr := t.Created.Format("Jan 2")
+		// Format updated date
+		dateStr := t.Updated.Format("Jan 2")
 
 		// Build lines based on selection state
 		if i == c.cursor && isActive {

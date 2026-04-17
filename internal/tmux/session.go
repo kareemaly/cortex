@@ -38,7 +38,8 @@ func (m *Manager) CreateSession(name, workingDir string) error {
 		return nil
 	}
 
-	args := []string{"new-session", "-d", "-s", name}
+	// -x/-y give tmux a defined size so split-window works in non-TTY environments
+	args := []string{"new-session", "-d", "-s", name, "-x", "220", "-y", "50"}
 	if workingDir != "" {
 		args = append(args, "-c", workingDir)
 	}

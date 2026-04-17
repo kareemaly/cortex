@@ -36,6 +36,6 @@ vendor/
 .cortex/logs/
 
 # Session state
-.cortex/sessions.json
+.sessions.json
 
 ephemeral
