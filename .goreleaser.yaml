@@ -36,7 +36,11 @@ builds:
       - -X github.com/kareemaly/cortex/pkg/version.BuildDate={{.Date}}
 
 archives:
+  # Raw binary per build (no tarball wrapping). The default name_template
+  # adds version+os+arch suffixes which break install.sh, so pin it to the
+  # plain {{ .Binary }} which already encodes os+arch (see builds above).
   - formats: [binary]
+    name_template: "{{ .Binary }}"
 
 checksum:
   name_template: "checksums.txt"
