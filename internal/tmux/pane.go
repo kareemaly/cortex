@@ -9,7 +9,9 @@ import (
 // The new pane starts in the specified working directory.
 func (m *Manager) SplitWindowHorizontal(session string, windowIndex int, workingDir string) error {
 	target := fmt.Sprintf("%s:%d", sessionTarget(session), windowIndex)
-	args := []string{"split-window", "-h", "-p", "70", "-t", target}
+	// -l N% (not -p N) — tmux 3.x rejects -p with "size missing" when there's no
+	// attached client to derive percentages from. -l <size>[%] is the supported form.
+	args := []string{"split-window", "-h", "-l", "70%", "-t", target}
 	if workingDir != "" {
 		args = append(args, "-c", workingDir)
 	}
@@ -24,7 +26,7 @@ func (m *Manager) SplitWindowHorizontal(session string, windowIndex int, working
 // The new pane occupies the given percent of the window width.
 func (m *Manager) SplitWindowHorizontalWithPercent(session string, windowIndex, percent int, workingDir string) error {
 	target := fmt.Sprintf("%s:%d", sessionTarget(session), windowIndex)
-	args := []string{"split-window", "-h", "-p", fmt.Sprintf("%d", percent), "-t", target}
+	args := []string{"split-window", "-h", "-l", fmt.Sprintf("%d%%", percent), "-t", target}
 	if workingDir != "" {
 		args = append(args, "-c", workingDir)
 	}
