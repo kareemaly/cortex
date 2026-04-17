@@ -248,7 +248,7 @@ main() {
     download "${base_url}/${cortex_binary}" "${tmp_dir}/cortex"
 
     local cortex_checksum
-    cortex_checksum=$(grep "${cortex_binary}$" "${tmp_dir}/checksums.txt" | awk '{print $1}')
+    cortex_checksum=$(awk -v f="${cortex_binary}" '$2==f{print $1}' "${tmp_dir}/checksums.txt")
     if [[ -n "$cortex_checksum" ]]; then
         info "Verifying checksum for cortex..."
         verify_checksum "${tmp_dir}/cortex" "$cortex_checksum"
@@ -262,7 +262,7 @@ main() {
     download "${base_url}/${cortexd_binary}" "${tmp_dir}/cortexd"
 
     local cortexd_checksum
-    cortexd_checksum=$(grep "${cortexd_binary}$" "${tmp_dir}/checksums.txt" | awk '{print $1}')
+    cortexd_checksum=$(awk -v f="${cortexd_binary}" '$2==f{print $1}' "${tmp_dir}/checksums.txt")
     if [[ -n "$cortexd_checksum" ]]; then
         info "Verifying checksum for cortexd..."
         verify_checksum "${tmp_dir}/cortexd" "$cortexd_checksum"
@@ -301,6 +301,9 @@ main() {
             codesign --force --sign - "${install_dir}/cortex" 2>/dev/null || true
             codesign --force --sign - "${install_dir}/cortexd" 2>/dev/null || true
         fi
+        # Remove Gatekeeper quarantine flag set by curl/wget on downloaded files
+        xattr -d com.apple.quarantine "${install_dir}/cortex" 2>/dev/null || true
+        xattr -d com.apple.quarantine "${install_dir}/cortexd" 2>/dev/null || true
     fi
 
     # Verify installation

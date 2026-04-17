@@ -46,6 +46,8 @@ Cortex is built for engineers who live in the terminal. Every agent runs in a tm
 - **Go 1.21+** (only for building from source)
 - Linux or macOS
 
+> **macOS note:** The binaries distributed via GitHub Releases are not Apple-notarized. On first run, macOS may show an "unidentified developer" Gatekeeper warning. The install script automatically removes the quarantine flag (`xattr -d com.apple.quarantine`) after placing the binaries, so you should not see this warning if you used the curl installer.
+
 ## Quickstart
 
 Install:
