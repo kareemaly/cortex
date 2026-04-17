@@ -5,9 +5,8 @@ Orchestration layer for AI coding agents. File-based ticket management with MCP 
 ## Quick Start
 
 ```bash
-cortexd &                           # Start daemon (background)
-cortex init myproject               # Create architect workspace
-cortex architect start              # Start architect session
+cortex init myproject               # Create architect workspace (daemon auto-starts)
+cd myproject && cortex architect start
 ```
 
 ## Build & Test
@@ -37,7 +36,7 @@ Single `cortexd` daemon serves all projects. **All clients communicate exclusive
                                      └──────────────────────┘
 ```
 
-Two-tier agent hierarchy: **Architect** (architect-scoped) → **Ticket Agent** (ticket-scoped).
+Three session types: **architect** (project-scoped), **ticket** (ticket-scoped worker), **collab** (ticketless interactive). The architect spawns ticket and collab sessions. Each type gets a different MCP tool set (see `internal/daemon/mcp/server.go`).
 
 Architect context: `X-Cortex-Architect` header (HTTP) or `CORTEX_ARCHITECT_PATH` env (MCP).
 
@@ -48,7 +47,7 @@ Tickets and conclusions use **YAML frontmatter + markdown body** stored as `inde
 - **Tickets**: `tickets/{status}/{slug}-{shortid}/index.md` (statuses: backlog, progress, done)
 - **Conclusions**: `sessions/{slug}-{shortid}/index.md` (persistent session records)
 
-Ticket path is always `{projectRoot}/tickets/`. Sessions are ephemeral and stored in `.cortex/sessions.json`.
+Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is stored in `{projectRoot}/.sessions.json` (hidden file at workspace root — see `internal/daemon/api/session_manager.go:50`).
 
 ## Critical Implementation Notes
 
@@ -67,7 +66,7 @@ Ticket path is always `{projectRoot}/tickets/`. Sessions are ephemeral and store
 | Spawn tmux sessions directly | Use `SpawnSession()` via SDK/API | Bypasses session tracking and MCP binding |
 | Import `internal/ticket` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
 | Import `internal/core/spawn` in CLI | Call `/tickets/{status}/{id}/spawn` | CLI should not import daemon internals |
-| Access `.cortex/sessions.json` directly | Use SessionManager API | Bypasses locking and event notifications |
+| Access `.sessions.json` directly | Use SessionManager API | Bypasses locking and event notifications |
 | Import `internal/architect` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
 | Call `architectconfig.Load()` in MCP tools | Call the daemon HTTP API via SDK client | MCP is a dumb client — all config resolution (including global agent merge) lives in the daemon |
 | Call `architectconfig.Load()` directly to resolve variants | Use `mergeProjectConfig()` in `internal/daemon/api/config_merge.go` | Direct load misses global agents from `~/.cortex/settings.yaml`; only the daemon merges project + global |
@@ -176,6 +175,8 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 
 | Tool | Description |
 |------|-------------|
+| `createWorkTicket` | Create a new work ticket in backlog (repo required) |
+| `updateTicket` | Update ticket title, body, or references (no status/type/repo changes) |
 | `concludeSession` | Conclude the collab session and create a conclusion record |
 
 ## Agent Workflow
@@ -185,7 +186,7 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 3. Ticket agent works autonomously
 4. Agent calls `concludeSession` when done → conclusion record created, ticket moved to done
 
-Spawn orchestration handles state detection (normal/active/orphaned) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`. Architect and ticket agent sessions are tracked in `.cortex/sessions.json`.
+Spawn orchestration handles state detection (normal/active/orphaned) and mode selection (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`. Architect, ticket, and collab sessions are tracked in `{projectRoot}/.sessions.json`.
 
 ## Development Guidelines
 

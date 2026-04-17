@@ -2,177 +2,208 @@
 
 [![Release](https://img.shields.io/github/v/release/kareemaly/cortex)](https://github.com/kareemaly/cortex/releases/latest)
 
-Orchestration layer for AI coding agents. File-based ticket management with MCP tools and tmux session management.
+**A persistent workspace for multi-repo AI development.**
 
-## What is Cortex?
+You work across many repos — five, ten, twenty, in one domain. AI coding agents work inside one repo; they don't see the others. Your planning lives in Jira, your design notes in Notion or Confluence, your last session's state in your head. None of it is where the code is.
 
-Cortex turns your AI coding assistant into a managed development team. An architect agent breaks down work into tickets and spawns worker agents in isolated tmux sessions—all through a kanban-style workflow.
+## The model
 
-## Quick Start
+Cortex splits the work across two tiers.
 
-```bash
-# Install (latest stable)
-curl -fsSL https://github.com/kareemaly/cortex/releases/latest/download/install.sh | bash
+The **architect** is a persistent workspace — a directory separate from any repo — where you brainstorm, write design docs, and manage tickets.
 
-# Initialize a new architect workspace
-cortex init myproject
+**Worker** agents are spawned from the architect. Each ticket targets exactly one repo. The worker runs in a scoped tmux session, implements the ticket, and writes a **conclusion** when done.
 
-# Start the architect
-cd myproject && cortex architect start
-```
+Every session — architect or worker — ends with a conclusion on disk. When you start a new architect session, it reads the previous one first, so prior context is already loaded.
 
-The architect will guide you through creating and managing tickets.
+## Just markdown
+
+Inside the workspace, tickets and conclusions are markdown files with YAML frontmatter: tickets in `tickets/{backlog,progress,done}/`, conclusions in `sessions/`. No database, no proprietary format.
+
+Uninstall Cortex and the workspace directory stays as-is. The markdown is readable and editable with any tool.
+
+## Accumulated context
+
+After a few months of regular use you have hundreds of tickets and conclusions. The architect has a `search` MCP tool that scans every ticket (backlog, in-progress, done) and every conclusion.
+
+Ask "what did we do on feature X?" and it returns the related tickets across every repo and their conclusions — commit SHAs, design notes, follow-ups. A single architect conclusion routinely covers a multi-ticket, multi-repo feature rollout.
+
+## Who this is for
+
+Cortex is built for engineers who live in the terminal. Every agent runs in a tmux window next to a companion pane — the kanban TUI for the architect, a configurable pane (lazygit, nvim, a shell) for workers and collab.
+
+![Architect session](docs/assets/architect-session.png)
+*Architect session — agent on the left, Cortex's kanban / sessions / config TUI on the right.*
+
+![Worker session](docs/assets/worker-session.png)
+*Worker session — agent on the left, lazygit and a diff viewer on the right.*
 
 ## Requirements
 
-- **tmux** - session management
-- **git** - version control
-- **AI agent** (one of):
-  - [Claude CLI](https://claude.ai/code) - recommended
-  - [OpenCode](https://github.com/opencode-ai/opencode)
+- **tmux**
+- **git**
+- **An AI agent runtime** — Claude Code, Codex, or OpenCode
+- **Go 1.21+** (only for building from source)
+- Linux or macOS
 
-## Core Workflow
+## Quickstart
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│   Architect                                                     │
-│   ├── Creates tickets in backlog                                │
-│   ├── Spawns worker agents for tickets                          │
-│   └── Reads session conclusions when work is done               │
-│                                                                 │
-│   Worker Agent (per ticket)                                     │
-│   ├── Runs in isolated tmux window                              │
-│   ├── Implements the ticket                                     │
-│   └── Calls concludeSession when done → ticket moves to done    │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+Install:
+
+```bash
+curl -fsSL https://github.com/kareemaly/cortex/releases/latest/download/install.sh | bash
 ```
 
-**Ticket lifecycle**: `backlog → progress → done`
+Create a new architect workspace:
+
+```bash
+cortex init myproject
+cd myproject
+```
+
+Edit `cortex.yaml` to point at your repos:
+
+```yaml
+name: myproject
+repos:
+  - ~/projects/my-service
+  - ~/projects/my-other-service
+```
+
+Start the architect:
+
+```bash
+cortex architect start
+```
+
+This attaches you to a tmux session with the architect agent on the left and the kanban TUI on the right. The daemon auto-starts on first invocation. From there, work with the architect — brainstorm, draft tickets, spawn workers.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `cortex init <name>` | Initialize architect workspace |
-| `cortex architect start [name]` | Start or attach to architect session |
+| `cortex init <name>` | Initialize a new architect workspace |
+| `cortex architect start [name]` | Start or attach to an architect session |
 | `cortex architect list` | List registered architects |
-| `cortex architect show [name]` | Project TUI |
+| `cortex architect show [name]` | Open the project TUI (kanban / sessions / config) |
 | `cortex daemon status` | Check daemon status |
 | `cortex upgrade` | Refresh embedded defaults |
 | `cortex eject <path>` | Customize a default prompt |
 
 ## Configuration
 
-### Global Config
-
-`~/.cortex/settings.yaml` - daemon settings and default agent variants (auto-populated on first `cortex init`):
+### `cortex.yaml`
 
 ```yaml
-port: 4200
-bind_address: 127.0.0.1  # use 0.0.0.0 for remote VM deployments
-log_level: info
+name: myproject
 
+# Repos this architect manages. Workers spawn inside these paths.
+repos:
+  - ~/projects/service-a
+  - ~/projects/service-b
+
+# Companion pane for workers and collab sessions.
+# The architect always shows the Cortex TUI (kanban / sessions / config).
+companion: lazygit
+
+# Agent variants. Project variants override global ones by name.
+# Valid agent values: claude, opencode, codex.
 agents:
   claude-opus:
     agent: claude
-    args: ["--dangerously-skip-permissions"]
+    args: ["--permission-mode", "auto"]
   claude-opus-plan:
     agent: claude
-    args: ["--allow-dangerously-skip-permissions", "--permission-mode", "plan"]
-  claude-sonnet:
-    agent: claude
-    args: ["--dangerously-skip-permissions", "--model", "claude-sonnet-4-6"]
-  claude-sonnet-plan:
-    agent: claude
-    args: ["--allow-dangerously-skip-permissions", "--permission-mode", "plan", "--model", "claude-sonnet-4-6"]
+    args: ["--permission-mode", "plan"]
+  codex:
+    agent: codex
+    args: ["--full-auto"]
+  codex-plan:
+    agent: codex
+    args: ["--sandbox", "read-only", "--ask-for-approval", "never"]
   opencode:
     agent: opencode
-    args: []
   opencode-plan:
     agent: opencode
     args: ["--agent", "plan"]
 ```
 
-Global agents are inherited by every architect project. To add or override variants for a specific project, define them in `cortex.yaml` — project-level entries take precedence over global ones.
+Defaults are generated during `cortex init` based on which agents (`claude`, `codex`, `opencode`) are on your `PATH`. They live in `~/.cortex/settings.yaml` and apply to every architect unless overridden.
 
-### Project Config
+### Global settings
 
-`cortex.yaml` - project-specific settings:
+`~/.cortex/settings.yaml` holds the daemon config:
 
 ```yaml
-name: my-project
-repos:
-  - ~/projects/my-repo
-
-# Optional: add project-specific agent variants or override global ones
-# agents:
-#   my-variant:
-#     agent: claude
-#     args: ["--dangerously-skip-permissions", "--model", "claude-opus-4-5"]
+port: 4200
+bind_address: 127.0.0.1  # set to 0.0.0.0 to expose the daemon to other machines
 ```
 
-After running `cortex init`, edit `cortex.yaml` to:
-- Add your repos under `repos:`
-- Set `companion: lazygit` for side-by-side git UI
-- Optionally add project-specific agent variants under `agents:`
+Clients find the daemon via `CORTEX_DAEMON_URL` (default `http://localhost:4200`) — set this when running `cortex` commands against a remote daemon.
 
-### Customizing Prompts
+## Customizing prompts
 
-Use `cortex eject` to copy default prompts for customization:
+Cortex ships default prompts that drive the architect and worker agents. Two files per role:
+
+- `SYSTEM.md` — the agent's system prompt. For the architect this fully replaces the agent's default system prompt; for workers it's appended.
+- `KICKOFF.md` — the first message the agent sees. Rendered with context: the architect's `KICKOFF.md` gets the ticket list, recent conclusions, and repos; the worker's gets the ticket body, references, and repo path.
+
+To customize, eject the default into your workspace:
 
 ```bash
-cortex eject work/KICKOFF.md        # Customize ticket workflow
-cortex eject architect/SYSTEM.md    # Customize architect behavior
+cortex eject architect/SYSTEM.md
+cortex eject architect/KICKOFF.md
+cortex eject work/KICKOFF.md
 ```
 
-Ejected prompts go to `<project>/prompts/`. Un-ejected prompts fall back to `~/.cortex/defaults/main/prompts/`.
-
-## How It Works
-
-1. **Initialize** - `cortex init` creates the workspace with config and ticket storage
-2. **Daemon starts** - `cortexd` launches automatically, serves all projects on port 4200
-3. **Architect session** - AI agent with MCP tools for ticket management
-4. **Worker sessions** - Each ticket gets a dedicated tmux window with scoped MCP tools
-5. **Conclusion** - Workers call `concludeSession` when done; the ticket moves to done and a session record is created
-
-The daemon handles:
-- Ticket storage (YAML frontmatter + markdown in `tickets/`)
-- Session records (persistent conclusion records in `sessions/`)
-- Tmux session orchestration
-- MCP server for AI agents
-- SSE events for real-time updates
-
-## Development
-
-```bash
-make build    # Build binaries
-make lint     # Run linter
-make test     # Run tests
-make install  # Build and install to ~/.local/bin/
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
+Ejected prompts live in `prompts/` inside your architect workspace and take precedence over the defaults. Delete the file to fall back.
 
 ## Architecture
 
-Single `cortexd` daemon serves all projects over HTTP. All clients (CLI, TUI, MCP) communicate through the daemon API—no direct file access. This enables running the daemon on a remote VM with local clients.
+A single `cortexd` daemon serves every architect workspace on your machine. The CLI/TUI and every agent talk to it over HTTP — clients use the REST API, agents use MCP tools. All state lives on disk in the workspace.
 
-```
-┌─────────────────┐
-│  cortex CLI/TUI │──┐
-└─────────────────┘  │
-┌─────────────────┐  │  HTTP :4200   ┌──────────────────────┐
-│  MCP Architect  │──┼──────────────▶│      cortexd         │
-└─────────────────┘  │               │  ├─ HTTP API         │
-┌─────────────────┐  │               │  ├─ Ticket Store     │
-│  MCP Ticket     │──┘               │  ├─ Tmux management  │
-└─────────────────┘                  │  └─ SSE events       │
-                                     └──────────────────────┘
+```mermaid
+flowchart LR
+  TUI["cortex CLI/TUI"]
+  Agents["Agents in tmux<br/>(architect, worker, collab)"]
+  Daemon["cortexd<br/>HTTP API · tmux mgr · SSE"]
+  Disk["Workspace<br/>tickets/, sessions/, prompts/"]
+
+  TUI -->|REST| Daemon
+  Agents -->|MCP| Daemon
+  Daemon --> Disk
+  Daemon -.->|SSE| TUI
+  Daemon -.->|spawn| Agents
 ```
 
-See [CLAUDE.md](CLAUDE.md) for detailed architecture and code paths.
+The daemon is one binary. Because everything is HTTP, you can run `cortexd` on a remote VM and point your local `cortex` CLI at it with `CORTEX_DAEMON_URL`.
+
+See [CLAUDE.md](CLAUDE.md) for architecture details and code paths.
+
+## Development
+
+Build from source:
+
+```bash
+git clone https://github.com/kareemaly/cortex.git
+cd cortex
+make build   # produces bin/cortex and bin/cortexd
+```
+
+Install to `~/.local/bin`:
+
+```bash
+make install
+```
+
+Tests and lint:
+
+```bash
+make test
+make lint
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
 
 ## License
 
