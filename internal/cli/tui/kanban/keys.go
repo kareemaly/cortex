@@ -33,7 +33,6 @@ const (
 	KeyYes            Key = "y"
 	KeyNo             Key = "n"
 	KeyOpenEditor     Key = "o"
-	KeyDequeue        Key = "x"
 	KeyOpenConclusion Key = "c"
 )
 
@@ -49,5 +48,5 @@ func isKey(msg tea.KeyMsg, keys ...Key) bool {
 
 // helpText returns the help bar text for the kanban board.
 func helpText() string {
-	return "h/l cols  j/k nav  s spawn  x dequeue  o/↵ open  c conclusion  f focus  r refresh  ! logs  q quit"
+	return "h/l cols  j/k nav  s spawn  o/↵ open  c conclusion  f focus  r refresh  ! logs  q quit"
 }

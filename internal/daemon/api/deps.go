@@ -12,7 +12,6 @@ type Dependencies struct {
 	StoreManager           *StoreManager
 	ConclusionStoreManager *ConclusionStoreManager
 	SessionManager         *SessionManager
-	QueueManager           *QueueManager
 	TmuxManager            *tmux.Manager
 	Bus                    *events.Bus
 	Logger                 *slog.Logger

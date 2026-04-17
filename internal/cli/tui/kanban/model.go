@@ -75,21 +75,11 @@ type TicketsErrorMsg struct {
 }
 
 type SessionSpawnedMsg struct {
-	Session  *sdk.SessionResponse
-	Ticket   *sdk.TicketSummary
-	Queued   bool
-	Position int
+	Session *sdk.SessionResponse
+	Ticket  *sdk.TicketSummary
 }
 
 type SessionErrorMsg struct {
-	Err error
-}
-
-type DequeueMsg struct {
-	Ticket *sdk.TicketSummary
-}
-
-type DequeueErrorMsg struct {
 	Err error
 }
 
@@ -217,33 +207,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case SessionSpawnedMsg:
-		if msg.Queued {
-			m.statusMsg = fmt.Sprintf("Queued #%d: %s", msg.Position, msg.Ticket.Title)
-			m.statusIsError = false
-			m.logBuf.Infof("queue", "ticket queued #%d: %s", msg.Position, msg.Ticket.Title)
-		} else {
-			m.statusMsg = fmt.Sprintf("Session spawned for: %s", msg.Ticket.Title)
-			m.statusIsError = false
-			m.logBuf.Infof("spawn", "session spawned for: %s", msg.Ticket.Title)
-		}
+		m.statusMsg = fmt.Sprintf("Session spawned for: %s", msg.Ticket.Title)
+		m.statusIsError = false
+		m.logBuf.Infof("spawn", "session spawned for: %s", msg.Ticket.Title)
 		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
 
 	case SessionErrorMsg:
 		m.statusMsg = fmt.Sprintf("Error: %s", msg.Err)
 		m.statusIsError = true
 		m.logBuf.Errorf("spawn", "spawn failed: %s", msg.Err)
-		return m, m.clearStatusAfterDelay()
-
-	case DequeueMsg:
-		m.statusMsg = fmt.Sprintf("Dequeued: %s", msg.Ticket.Title)
-		m.statusIsError = false
-		m.logBuf.Infof("queue", "dequeued: %s", msg.Ticket.Title)
-		return m, tea.Batch(m.loadTickets(), m.clearStatusAfterDelay())
-
-	case DequeueErrorMsg:
-		m.statusMsg = fmt.Sprintf("Dequeue error: %s", msg.Err)
-		m.statusIsError = true
-		m.logBuf.Errorf("queue", "dequeue failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
 	case OrphanedSessionMsg:
@@ -484,17 +456,6 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("Spawning session for: %s...", t.Title)
 			m.statusIsError = false
 			return m, m.loadVariants()
-		}
-		return m, nil
-	}
-
-	// Dequeue ticket.
-	if isKey(msg, KeyDequeue) {
-		t := m.columns[m.activeColumn].SelectedTicket()
-		if t != nil && t.QueuePosition != nil {
-			m.statusMsg = fmt.Sprintf("Dequeuing: %s...", t.Title)
-			m.statusIsError = false
-			return m, m.dequeueTicket(t)
 		}
 		return m, nil
 	}
@@ -778,7 +739,7 @@ func (m Model) spawnSessionWithVariant(ticket *sdk.TicketSummary, mode, variantN
 			}
 			return SessionErrorMsg{Err: err}
 		}
-		return SessionSpawnedMsg{Session: result.Session, Ticket: ticket, Queued: result.Queued, Position: result.Position}
+		return SessionSpawnedMsg{Session: result.Session, Ticket: ticket}
 	}
 }
 
@@ -787,15 +748,6 @@ func (m Model) handleVariantSelectorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.variantSelector, cmd = m.variantSelector.Update(msg)
 	return m, cmd
-}
-
-func (m Model) dequeueTicket(ticket *sdk.TicketSummary) tea.Cmd {
-	return func() tea.Msg {
-		if err := m.client.Dequeue(ticket.ID); err != nil {
-			return DequeueErrorMsg{Err: err}
-		}
-		return DequeueMsg{Ticket: ticket}
-	}
 }
 
 func (m Model) focusTicket(ticket *sdk.TicketSummary) tea.Cmd {

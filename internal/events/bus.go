@@ -17,8 +17,6 @@ const (
 	SessionEnded      EventType = "session_ended"
 	SessionStatus     EventType = "session_status"
 	ConclusionCreated EventType = "conclusion_created"
-	TicketQueued      EventType = "ticket_queued"
-	TicketDequeued    EventType = "ticket_dequeued"
 )
 
 // Event represents a change in the system.

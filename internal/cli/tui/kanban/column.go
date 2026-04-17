@@ -116,17 +116,6 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 	for i, t := range c.tickets {
 		isSelected := i == c.cursor && isActive
 
-		var queueIndicator string
-		if c.status == "backlog" && t.QueuePosition != nil {
-			if isSelected {
-				queueIndicator = inlineFgColorChange(queuePositionColorCode()) +
-					fmt.Sprintf("[#%d] ", *t.QueuePosition) +
-					inlineFgColorChange(selectedFgColor)
-			} else {
-				queueIndicator = queuePositionStyle.Render(fmt.Sprintf("[#%d] ", *t.QueuePosition))
-			}
-		}
-
 		// Build due date indicator
 		dueDateIndicator := ""
 		if t.Due != nil && c.status == "backlog" {
@@ -150,14 +139,7 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 			}
 		}
 
-		badgeWidth := 0
-		if t.QueuePosition != nil && c.status == "backlog" {
-			badgeWidth += len(fmt.Sprintf("[#%d] ", *t.QueuePosition))
-		}
-		wrappedTitle := wrapText(t.Title, titleWidth-badgeWidth)
-		if len(wrappedTitle) > 0 {
-			wrappedTitle[0] = queueIndicator + wrappedTitle[0]
-		}
+		wrappedTitle := wrapText(t.Title, titleWidth)
 		if dueDateIndicator != "" && len(wrappedTitle) > 0 {
 			wrappedTitle[0] = wrappedTitle[0] + dueDateIndicator
 		}

@@ -29,7 +29,6 @@ type AgentVariant struct {
 // Config holds the architect configuration.
 type Config struct {
 	Name      string                  `yaml:"name"`
-	Queue     bool                    `yaml:"queue,omitempty"`
 	Repos     []string                `yaml:"repos,omitempty"`
 	Companion string                  `yaml:"companion,omitempty"`
 	Agents    map[string]AgentVariant `yaml:"agents,omitempty"`

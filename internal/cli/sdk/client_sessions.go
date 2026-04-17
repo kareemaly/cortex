@@ -7,30 +7,9 @@ import (
 	"time"
 )
 
-func (c *Client) Dequeue(ticketID string) error {
-	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/tickets/"+ticketID+"/queue", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.doRequest(req)
-	if err != nil {
-		return fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return c.parseError(resp)
-	}
-
-	return nil
-}
-
 type SpawnResult struct {
-	Session  *SessionResponse
-	Ticket   *TicketResponse
-	Queued   bool
-	Position int
+	Session *SessionResponse
+	Ticket  *TicketResponse
 }
 
 func (c *Client) SpawnSession(status, id, mode, variant string) (*SpawnResult, error) {
@@ -56,25 +35,21 @@ func (c *Client) SpawnSession(status, id, mode, variant string) (*SpawnResult, e
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, c.parseError(resp)
 	}
 
 	var result struct {
-		Session  SessionResponse `json:"session"`
-		Ticket   TicketResponse  `json:"ticket"`
-		Queued   bool            `json:"queued"`
-		Position int             `json:"position"`
+		Session SessionResponse `json:"session"`
+		Ticket  TicketResponse  `json:"ticket"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	return &SpawnResult{
-		Session:  &result.Session,
-		Ticket:   &result.Ticket,
-		Queued:   result.Queued,
-		Position: result.Position,
+		Session: &result.Session,
+		Ticket:  &result.Ticket,
 	}, nil
 }
 

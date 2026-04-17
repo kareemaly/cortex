@@ -4,7 +4,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kareemaly/cortex/internal/queue"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
@@ -64,10 +63,8 @@ type SetDueDateRequest struct {
 
 // SpawnResponse is the response for the spawn endpoint.
 type SpawnResponse struct {
-	Session  SessionResponse `json:"session,omitempty"`
-	Ticket   TicketResponse  `json:"ticket"`
-	Queued   bool            `json:"queued,omitempty"`
-	Position int             `json:"position,omitempty"`
+	Session SessionResponse `json:"session,omitempty"`
+	Ticket  TicketResponse  `json:"ticket"`
 }
 
 // ConcludeSessionRequest is the request body for concluding a session.
@@ -116,7 +113,7 @@ type CreateConclusionRequest struct {
 
 // filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
 // Looks up session from session manager for each ticket.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string, queueStore *queue.Store) []TicketSummary {
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string) []TicketSummary {
 	var summaries []TicketSummary
 
 	var sessStore *session.Store
@@ -141,16 +138,7 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 			sess, _ = sessStore.GetByTicketID(t.ID)
 		}
 
-		summary := types.ToTicketSummary(t, status, sess, tmuxSession, checker)
-
-		if queueStore != nil && queueStore.IsEnabled() && status == ticket.StatusBacklog && t.Type == "work" && t.Repo != "" {
-			pos := queueStore.Position(t.Repo, t.ID)
-			if pos > 0 {
-				summary.QueuePosition = &pos
-			}
-		}
-
-		summaries = append(summaries, summary)
+		summaries = append(summaries, types.ToTicketSummary(t, status, sess, tmuxSession, checker))
 	}
 	if summaries == nil {
 		summaries = []TicketSummary{}

@@ -97,9 +97,6 @@ var (
 
 	orphanedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")) // yellow/orange
-
-	queuePositionStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("99")) // purple/violet
 )
 
 // selectedFgColor is the default foreground color for selected card text.
@@ -117,10 +114,6 @@ func dueDateColorCode(overdue bool) string {
 		return "196"
 	}
 	return "214"
-}
-
-func queuePositionColorCode() string {
-	return "99"
 }
 
 // columnHeaderStyle returns the appropriate header style for a status.

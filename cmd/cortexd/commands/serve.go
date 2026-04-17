@@ -86,7 +86,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	sessionManager := api.NewSessionManager(logger)
 	conclusionStoreManager := api.NewConclusionStoreManager(logger, bus)
-	queueManager := api.NewQueueManager(logger)
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -97,15 +96,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		StoreManager:           storeManager,
 		ConclusionStoreManager: conclusionStoreManager,
 		SessionManager:         sessionManager,
-		QueueManager:           queueManager,
 		TmuxManager:            tmuxManager,
 		Bus:                    bus,
 		Logger:                 logger,
 		DefaultsDir:            filepath.Join(homeDir, ".cortex", "defaults", "main"),
 	}
-
-	queueWorker := api.NewQueueWorker(deps)
-	queueWorker.Start(ctx)
 
 	// Create and run server
 	server := api.NewServer(cfg.Port, cfg.BindAddress, logger, deps)
