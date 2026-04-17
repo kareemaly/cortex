@@ -86,6 +86,7 @@ This attaches you to a tmux session with the architect agent on the left and the
 | `cortex architect start [name]` | Start or attach to an architect session |
 | `cortex architect list` | List registered architects |
 | `cortex architect show [name]` | Open the project TUI (kanban / sessions / config) |
+| `cortex dashboard` | Open the global dashboard across all registered architects |
 | `cortex daemon status` | Check daemon status |
 | `cortex upgrade` | Refresh embedded defaults |
 | `cortex eject <path>` | Customize a default prompt |
@@ -143,10 +144,13 @@ Clients find the daemon via `CORTEX_DAEMON_URL` (default `http://localhost:4200`
 
 ## Customizing prompts
 
-Cortex ships default prompts that drive the architect and worker agents. Two files per role:
+Cortex ships default prompts for the architect and worker agents:
 
-- `SYSTEM.md` — the agent's system prompt. For the architect this fully replaces the agent's default system prompt; for workers it's appended.
-- `KICKOFF.md` — the first message the agent sees. Rendered with context: the architect's `KICKOFF.md` gets the ticket list, recent conclusions, and repos; the worker's gets the ticket body, references, and repo path.
+- `architect/SYSTEM.md` — fully replaces the agent's system prompt for the architect session.
+- `architect/KICKOFF.md` — first message sent to the architect, rendered with the ticket list, recent conclusions, and repos.
+- `work/KICKOFF.md` — first message sent to each worker, rendered with the ticket body, references, and repo path.
+
+Only the architect has a `SYSTEM.md`. Worker and collab sessions rely on the kickoff prompt alone.
 
 To customize, eject the default into your workspace:
 
