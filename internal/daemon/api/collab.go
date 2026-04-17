@@ -213,6 +213,7 @@ func (h *CollabHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		StartedAt:     startedAt,
 		Repo:          repo,
 		Prompt:        prompt,
+		Commits:       req.Commits,
 		Logger:        h.deps.Logger,
 		TmuxManager:   h.deps.TmuxManager,
 		ConclusionMgr: h.deps.ConclusionStoreManager,

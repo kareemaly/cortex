@@ -708,7 +708,10 @@ func TestConcludeSession_Success(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.ConcludeSession("abc123", "done report", "")
+	resp, err := c.ConcludeSession(ConcludeSessionParams{
+		TicketID: "abc123",
+		Body:     "done report",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -27,12 +27,25 @@ func NewStore(sessionsDir string, bus *events.Bus, projectPath string) (*Store, 
 	return &Store{BaseStore: base}, nil
 }
 
-func (s *Store) Create(conclusionType string, ticketID, repo, body string, startedAt time.Time, prompt string) (*Conclusion, error) {
-	if body == "" {
+// CreateParams holds all parameters for creating a conclusion record.
+type CreateParams struct {
+	Type            string
+	TicketID        string
+	Repo            string
+	Body            string
+	StartedAt       time.Time
+	Prompt          string
+	Commits         []string
+	Rejected        bool
+	RejectionReason string
+}
+
+func (s *Store) Create(p CreateParams) (*Conclusion, error) {
+	if p.Body == "" {
 		return nil, &ValidationError{Field: "body", Message: "cannot be empty"}
 	}
 
-	ct := ConclusionType(conclusionType)
+	ct := ConclusionType(p.Type)
 	if ct != TypeArchitect && ct != TypeWork && ct != TypeCollab {
 		ct = TypeWork
 	}
@@ -40,23 +53,26 @@ func (s *Store) Create(conclusionType string, ticketID, repo, body string, start
 	now := time.Now().UTC()
 	c := &Conclusion{
 		ConclusionMeta: ConclusionMeta{
-			ID:          uuid.New().String(),
-			Type:        ct,
-			Ticket:      ticketID,
-			Repo:        repo,
-			Prompt:      prompt,
-			ConcludedAt: now,
-			StartedAt:   startedAt,
+			ID:              uuid.New().String(),
+			Type:            ct,
+			Ticket:          p.TicketID,
+			Repo:            p.Repo,
+			Prompt:          p.Prompt,
+			ConcludedAt:     now,
+			StartedAt:       p.StartedAt,
+			Commits:         p.Commits,
+			Rejected:        p.Rejected,
+			RejectionReason: p.RejectionReason,
 		},
-		Body: body,
+		Body: p.Body,
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	slugSrc := "session"
-	if ticketID != "" {
-		slugSrc = ticketID
+	if p.TicketID != "" {
+		slugSrc = p.TicketID
 		if len(slugSrc) > 20 {
 			slugSrc = slugSrc[:20]
 		}

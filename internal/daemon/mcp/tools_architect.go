@@ -569,12 +569,12 @@ func (s *Server) handleArchitectConcludeSession(
 	req *mcp.CallToolRequest,
 	input ConcludeSessionInput,
 ) (*mcp.CallToolResult, ArchitectConcludeOutput, error) {
-	if input.Content == "" {
-		return nil, ArchitectConcludeOutput{}, NewValidationError("content", "cannot be empty")
+	if input.Body == "" {
+		return nil, ArchitectConcludeOutput{}, NewValidationError("body", "cannot be empty")
 	}
 
 	startedAt := os.Getenv("CORTEX_STARTED_AT")
-	resp, err := s.sdkClient.ConcludeArchitectSession(input.Content, startedAt)
+	resp, err := s.sdkClient.ConcludeArchitectSession(input.Body, startedAt)
 	if err != nil {
 		return nil, ArchitectConcludeOutput{}, wrapSDKError(err)
 	}

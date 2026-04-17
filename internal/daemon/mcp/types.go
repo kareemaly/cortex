@@ -116,7 +116,10 @@ type ClearDueDateInput struct {
 
 // ConcludeSessionInput is the input for the concludeSession tool.
 type ConcludeSessionInput struct {
-	Content string `json:"content" jsonschema:"Session conclusion summary. For architect sessions, include tickets touched, key user requests, decisions, blockers, and next steps. For ticket or collab sessions, include outcome, files changed, commit SHA if any, and follow-up work or blockers."`
+	Body            string   `json:"body" jsonschema:"Session conclusion summary — outcome, files changed, and follow-up work or blockers (required)."`
+	Commits         []string `json:"commits,omitempty" jsonschema:"List of commit SHAs produced during this session. Required for work ticket sessions unless rejected=true. Optional for collab sessions. Ignored for architect sessions."`
+	Rejected        bool     `json:"rejected,omitempty" jsonschema:"Set to true if the session produced no work and should be marked as rejected. Requires rejection_reason. Work ticket sessions only."`
+	RejectionReason string   `json:"rejection_reason,omitempty" jsonschema:"Required and non-empty when rejected=true. Explain why the session produced no commits. Work ticket sessions only."`
 }
 
 // MCP-specific output types (structurally different from shared types)

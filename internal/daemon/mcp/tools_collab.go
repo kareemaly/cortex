@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -21,7 +22,7 @@ func (s *Server) registerCollabTools() {
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
-		Description: "Conclude the collab session and create a conclusion record. Include the outcome, files changed, commit SHA if any, and follow-up work or blockers.",
+		Description: "Conclude the collab session and create a conclusion record. Include the outcome, files changed, and follow-up work or blockers. commits is optional.",
 	}, s.handleCollabConcludeSession)
 }
 
@@ -31,14 +32,19 @@ func (s *Server) handleCollabConcludeSession(
 	req *mcp.CallToolRequest,
 	input ConcludeSessionInput,
 ) (*mcp.CallToolResult, CollabConcludeOutput, error) {
-	if input.Content == "" {
-		return nil, CollabConcludeOutput{}, NewValidationError("content", "cannot be empty")
+	if input.Body == "" {
+		return nil, CollabConcludeOutput{}, NewValidationError("body", "cannot be empty")
 	}
 
 	collabID := s.session.CollabID
 	startedAt := os.Getenv("CORTEX_STARTED_AT")
 
-	resp, err := s.sdkClient.ConcludeCollabSession(collabID, input.Content, startedAt)
+	resp, err := s.sdkClient.ConcludeCollabSession(sdk.ConcludeCollabSessionParams{
+		CollabID:  collabID,
+		Body:      input.Body,
+		StartedAt: startedAt,
+		Commits:   input.Commits,
+	})
 	if err != nil {
 		return nil, CollabConcludeOutput{}, wrapSDKError(err)
 	}

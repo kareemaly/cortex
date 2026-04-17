@@ -611,7 +611,9 @@ func TestHandleConcludeSession(t *testing.T) {
 	defer cleanup()
 
 	_, output, err := server.handleConcludeSession(context.Background(), nil, ConcludeSessionInput{
-		Content: "Work completed successfully",
+		Body:            "Work completed successfully",
+		Rejected:        true,
+		RejectionReason: "test session — no commits produced",
 	})
 	if err != nil {
 		t.Fatalf("handleConcludeSession failed: %v", err)

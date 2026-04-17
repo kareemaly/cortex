@@ -5,22 +5,26 @@ import (
 	"time"
 
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
+	"github.com/kareemaly/cortex/internal/conclusion"
 	"github.com/kareemaly/cortex/internal/tmux"
 )
 
 // ConcludeParams holds parameters for creating a conclusion and killing a tmux window.
 type ConcludeParams struct {
-	ProjectPath   string
-	EntityType    string
-	EntityID      string
-	TmuxWindow    string
-	Content       string
-	StartedAt     time.Time
-	Repo          string
-	Prompt        string
-	Logger        *slog.Logger
-	TmuxManager   *tmux.Manager
-	ConclusionMgr *ConclusionStoreManager
+	ProjectPath     string
+	EntityType      string
+	EntityID        string
+	TmuxWindow      string
+	Content         string
+	StartedAt       time.Time
+	Repo            string
+	Prompt          string
+	Commits         []string
+	Rejected        bool
+	RejectionReason string
+	Logger          *slog.Logger
+	TmuxManager     *tmux.Manager
+	ConclusionMgr   *ConclusionStoreManager
 }
 
 // CreateConclusionAndKillWindow creates a conclusion record and kills the associated tmux window.
@@ -32,14 +36,17 @@ func CreateConclusionAndKillWindow(params ConcludeParams) string {
 	if params.ConclusionMgr != nil {
 		conclusionStore, err := params.ConclusionMgr.GetStore(params.ProjectPath)
 		if err == nil {
-			rec, createErr := conclusionStore.Create(
-				params.EntityType,
-				params.EntityID,
-				params.Repo,
-				params.Content,
-				params.StartedAt,
-				params.Prompt,
-			)
+			rec, createErr := conclusionStore.Create(conclusion.CreateParams{
+				Type:            params.EntityType,
+				TicketID:        params.EntityID,
+				Repo:            params.Repo,
+				Body:            params.Content,
+				StartedAt:       params.StartedAt,
+				Prompt:          params.Prompt,
+				Commits:         params.Commits,
+				Rejected:        params.Rejected,
+				RejectionReason: params.RejectionReason,
+			})
 			if createErr != nil {
 				params.Logger.Warn("failed to create conclusion", "type", params.EntityType, "error", createErr)
 			} else {

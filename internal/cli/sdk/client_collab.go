@@ -45,18 +45,29 @@ func (c *Client) SpawnCollabSession(path, prompt, mode, variant string) (*SpawnC
 	return &result, nil
 }
 
+// ConcludeCollabSessionParams holds parameters for concluding a collab session.
+type ConcludeCollabSessionParams struct {
+	CollabID  string
+	Body      string
+	StartedAt string
+	Commits   []string
+}
+
 // ConcludeCollabSession concludes a collab session via POST /collab/{id}/conclude.
-func (c *Client) ConcludeCollabSession(collabID, content, startedAt string) (*ConcludeSessionResponse, error) {
-	reqBody := map[string]string{"content": content}
-	if startedAt != "" {
-		reqBody["started_at"] = startedAt
+func (c *Client) ConcludeCollabSession(p ConcludeCollabSessionParams) (*ConcludeSessionResponse, error) {
+	reqBody := map[string]interface{}{"content": p.Body}
+	if p.StartedAt != "" {
+		reqBody["started_at"] = p.StartedAt
+	}
+	if len(p.Commits) > 0 {
+		reqBody["commits"] = p.Commits
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/collab/"+collabID+"/conclude", bytes.NewReader(jsonBody))
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/collab/"+p.CollabID+"/conclude", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

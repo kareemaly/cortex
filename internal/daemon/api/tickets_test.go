@@ -273,7 +273,12 @@ func TestConclude_Success(t *testing.T) {
 
 	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, "", "")
 
-	body := ConcludeSessionRequest{Content: "done report"}
+	// Use rejected=true to avoid needing a real git repo in the unit test.
+	body := ConcludeSessionRequest{
+		Content:         "done report",
+		Rejected:        true,
+		RejectionReason: "unit test — no git repo available",
+	}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
 	defer func() { _ = resp.Body.Close() }()
 
@@ -291,6 +296,42 @@ func TestConclude_Success(t *testing.T) {
 	_, status, _ := ts.store.Get(created.ID)
 	if status != ticket.StatusDone {
 		t.Errorf("expected status 'done', got %q", status)
+	}
+}
+
+func TestConclude_MissingCommits(t *testing.T) {
+	ts := setupUnitServer(t)
+	defer ts.Close()
+
+	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, "", "")
+
+	body := ConcludeSessionRequest{Content: "done report"}
+	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
+	defer func() { _ = resp.Body.Close() }()
+
+	assertStatus(t, resp, http.StatusBadRequest)
+
+	result := decode[ErrorResponse](t, resp)
+	if result.Code != "validation_error" {
+		t.Errorf("expected code 'validation_error', got %q", result.Code)
+	}
+}
+
+func TestConclude_Rejected_NoReason(t *testing.T) {
+	ts := setupUnitServer(t)
+	defer ts.Close()
+
+	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, "", "")
+
+	body := ConcludeSessionRequest{Content: "done report", Rejected: true}
+	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
+	defer func() { _ = resp.Body.Close() }()
+
+	assertStatus(t, resp, http.StatusBadRequest)
+
+	result := decode[ErrorResponse](t, resp)
+	if result.Code != "validation_error" {
+		t.Errorf("expected code 'validation_error', got %q", result.Code)
 	}
 }
 

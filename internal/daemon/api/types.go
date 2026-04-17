@@ -69,10 +69,13 @@ type SpawnResponse struct {
 
 // ConcludeSessionRequest is the request body for concluding a session.
 type ConcludeSessionRequest struct {
-	Content   string `json:"content"`
-	Type      string `json:"type,omitempty"`
-	Repo      string `json:"repo,omitempty"`
-	StartedAt string `json:"started_at,omitempty"`
+	Content         string   `json:"content"`
+	Type            string   `json:"type,omitempty"`
+	Repo            string   `json:"repo,omitempty"`
+	StartedAt       string   `json:"started_at,omitempty"`
+	Commits         []string `json:"commits,omitempty"`
+	Rejected        bool     `json:"rejected,omitempty"`
+	RejectionReason string   `json:"rejection_reason,omitempty"`
 }
 
 // FocusResponse is the response for the focus endpoint.

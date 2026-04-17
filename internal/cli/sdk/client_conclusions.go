@@ -8,18 +8,37 @@ import (
 	"strings"
 )
 
+// ConcludeSessionParams holds parameters for concluding a ticket session.
+type ConcludeSessionParams struct {
+	TicketID        string
+	Body            string
+	StartedAt       string
+	Commits         []string
+	Rejected        bool
+	RejectionReason string
+}
+
 // ConcludeSession concludes a ticket session.
-func (c *Client) ConcludeSession(ticketID, content, startedAt string) (*ConcludeSessionResponse, error) {
-	reqBody := map[string]string{"content": content}
-	if startedAt != "" {
-		reqBody["started_at"] = startedAt
+func (c *Client) ConcludeSession(p ConcludeSessionParams) (*ConcludeSessionResponse, error) {
+	reqBody := map[string]interface{}{"content": p.Body}
+	if p.StartedAt != "" {
+		reqBody["started_at"] = p.StartedAt
+	}
+	if len(p.Commits) > 0 {
+		reqBody["commits"] = p.Commits
+	}
+	if p.Rejected {
+		reqBody["rejected"] = true
+	}
+	if p.RejectionReason != "" {
+		reqBody["rejection_reason"] = p.RejectionReason
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+ticketID+"/conclude", bytes.NewReader(jsonBody))
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+p.TicketID+"/conclude", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

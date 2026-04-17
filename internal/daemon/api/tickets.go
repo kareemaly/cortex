@@ -649,6 +649,37 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve repo early — needed for commit validation.
+	repo := req.Repo
+	if repo == "" {
+		repo = t.Repo
+	}
+
+	// Validate commits / rejection fields.
+	if !req.Rejected {
+		if len(req.Commits) == 0 {
+			writeError(w, http.StatusBadRequest, "validation_error",
+				"Cannot conclude: commits array is required with at least one SHA. If this session produced no work, pass rejected: true with a rejection_reason.")
+			return
+		}
+		if invalid := validateCommitSHAs(repo, req.Commits); len(invalid) > 0 {
+			writeError(w, http.StatusBadRequest, "validation_error",
+				"Cannot conclude: commit "+invalid[0]+" does not exist in "+repo+".")
+			return
+		}
+	} else {
+		if req.RejectionReason == "" {
+			writeError(w, http.StatusBadRequest, "validation_error",
+				"Cannot conclude: rejection_reason is required when rejected: true.")
+			return
+		}
+		if invalid := validateCommitSHAs(repo, req.Commits); len(invalid) > 0 {
+			writeError(w, http.StatusBadRequest, "validation_error",
+				"Cannot conclude: commit "+invalid[0]+" does not exist in "+repo+".")
+			return
+		}
+	}
+
 	// Capture session info before ending
 	var tmuxWindow string
 
@@ -679,10 +710,6 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	if conclusionType == "" {
 		conclusionType = t.Type
 	}
-	repo := req.Repo
-	if repo == "" {
-		repo = t.Repo
-	}
 
 	var startedAt time.Time
 	if req.StartedAt != "" {
@@ -692,16 +719,19 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conclusionID := CreateConclusionAndKillWindow(ConcludeParams{
-		ProjectPath:   projectPath,
-		EntityType:    conclusionType,
-		EntityID:      id,
-		TmuxWindow:    tmuxWindow,
-		Content:       req.Content,
-		StartedAt:     startedAt,
-		Repo:          repo,
-		Logger:        h.deps.Logger,
-		TmuxManager:   h.deps.TmuxManager,
-		ConclusionMgr: h.deps.ConclusionStoreManager,
+		ProjectPath:     projectPath,
+		EntityType:      conclusionType,
+		EntityID:        id,
+		TmuxWindow:      tmuxWindow,
+		Content:         req.Content,
+		StartedAt:       startedAt,
+		Repo:            repo,
+		Commits:         req.Commits,
+		Rejected:        req.Rejected,
+		RejectionReason: req.RejectionReason,
+		Logger:          h.deps.Logger,
+		TmuxManager:     h.deps.TmuxManager,
+		ConclusionMgr:   h.deps.ConclusionStoreManager,
 	})
 
 	// Update ticket with session back-reference

@@ -20,7 +20,7 @@ func (s *Server) registerTicketTools() {
 	// Conclude session tool
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
-		Description: "Conclude the session and mark the ticket as done. Include the outcome, files changed, commit SHA if any, and follow-up work or blockers.",
+		Description: "Conclude the session and mark the ticket as done. commits is required (at least one SHA). If no commits were produced, set rejected=true and provide a rejection_reason.",
 	}, s.handleConcludeSession)
 }
 
@@ -31,12 +31,19 @@ func (s *Server) handleConcludeSession(
 	req *mcp.CallToolRequest,
 	input ConcludeSessionInput,
 ) (*mcp.CallToolResult, ConcludeSessionOutput, error) {
-	if input.Content == "" {
-		return nil, ConcludeSessionOutput{}, NewValidationError("content", "cannot be empty")
+	if input.Body == "" {
+		return nil, ConcludeSessionOutput{}, NewValidationError("body", "cannot be empty")
 	}
 
 	startedAt := os.Getenv("CORTEX_STARTED_AT")
-	resp, err := s.sdkClient.ConcludeSession(s.session.TicketID, input.Content, startedAt)
+	resp, err := s.sdkClient.ConcludeSession(sdk.ConcludeSessionParams{
+		TicketID:        s.session.TicketID,
+		Body:            input.Body,
+		StartedAt:       startedAt,
+		Commits:         input.Commits,
+		Rejected:        input.Rejected,
+		RejectionReason: input.RejectionReason,
+	})
 	if err != nil {
 		return nil, ConcludeSessionOutput{}, wrapSDKError(err)
 	}

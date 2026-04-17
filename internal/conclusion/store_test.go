@@ -13,7 +13,7 @@ func TestCreateAndGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := store.Create("work", "ticket-123", "/repo", "# Summary\n\nDid some work.", time.Time{}, "")
+	c, err := store.Create(CreateParams{Type: "work", TicketID: "ticket-123", Repo: "/repo", Body: "# Summary\n\nDid some work."})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestList(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = store.Create("work", "t1", "", "First", time.Time{}, "")
+	_, err = store.Create(CreateParams{Type: "work", TicketID: "t1", Body: "First"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestCreateValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = store.Create("work", "", "", "", time.Time{}, "")
+	_, err = store.Create(CreateParams{Type: "work"})
 	if err == nil {
 		t.Error("expected error for empty body")
 	}
@@ -97,7 +97,7 @@ func TestListWithOptions_TypeFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = store.Create("work", "t1", "", "Work conclusion", time.Time{}, "")
+	_, err = store.Create(CreateParams{Type: "work", TicketID: "t1", Body: "Work conclusion"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestListWithOptions_Pagination(t *testing.T) {
 
 	// Create 5 conclusions with staggered times to ensure deterministic order
 	for i := range 5 {
-		_, err = store.Create("work", "", "", "Conclusion body", time.Time{}, "")
+		_, err = store.Create(CreateParams{Type: "work", Body: "Conclusion body"})
 		if err != nil {
 			t.Fatal(err)
 		}

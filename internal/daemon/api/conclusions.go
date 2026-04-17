@@ -207,7 +207,13 @@ func (h *ConclusionHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	c, err := store.Create(req.Type, req.Ticket, req.Repo, req.Body, startedAt, "")
+	c, err := store.Create(conclusion.CreateParams{
+		Type:      req.Type,
+		TicketID:  req.Ticket,
+		Repo:      req.Repo,
+		Body:      req.Body,
+		StartedAt: startedAt,
+	})
 	if err != nil {
 		handleConclusionError(w, err, h.deps.Logger)
 		return
