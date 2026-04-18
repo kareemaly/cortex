@@ -2,41 +2,55 @@
 
 [![Release](https://img.shields.io/github/v/release/kareemaly/cortex)](https://github.com/kareemaly/cortex/releases/latest)
 
-**A persistent workspace for multi-repo AI development.**
+You work across five or ten repos in one domain. AI coding agents are scoped to one repo and blind to the others. You become the router — between sessions, between repos, between subscriptions — holding state in your head and re-explaining context every time you open a new chat.
 
-You work across many repos — five, ten, twenty, in one domain. AI coding agents work inside one repo; they don't see the others. Your planning lives in Jira, your design notes in Notion or Confluence, your last session's state in your head. None of it is where the code is.
+Cortex splits that job in two: a persistent workspace where you plan, and scoped workers that take each ticket into the right repo.
 
-## The model
+## A day with Cortex
 
-Cortex splits the work across two tiers.
-
-The **architect** is a persistent workspace — a directory separate from any repo — where you brainstorm, write design docs, and manage tickets.
-
-**Worker** agents are spawned from the architect. Each ticket targets exactly one repo. The worker runs in a scoped tmux session, implements the ticket, and writes a **conclusion** when done.
-
-Every session — architect or worker — ends with a conclusion on disk. When you start a new architect session, it reads the previous one first, so prior context is already loaded.
-
-## Just markdown
-
-Inside the workspace, tickets and conclusions are markdown files with YAML frontmatter: tickets in `tickets/{backlog,progress,done}/`, conclusions in `sessions/`. No database, no proprietary format.
-
-Uninstall Cortex and the workspace directory stays as-is. The markdown is readable and editable with any tool.
-
-## Accumulated context
-
-After a few months of regular use you have hundreds of tickets and conclusions. The architect has a `search` MCP tool that scans every ticket (backlog, in-progress, done) and every conclusion.
-
-Ask "what did we do on feature X?" and it returns the related tickets across every repo and their conclusions — commit SHAs, design notes, follow-ups. A single architect conclusion routinely covers a multi-ticket, multi-repo feature rollout.
-
-## Who this is for
-
-Cortex is built for engineers who live in the terminal. Every agent runs in a tmux window next to a companion pane — the kanban TUI for the architect, a configurable pane (lazygit, nvim, a shell) for workers and collab.
+You `cd` into your architect workspace and run `cortex architect start`. It attaches you to a tmux window: the architect agent on the left, a kanban TUI on the right. The architect already knows the current kanban, the repos it works across, and yesterday's conclusion — so the planning thread picks up where you left off.
 
 ![Architect session](docs/assets/architect-session.png)
 *Architect session — agent on the left, Cortex's kanban / sessions / config TUI on the right.*
 
+You spend the morning here, with the architect — researching, sketching ideas, writing notes. None of it lives in any repo. Once the plan is concrete, you draft tickets, each lean but grounded in the artifacts you just wrote.
+
+When you're ready to ship a ticket, you tell the architect *"spawn this ticket with claude-sonnet"* — or hit `s` on the kanban TUI. A new tmux window opens with the worker agent on the left and a companion pane (lazygit by default) on the right. The agent starts immediately: it already knows which architect it's under, which repo it lives in, the sibling repos in the ecosystem, the ticket body, and any referenced tickets — no setup prompt from you.
+
 ![Worker session](docs/assets/worker-session.png)
 *Worker session — agent on the left, lazygit and a diff viewer on the right.*
+
+While workers run across your repos, you stay in the architect, planning the next piece. The kanban shows live status for every session. When you notice a worker has gone idle — usually waiting on you — you switch to its window, answer the question or approve the plan, and let it continue. When the work is done, you review the diff in the companion pane, push, and test. Then you tell the worker *"conclude cortex session"*. It writes a conclusion (what shipped, what was decided, what was rejected and why), the tmux window closes, and the kanban flips the ticket to done.
+
+For work that doesn't warrant a ticket — a hotfix, a spike, a quick investigation — you tell the architect *"spawn a collab in ~/projects/some-repo to look at X"*. A **collab** is a ticketless worker that runs at any path you give it, writes its own conclusion, and can create tickets mid-session if something real surfaces.
+
+At end of day, your last message to the architect is *"conclude cortex session, leave a note for tomorrow to continue X, Y, Z"*. It writes the conclusion and the tmux window closes. Tomorrow morning you run `cortex architect start` from the workspace again and the thread resumes.
+
+### Steering prompts
+
+| Role | When you say… | The agent calls |
+|------|---------------|-----------------|
+| Architect | "spawn this ticket with variant X" | `spawnSession` |
+| | "spawn a collab in repo X to investigate Y" | `spawnCollabSession` |
+| | "ticket X is done, read it" | `readTicket` (with nested conclusion) |
+| | "search for Y" | `search` |
+| | "create a ticket for Z" | `createWorkTicket` |
+| | "show me available variants" | `listVariants` |
+| | "conclude cortex session" | `concludeSession` |
+| Worker | "conclude cortex session" | `concludeSession` (commits required) |
+| | "conclude cortex session with rejection" | `concludeSession` (rejected) |
+| Collab | "create a ticket for …" | `createWorkTicket` |
+| | "conclude cortex session" | `concludeSession` (no commits) |
+
+## Markdown on disk
+
+Tickets live in `tickets/{backlog,progress,done}/`, conclusions in `sessions/`. Each is a markdown file with YAML frontmatter — no database, no proprietary format. After a few months of regular use you have hundreds of each; the architect's `search` tool scans all of them when you ask "what did we do on feature X?"
+
+Uninstall Cortex and the workspace directory stays readable and editable with any tool.
+
+## Mixing models
+
+Each spawn picks an **agent variant** — a named runtime + flags combination. On first `cortex init`, Cortex detects the agent CLIs on your `PATH` and seeds `~/.cortex/settings.yaml` with sensible defaults: `claude-opus` and `claude-sonnet` for Claude, `codex` for OpenAI, `opencode` for OpenCode — each with a `-plan` sibling. Add your own variants (different models, flags, subscriptions) to the global settings, or override per project in `cortex.yaml`. You pick per spawn — and your Claude and OpenAI subscriptions stop competing.
 
 ## Requirements
 
@@ -128,8 +142,6 @@ agents:
     agent: opencode
     args: ["--agent", "plan"]
 ```
-
-Defaults are generated during `cortex init` based on which agents (`claude`, `codex`, `opencode`) are on your `PATH`. They live in `~/.cortex/settings.yaml` and apply to every architect unless overridden.
 
 ### Global settings
 
