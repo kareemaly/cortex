@@ -162,6 +162,28 @@ cortex eject work/KICKOFF.md
 
 Ejected prompts live in `prompts/` inside your architect workspace and take precedence over the defaults. Delete the file to fall back.
 
+## MCP tools
+
+Every canonical phrase from the [Steering prompts](#steering-prompts) table maps to one of these MCP tools. Access differs by role (Architect / Worker / Collab):
+
+| Tool | A | W | C | Parameters |
+|------|---|---|---|------------|
+| `listTickets` | ✓ | | | `status` (req: backlog/progress/done), `query` |
+| `readTicket` | ✓ | ✓ | | `id` (req) |
+| `createWorkTicket` | ✓ | | ✓ | `title` (req), `repo` (req), `body`, `due_date` (RFC3339), `references` |
+| `updateTicket` | ✓ | | ✓ | `id` (req); any of `title`, `body`, `references` |
+| `deleteTicket` | ✓ | | | `id` (req) |
+| `moveTicket` | ✓ | | | `id` (req), `status` (req) |
+| `updateDueDate` | ✓ | | | `id` (req), `due_date` (req: RFC3339) |
+| `clearDueDate` | ✓ | | | `id` (req) |
+| `listVariants` | ✓ | | | — |
+| `spawnSession` | ✓ | | | `ticket_id` (req), `variant` (req), `mode` (normal/resume/fresh) |
+| `spawnCollabSession` | ✓ | | | `path` (req, must exist), `prompt` (req), `variant` (req) |
+| `listConclusions` | ✓ | | | `type` (architect/work/collab), `limit` (default 10), `offset` |
+| `readConclusion` | ✓ | | | `id` (req) |
+| `search` | ✓ | | | `query` (req), `limit` (default 25) |
+| `concludeSession` | ✓ | ✓ | ✓ | `body` (req). Worker: `commits` required unless `rejected=true` + `rejection_reason`. Collab: `commits` optional. |
+
 ## Architecture
 
 A single `cortexd` daemon serves every architect workspace on your machine. The CLI/TUI and every agent talk to it over HTTP — clients use the REST API, agents use MCP tools. All state lives on disk in the workspace.
