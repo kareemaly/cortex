@@ -96,24 +96,6 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve variant — required
-	if variantName == "" {
-		names := projectCfg.VariantNames()
-		var msg string
-		if len(names) > 0 {
-			msg = fmt.Sprintf("--variant is required, choose one of: %s", strings.Join(names, ", "))
-		} else {
-			msg = "--variant is required — run 'cortex init' to populate defaults in ~/.cortex/settings.yaml"
-		}
-		writeError(w, http.StatusBadRequest, "variant_required", msg)
-		return
-	}
-	av, err := projectCfg.ResolveVariant(variantName)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_variant", err.Error())
-		return
-	}
-
 	// Check tmux is available
 	if h.deps.TmuxManager == nil {
 		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
@@ -128,14 +110,8 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agent := string(av.Agent)
-	if agent == "" {
-		agent = "claude"
-	}
-
-	switch stateInfo.State {
-	case spawn.StateActive:
-		// Focus the existing window and return 200
+	// If already active, focus the existing window — no variant needed
+	if stateInfo.State == spawn.StateActive {
 		if err := h.deps.TmuxManager.FocusWindow(sessionName, "architect"); err != nil {
 			h.deps.Logger.Warn("failed to focus architect window", "error", err)
 		}
@@ -159,7 +135,32 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 			TmuxWindow:  "architect",
 		})
 		return
+	}
 
+	// Resolve variant — required for all spawn paths
+	if variantName == "" {
+		names := projectCfg.VariantNames()
+		var msg string
+		if len(names) > 0 {
+			msg = fmt.Sprintf("--variant is required, choose one of: %s", strings.Join(names, ", "))
+		} else {
+			msg = "--variant is required — run 'cortex init' to populate defaults in ~/.cortex/settings.yaml"
+		}
+		writeError(w, http.StatusBadRequest, "variant_required", msg)
+		return
+	}
+	av, err := projectCfg.ResolveVariant(variantName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_variant", err.Error())
+		return
+	}
+
+	agent := string(av.Agent)
+	if agent == "" {
+		agent = "claude"
+	}
+
+	switch stateInfo.State {
 	case spawn.StateOrphaned:
 		switch mode {
 		case "normal":

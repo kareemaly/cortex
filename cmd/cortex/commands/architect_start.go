@@ -3,9 +3,13 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/tui/variant"
 	"github.com/kareemaly/cortex/internal/tmux"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +60,27 @@ func runArchitectStart(cmd *cobra.Command, args []string) error {
 		if ok && apiErr.IsOrphanedSession() {
 			return fmt.Errorf("architect session is orphaned. Use --mode resume to continue or --mode fresh to start over\n  cortex architect start --mode fresh")
 		}
-		return fmt.Errorf("failed to spawn architect: %w", err)
+		if ok && apiErr.IsVariantRequired() && !architectStartDetach &&
+			(isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd())) {
+			variants, fetchErr := client.GetVariants()
+			if fetchErr == nil && len(variants) > 0 {
+				chosen, selErr := runVariantSelector(variants)
+				if selErr != nil {
+					return fmt.Errorf("failed to spawn architect: %w", err)
+				}
+				if chosen == "" {
+					return fmt.Errorf("no variant selected")
+				}
+				resp, err = client.SpawnArchitect(architectStartMode, chosen)
+				if err != nil {
+					return fmt.Errorf("failed to spawn architect: %w", err)
+				}
+			} else {
+				return fmt.Errorf("failed to spawn architect: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to spawn architect: %w", err)
+		}
 	}
 
 	if architectStartDetach {
@@ -78,4 +102,40 @@ func runArchitectStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to attach to session: %w", err)
 	}
 	return nil
+}
+
+type variantPrompt struct {
+	m        variant.Model
+	chosen   string
+	canceled bool
+}
+
+func (p variantPrompt) Init() tea.Cmd { return nil }
+func (p variantPrompt) View() string  { return p.m.View() }
+func (p variantPrompt) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case variant.SelectedMsg:
+		p.chosen = msg.Name
+		return p, tea.Quit
+	case variant.CancelledMsg:
+		_ = msg
+		p.canceled = true
+		return p, tea.Quit
+	}
+	newM, cmd := p.m.Update(msg)
+	p.m = newM
+	return p, cmd
+}
+
+func runVariantSelector(variants []string) (string, error) {
+	p := variantPrompt{m: variant.New("Select agent variant", variants)}
+	result, err := tea.NewProgram(p).Run()
+	if err != nil {
+		return "", err
+	}
+	final := result.(variantPrompt)
+	if final.canceled {
+		return "", nil
+	}
+	return final.chosen, nil
 }

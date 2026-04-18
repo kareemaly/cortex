@@ -83,6 +83,10 @@ func (e *APIError) IsOrphanedSession() bool {
 	return e.Code == "session_orphaned"
 }
 
+func (e *APIError) IsVariantRequired() bool {
+	return e.Code == "variant_required"
+}
+
 func (c *Client) parseError(resp *http.Response) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
