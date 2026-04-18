@@ -11,14 +11,14 @@ Cortex splits that job in two: a persistent workspace where you plan, and scoped
 You `cd` into your architect workspace and run `cortex architect start`. It attaches you to a tmux window: the architect agent on the left, a kanban TUI on the right. The architect already knows the current kanban, the repos it works across, and yesterday's conclusion — so the planning thread picks up where you left off.
 
 ![Architect session](docs/assets/architect-session.png)
-*Architect session — agent on the left, Cortex's kanban / sessions / config TUI on the right.*
+*Architect session — agent on the left, Cortex's kanban TUI on the right.*
 
 You spend the morning here, with the architect — researching, sketching ideas, writing notes. None of it lives in any repo. Once the plan is concrete, you draft tickets, each lean but grounded in the artifacts you just wrote.
 
 When you're ready to ship a ticket, you tell the architect *"spawn this ticket with claude-sonnet"* — or hit `s` on the kanban TUI. A new tmux window opens with the worker agent on the left and a companion pane (lazygit by default) on the right. The agent starts immediately: it already knows which architect it's under, which repo it lives in, the sibling repos in the ecosystem, the ticket body, and any referenced tickets — no setup prompt from you.
 
 ![Worker session](docs/assets/worker-session.png)
-*Worker session — agent on the left, lazygit and a diff viewer on the right.*
+*Worker session — agent on the left, lazygit on the right.*
 
 While workers run across your repos, you stay in the architect, planning the next piece. The kanban shows live status for every session. When you notice a worker has gone idle — usually waiting on you — you switch to its window, answer the question or approve the plan, and let it continue. When the work is done, you review the diff in the companion pane, push, and test. Then you tell the worker *"conclude cortex session"*. It writes a conclusion (what shipped, what was decided, what was rejected and why), the tmux window closes, and the kanban flips the ticket to done.
 
@@ -50,7 +50,7 @@ Uninstall Cortex and you don't lose anything. The tickets and conclusions stay o
 
 ## Mixing models
 
-Each spawn picks an **agent variant** — a named runtime + flags combination. On first `cortex init`, Cortex detects the agent CLIs on your `PATH` and seeds `~/.cortex/settings.yaml` with sensible defaults: `claude-opus` and `claude-sonnet` for Claude, `codex` for OpenAI, `opencode` for OpenCode — each with a `-plan` sibling. Add your own variants (different models, flags, subscriptions) to the global settings, or override per project in `cortex.yaml`. You pick per spawn — and your Claude and OpenAI subscriptions stop competing.
+Each spawn picks an **agent variant** — a named runtime + flags combination, defined in [`cortex.yaml`](#cortexyaml) or `~/.cortex/settings.yaml`. On first `cortex init`, defaults are seeded for any of Claude / Codex / OpenCode on your `PATH`, each with a `-plan` sibling. Pick per spawn — your Claude and OpenAI subscriptions stop competing.
 
 ## Requirements
 
@@ -158,9 +158,9 @@ Clients find the daemon via `CORTEX_DAEMON_URL` (default `http://localhost:4200`
 
 Cortex ships default prompts for the architect and worker agents:
 
-- `architect/SYSTEM.md` — fully replaces the agent's system prompt for the architect session.
-- `architect/KICKOFF.md` — first message sent to the architect, rendered with the ticket list, recent conclusions, and repos.
-- `work/KICKOFF.md` — first message sent to each worker, rendered with the ticket body, references, and repo path.
+- [`architect/SYSTEM.md`](internal/install/defaults/main/prompts/architect/SYSTEM.md) — fully replaces the agent's system prompt for the architect session.
+- [`architect/KICKOFF.md`](internal/install/defaults/main/prompts/architect/KICKOFF.md) — first message sent to the architect, rendered with the ticket list, recent conclusions, and repos.
+- [`work/KICKOFF.md`](internal/install/defaults/main/prompts/work/KICKOFF.md) — first message sent to each worker, rendered with the ticket body, references, and repo path.
 
 Only the architect has a `SYSTEM.md`. Worker and collab sessions rely on the kickoff prompt alone.
 
