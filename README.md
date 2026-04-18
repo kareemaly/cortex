@@ -164,7 +164,7 @@ Ejected prompts live in `prompts/` inside your architect workspace and take prec
 
 ## MCP tools
 
-Every canonical phrase from the [Steering prompts](#steering-prompts) table maps to one of these MCP tools. Access differs by role (Architect / Worker / Collab):
+The full MCP API each role can call. The [Steering prompts](#steering-prompts) table above covers the common user-facing phrases; this is the complete reference, with access per role (Architect / Worker / Collab):
 
 | Tool | A | W | C | Parameters |
 |------|---|---|---|------------|
