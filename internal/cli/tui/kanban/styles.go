@@ -102,6 +102,9 @@ var (
 // selectedFgColor is the default foreground color for selected card text.
 const selectedFgColor = "255"
 
+// repoPrefixPalette cycles through distinct colors assigned per repo (sorted order → consistent).
+var repoPrefixPalette = []string{"214", "82", "212", "39", "203", "87", "222", "141"}
+
 // inlineFgColorChange returns a raw ANSI escape that changes only the foreground
 // color without resetting other attributes. This preserves the outer background
 // set by selectedTicketStyle.Render().

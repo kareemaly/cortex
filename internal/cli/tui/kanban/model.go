@@ -3,6 +3,7 @@ package kanban
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -612,10 +613,27 @@ func (m Model) View() string {
 	// Status bar (1) + help bar (1) + margins (2) = ~4 lines overhead
 	columnHeight := max(m.height-4, 5)
 
+	// Assign a distinct palette color per repo (sorted for consistency across renders).
+	seen := map[string]bool{}
+	var sortedRepos []string
+	for _, col := range m.columns {
+		for _, t := range col.tickets {
+			if t.Repo != "" && !seen[t.Repo] {
+				seen[t.Repo] = true
+				sortedRepos = append(sortedRepos, t.Repo)
+			}
+		}
+	}
+	sort.Strings(sortedRepos)
+	repoColors := make(map[string]string, len(sortedRepos))
+	for i, repo := range sortedRepos {
+		repoColors[repo] = repoPrefixPalette[i%len(repoPrefixPalette)]
+	}
+
 	// Render columns side by side.
 	cols := make([]string, 3)
 	for i := range m.columns {
-		cols[i] = m.columns[i].View(columnWidth, i == m.activeColumn, columnHeight)
+		cols[i] = m.columns[i].View(columnWidth, i == m.activeColumn, columnHeight, repoColors)
 	}
 	columnsView := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 

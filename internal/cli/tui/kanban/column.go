@@ -2,6 +2,7 @@ package kanban
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -101,7 +102,7 @@ func (c *Column) Len() int {
 }
 
 // renderAllTickets renders all tickets into a single string for the viewport.
-func (c *Column) renderAllTickets(width int, isActive bool) string {
+func (c *Column) renderAllTickets(width int, isActive bool, repoColors map[string]string) string {
 	if len(c.tickets) == 0 {
 		emptyText := lipgloss.NewStyle().
 			Foreground(mutedColor).
@@ -139,7 +140,20 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 			}
 		}
 
-		wrappedTitle := wrapText(t.Title, titleWidth)
+		plainPrefix := ""
+		colorCode, hasColor := repoColors[t.Repo]
+		if len(repoColors) > 1 && t.Repo != "" && hasColor {
+			plainPrefix = "[" + filepath.Base(t.Repo) + "] "
+		}
+		wrappedTitle := wrapText(plainPrefix+t.Title, titleWidth)
+		if len(plainPrefix) > 0 && len(wrappedTitle) > 0 && len(wrappedTitle[0]) >= len(plainPrefix) {
+			titlePart := wrappedTitle[0][len(plainPrefix):]
+			if isSelected {
+				wrappedTitle[0] = inlineFgColorChange(colorCode) + plainPrefix + inlineFgColorChange(selectedFgColor) + titlePart
+			} else {
+				wrappedTitle[0] = lipgloss.NewStyle().Foreground(lipgloss.Color(colorCode)).Render(plainPrefix) + titlePart
+			}
+		}
 		if dueDateIndicator != "" && len(wrappedTitle) > 0 {
 			wrappedTitle[0] = wrappedTitle[0] + dueDateIndicator
 		}
@@ -189,17 +203,17 @@ func (c *Column) renderAllTickets(width int, isActive bool) string {
 }
 
 // cursorYOffset calculates the line number where the cursor's ticket starts in rendered content.
-func (c *Column) cursorYOffset(titleWidth int) int {
+func (c *Column) cursorYOffset(titleWidth int, repoColors map[string]string) int {
 	y := 0
 	for i := 0; i < c.cursor; i++ {
-		y += ticketHeight(c.tickets[i], titleWidth)
+		y += ticketHeight(c.tickets[i], titleWidth, repoColors)
 		y++ // gap line between tickets
 	}
 	return y
 }
 
 // View renders the column.
-func (c *Column) View(width int, isActive bool, maxHeight int) string {
+func (c *Column) View(width int, isActive bool, maxHeight int, repoColors map[string]string) string {
 	var b strings.Builder
 
 	// Header takes ~2 lines (text + border)
@@ -208,7 +222,7 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	// Calculate title width for height calculations
 	titleWidth := max(width-4, 10)
 
-	totalHeight := totalTicketHeight(c.tickets, titleWidth)
+	totalHeight := totalTicketHeight(c.tickets, titleWidth, repoColors)
 	availableLines := maxHeight - headerLines
 	needsScrolling := totalHeight > availableLines
 
@@ -225,7 +239,7 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 	c.vp.Height = vpHeight
 
 	// Render all tickets and set as viewport content
-	content := c.renderAllTickets(width, isActive)
+	content := c.renderAllTickets(width, isActive, repoColors)
 
 	// Preserve scroll position across re-renders
 	savedYOffset := c.vp.YOffset
@@ -234,8 +248,8 @@ func (c *Column) View(width int, isActive bool, maxHeight int) string {
 
 	// Ensure cursor is visible within the viewport
 	if len(c.tickets) > 0 {
-		cursorY := c.cursorYOffset(titleWidth)
-		cursorH := ticketHeight(c.tickets[c.cursor], titleWidth)
+		cursorY := c.cursorYOffset(titleWidth, repoColors)
+		cursorH := ticketHeight(c.tickets[c.cursor], titleWidth, repoColors)
 
 		// Cursor above viewport — scroll up
 		if cursorY < c.vp.YOffset {
@@ -352,19 +366,21 @@ func wrapText(text string, width int) []string {
 }
 
 // ticketHeight returns the number of lines a single ticket occupies (title lines + metadata line).
-func ticketHeight(t sdk.TicketSummary, titleWidth int) int {
-	bw := 0
-	if t.Type != "" {
-		bw = len("[" + t.Type + "] ")
+func ticketHeight(t sdk.TicketSummary, titleWidth int, repoColors map[string]string) int {
+	title := t.Title
+	if len(repoColors) > 1 && t.Repo != "" {
+		if _, ok := repoColors[t.Repo]; ok {
+			title = "[" + filepath.Base(t.Repo) + "] " + title
+		}
 	}
-	return len(wrapText(t.Title, titleWidth-bw)) + 1
+	return len(wrapText(title, titleWidth)) + 1
 }
 
 // totalTicketHeight returns the total lines needed to render all tickets with gaps.
-func totalTicketHeight(tickets []sdk.TicketSummary, titleWidth int) int {
+func totalTicketHeight(tickets []sdk.TicketSummary, titleWidth int, repoColors map[string]string) int {
 	total := 0
 	for i, t := range tickets {
-		total += ticketHeight(t, titleWidth)
+		total += ticketHeight(t, titleWidth, repoColors)
 		if i > 0 {
 			total++ // gap line between tickets
 		}
