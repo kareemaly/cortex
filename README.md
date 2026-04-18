@@ -33,7 +33,7 @@ At end of day, your last message to the architect is *"conclude cortex session, 
 | Architect | "spawn this ticket with variant X" | `spawnSession` |
 | | "spawn a collab in repo X to investigate Y" | `spawnCollabSession` |
 | | "ticket X is done, read it" | `readTicket` (with nested conclusion) |
-| | "search for Y" | `search` |
+| | "search tickets for Y" | `search` |
 | | "create a ticket for Z" | `createWorkTicket` |
 | | "show me available variants" | `listVariants` |
 | | "conclude cortex session" | `concludeSession` |
@@ -46,7 +46,7 @@ At end of day, your last message to the architect is *"conclude cortex session, 
 
 Tickets live in `tickets/{backlog,progress,done}/`, conclusions in `sessions/`. Each is a markdown file with YAML frontmatter — no database, no proprietary format. After a few months of regular use you have hundreds of each; the architect's `search` tool scans all of them when you ask "what did we do on feature X?"
 
-Uninstall Cortex and the workspace directory stays readable and editable with any tool.
+Uninstall Cortex and you don't lose anything. The tickets and conclusions stay on disk — point any coding agent at the workspace and it can still read and search them.
 
 ## Mixing models
 
