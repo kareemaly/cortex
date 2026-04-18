@@ -31,16 +31,15 @@ At end of day, your last message to the architect is *"conclude cortex session, 
 | Role | When you say… | The agent calls |
 |------|---------------|-----------------|
 | Architect | "spawn this ticket with variant X" | `spawnSession` |
-| | "spawn a collab in repo X to investigate Y" | `spawnCollabSession` |
+| | "spawn a collab in ~/projects/foo to investigate Y" | `spawnCollabSession` |
 | | "ticket X is done, read it" | `readTicket` (with nested conclusion) |
 | | "search tickets for Y" | `search` |
 | | "create a ticket for Z" | `createWorkTicket` |
 | | "show me available variants" | `listVariants` |
 | | "conclude cortex session" | `concludeSession` |
-| Worker | "conclude cortex session" | `concludeSession` (commits required) |
-| | "conclude cortex session with rejection" | `concludeSession` (rejected) |
+| Worker | "conclude cortex session" | `concludeSession` (commits required, or `rejected=true` + reason) |
 | Collab | "create a ticket for …" | `createWorkTicket` |
-| | "conclude cortex session" | `concludeSession` (no commits) |
+| | "conclude cortex session" | `concludeSession` (commits optional) |
 
 ## Markdown on disk
 
@@ -75,7 +74,7 @@ cortex init myproject
 cd myproject
 ```
 
-Edit `cortex.yaml` to point at your repos:
+`cortex init` created a starter `cortex.yaml`. Edit it to point at your repos:
 
 ```yaml
 name: myproject
@@ -121,26 +120,13 @@ repos:
 # The architect always shows the Cortex TUI (kanban / sessions / config).
 companion: lazygit
 
-# Agent variants. Project variants override global ones by name.
+# Optional: project-only variants, or overrides for the global ones in
+# ~/.cortex/settings.yaml. Same schema; project values win on name match.
 # Valid agent values: claude, opencode, codex.
 agents:
-  claude-opus:
-    agent: claude
-    args: ["--permission-mode", "auto"]
-  claude-opus-plan:
+  claude-strict:
     agent: claude
     args: ["--permission-mode", "plan"]
-  codex:
-    agent: codex
-    args: ["--full-auto"]
-  codex-plan:
-    agent: codex
-    args: ["--sandbox", "read-only", "--ask-for-approval", "never"]
-  opencode:
-    agent: opencode
-  opencode-plan:
-    agent: opencode
-    args: ["--agent", "plan"]
 ```
 
 ### Global settings
@@ -152,6 +138,8 @@ port: 4200
 bind_address: 127.0.0.1  # set to 0.0.0.0 to expose the daemon to other machines
 ```
 
+`cortex init` also seeds an `agents:` map here (same schema as `cortex.yaml` above) — one variant + a `-plan` sibling for each of Claude / Codex / OpenCode on your `PATH`. Edit it to add or tweak variants; project `cortex.yaml` values override by name.
+
 Clients find the daemon via `CORTEX_DAEMON_URL` (default `http://localhost:4200`) — set this when running `cortex` commands against a remote daemon.
 
 ## Customizing prompts
@@ -162,7 +150,7 @@ Cortex ships default prompts for the architect and worker agents:
 - [`architect/KICKOFF.md`](internal/install/defaults/main/prompts/architect/KICKOFF.md) — first message sent to the architect, rendered with the ticket list, recent conclusions, and repos.
 - [`work/KICKOFF.md`](internal/install/defaults/main/prompts/work/KICKOFF.md) — first message sent to each worker, rendered with the ticket body, references, and repo path.
 
-Only the architect has a `SYSTEM.md`. Worker and collab sessions rely on the kickoff prompt alone.
+Only the architect has a `SYSTEM.md`. Workers rely on the kickoff prompt alone; collab sessions have no template — the architect crafts each one's prompt live.
 
 To customize, eject the default into your workspace:
 
