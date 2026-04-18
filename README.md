@@ -2,60 +2,115 @@
 
 [![Release](https://img.shields.io/github/v/release/kareemaly/cortex)](https://github.com/kareemaly/cortex/releases/latest)
 
-You work across five or ten repos in one domain. AI coding agents are scoped to one repo and blind to the others. You become the router — between sessions, between repos, between subscriptions — holding state in your head and re-explaining context every time you open a new chat.
+Cortex is a terminal-native workspace for AI-assisted software engineering across multiple repos.
 
-Cortex splits that job in two: a persistent workspace where you plan, and scoped workers that take each ticket into the right repo.
+It gives you:
 
-## A day with Cortex
+- a persistent **architect workspace** for project memory, notes, specs, tickets, and session conclusions
+- repo-scoped **worker sessions** that spawn directly into the right codebase with the right context
+- a file-based system that keeps project state on disk instead of trapped in chat history
 
-You `cd` into your architect workspace and run `cortex architect start`. It attaches you to a tmux window: the architect agent on the left, a kanban TUI on the right. The architect already knows the current kanban, the repos it works across, and yesterday's conclusion — so the planning thread picks up where you left off.
+If you work across several repos, Cortex keeps the planning thread in one place and sends implementation work to scoped agents in the correct repo.
 
 ![Architect session](docs/assets/architect-session.png)
-*Architect session — agent on the left, Cortex's kanban TUI on the right.*
+*Architect session - agent on the left, Cortex project UI on the right.*
 
-You spend the morning here, with the architect — researching, sketching ideas, writing notes. None of it lives in any repo. Once the plan is concrete, you draft tickets, each lean but grounded in the artifacts you just wrote.
+## What Cortex Actually Is
 
-When you're ready to ship a ticket, you tell the architect *"spawn this ticket with claude-sonnet"* — or hit `s` on the kanban TUI. A new tmux window opens with the worker agent on the left and a companion pane (lazygit by default) on the right. The agent starts immediately: it already knows which architect it's under, which repo it lives in, the sibling repos in the ecosystem, the ticket body, and any referenced tickets — no setup prompt from you.
+Cortex combines a few things into one workflow:
+
+- a dedicated project workspace, separate from your source repos
+- a long-lived **architect** session for planning, research, and coordination
+- scoped **worker** sessions for ticketed repo work
+- optional **collab** sessions for ticketless repo investigations or hotfixes
+- a single `cortexd` daemon that manages tmux sessions, HTTP APIs, and MCP tools
+
+This is not just a ticket format and not just a CLI wrapper around agent runtimes. It is a persistent control plane for multi-repo engineering work.
+
+## Mental Model
+
+Cortex has three session types:
+
+- **Architect**: the long-lived session where you plan, review backlog, write tickets, keep notes, and coordinate work across repos
+- **Worker**: a ticket-backed session spawned into a specific repo to implement changes
+- **Collab**: a ticketless repo session for ad hoc debugging, investigation, or one-off work
+
+The architect workspace is where Cortex stores and grows project context over time. In practice, that often includes:
+
+- tickets and conclusions
+- architecture notes and specs
+- findings from investigations
+- scratch scripts and generated artifacts
+- prompts and local workflow conventions
+
+## How It Works
+
+1. Create an architect workspace.
+   This is the durable home for the project, separate from the repos it manages.
+
+2. Start the architect session.
+   Cortex opens a tmux session with your architect agent on the left and the Cortex TUI on the right.
+
+3. Create or select a ticket.
+   The architect writes lightweight markdown tickets grounded in the workspace context.
+
+4. Spawn a worker.
+   Cortex opens a new tmux window inside the target repo, injects the ticket context, and starts the worker immediately.
+
+5. Review and conclude.
+   When work is done, the worker records a conclusion, the ticket state advances, and the architect keeps the broader thread intact.
+
+## Why Use It
+
+Without Cortex, multi-repo agent work usually means:
+
+- re-explaining context every time you open a new session
+- mixing planning notes with implementation threads
+- losing state between chats
+- manually routing work to the right repo and model
+
+Cortex gives you:
+
+- persistent project memory across sessions
+- clear separation between planning and implementation
+- repo-scoped execution instead of one giant shared context
+- markdown tickets and conclusions that remain useful without Cortex
+- per-session model selection across Claude, Codex, and OpenCode variants
+
+## A Day With Cortex
+
+You `cd` into your architect workspace and run `cortex architect start`. Cortex attaches you to a tmux window: the architect agent on the left, the project TUI on the right. The architect already has the current ticket state, configured repos, and recent conclusions, so the session resumes from the last meaningful checkpoint instead of from zero.
+
+You spend time here doing the work that does not belong in any single source repo yet: exploring the problem, writing notes, drafting specs, capturing findings, and shaping tickets. This workspace becomes the durable memory of the project.
+
+When a task is concrete enough, you create or refine a ticket and spawn a worker. Cortex opens a new tmux window in the repo that owns the work. The worker already knows which architect it belongs to, which repo it is in, the ticket body, and any referenced tickets.
+
+While workers run, you stay with the architect and continue planning, researching, or drafting the next piece. The TUI shows live ticket/session state. When a worker finishes, you review the diff in the companion pane, test or push as needed, and tell the worker to conclude the session. Cortex records the conclusion and closes the window.
+
+For work that does not deserve a ticket, you can spawn a collab session at any path. A collab is still part of the same Cortex operating model: it has its own conclusion, can create tickets if the investigation turns into real work, and keeps the architect workspace as the top-level coordination layer.
+
+## Worker Sessions
+
+A worker session is a repo-scoped tmux window. The agent works on the left; the companion pane on the right can be `lazygit` or another repo tool.
 
 ![Worker session](docs/assets/worker-session.png)
-*Worker session — agent on the left, lazygit on the right.*
+*Worker session - agent on the left, repo companion pane on the right.*
 
-While workers run across your repos, you stay in the architect, planning the next piece. The kanban shows live status for every session. When you notice a worker has gone idle — usually waiting on you — you switch to its window, answer the question or approve the plan, and let it continue. When the work is done, you review the diff in the companion pane, push, and test. Then you tell the worker *"conclude cortex session"*. It writes a conclusion (what shipped, what was decided, what was rejected and why), the tmux window closes, and the kanban flips the ticket to done.
+## Markdown On Disk
 
-For work that doesn't warrant a ticket — a hotfix, a spike, a quick investigation — you tell the architect *"spawn a collab in ~/projects/some-repo to look at X"*. A **collab** is a ticketless worker that runs at any path you give it, writes its own conclusion, and can create tickets mid-session if something real surfaces.
+Tickets live in `tickets/{backlog,progress,done}/`, conclusions in `sessions/`. Each is a markdown file with YAML frontmatter - no database, no proprietary format. The workspace can also hold whatever supporting material your project needs: notes, specs, findings, workbench experiments, prompts, and generated artifacts.
 
-At end of day, your last message to the architect is *"conclude cortex session, leave a note for tomorrow to continue X, Y, Z"*. It writes the conclusion and the tmux window closes. Tomorrow morning you run `cortex architect start` from the workspace again and the thread resumes.
+Uninstall Cortex and you do not lose your project history. The workspace remains readable on disk, and any coding agent can still inspect it.
 
-### Steering prompts
+## Mixing Models
 
-| Role | When you say… | The agent calls |
-|------|---------------|-----------------|
-| Architect | "spawn this ticket with variant X" | `spawnSession` |
-| | "spawn a collab in ~/projects/foo to investigate Y" | `spawnCollabSession` |
-| | "ticket X is done, read it" | `readTicket` (with nested conclusion) |
-| | "search tickets for Y" | `search` |
-| | "create a ticket for Z" | `createWorkTicket` |
-| | "show me available variants" | `listVariants` |
-| | "conclude cortex session" | `concludeSession` |
-| Worker | "conclude cortex session" | `concludeSession` (commits required, or `rejected=true` + reason) |
-| Collab | "create a ticket for …" | `createWorkTicket` |
-| | "conclude cortex session" | `concludeSession` (commits optional) |
-
-## Markdown on disk
-
-Tickets live in `tickets/{backlog,progress,done}/`, conclusions in `sessions/`. Each is a markdown file with YAML frontmatter — no database, no proprietary format. After a few months of regular use you have hundreds of each; the architect's `search` tool scans all of them when you ask "what did we do on feature X?"
-
-Uninstall Cortex and you don't lose anything. The tickets and conclusions stay on disk — point any coding agent at the workspace and it can still read and search them.
-
-## Mixing models
-
-Each spawn picks an **agent variant** — a named runtime + flags combination, defined in [`cortex.yaml`](#cortexyaml) or `~/.cortex/settings.yaml`. On first `cortex init`, defaults are seeded for any of Claude / Codex / OpenCode on your `PATH`, each with a `-plan` sibling. Pick per spawn — your Claude and OpenAI subscriptions stop competing.
+Each spawn picks an **agent variant** - a named runtime + flags combination, defined in [`cortex.yaml`](#cortexyaml) or `~/.cortex/settings.yaml`. On first `cortex init`, defaults are seeded for any of Claude / Codex / OpenCode on your `PATH`, each with a `-plan` sibling. Pick per spawn, so your Claude and OpenAI subscriptions do not compete for the same session model.
 
 ## Requirements
 
 - **tmux**
 - **git**
-- **An AI agent runtime** — Claude Code, Codex, or OpenCode
+- **An AI agent runtime** - Claude Code, Codex, or OpenCode
 - **Go 1.21+** (only for building from source)
 - Linux or macOS
 
@@ -74,7 +129,7 @@ cortex init myproject
 cd myproject
 ```
 
-`cortex init` created a starter `cortex.yaml`. Edit it to point at your repos:
+`cortex init` creates a starter `cortex.yaml`. Edit it to point at the repos Cortex should manage:
 
 ```yaml
 name: myproject
@@ -89,7 +144,7 @@ Start the architect:
 cortex architect start
 ```
 
-This attaches you to a tmux session with the architect agent on the left and the kanban TUI on the right. The daemon auto-starts on first invocation. From there, work with the architect — brainstorm, draft tickets, spawn workers.
+This attaches you to a tmux session with the architect agent on the left and the Cortex TUI on the right. From there, you can write notes, create tickets, inspect recent conclusions, and spawn workers into the configured repos.
 
 ## Commands
 
@@ -124,7 +179,7 @@ companion: lazygit
 # ~/.cortex/settings.yaml. Same schema; project values win on name match.
 # Valid agent values: claude, opencode, codex.
 agents:
-  claude-strict:
+  claude-plan:
     agent: claude
     args: ["--permission-mode", "plan"]
 ```
@@ -138,19 +193,19 @@ port: 4200
 bind_address: 127.0.0.1  # set to 0.0.0.0 to expose the daemon to other machines
 ```
 
-`cortex init` also seeds an `agents:` map here (same schema as `cortex.yaml` above) — one variant + a `-plan` sibling for each of Claude / Codex / OpenCode on your `PATH`. Edit it to add or tweak variants; project `cortex.yaml` values override by name.
+`cortex init` also seeds an `agents:` map here (same schema as `cortex.yaml` above) - one variant + a `-plan` sibling for each of Claude / Codex / OpenCode on your `PATH`. Edit it to add or tweak variants; project `cortex.yaml` values override by name.
 
-Clients find the daemon via `CORTEX_DAEMON_URL` (default `http://localhost:4200`) — set this when running `cortex` commands against a remote daemon.
+Clients find the daemon via `CORTEX_DAEMON_URL` (default `http://localhost:4200`) - set this when running `cortex` commands against a remote daemon.
 
-## Customizing prompts
+## Customizing Prompts
 
 Cortex ships default prompts for the architect and worker agents:
 
-- [`architect/SYSTEM.md`](internal/install/defaults/main/prompts/architect/SYSTEM.md) — fully replaces the agent's system prompt for the architect session.
-- [`architect/KICKOFF.md`](internal/install/defaults/main/prompts/architect/KICKOFF.md) — first message sent to the architect, rendered with the ticket list, recent conclusions, and repos.
-- [`work/KICKOFF.md`](internal/install/defaults/main/prompts/work/KICKOFF.md) — first message sent to each worker, rendered with the ticket body, references, and repo path.
+- [`architect/SYSTEM.md`](internal/install/defaults/main/prompts/architect/SYSTEM.md) - fully replaces the agent's system prompt for the architect session
+- [`architect/KICKOFF.md`](internal/install/defaults/main/prompts/architect/KICKOFF.md) - first message sent to the architect, rendered with the ticket list, recent conclusions, and repos
+- [`work/KICKOFF.md`](internal/install/defaults/main/prompts/work/KICKOFF.md) - first message sent to each worker, rendered with the ticket body, references, and repo path
 
-Only the architect has a `SYSTEM.md`. Workers rely on the kickoff prompt alone; collab sessions have no template — the architect crafts each one's prompt live.
+Only the architect has a `SYSTEM.md`. Workers rely on the kickoff prompt alone; collab sessions have no template - the architect crafts each one's prompt live.
 
 To customize, eject the default into your workspace:
 
@@ -162,9 +217,9 @@ cortex eject work/KICKOFF.md
 
 Ejected prompts live in `prompts/` inside your architect workspace and take precedence over the defaults. Delete the file to fall back.
 
-## MCP tools
+## MCP Tools
 
-The full MCP API each role can call. The [Steering prompts](#steering-prompts) table above covers the common user-facing phrases; this is the complete reference, with access per role (Architect / Worker / Collab):
+The full MCP API each role can call. The common user-facing phrases are things like "spawn this ticket", "create a ticket", "search tickets", and "conclude cortex session". This table is the complete reference, with access per role (Architect / Worker / Collab):
 
 | Tool | A | W | C | Parameters |
 |------|---|---|---|------------|
@@ -176,7 +231,7 @@ The full MCP API each role can call. The [Steering prompts](#steering-prompts) t
 | `moveTicket` | ✓ | | | `id` (req), `status` (req) |
 | `updateDueDate` | ✓ | | | `id` (req), `due_date` (req: RFC3339) |
 | `clearDueDate` | ✓ | | | `id` (req) |
-| `listVariants` | ✓ | | | — |
+| `listVariants` | ✓ | | | - |
 | `spawnSession` | ✓ | | | `ticket_id` (req), `variant` (req), `mode` (normal/resume/fresh) |
 | `spawnCollabSession` | ✓ | | | `path` (req, must exist), `prompt` (req), `variant` (req) |
 | `listConclusions` | ✓ | | | `type` (architect/work/collab), `limit` (default 10), `offset` |
@@ -186,7 +241,7 @@ The full MCP API each role can call. The [Steering prompts](#steering-prompts) t
 
 ## Architecture
 
-A single `cortexd` daemon serves every architect workspace on your machine. The CLI/TUI and every agent talk to it over HTTP — clients use the REST API, agents use MCP tools. All state lives on disk in the workspace.
+A single `cortexd` daemon serves every architect workspace on your machine. The CLI/TUI and every agent talk to it over HTTP - clients use the REST API, agents use MCP tools. All durable state lives on disk in the workspace.
 
 ```mermaid
 flowchart LR
@@ -202,7 +257,7 @@ flowchart LR
   Daemon -.->|spawn| Agents
 ```
 
-The daemon is one binary. Because everything is HTTP, you can run `cortexd` on a remote VM and point your local `cortex` CLI at it with `CORTEX_DAEMON_URL`.
+Because everything is HTTP, you can run `cortexd` on a remote VM and point your local `cortex` CLI at it with `CORTEX_DAEMON_URL`.
 
 See [CLAUDE.md](CLAUDE.md) for architecture details and code paths.
 
