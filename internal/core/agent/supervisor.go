@@ -16,14 +16,13 @@ import (
 	"github.com/kareemaly/cortex/internal/tmux/observer"
 )
 
-// Publisher is the sink for status transitions. The production path posts
-// to cortexd's /agent/status endpoint; tests substitute an in-memory
-// recorder.
+// Publisher is the sink for status transitions. The production path posts to
+// cortexd's /agent/status endpoint; tests substitute an in-memory recorder.
 type Publisher func(Transition)
 
-// Transition is a single status change observed by the decision machine.
-// Only transitions are emitted — identical-to-previous status updates
-// are collapsed by the supervisor before the publisher is called.
+// Transition is a single status change observed by the decision machine. Only
+// transitions are emitted — identical-to-previous status updates are
+// collapsed by the supervisor before the publisher is called.
 type Transition struct {
 	SessionID string
 	TicketID  string
@@ -34,9 +33,9 @@ type Transition struct {
 }
 
 // SupervisorConfig carries everything a supervisor needs to run for one
-// session: identity, the adapter (parser + patterns + threshold), the
-// observer to subscribe to, file paths for discovery & liveness, and the
-// publisher for state transitions.
+// session: identity, the adapter (parser + phrases + window), the observer
+// to subscribe to, file paths for discovery & liveness, and the publisher
+// for state transitions.
 type SupervisorConfig struct {
 	SessionID     string
 	TicketID      string
@@ -48,15 +47,17 @@ type SupervisorConfig struct {
 	Observer *observer.Observer
 
 	// PaneTarget is the tmux "session:window.pane" string to register with
-	// the observer. Empty disables pane observation for this session.
+	// the observer. Empty disables pane observation for this session — OK
+	// for agents whose plugin gives authoritative status (opencode), but
+	// means Claude/Codex lose their awaiting_input signal.
 	PaneTarget string
 
 	// Runtime carries adapter-specific context for ResolveTranscript (env,
 	// transcript hint from Prepare).
 	Runtime RuntimeCtx
 
-	// Publisher reports status transitions. Defaults to HTTPPublisher
-	// against DaemonURL when nil.
+	// Publisher reports status transitions. Defaults to HTTPPublisher against
+	// DaemonURL when nil.
 	Publisher Publisher
 	DaemonURL string
 
@@ -68,7 +69,6 @@ type SupervisorConfig struct {
 	DiscoveryInterval time.Duration
 	FollowInterval    time.Duration
 	LivenessInterval  time.Duration
-	TimerInterval     time.Duration
 
 	// now returns the current time. Tests override it for determinism.
 	now func() time.Time
@@ -79,7 +79,6 @@ const (
 	defaultDiscoveryInterval   = 250 * time.Millisecond
 	defaultFollowInterval      = 100 * time.Millisecond
 	defaultLivenessInterval    = 1 * time.Second
-	defaultTimerInterval       = 500 * time.Millisecond
 	transcriptLineBufferMaxLen = 1 << 20 // 1 MiB; oversized lines trigger loud fallback
 )
 
@@ -87,10 +86,9 @@ const (
 // goroutines. The returned cancel func tears them down.
 //
 // Required: Adapter, SessionID-or-TicketID, and LivenessPath. If the
-// Adapter has PanePatterns configured and Observer+PaneTarget are set,
-// pane observation is registered; otherwise the supervisor runs on
-// transcript + liveness alone (acceptable for agents whose plugin gives
-// authoritative status — opencode today).
+// Adapter has AwaitingInputPhrases configured and Observer+PaneTarget are
+// set, pane observation is registered; otherwise the supervisor runs on
+// transcript + liveness alone.
 func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelFunc, error) {
 	if cfg.Adapter == nil {
 		return nil, errMissing("Adapter")
@@ -110,9 +108,6 @@ func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelF
 	if cfg.LivenessInterval == 0 {
 		cfg.LivenessInterval = defaultLivenessInterval
 	}
-	if cfg.TimerInterval == 0 {
-		cfg.TimerInterval = defaultTimerInterval
-	}
 	if cfg.now == nil {
 		cfg.now = time.Now
 	}
@@ -126,7 +121,7 @@ func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelF
 	ctx, cancelCtx := context.WithCancel(ctx)
 	decision := NewDecision(DecisionConfig{
 		InitialStatus: session.AgentStatusStarting,
-		IdleThreshold: cfg.Adapter.IdleThreshold,
+		IdleWindow:    cfg.Adapter.IdleWindow,
 	})
 
 	sup := &supervisor{
@@ -134,16 +129,16 @@ func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelF
 		ctx:            ctx,
 		decision:       decision,
 		signals:        make(chan Signal, 64),
-		paneSink:       make(chan observer.Signal, 4),
+		paneSink:       make(chan observer.Snapshot, 4),
 		statusSnapshot: session.AgentStatusStarting,
 	}
 
-	// Observer registration — optional but cheap.
-	if cfg.Observer != nil && cfg.PaneTarget != "" && len(cfg.Adapter.PanePatterns.Boxes) > 0 {
+	// Observer registration — optional but cheap. Only worth registering if
+	// the adapter has at least one phrase to match against the pane.
+	if cfg.Observer != nil && cfg.PaneTarget != "" && len(cfg.Adapter.AwaitingInputPhrases) > 0 {
 		sup.paneCancel = cfg.Observer.Register(observer.Pane{
 			SessionID: cfg.SessionID,
 			Target:    cfg.PaneTarget,
-			StatusFn:  sup.statusForObserver,
 			Sink:      sup.paneSink,
 		})
 	}
@@ -156,10 +151,6 @@ func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelF
 	go sup.livenessLoop()
 	sup.wg.Add(1)
 	go sup.paneLoop()
-	if cfg.Adapter.IdleThreshold > 0 {
-		sup.wg.Add(1)
-		go sup.timerLoop()
-	}
 
 	return func() {
 		// Unregister the pane observer FIRST so it stops publishing into
@@ -186,21 +177,13 @@ type supervisor struct {
 	decision *Decision
 
 	signals    chan Signal
-	paneSink   chan observer.Signal
+	paneSink   chan observer.Snapshot
 	paneCancel func()
 
 	wg sync.WaitGroup
 
 	statusMu       sync.Mutex // guards statusSnapshot
 	statusSnapshot session.AgentStatus
-}
-
-// statusForObserver is passed to the pane observer so it can pick its
-// fast/slow cadence. Must be safe from the observer's goroutine.
-func (s *supervisor) statusForObserver() string {
-	s.statusMu.Lock()
-	defer s.statusMu.Unlock()
-	return string(s.statusSnapshot)
 }
 
 func (s *supervisor) decisionLoop() {
@@ -235,12 +218,12 @@ func (s *supervisor) decisionLoop() {
 
 func (s *supervisor) transcriptLoop() {
 	defer s.wg.Done()
-	if s.cfg.Adapter.ResolveTranscript == nil || s.cfg.Adapter.ParseLine == nil {
+	if s.cfg.Adapter.ResolveTranscript == nil || s.cfg.Adapter.ParseTranscriptLine == nil {
 		return
 	}
 
-	// Phase 1: discovery — poll ResolveTranscript until it returns a path
-	// or DiscoveryTimeout elapses. Liveness disappearance exits early.
+	// Phase 1: discovery — poll ResolveTranscript until it returns a path or
+	// DiscoveryTimeout elapses. Liveness disappearance exits early.
 	deadline := time.Time{}
 	if s.cfg.Adapter.DiscoveryTimeout > 0 {
 		deadline = s.cfg.now().Add(s.cfg.Adapter.DiscoveryTimeout)
@@ -260,8 +243,6 @@ func (s *supervisor) transcriptLoop() {
 				"ticket_id", s.cfg.TicketID,
 				"agent", s.cfg.Adapter.Name,
 			)
-			// Surface transcript error through the decision machine so the
-			// dashboard doesn't silently stay on "starting" forever.
 			s.send(Signal{Source: SourceTranscript, IsError: true, At: s.cfg.now()})
 			return
 		}
@@ -292,25 +273,30 @@ func (s *supervisor) transcriptLoop() {
 			if len(line) == 0 {
 				continue
 			}
-			update := s.cfg.Adapter.ParseLine(line)
+			ev := s.cfg.Adapter.ParseTranscriptLine(line)
 			sig := Signal{Source: SourceTranscript, At: s.cfg.now()}
-			if update.Status != "" {
-				sig.Status = update.Status
-			}
-			if update.Tool != "" {
-				t := update.Tool
+			sig.Activity = ev.Activity
+			sig.Status = ev.Status
+			sig.IsError = ev.IsError
+			if ev.Tool != "" {
+				t := ev.Tool
 				sig.Tool = &t
 			}
-			if update.Work != "" {
-				w := update.Work
+			if ev.Work != "" {
+				w := ev.Work
 				sig.Work = &w
+			}
+			// Drop the signal if nothing useful is in it — keeps the decision
+			// loop from doing busywork on blank lines.
+			if !sig.Activity && sig.Status == "" && !sig.IsError && sig.Tool == nil && sig.Work == nil {
+				continue
 			}
 			s.send(sig)
 		}
 		if err := reader.Err(); err != nil {
 			// ErrTooLong: a single transcript line exceeded the 1 MiB cap.
-			// Skip past it and reopen the scanner at the current offset so
-			// we don't lose the rest of the transcript.
+			// Skip past it and reopen the scanner at the current offset so we
+			// don't lose the rest of the transcript.
 			s.cfg.Logger.Warn("agent supervisor: transcript scanner error",
 				"error", err, "session_id", s.cfg.SessionID)
 			reader = bufio.NewScanner(f)
@@ -341,39 +327,32 @@ func (s *supervisor) livenessLoop() {
 	}
 }
 
+// paneLoop translates observer snapshots into decision signals. Each tick
+// produces one Signal; substring match against AwaitingInputPhrases is the
+// only pane-derived disambiguation the decision machine gets. The observer's
+// per-tick heartbeat doubles as the idle-timer drive — no separate timer
+// goroutine required.
 func (s *supervisor) paneLoop() {
 	defer s.wg.Done()
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
-		case ps, ok := <-s.paneSink:
+		case snap, ok := <-s.paneSink:
 			if !ok {
 				return
 			}
 			sig := Signal{
-				Source: SourcePane,
-				Stable: ps.Stable,
-				At:     ps.At,
+				Source:  SourcePane,
+				At:      snap.At,
+				Changed: snap.Changed,
 			}
-			if ps.Stable {
-				if _, implied, ok := s.cfg.Adapter.PanePatterns.MatchFirst(ps.RawTail); ok {
-					sig.HasBox = true
-					sig.Status = implied
-				}
+			if phrase := s.cfg.Adapter.MatchAwaitingInput(snap.Content); phrase != "" {
+				sig.HasAwaitingPhrase = true
+				RecordPhraseHit(s.cfg.Adapter.Name, phrase)
 			}
 			s.send(sig)
 		}
-	}
-}
-
-func (s *supervisor) timerLoop() {
-	defer s.wg.Done()
-	for {
-		if !sleep(s.ctx, s.cfg.TimerInterval) {
-			return
-		}
-		s.send(Signal{Source: SourceTimer, At: s.cfg.now()})
 	}
 }
 
@@ -389,8 +368,8 @@ func (s *supervisor) send(sig Signal) {
 	}
 }
 
-// sleep blocks for d or until ctx is done. Returns false if the context
-// was cancelled.
+// sleep blocks for d or until ctx is done. Returns false if the context was
+// cancelled.
 func sleep(ctx context.Context, d time.Duration) bool {
 	if d <= 0 {
 		select {

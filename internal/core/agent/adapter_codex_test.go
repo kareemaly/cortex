@@ -17,7 +17,7 @@ func codexFixture(t *testing.T, name string) []byte {
 	return b
 }
 
-func TestCodexParseLine(t *testing.T) {
+func TestCodexParseTranscriptLine(t *testing.T) {
 	cases := []struct {
 		name string
 		line string
@@ -33,29 +33,25 @@ func TestCodexParseLine(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := parseCodexLine([]byte(tc.line)).Status
 			if got != tc.want {
-				t.Errorf("parseCodexLine(%q) = %q, want %q", tc.line, got, tc.want)
+				t.Errorf("parseCodexLine(%q).Status = %q, want %q", tc.line, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestCodexPaneMatchesApproval(t *testing.T) {
+func TestCodexPhraseMatchesApproval(t *testing.T) {
 	a, _ := Get("codex")
-	_, implied, ok := a.PanePatterns.MatchFirst(codexFixture(t, "awaiting_input_command"))
-	if !ok {
-		t.Fatal("expected match on approval fixture")
-	}
-	if implied != session.AgentStatusAwaitingInput {
-		t.Errorf("got %v, want awaiting_input", implied)
+	if phrase := a.MatchAwaitingInput(codexFixture(t, "awaiting_input_command")); phrase == "" {
+		t.Error("expected phrase match on approval fixture")
 	}
 }
 
-func TestCodexPaneRejectsNonApproval(t *testing.T) {
+func TestCodexPhraseRejectsNonApproval(t *testing.T) {
 	a, _ := Get("codex")
 	for _, name := range []string{"working", "idle", "info_banner_non_approval"} {
 		t.Run(name, func(t *testing.T) {
-			if _, _, ok := a.PanePatterns.MatchFirst(codexFixture(t, name)); ok {
-				t.Errorf("%s: unexpected match", name)
+			if phrase := a.MatchAwaitingInput(codexFixture(t, name)); phrase != "" {
+				t.Errorf("%s: unexpected phrase match %q", name, phrase)
 			}
 		})
 	}

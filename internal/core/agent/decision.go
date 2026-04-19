@@ -6,44 +6,51 @@ import (
 	"github.com/kareemaly/cortex/internal/session"
 )
 
-// Source tags which part of the supervisor produced a Signal. The
-// decision machine routes on Source — e.g. only pane signals can flip
-// the session to awaiting_input, regardless of what the transcript says.
+// Source tags which part of the supervisor produced a Signal. The decision
+// machine reads Source to route — e.g. liveness always wins, transcript with
+// an explicit status overrides pane signals.
 type Source string
 
 const (
 	SourceTranscript Source = "transcript"
 	SourcePane       Source = "pane"
 	SourceLiveness   Source = "liveness"
-	SourceTimer      Source = "timer"
 )
 
-// Signal is the internal event fed to Decision.Apply. It's the union of
-// everything the supervisor's inputs (transcript tailer, pane observer,
-// liveness watcher, timer) can produce.
+// Signal is the internal event fed to Decision.Apply. One signal per tick
+// per input source — the supervisor fans transcript / pane / liveness into a
+// single stream and the decision machine is the sole writer of status.
 type Signal struct {
-	Source  Source
-	Status  session.AgentStatus
-	Tool    *string
-	Work    *string
-	Stable  bool // Source==pane: pane hash unchanged for the stability window
-	HasBox  bool // Source==pane: a box pattern matched on this stable tail
-	IsError bool // Source==transcript: explicit transcript error event
-	At      time.Time
+	Source Source
+	At     time.Time
+
+	// Activity, Status, Tool, Work, IsError: populated when Source==transcript.
+	Activity bool
+	Status   session.AgentStatus
+	Tool     *string
+	Work     *string
+	IsError  bool
+
+	// HasAwaitingPhrase, Changed: populated when Source==pane.
+	// HasAwaitingPhrase is true when the pane content contains one of the
+	// adapter's AwaitingInputPhrases. Changed is true when the pane hash
+	// moved since the prior tick.
+	HasAwaitingPhrase bool
+	Changed           bool
 }
 
-// DecisionConfig picks an initial status and the idle threshold — the
-// minimum silence window before transcript silence alone can flip to
-// idle. Zero IdleThreshold disables time-based idle (codex, which emits
-// task_complete explicitly).
+// DecisionConfig seeds the starting state and picks the idle window — how
+// long without transcript activity OR pane change before flipping to idle.
+// Zero IdleWindow disables time-based idle (the status then lives entirely
+// on authoritative transcript signals).
 type DecisionConfig struct {
 	InitialStatus session.AgentStatus
-	IdleThreshold time.Duration
+	IdleWindow    time.Duration
 }
 
-// Decision is the single writer of the session's current status. One
-// lives per supervisor; Apply is called sequentially from the decision
-// goroutine so there is no concurrent mutation.
+// Decision is the single writer of a session's current status. One lives per
+// supervisor; Apply is called sequentially from the decision goroutine so
+// there is no concurrent mutation.
 type Decision struct {
 	cfg DecisionConfig
 
@@ -51,13 +58,11 @@ type Decision struct {
 	tool    *string
 	work    *string
 
-	lastTranscriptAt     time.Time
-	lastPaneStableAt     time.Time
-	lastStablePaneHadBox bool
-	lastStablePaneSeen   bool
+	lastActivityAt time.Time // last transcript activity OR pane change
 }
 
-// NewDecision seeds state from the config's InitialStatus.
+// NewDecision seeds state from the config's InitialStatus (defaults to
+// starting).
 func NewDecision(cfg DecisionConfig) *Decision {
 	initial := cfg.InitialStatus
 	if initial == "" {
@@ -66,8 +71,8 @@ func NewDecision(cfg DecisionConfig) *Decision {
 	return &Decision{cfg: cfg, current: initial}
 }
 
-// Current returns the decision machine's current status snapshot. Safe
-// only from the decision goroutine.
+// Current returns the decision machine's current status snapshot. Safe only
+// from the decision goroutine.
 func (d *Decision) Current() session.AgentStatus { return d.current }
 
 // Tool returns the last known tool reported by the adapter.
@@ -78,115 +83,99 @@ func (d *Decision) Work() *string { return d.work }
 
 // Apply feeds one Signal into the state machine and returns the resulting
 // status along with whether that's a transition from the previous status.
-// The rules implement the decision table from the agent-status ticket:
 //
-//   - Source==liveness                 → ended
-//   - Source==transcript && IsError    → error
-//   - starting → idle                  on first transcript line OR first stable pane with no box
-//   - * → working                      on transcript activity OR pane-hash change with no box match on stable
-//   - * → awaiting_input               ONLY when Source==pane && Stable && HasBox
-//   - awaiting_input → working         on next transcript line OR stable pane with no box
-//   - working → idle                   ONLY when IdleThreshold elapsed AND last pane stable AND last stable had no box
+// Precedence (highest wins, evaluated per signal):
+//  1. Source==liveness → ended (terminal)
+//  2. Source==transcript && IsError → error
+//  3. Source==transcript && Status != "" → that status (authoritative:
+//     opencode plugin, codex task events)
+//  4. Source==pane && HasAwaitingPhrase → awaiting_input
+//  5. Source==pane && Changed OR Source==transcript && Activity → working
+//     (unless HasAwaitingPhrase overrode us above)
+//  6. Source==pane && quiet for ≥ IdleWindow → idle
 //
-// The last conjunction is the Claude permission-dialog bug fix: today's
-// tailer trips to idle on transcript silence alone, which paints `idle`
-// on the dashboard while a permission box is still on screen.
+// The previous design carried a mess of "stable pane seen" flags plus a
+// conjunction timer rule; that rule fired idle on a stable-pane-without-
+// dialog-box heuristic which turned silent tool calls into false idles.
+// This model drops the heuristic entirely — idle is computed from elapsed
+// time since any signal of life, nothing more.
 func (d *Decision) Apply(s Signal) (session.AgentStatus, bool) {
 	prev := d.current
 
-	// Once ended, stay ended — late transcript writes from a killed agent
-	// (or a race between liveness-disappear and in-flight stdout) must not
+	// Once ended, stay ended — late transcript writes from a killed agent (or
+	// a race between liveness-disappear and in-flight stdout) must not
 	// resurrect the session.
 	if d.current == session.AgentStatusEnded {
 		return d.current, false
 	}
 
-	// Terminal states dominate regardless of current status.
-	switch {
-	case s.Source == SourceLiveness:
+	switch s.Source {
+	case SourceLiveness:
 		d.current = session.AgentStatusEnded
-	case s.Source == SourceTranscript && s.IsError:
-		d.current = session.AgentStatusError
-	case s.Source == SourceTranscript:
-		d.lastTranscriptAt = s.At
+
+	case SourceTranscript:
 		if s.Tool != nil {
 			d.tool = s.Tool
 		}
 		if s.Work != nil {
 			d.work = s.Work
 		}
-		if s.Status != "" {
-			// Adapters that know their state (codex task_started/task_complete,
-			// opencode plugin) speak directly. Only promote out of
-			// awaiting_input on non-awaiting updates — a plugin emitting
-			// "idle" while a box is visible should not override the pane.
-			if d.current == session.AgentStatusAwaitingInput && s.Status == session.AgentStatusAwaitingInput {
-				d.current = s.Status
-			} else if d.current == session.AgentStatusAwaitingInput && s.Status == session.AgentStatusWorking {
-				d.current = session.AgentStatusWorking
-			} else if d.current == session.AgentStatusAwaitingInput {
-				// Ignore idle-ish transcript hints while awaiting input.
+		switch {
+		case s.IsError:
+			d.current = session.AgentStatusError
+			d.lastActivityAt = s.At
+		case s.Status != "":
+			// Authoritative transcript status wins over pane-derived state,
+			// with one carve-out: a plugin that belatedly says "idle" while a
+			// pane-matched permission dialog is still visible shouldn't undo
+			// the awaiting_input flip. In practice plugins and panes agree
+			// within a tick or two, so this only bites at the edges.
+			if d.current == session.AgentStatusAwaitingInput && s.Status == session.AgentStatusIdle {
+				// Keep awaiting_input; wait for the pane to clear first.
 			} else {
 				d.current = s.Status
 			}
-		} else if d.current == session.AgentStatusStarting {
-			// Default promotion: transcript activity out of starting → idle,
-			// we'll go to working only if the adapter says so or via pane.
-			d.current = session.AgentStatusIdle
-		} else if d.current == session.AgentStatusIdle {
-			// Any transcript line in idle is activity — go working.
-			d.current = session.AgentStatusWorking
+			d.lastActivityAt = s.At
+		case s.Activity:
+			// Activity without explicit status is a liveness beat. Promote
+			// out of starting/idle, hold awaiting_input (user is still
+			// blocking — the transcript line is just the agent acknowledging
+			// something internally).
+			if d.current != session.AgentStatusAwaitingInput {
+				d.current = session.AgentStatusWorking
+			}
+			d.lastActivityAt = s.At
 		}
-	case s.Source == SourcePane && s.Stable:
-		d.lastPaneStableAt = s.At
-		d.lastStablePaneSeen = true
-		d.lastStablePaneHadBox = s.HasBox
+
+	case SourcePane:
 		switch {
-		case s.HasBox:
+		case s.HasAwaitingPhrase:
 			d.current = session.AgentStatusAwaitingInput
-		case d.current == session.AgentStatusStarting:
-			d.current = session.AgentStatusIdle
-		case d.current == session.AgentStatusAwaitingInput:
-			// Box disappeared on a stable frame — back to working. Anchor
-			// the silence window to this moment: any prior transcript line
-			// from during the dialog shouldn't block the next idle flip.
+			// Don't update lastActivityAt: the phrase is visible precisely
+			// because the agent has stopped producing output.
+		case s.Changed:
+			// The pane moved. If we were awaiting_input and the dialog just
+			// cleared, pane change counts as the agent resuming work.
 			d.current = session.AgentStatusWorking
-			d.lastTranscriptAt = s.At
+			d.lastActivityAt = s.At
+		default:
+			// No phrase, no change. Evaluate idle-by-timeout. Only `working`
+			// can decay into `idle` — starting stays until something
+			// happens; awaiting_input holds until the pane clears;
+			// error/ended are terminal enough to not bother.
+			if d.current != session.AgentStatusWorking {
+				break
+			}
+			if d.cfg.IdleWindow == 0 {
+				break
+			}
+			if d.lastActivityAt.IsZero() {
+				break
+			}
+			if s.At.Sub(d.lastActivityAt) >= d.cfg.IdleWindow {
+				d.current = session.AgentStatusIdle
+			}
 		}
-	case s.Source == SourcePane && !s.Stable:
-		// Pane changed (hash moved) — evidence of activity. Promote to
-		// working unless we're currently waiting on the user.
-		if d.current != session.AgentStatusAwaitingInput {
-			d.current = session.AgentStatusWorking
-		}
-	case s.Source == SourceTimer:
-		// Silence timer: flip to idle only when ALL conditions hold —
-		// transcript silent long enough, and a stable pane without a box
-		// has been seen more recently than the last transcript line. The
-		// conjunction is what stops `idle` from flickering over Claude
-		// permission dialogs.
-		if d.cfg.IdleThreshold == 0 {
-			break
-		}
-		if d.current != session.AgentStatusWorking {
-			break
-		}
-		silent := !d.lastTranscriptAt.IsZero() && s.At.Sub(d.lastTranscriptAt) >= d.cfg.IdleThreshold
-		if !silent {
-			break
-		}
-		if !d.lastStablePaneSeen {
-			break
-		}
-		if d.lastPaneStableAt.Before(d.lastTranscriptAt) {
-			// A transcript line arrived after the last stable pane — can't
-			// trust the pane to still reflect the current state.
-			break
-		}
-		if d.lastStablePaneHadBox {
-			break
-		}
-		d.current = session.AgentStatusIdle
 	}
 
 	return d.current, d.current != prev

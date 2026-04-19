@@ -17,8 +17,8 @@ func opencodeFixture(t *testing.T, name string) []byte {
 	return b
 }
 
-func TestOpenCodeParseLineCanonicalStatuses(t *testing.T) {
-	// The plugin emits only canonical names; ParseLine forwards them verbatim.
+func TestOpenCodeParseTranscriptLineCanonicalStatuses(t *testing.T) {
+	// The plugin emits only canonical names; ParseTranscriptLine forwards them verbatim.
 	cases := []struct {
 		in   string
 		want session.AgentStatus
@@ -31,12 +31,12 @@ func TestOpenCodeParseLineCanonicalStatuses(t *testing.T) {
 	for _, tc := range cases {
 		got := parseOpenCodeLine([]byte(tc.in)).Status
 		if got != tc.want {
-			t.Errorf("parseOpenCodeLine(%q) = %q, want %q", tc.in, got, tc.want)
+			t.Errorf("parseOpenCodeLine(%q).Status = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
 
-func TestOpenCodeParseLineCarriesToolAndWork(t *testing.T) {
+func TestOpenCodeParseTranscriptLineCarriesToolAndWork(t *testing.T) {
 	got := parseOpenCodeLine([]byte(`{"status":"working","tool":"Bash","work":"make test"}`))
 	if got.Tool != "Bash" {
 		t.Errorf("tool = %q, want Bash", got.Tool)
@@ -46,23 +46,19 @@ func TestOpenCodeParseLineCarriesToolAndWork(t *testing.T) {
 	}
 }
 
-func TestOpenCodePaneMatchesPermissionFallback(t *testing.T) {
+func TestOpenCodePhraseMatchesPermissionFallback(t *testing.T) {
 	a, _ := Get("opencode")
-	_, implied, ok := a.PanePatterns.MatchFirst(opencodeFixture(t, "awaiting_input_permission"))
-	if !ok {
-		t.Fatal("expected match on permission fixture")
-	}
-	if implied != session.AgentStatusAwaitingInput {
-		t.Errorf("got %v, want awaiting_input", implied)
+	if phrase := a.MatchAwaitingInput(opencodeFixture(t, "awaiting_input_permission")); phrase == "" {
+		t.Error("expected phrase match on permission fixture")
 	}
 }
 
-func TestOpenCodePaneRejectsNonPermission(t *testing.T) {
+func TestOpenCodePhraseRejectsNonPermission(t *testing.T) {
 	a, _ := Get("opencode")
 	for _, name := range []string{"working", "info_divider_non_permission"} {
 		t.Run(name, func(t *testing.T) {
-			if _, _, ok := a.PanePatterns.MatchFirst(opencodeFixture(t, name)); ok {
-				t.Errorf("%s: unexpected match", name)
+			if phrase := a.MatchAwaitingInput(opencodeFixture(t, name)); phrase != "" {
+				t.Errorf("%s: unexpected phrase match %q", name, phrase)
 			}
 		})
 	}

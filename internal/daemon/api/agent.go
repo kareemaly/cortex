@@ -108,12 +108,12 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 // DebugStatusResponse is what GET /agent/status/debug returns: every piece
 // of observability data the agent-status machinery exposes in one payload
-// so an operator can verify "pattern X is firing N times per hour" without
+// so an operator can verify "phrase X is firing N times per hour" without
 // stitching together log lines.
 type DebugStatusResponse struct {
-	PatternStats    []agent.Stats     `json:"pattern_stats"`
-	ObserverMetrics *observer.Metrics `json:"observer_metrics,omitempty"`
-	SupervisedCount int               `json:"supervised_count"`
+	PhraseStats     []agent.PhraseStats `json:"phrase_stats"`
+	ObserverMetrics *observer.Metrics   `json:"observer_metrics,omitempty"`
+	SupervisedCount int                 `json:"supervised_count"`
 }
 
 // DebugStatus handles GET /agent/status/debug. Intentionally global
@@ -121,7 +121,7 @@ type DebugStatusResponse struct {
 // observability.
 func (h *AgentHandlers) DebugStatus(w http.ResponseWriter, r *http.Request) {
 	resp := DebugStatusResponse{
-		PatternStats: agent.AllStats(),
+		PhraseStats: agent.AllPhraseStats(),
 	}
 	if h.deps.PaneObserver != nil {
 		m := h.deps.PaneObserver.Metrics()

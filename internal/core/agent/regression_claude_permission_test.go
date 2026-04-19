@@ -7,62 +7,89 @@ import (
 	"github.com/kareemaly/cortex/internal/session"
 )
 
-// TestClaudePermissionRegression is the load-bearing bug acceptance test.
-// Scenario: Claude writes a tool_use line, then the transcript goes
-// silent for 6 seconds (well past the 5s IdleThreshold) because Claude
-// is blocked on a permission dialog; meanwhile the pane stabilizes with
-// the permission box visible.
-//
-// Today's Claude tailer flips to idle on transcript silence alone and
-// paints "idle" on the dashboard while the box is still up. This test
-// feeds the same sequence through the new decision machine + Claude
-// pane patterns; the resulting status MUST be awaiting_input, NOT idle.
-func TestClaudePermissionRegression(t *testing.T) {
+// claudeFixture lives in adapter_claude_test.go in the same package.
+
+// TestClaudePermissionEndToEnd feeds a representative sequence through the
+// supervisor's decision machine: working transcript line → stable pane with
+// the permission box visible → silent timer ticks. The result MUST stay
+// awaiting_input throughout the silence — this is the bug that motivated
+// the rewrite (`0d8abcaa`).
+func TestClaudePermissionEndToEnd(t *testing.T) {
 	adapter, ok := Get("claude")
 	if !ok {
 		t.Fatal("claude adapter not registered")
 	}
-	decision := NewDecision(DecisionConfig{
+	d := NewDecision(DecisionConfig{
 		InitialStatus: session.AgentStatusStarting,
-		IdleThreshold: adapter.IdleThreshold,
+		IdleWindow:    adapter.IdleWindow,
 	})
 	t0 := time.Now()
 
-	// 1) Claude writes a tool_use line — working.
-	if got, _ := decision.Apply(Signal{
-		Source: SourceTranscript,
-		Status: session.AgentStatusWorking,
-		At:     t0,
-	}); got != session.AgentStatusWorking {
-		t.Fatalf("after transcript line: got %v, want working", got)
+	// 1) Claude writes a tool_use line → working.
+	d.Apply(Signal{Source: SourceTranscript, Activity: true, At: t0})
+	if got := d.Current(); got != session.AgentStatusWorking {
+		t.Fatalf("after transcript line: %v, want working", got)
 	}
 
-	// 2) Pane stabilizes 1s later with the permission box on screen. Feed
-	//    the real Claude permission fixture through the adapter's box
-	//    patterns so the test also exercises the regex shape.
-	rawTail := claudeFixture(t, "awaiting_input_bash")
-	_, implied, hitBox := adapter.PanePatterns.MatchFirst(rawTail)
-	if !hitBox {
-		t.Fatal("pane patterns did not match permission fixture — the regression test can't fire")
-	}
-	if got, _ := decision.Apply(Signal{
-		Source: SourcePane,
-		Stable: true,
-		HasBox: true,
-		Status: implied,
-		At:     t0.Add(1 * time.Second),
-	}); got != session.AgentStatusAwaitingInput {
-		t.Fatalf("after stable-with-box: got %v, want awaiting_input", got)
-	}
-
-	// 3) 6s of silence pass — timer fires. The broken code path flips to
-	//    idle here; the fixed one must leave us on awaiting_input because
-	//    the last stable pane carried a box.
-	got, _ := decision.Apply(Signal{
-		Source: SourceTimer,
-		At:     t0.Add(7 * time.Second),
+	// 2) Pane shows the permission dialog → awaiting_input.
+	content := claudeFixture(t, "awaiting_input_bash")
+	hasPhrase := adapter.MatchAwaitingInput(content) != ""
+	d.Apply(Signal{
+		Source:            SourcePane,
+		At:                t0.Add(1 * time.Second),
+		HasAwaitingPhrase: hasPhrase,
 	})
-	if got != session.AgentStatusAwaitingInput {
-		t.Fatalf("PERMISSION DIALOG BUG REGRESSED: got %v after silence timer, want awaiting_input", got)
+	if got := d.Current(); got != session.AgentStatusAwaitingInput {
+		t.Fatalf("after pane with permission box: %v, want awaiting_input", got)
+	}
+
+	// 3) Six seconds of silence — pane keeps reporting the dialog (still on
+	//    screen). Status MUST stay awaiting_input. The old timer-driven idle
+	//    flip is what this test prevents from regressing.
+	for i := 1; i <= 12; i++ {
+		d.Apply(Signal{
+			Source:            SourcePane,
+			At:                t0.Add(time.Duration(1+i/2) * time.Second),
+			HasAwaitingPhrase: hasPhrase,
+		})
+	}
+	if got := d.Current(); got != session.AgentStatusAwaitingInput {
+		t.Fatalf("PERMISSION DIALOG BUG REGRESSED: %v after held silence, want awaiting_input", got)
+	}
+}
+
+// TestClaudeWorkingDuringSilentToolCall is the new regression for the bug
+// that motivated this rewrite: a Claude session running a long silent tool
+// call (e.g. `make test-integration`) used to flip working→idle because the
+// observer's glyph stripping defeated the spinner-driven hash movement and
+// the decision rule treated stable-pane-without-box as evidence of idle.
+//
+// In the new model, raw pane hashing means the spinner DOES move the hash.
+// This test simulates the supervisor seeing pane Changed=true ticks during
+// the silent tool execution and asserts working holds.
+func TestClaudeWorkingDuringSilentToolCall(t *testing.T) {
+	adapter, ok := Get("claude")
+	if !ok {
+		t.Fatal("claude adapter not registered")
+	}
+	d := NewDecision(DecisionConfig{
+		InitialStatus: session.AgentStatusStarting,
+		IdleWindow:    adapter.IdleWindow,
+	})
+	t0 := time.Now()
+	d.Apply(Signal{Source: SourceTranscript, Activity: true, At: t0})
+
+	// 10 seconds of pane ticks where the spinner keeps moving the hash.
+	// Transcript is silent the whole time (long tool call).
+	for i := 1; i <= 20; i++ {
+		d.Apply(Signal{
+			Source:  SourcePane,
+			Changed: true,
+			At:      t0.Add(time.Duration(i) * 500 * time.Millisecond),
+		})
+	}
+
+	if got := d.Current(); got != session.AgentStatusWorking {
+		t.Fatalf("BUG 0d8abcaa REGRESSED: %v during silent tool call, want working", got)
 	}
 }

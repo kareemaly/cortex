@@ -57,7 +57,7 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 - **ConclusionStoreManager**: Manages conclusion stores per architect. Located in `internal/daemon/api/conclusion_store_manager.go`.
 - **SessionManager**: Manages ephemeral session stores per architect. Located in `internal/daemon/api/session_manager.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
-- **Agent status supervision**: Per-session supervisor per spawned agent, wired via `startAgentSupervisor` in `internal/core/spawn/supervisor.go`. Adapter-based — each agent (claude/codex/opencode) registers an `agent.Adapter` in `internal/core/agent/adapter_*.go` with transcript + pane patterns. A single `tmux/observer.Observer` polls all supervised panes; supervisors bind to daemon-root `SupervisorCtx` so they outlive the HTTP spawn handler. Sessions route by canonical `SessionID` UUID everywhere (store, events, `/agent/status`).
+- **Agent status supervision**: Per-session supervisor per spawned agent, wired via `startAgentSupervisor` in `internal/core/spawn/supervisor.go`. Adapter-based — each agent (claude/codex/opencode) registers an `agent.Adapter` in `internal/core/agent/adapter_*.go` with a transcript parser + a list of `AwaitingInputPhrases` (literal substrings matched against raw pane captures). A single `tmux/observer.Observer` polls all supervised panes every 500 ms; each tick emits a `Snapshot{Hash, Content, Changed}` that feeds both the supervisor's substring match and the idle-window timer. Decision logic in `internal/core/agent/decision.go` is a six-row precedence table (ended > error > authoritative transcript > phrase match > change-activity > idle-window). Supervisors bind to daemon-root `SupervisorCtx` so they outlive the HTTP spawn handler. Sessions route by canonical `SessionID` UUID everywhere (store, events, `/agent/status`).
 
 ## Anti-Patterns
 
@@ -95,8 +95,8 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Conclusion store | `internal/conclusion/` |
 | SDK client | `internal/cli/sdk/client.go` |
 | Spawn orchestration | `internal/core/spawn/` |
-| Agent status adapters | `internal/core/agent/` (`adapter_{claude,codex,opencode}.go`, supervisor, decision machine, box patterns) |
-| Tmux pane observer | `internal/tmux/observer/` (shared stability-detector goroutine) |
+| Agent status adapters | `internal/core/agent/` (`adapter_{claude,codex,opencode}.go`, supervisor, decision machine, phrase matcher) |
+| Tmux pane observer | `internal/tmux/observer/` (shared per-tick raw-hash goroutine) |
 | Architect config | `internal/architect/config/` |
 | Daemon config | `internal/daemon/config/` |
 | Tmux manager | `internal/tmux/` |
