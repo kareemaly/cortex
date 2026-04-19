@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/tui/status"
 )
 
 func (m *Model) rebuildRows() {
@@ -220,23 +221,12 @@ func (m *Model) ensureCursorVisible(viewHeight int) {
 
 func agentStatusIcon(t sdk.TicketSummary) string {
 	if t.IsOrphaned {
-		return "◌"
+		return status.OrphanedIcon
 	}
-
 	if t.AgentStatus == nil {
-		return "●"
+		return status.Icon("")
 	}
-	symbols := map[string]string{
-		"starting":           "▶",
-		"in_progress":        "●",
-		"idle":               "○",
-		"waiting_permission": "⏸",
-		"error":              "✗",
-	}
-	if s, ok := symbols[*t.AgentStatus]; ok {
-		return s
-	}
-	return "●"
+	return status.Icon(*t.AgentStatus)
 }
 
 func formatDuration(d time.Duration) string {

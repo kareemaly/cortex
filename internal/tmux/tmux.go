@@ -69,6 +69,14 @@ func (m *Manager) run(args ...string) ([]byte, error) {
 	return m.runner.Run(args...)
 }
 
+// CapturePane returns the currently visible screen content of the pane at
+// target (formatted as "session:window.pane"). -J joins wrapped lines so
+// box-border detection stays robust across terminal widths; ANSI codes are
+// stripped by tmux before return.
+func (m *Manager) CapturePane(target string) ([]byte, error) {
+	return m.run("capture-pane", "-p", "-J", "-t", target)
+}
+
 // runSilent executes a tmux command and discards output.
 func (m *Manager) runSilent(args ...string) error {
 	_, err := m.run(args...)

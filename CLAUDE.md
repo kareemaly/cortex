@@ -57,6 +57,7 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 - **ConclusionStoreManager**: Manages conclusion stores per architect. Located in `internal/daemon/api/conclusion_store_manager.go`.
 - **SessionManager**: Manages ephemeral session stores per architect. Located in `internal/daemon/api/session_manager.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
+- **Agent status supervision**: Per-session supervisor per spawned agent, wired via `startAgentSupervisor` in `internal/core/spawn/supervisor.go`. Adapter-based — each agent (claude/codex/opencode) registers an `agent.Adapter` in `internal/core/agent/adapter_*.go` with transcript + pane patterns. A single `tmux/observer.Observer` polls all supervised panes; supervisors bind to daemon-root `SupervisorCtx` so they outlive the HTTP spawn handler. Sessions route by canonical `SessionID` UUID everywhere (store, events, `/agent/status`).
 
 ## Anti-Patterns
 
@@ -70,6 +71,8 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Import `internal/architect` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
 | Call `architectconfig.Load()` in MCP tools | Call the daemon HTTP API via SDK client | MCP is a dumb client — all config resolution (including global agent merge) lives in the daemon |
 | Call `architectconfig.Load()` directly to resolve variants | Use `mergeProjectConfig()` in `internal/daemon/api/config_merge.go` | Direct load misses global agents from `~/.cortex/settings.yaml`; only the daemon merges project + global |
+| Add a per-agent status supervisor wrapper | Extend `startAgentSupervisor` in `internal/core/spawn/supervisor.go` + register a new `agent.Adapter` | The unified helper owns ctx-lifetime, logger wiring, and observer registration; per-agent wrappers drift |
+| Post `ended` to `POST /agent/status` | `ended` is terminal and produced only by the supervisor's liveness loop | Accepting client-sent `ended` jams the decision machine's terminal guard |
 
 ## Debugging
 
@@ -92,10 +95,12 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Conclusion store | `internal/conclusion/` |
 | SDK client | `internal/cli/sdk/client.go` |
 | Spawn orchestration | `internal/core/spawn/` |
+| Agent status adapters | `internal/core/agent/` (`adapter_{claude,codex,opencode}.go`, supervisor, decision machine, box patterns) |
+| Tmux pane observer | `internal/tmux/observer/` (shared stability-detector goroutine) |
 | Architect config | `internal/architect/config/` |
 | Daemon config | `internal/daemon/config/` |
 | Tmux manager | `internal/tmux/` |
-| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `sessions/`, `config/`, `ticket/`) |
+| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `sessions/`, `config/`, `ticket/`, `status/` symbols) |
 | Install/init logic | `internal/install/` |
 | Agent defaults | `internal/install/defaults/main/` (shared prompts for all agents) |
 | Shared storage | `internal/storage/` |

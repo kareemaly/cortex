@@ -8,10 +8,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kareemaly/cortex/internal/binpath"
-	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
+	"github.com/kareemaly/cortex/internal/core/agent"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/tmux/observer"
 )
 
 // newClaudeSessionID generates a UUID for a fresh claude-code session. Stored
@@ -37,13 +38,15 @@ type StoreInterface interface {
 
 // SessionStoreInterface defines the session store operations needed for spawning.
 type SessionStoreInterface interface {
-	Create(ticketID, agent, tmuxWindow string) (string, *session.Session, error)
-	End(ticketShortID string) error
+	Create(ticketID, agent, tmuxWindow string) (*session.Session, error)
+	EndBySessionID(sessionID string) error
+	EndByTicketID(ticketID string) error
 	GetByTicketID(ticketID string) (*session.Session, error)
 	CreateArchitect(agent, tmuxWindow string) (*session.Session, error)
 	GetArchitect() (*session.Session, error)
 	EndArchitect() error
-	CreateCollab(collabID, prompt, agent, tmuxWindow string) (string, *session.Session, error)
+	CreateCollab(collabID, prompt, agent, tmuxWindow string) (*session.Session, error)
+	SetAgentSessionID(sessionID, agentSessionID string) error
 }
 
 // TmuxManagerInterface defines the tmux operations needed for spawning.
@@ -55,13 +58,15 @@ type TmuxManagerInterface interface {
 
 // Dependencies contains the external dependencies for the Spawner.
 type Dependencies struct {
-	Store        StoreInterface
-	SessionStore SessionStoreInterface
-	TmuxManager  TmuxManagerInterface
-	Logger       *slog.Logger // optional logger for warnings
-	CortexdPath  string       // optional override for cortexd binary path
-	MCPConfigDir string       // optional override for MCP config directory
-	DefaultsDir  string       // path to defaults (e.g., ~/.cortex/defaults/main) for prompt fallback
+	Store         StoreInterface
+	SessionStore  SessionStoreInterface
+	TmuxManager   TmuxManagerInterface
+	PaneObserver  *observer.Observer // optional: shared tmux pane observer for adapter supervisors
+	Logger        *slog.Logger       // optional logger for warnings
+	SupervisorCtx context.Context    // daemon-root context for long-lived agent supervisors; nil → context.Background
+	CortexdPath   string             // optional override for cortexd binary path
+	MCPConfigDir  string             // optional override for MCP config directory
+	DefaultsDir   string             // path to defaults (e.g., ~/.cortex/defaults/main) for prompt fallback
 }
 
 // Spawner handles spawning agent sessions.
@@ -71,6 +76,9 @@ type Spawner struct {
 
 // NewSpawner creates a new Spawner with the given dependencies.
 func NewSpawner(deps Dependencies) *Spawner {
+	if deps.SupervisorCtx == nil {
+		deps.SupervisorCtx = context.Background()
+	}
 	return &Spawner{deps: deps}
 }
 
@@ -181,23 +189,35 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		return nil, err
 	}
 
-	// Create session in store
+	// Create the session record up front — the supervisor posts status
+	// updates against the canonical SessionID UUID, which it needs before
+	// launching the agent.
+	var sessionIDForStatus string
 	if s.deps.SessionStore != nil {
 		switch req.AgentType {
 		case AgentTypeTicketAgent:
-			_, _, err := s.deps.SessionStore.Create(req.TicketID, req.Agent, windowName)
+			sess, err := s.deps.SessionStore.Create(req.TicketID, req.Agent, windowName)
 			if err != nil {
 				return nil, err
+			}
+			if sess != nil {
+				sessionIDForStatus = sess.SessionID
 			}
 		case AgentTypeArchitect:
-			_, err := s.deps.SessionStore.CreateArchitect(req.Agent, windowName)
+			sess, err := s.deps.SessionStore.CreateArchitect(req.Agent, windowName)
 			if err != nil {
 				return nil, err
 			}
+			if sess != nil {
+				sessionIDForStatus = sess.SessionID
+			}
 		case AgentTypeCollabAgent:
-			_, _, err := s.deps.SessionStore.CreateCollab(req.CollabID, req.Prompt, req.Agent, windowName)
+			sess, err := s.deps.SessionStore.CreateCollab(req.CollabID, req.Prompt, req.Agent, windowName)
 			if err != nil {
 				return nil, err
+			}
+			if sess != nil {
+				sessionIDForStatus = sess.SessionID
 			}
 		}
 	}
@@ -285,6 +305,11 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	var claudeSessionID string
 	if req.Agent == "claude" {
 		claudeSessionID = newClaudeSessionID()
+		if sessionIDForStatus != "" && s.deps.SessionStore != nil {
+			if err := s.deps.SessionStore.SetAgentSessionID(sessionIDForStatus, claudeSessionID); err != nil {
+				s.logWarn("failed to record claude session id", "error", err)
+			}
+		}
 	}
 
 	// Build launcher params based on agent type
@@ -379,24 +404,38 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}, nil
 	}
 
-	// Start the live status tailer for the spawned agent. All three agents
-	// share the same daemon-side transport; they only differ in where the
-	// transcript lives and how lines are parsed.
+	// Start the live status supervisor for the spawned agent. Bind to the
+	// daemon-root context (not the HTTP request context) so the supervisor
+	// outlives the spawn handler. Normal teardown happens via the liveness
+	// loop when the launcher's trap EXIT cleans up mcpConfigPath on session
+	// end; daemon shutdown cancels SupervisorCtx.
 	ticketIDForStatus := launcherParams.EnvVars["CORTEX_TICKET_ID"]
+	paneTarget := agentPaneTarget(req.TmuxSession, windowName)
+	supCtx := s.deps.SupervisorCtx
+	supParams := agentSupervisorParams{
+		Agent:         req.Agent,
+		SessionID:     sessionIDForStatus,
+		TicketID:      ticketIDForStatus,
+		ArchitectPath: req.ArchitectPath,
+		PaneTarget:    paneTarget,
+		Observer:      s.deps.PaneObserver,
+		Logger:        s.deps.Logger,
+	}
 	switch req.Agent {
 	case "codex":
-		if codexConfigDir != "" {
-			StartCodexTailer(codexConfigDir, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
-		}
+		supParams.TranscriptHint = codexConfigDir
+		supParams.LivenessPath = codexConfigDir
 	case "claude":
 		if claudeSessionID != "" {
-			transcriptPath := ClaudeTranscriptPath(workingDir, claudeSessionID)
-			StartClaudeTailer(transcriptPath, mcpConfigPath, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+			supParams.TranscriptHint = agent.ClaudeTranscriptPath(workingDir, claudeSessionID)
+			supParams.LivenessPath = mcpConfigPath
 		}
 	case "opencode":
-		if opencodeStatusFile != "" {
-			StartOpenCodeTailer(opencodeStatusFile, mcpConfigPath, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
-		}
+		supParams.TranscriptHint = opencodeStatusFile
+		supParams.LivenessPath = mcpConfigPath
+	}
+	if _, err := startAgentSupervisor(supCtx, supParams); err != nil {
+		s.logWarn("failed to start agent supervisor", "agent", req.Agent, "error", err)
 	}
 
 	return &SpawnResult{
@@ -538,11 +577,21 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	}
 	allTempFiles := append(tempFiles, launcherPath)
 
-	// Create session in store for architect resume
+	// Create or resolve the session in the store for the resume path so the
+	// tailer can address it by SessionID. For tickets we look up the already-
+	// active session; for architect resume we (re)create the singleton entry.
+	var resumeSessionID string
 	if s.deps.SessionStore != nil {
-		if req.AgentType == AgentTypeArchitect {
-			if _, createErr := s.deps.SessionStore.CreateArchitect(req.Agent, req.WindowName); createErr != nil {
+		switch req.AgentType {
+		case AgentTypeArchitect:
+			if sess, createErr := s.deps.SessionStore.CreateArchitect(req.Agent, req.WindowName); createErr != nil {
 				s.logWarn("resume: failed to create architect session", "error", createErr)
+			} else if sess != nil {
+				resumeSessionID = sess.SessionID
+			}
+		case AgentTypeTicketAgent:
+			if existing, _ := s.deps.SessionStore.GetByTicketID(req.TicketID); existing != nil {
+				resumeSessionID = existing.SessionID
 			}
 		}
 	}
@@ -581,25 +630,61 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		}, nil
 	}
 
-	// Start the live status tailer for the resumed agent. Mirrors the Spawn
-	// switch above so all three agents share the same daemon-side transport.
+	// Start the live status supervisor for the resumed agent. Bind to the
+	// daemon-root context so the supervisor outlives the resume handler.
 	ticketIDForStatus := envVars["CORTEX_TICKET_ID"]
+	resumePaneTarget := agentPaneTarget(req.TmuxSession, req.WindowName)
+	supCtx := s.deps.SupervisorCtx
+	supParams := agentSupervisorParams{
+		Agent:         req.Agent,
+		SessionID:     resumeSessionID,
+		TicketID:      ticketIDForStatus,
+		ArchitectPath: req.ArchitectPath,
+		PaneTarget:    resumePaneTarget,
+		Observer:      s.deps.PaneObserver,
+		Logger:        s.deps.Logger,
+	}
 	switch req.Agent {
 	case "codex":
-		if codexConfigDir != "" {
-			StartCodexTailer(codexConfigDir, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
-		}
+		supParams.TranscriptHint = codexConfigDir
+		supParams.LivenessPath = codexConfigDir
 	case "claude":
-		// Bare --resume doesn't tell claude which prior session UUID to
-		// reuse, so we have no transcript path to tail. Skip silently.
-		if req.SessionID != "" {
-			transcriptPath := ClaudeTranscriptPath(workingDir, req.SessionID)
-			StartClaudeTailer(transcriptPath, mcpConfigPath, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
+		// Recover the Claude --session-id so the transcript tailer can
+		// re-attach to the existing projects/<slug>/<uuid>.jsonl. Priority:
+		//  1. req.SessionID (caller explicitly passes the UUID)
+		//  2. stored AgentSessionID on the session (saved at spawn time)
+		//
+		// If neither is available, the resumed Claude will still run, but
+		// status wiring is impossible — surface that loudly rather than
+		// silently showing nothing on the dashboard.
+		claudeUUID := req.SessionID
+		if claudeUUID == "" && s.deps.SessionStore != nil {
+			var stored *session.Session
+			switch req.AgentType {
+			case AgentTypeTicketAgent:
+				stored, _ = s.deps.SessionStore.GetByTicketID(req.TicketID)
+			case AgentTypeArchitect:
+				stored, _ = s.deps.SessionStore.GetArchitect()
+			}
+			if stored != nil {
+				claudeUUID = stored.AgentSessionID
+			}
+		}
+		if claudeUUID == "" {
+			s.logWarn("claude resume: unable to recover prior session UUID; status wiring disabled for this resume",
+				"ticket_id", req.TicketID,
+				"architect_path", req.ArchitectPath,
+			)
+		} else {
+			supParams.TranscriptHint = agent.ClaudeTranscriptPath(workingDir, claudeUUID)
+			supParams.LivenessPath = mcpConfigPath
 		}
 	case "opencode":
-		if opencodeStatusFile != "" {
-			StartOpenCodeTailer(opencodeStatusFile, mcpConfigPath, ticketIDForStatus, req.ArchitectPath, daemonconfig.DefaultDaemonURL)
-		}
+		supParams.TranscriptHint = opencodeStatusFile
+		supParams.LivenessPath = mcpConfigPath
+	}
+	if _, err := startAgentSupervisor(supCtx, supParams); err != nil {
+		s.logWarn("resume: supervisor start failed", "agent", req.Agent, "error", err)
 	}
 
 	return &SpawnResult{
@@ -615,15 +700,11 @@ func (s *Spawner) Fresh(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	if s.deps.SessionStore != nil {
 		switch req.AgentType {
 		case AgentTypeTicketAgent:
-			existingSess, _ := s.deps.SessionStore.GetByTicketID(req.TicketID)
-			if existingSess != nil {
-				shortID := storage.ShortID(req.TicketID)
-				if err := s.deps.SessionStore.End(shortID); err != nil {
-					s.logWarn("fresh: failed to end existing session", "ticketID", req.TicketID, "error", err)
-				}
+			if err := s.deps.SessionStore.EndByTicketID(req.TicketID); err != nil && !storage.IsNotFound(err) {
+				s.logWarn("fresh: failed to end existing session", "ticketID", req.TicketID, "error", err)
 			}
 		case AgentTypeArchitect:
-			if err := s.deps.SessionStore.EndArchitect(); err != nil {
+			if err := s.deps.SessionStore.EndArchitect(); err != nil && !storage.IsNotFound(err) {
 				s.logWarn("fresh: failed to end existing architect session", "error", err)
 			}
 		}
@@ -671,13 +752,12 @@ func (s *Spawner) cleanupOnFailure(_ context.Context, agentType AgentType, ticke
 		switch agentType {
 		case AgentTypeTicketAgent:
 			if ticketID != "" {
-				shortID := storage.ShortID(ticketID)
-				if err := s.deps.SessionStore.End(shortID); err != nil {
+				if err := s.deps.SessionStore.EndByTicketID(ticketID); err != nil && !storage.IsNotFound(err) {
 					s.logWarn("cleanup: failed to end session", "ticketID", ticketID, "error", err)
 				}
 			}
 		case AgentTypeArchitect:
-			if err := s.deps.SessionStore.EndArchitect(); err != nil {
+			if err := s.deps.SessionStore.EndArchitect(); err != nil && !storage.IsNotFound(err) {
 				s.logWarn("cleanup: failed to end architect session", "error", err)
 			}
 			// AgentTypeCollabAgent cleanup handled in SpawnCollab via EndCollab

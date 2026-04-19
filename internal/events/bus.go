@@ -24,6 +24,7 @@ type Event struct {
 	Type          EventType `json:"type"`
 	ArchitectPath string    `json:"architect_path"`
 	TicketID      string    `json:"ticket_id"`
+	SessionID     string    `json:"session_id,omitempty"`
 	Payload       any       `json:"payload,omitempty"`
 }
 

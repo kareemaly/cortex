@@ -6,11 +6,12 @@ import "time"
 type AgentStatus string
 
 const (
-	AgentStatusStarting          AgentStatus = "starting"
-	AgentStatusInProgress        AgentStatus = "in_progress"
-	AgentStatusIdle              AgentStatus = "idle"
-	AgentStatusWaitingPermission AgentStatus = "waiting_permission"
-	AgentStatusError             AgentStatus = "error"
+	AgentStatusStarting      AgentStatus = "starting"
+	AgentStatusWorking       AgentStatus = "working"
+	AgentStatusIdle          AgentStatus = "idle"
+	AgentStatusAwaitingInput AgentStatus = "awaiting_input"
+	AgentStatusError         AgentStatus = "error"
+	AgentStatusEnded         AgentStatus = "ended"
 )
 
 // SessionType distinguishes architect sessions from ticket agent sessions.
@@ -29,7 +30,12 @@ const ArchitectSessionKey = "architect"
 
 // Session represents an active work session for a ticket.
 // Sessions are ephemeral — deleted when ended.
+//
+// SessionID is a stable UUID minted at creation time. It is the canonical
+// routing key for /agent/status updates so collab and architect sessions
+// (which don't have a TicketID) can be addressed uniformly.
 type Session struct {
+	SessionID  string      `json:"session_id"`
 	Type       SessionType `json:"type"`
 	TicketID   string      `json:"ticket_id,omitempty"`
 	CollabID   string      `json:"collab_id,omitempty"`
@@ -40,4 +46,9 @@ type Session struct {
 	Status     AgentStatus `json:"status"`
 	Tool       *string     `json:"tool,omitempty"`
 	Work       *string     `json:"work,omitempty"`
+	// AgentSessionID is the agent tool's internal session identifier
+	// (Claude Code's --session-id, Codex's rollout-file name). Cortex
+	// records it at spawn time so a Resume can re-attach to the existing
+	// transcript instead of starting stateless.
+	AgentSessionID string `json:"agent_session_id,omitempty"`
 }

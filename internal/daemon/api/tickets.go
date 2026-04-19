@@ -501,12 +501,14 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		Companion:     projectCfg.Companion,
 		ArchitectPath: projectPath,
 	}, spawn.OrchestrateDeps{
-		Store:        store,
-		SessionStore: sessionStore,
-		TmuxManager:  h.deps.TmuxManager,
-		Logger:       h.deps.Logger,
-		CortexdPath:  h.deps.CortexdPath,
-		DefaultsDir:  h.deps.DefaultsDir,
+		Store:         store,
+		SessionStore:  sessionStore,
+		TmuxManager:   h.deps.TmuxManager,
+		PaneObserver:  h.deps.PaneObserver,
+		SupervisorCtx: h.deps.SupervisorCtx,
+		Logger:        h.deps.Logger,
+		CortexdPath:   h.deps.CortexdPath,
+		DefaultsDir:   h.deps.DefaultsDir,
 	})
 	if err != nil {
 		switch {
@@ -693,8 +695,7 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	// End ephemeral session
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
-		shortID := storage.ShortID(id)
-		if endErr := sessStore.End(shortID); endErr != nil {
+		if endErr := sessStore.EndByTicketID(id); endErr != nil && !storage.IsNotFound(endErr) {
 			h.deps.Logger.Warn("failed to end session", "error", endErr)
 		}
 	}

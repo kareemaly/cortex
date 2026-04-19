@@ -26,47 +26,47 @@ func TestCreate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	key, session, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "fix-auth-bug")
+	sess, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "fix-auth-bug")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	if key != "a1b2c3d4" {
-		t.Errorf("key = %q, want %q", key, "a1b2c3d4")
+	if sess.SessionID == "" {
+		t.Error("SessionID should be set")
 	}
-	if session.TicketID != "a1b2c3d4-e5f6-7890-abcd-ef0123456789" {
+	if sess.TicketID != "a1b2c3d4-e5f6-7890-abcd-ef0123456789" {
 		t.Errorf("ticket_id mismatch")
 	}
-	if session.Agent != "claude" {
-		t.Errorf("agent = %q, want %q", session.Agent, "claude")
+	if sess.Agent != "claude" {
+		t.Errorf("agent = %q, want %q", sess.Agent, "claude")
 	}
-	if session.TmuxWindow != "fix-auth-bug" {
-		t.Errorf("tmux_window = %q, want %q", session.TmuxWindow, "fix-auth-bug")
+	if sess.TmuxWindow != "fix-auth-bug" {
+		t.Errorf("tmux_window = %q, want %q", sess.TmuxWindow, "fix-auth-bug")
 	}
-	if session.Status != AgentStatusStarting {
-		t.Errorf("status = %q, want %q", session.Status, AgentStatusStarting)
+	if sess.Status != AgentStatusStarting {
+		t.Errorf("status = %q, want %q", sess.Status, AgentStatusStarting)
 	}
-	if session.StartedAt.IsZero() {
+	if sess.StartedAt.IsZero() {
 		t.Error("started_at should be set")
 	}
 }
 
-func TestGet(t *testing.T) {
+func TestGetBySessionID(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	key, _, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
+	sess, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	session, err := store.Get(key)
+	got, err := store.GetBySessionID(sess.SessionID)
 	if err != nil {
-		t.Fatalf("Get failed: %v", err)
+		t.Fatalf("GetBySessionID failed: %v", err)
 	}
 
-	if session.Agent != "claude" {
-		t.Errorf("agent = %q, want %q", session.Agent, "claude")
+	if got.Agent != "claude" {
+		t.Errorf("agent = %q, want %q", got.Agent, "claude")
 	}
 }
 
@@ -75,89 +75,90 @@ func TestGetByTicketID(t *testing.T) {
 	defer cleanup()
 
 	ticketID := "a1b2c3d4-e5f6-7890-abcd-ef0123456789"
-	_, _, err := store.Create(ticketID, "claude", "window")
-	if err != nil {
+	if _, err := store.Create(ticketID, "claude", "window"); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	session, err := store.GetByTicketID(ticketID)
+	sess, err := store.GetByTicketID(ticketID)
 	if err != nil {
 		t.Fatalf("GetByTicketID failed: %v", err)
 	}
 
-	if session.TicketID != ticketID {
+	if sess.TicketID != ticketID {
 		t.Errorf("ticket_id mismatch")
 	}
 }
 
-func TestGetNotFound(t *testing.T) {
+func TestGetBySessionIDNotFound(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, err := store.Get("nonexistent")
-	if err == nil {
-		t.Error("expected error for nonexistent session")
-	}
+	_, err := store.GetBySessionID("nonexistent")
 	if !storage.IsNotFound(err) {
 		t.Errorf("expected NotFoundError, got %T", err)
 	}
 }
 
-func TestUpdateStatus(t *testing.T) {
+func TestUpdateStatusBySessionID(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
+	sess, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 
 	tool := "Edit"
-	err := store.UpdateStatus(key, AgentStatusInProgress, &tool, nil)
-	if err != nil {
-		t.Fatalf("UpdateStatus failed: %v", err)
+	if err := store.UpdateStatusBySessionID(sess.SessionID, AgentStatusWorking, &tool, nil); err != nil {
+		t.Fatalf("UpdateStatusBySessionID failed: %v", err)
 	}
 
-	session, _ := store.Get(key)
-	if session.Status != AgentStatusInProgress {
-		t.Errorf("status = %q, want %q", session.Status, AgentStatusInProgress)
+	got, _ := store.GetBySessionID(sess.SessionID)
+	if got.Status != AgentStatusWorking {
+		t.Errorf("status = %q, want %q", got.Status, AgentStatusWorking)
 	}
-	if session.Tool == nil || *session.Tool != "Edit" {
+	if got.Tool == nil || *got.Tool != "Edit" {
 		t.Error("tool not set correctly")
 	}
 }
 
-func TestUpdateStatusNotFound(t *testing.T) {
+func TestUpdateStatusBySessionIDNotFound(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	err := store.UpdateStatus("nonexistent", AgentStatusInProgress, nil, nil)
+	err := store.UpdateStatusBySessionID("nonexistent", AgentStatusWorking, nil, nil)
 	if !storage.IsNotFound(err) {
 		t.Errorf("expected NotFoundError, got %T", err)
 	}
 }
 
-func TestEnd(t *testing.T) {
+func TestEndBySessionID(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
+	sess, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 
-	err := store.End(key)
-	if err != nil {
+	if err := store.EndBySessionID(sess.SessionID); err != nil {
 		t.Fatalf("End failed: %v", err)
 	}
 
-	_, err = store.Get(key)
+	_, err := store.GetBySessionID(sess.SessionID)
 	if !storage.IsNotFound(err) {
 		t.Error("session should be deleted after End")
 	}
 }
 
-func TestEndNotFound(t *testing.T) {
+func TestEndByTicketID(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	err := store.End("nonexistent")
-	if !storage.IsNotFound(err) {
-		t.Errorf("expected NotFoundError, got %T", err)
+	ticketID := "a1b2c3d4-e5f6-7890-abcd-ef0123456789"
+	if _, err := store.Create(ticketID, "claude", "window"); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	if err := store.EndByTicketID(ticketID); err != nil {
+		t.Fatalf("EndByTicketID failed: %v", err)
+	}
+	if _, err := store.GetByTicketID(ticketID); !storage.IsNotFound(err) {
+		t.Errorf("expected NotFound after EndByTicketID, got %v", err)
 	}
 }
 
@@ -165,8 +166,8 @@ func TestList(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, _, _ = store.Create("a1b2c3d4-0000-0000-0000-000000000001", "claude", "window1")
-	_, _, _ = store.Create("b2c3d4e5-0000-0000-0000-000000000002", "opencode", "window2")
+	_, _ = store.Create("a1b2c3d4-0000-0000-0000-000000000001", "claude", "window1")
+	_, _ = store.Create("b2c3d4e5-0000-0000-0000-000000000002", "opencode", "window2")
 
 	sessions, err := store.List()
 	if err != nil {
@@ -214,7 +215,7 @@ func TestCreateSetsTicketType(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, sess, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
+	sess, err := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -244,64 +245,26 @@ func TestCreateArchitectSetsType(t *testing.T) {
 	}
 }
 
-func TestBackwardCompatMigration(t *testing.T) {
-	dir, err := os.MkdirTemp("", "session-migration-test")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
+func TestCreateArchitectReplacesExisting(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
 
-	path := filepath.Join(dir, "sessions.json")
+	first, _ := store.CreateArchitect("claude", "w1")
+	second, _ := store.CreateArchitect("codex", "w2")
 
-	// Write old-format JSON: architect has ticket_id="architect", no type field
-	oldJSON := `{
-  "architect": {
-    "ticket_id": "architect",
-    "agent": "claude",
-    "tmux_window": "arch-window",
-    "started_at": "2025-01-01T00:00:00Z",
-    "status": "in_progress"
-  },
-  "a1b2c3d4": {
-    "ticket_id": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
-    "agent": "claude",
-    "tmux_window": "ticket-window",
-    "started_at": "2025-01-01T00:00:00Z",
-    "status": "starting"
-  }
-}`
-	if err := os.WriteFile(path, []byte(oldJSON), 0644); err != nil {
-		t.Fatalf("write old JSON: %v", err)
+	if first.SessionID == second.SessionID {
+		t.Error("architect session IDs should differ across recreations")
 	}
 
-	store := NewStore(path)
-	sessions, err := store.List()
-	if err != nil {
-		t.Fatalf("List failed: %v", err)
+	sessions, _ := store.List()
+	archCount := 0
+	for _, s := range sessions {
+		if s.Type == SessionTypeArchitect {
+			archCount++
+		}
 	}
-
-	// Verify architect session was migrated
-	archSess, ok := sessions[ArchitectSessionKey]
-	if !ok {
-		t.Fatal("architect session not found")
-	}
-	if archSess.Type != SessionTypeArchitect {
-		t.Errorf("architect Type = %q, want %q", archSess.Type, SessionTypeArchitect)
-	}
-	if archSess.TicketID != "" {
-		t.Errorf("architect TicketID = %q, want empty after migration", archSess.TicketID)
-	}
-
-	// Verify ticket session was migrated
-	ticketSess, ok := sessions["a1b2c3d4"]
-	if !ok {
-		t.Fatal("ticket session not found")
-	}
-	if ticketSess.Type != SessionTypeTicket {
-		t.Errorf("ticket Type = %q, want %q", ticketSess.Type, SessionTypeTicket)
-	}
-	if ticketSess.TicketID != "a1b2c3d4-e5f6-7890-abcd-ef0123456789" {
-		t.Errorf("ticket TicketID = %q, want original value preserved", ticketSess.TicketID)
+	if archCount != 1 {
+		t.Errorf("want exactly 1 architect session, got %d", archCount)
 	}
 }
 
@@ -309,8 +272,7 @@ func TestConcurrentAccess(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	// Create a session to operate on
-	key, _, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
+	sess, _ := store.Create("a1b2c3d4-e5f6-7890-abcd-ef0123456789", "claude", "window")
 
 	const goroutines = 10
 	var wg sync.WaitGroup
@@ -320,17 +282,17 @@ func TestConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			tool := "Read"
-			_ = store.UpdateStatus(key, AgentStatusInProgress, &tool, nil)
+			_ = store.UpdateStatusBySessionID(sess.SessionID, AgentStatusWorking, &tool, nil)
 		}()
 	}
 
 	wg.Wait()
 
-	session, err := store.Get(key)
+	got, err := store.GetBySessionID(sess.SessionID)
 	if err != nil {
 		t.Fatalf("Get after concurrent access failed: %v", err)
 	}
-	if session.Status != AgentStatusInProgress {
-		t.Errorf("status = %q, want %q", session.Status, AgentStatusInProgress)
+	if got.Status != AgentStatusWorking {
+		t.Errorf("status = %q, want %q", got.Status, AgentStatusWorking)
 	}
 }

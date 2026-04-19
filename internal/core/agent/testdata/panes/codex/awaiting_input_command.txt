@@ -1,0 +1,10 @@
+│ codex
+│
+│   Task progress: Running tests
+│
+│   > codex wants to run
+│     make test-integration
+│
+│   This command requires approval. Allow this command? (y/n)
+│
+>

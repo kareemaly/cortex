@@ -1,0 +1,10 @@
+opencode: session summary
+
+──────────────────────────────────────
+Session started: 2026-04-18 10:30
+Model: opencode-pro
+──────────────────────────────────────
+
+Ready for input.
+
+>

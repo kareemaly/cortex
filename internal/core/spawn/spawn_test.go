@@ -42,11 +42,25 @@ func (m *mockStore) Get(id string) (*ticket.Ticket, ticket.Status, error) {
 
 // mockSessionStore implements SessionStoreInterface for testing.
 type mockSessionStore struct {
-	sessions        map[string]*session.Session // keyed by short ID
+	sessions        map[string]*session.Session // keyed by SessionID UUID
 	createErr       error
 	endErr          error
-	endCalls        []string // tracks which short IDs had End called
+	endCalls        []string // tracks which session IDs had End called
 	lastCreateAgent string
+}
+
+// addTicketSession pre-populates a ticket session for tests that need an
+// existing session without going through Create. Returns the SessionID.
+func (m *mockSessionStore) addTicketSession(ticketID, tmuxWindow string) string {
+	sess := &session.Session{
+		SessionID:  session.NewSessionID(),
+		Type:       session.SessionTypeTicket,
+		TicketID:   ticketID,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now(),
+	}
+	m.sessions[sess.SessionID] = sess
+	return sess.SessionID
 }
 
 func newMockSessionStore() *mockSessionStore {
@@ -55,13 +69,13 @@ func newMockSessionStore() *mockSessionStore {
 	}
 }
 
-func (m *mockSessionStore) Create(ticketID, agent, tmuxWindow string) (string, *session.Session, error) {
+func (m *mockSessionStore) Create(ticketID, agent, tmuxWindow string) (*session.Session, error) {
 	if m.createErr != nil {
-		return "", nil, m.createErr
+		return nil, m.createErr
 	}
 	m.lastCreateAgent = agent
-	shortID := storage.ShortID(ticketID)
 	sess := &session.Session{
+		SessionID:  session.NewSessionID(),
 		Type:       session.SessionTypeTicket,
 		TicketID:   ticketID,
 		Agent:      agent,
@@ -69,26 +83,40 @@ func (m *mockSessionStore) Create(ticketID, agent, tmuxWindow string) (string, *
 		StartedAt:  time.Now(),
 		Status:     session.AgentStatusStarting,
 	}
-	m.sessions[shortID] = sess
-	return shortID, sess, nil
+	m.sessions[sess.SessionID] = sess
+	return sess, nil
 }
 
-func (m *mockSessionStore) End(ticketShortID string) error {
+func (m *mockSessionStore) EndByTicketID(ticketID string) error {
 	if m.endErr != nil {
 		return m.endErr
 	}
-	m.endCalls = append(m.endCalls, ticketShortID)
-	delete(m.sessions, ticketShortID)
+	for id, sess := range m.sessions {
+		if sess.Type == session.SessionTypeTicket && sess.TicketID == ticketID {
+			m.endCalls = append(m.endCalls, id)
+			delete(m.sessions, id)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *mockSessionStore) EndBySessionID(sessionID string) error {
+	if m.endErr != nil {
+		return m.endErr
+	}
+	m.endCalls = append(m.endCalls, sessionID)
+	delete(m.sessions, sessionID)
 	return nil
 }
 
 func (m *mockSessionStore) GetByTicketID(ticketID string) (*session.Session, error) {
-	shortID := storage.ShortID(ticketID)
-	sess, ok := m.sessions[shortID]
-	if !ok {
-		return nil, &storage.NotFoundError{Resource: "session", ID: shortID}
+	for _, sess := range m.sessions {
+		if sess.Type == session.SessionTypeTicket && sess.TicketID == ticketID {
+			return sess, nil
+		}
 	}
-	return sess, nil
+	return nil, &storage.NotFoundError{Resource: "session", ID: ticketID}
 }
 
 func (m *mockSessionStore) CreateArchitect(agent, tmuxWindow string) (*session.Session, error) {
@@ -96,45 +124,65 @@ func (m *mockSessionStore) CreateArchitect(agent, tmuxWindow string) (*session.S
 		return nil, m.createErr
 	}
 	m.lastCreateAgent = agent
+	// Remove any existing architect
+	for id, sess := range m.sessions {
+		if sess.Type == session.SessionTypeArchitect {
+			delete(m.sessions, id)
+		}
+	}
 	sess := &session.Session{
+		SessionID:  session.NewSessionID(),
 		Type:       session.SessionTypeArchitect,
 		Agent:      agent,
 		TmuxWindow: tmuxWindow,
 		StartedAt:  time.Now(),
 		Status:     session.AgentStatusStarting,
 	}
-	m.sessions[session.ArchitectSessionKey] = sess
+	m.sessions[sess.SessionID] = sess
 	return sess, nil
 }
 
 func (m *mockSessionStore) GetArchitect() (*session.Session, error) {
-	sess, ok := m.sessions[session.ArchitectSessionKey]
-	if !ok {
-		return nil, &storage.NotFoundError{Resource: "session", ID: session.ArchitectSessionKey}
+	for _, sess := range m.sessions {
+		if sess.Type == session.SessionTypeArchitect {
+			return sess, nil
+		}
 	}
-	return sess, nil
+	return nil, &storage.NotFoundError{Resource: "session", ID: session.ArchitectSessionKey}
 }
 
 func (m *mockSessionStore) EndArchitect() error {
 	if m.endErr != nil {
 		return m.endErr
 	}
-	m.endCalls = append(m.endCalls, session.ArchitectSessionKey)
-	delete(m.sessions, session.ArchitectSessionKey)
+	for id, sess := range m.sessions {
+		if sess.Type == session.SessionTypeArchitect {
+			m.endCalls = append(m.endCalls, id)
+			delete(m.sessions, id)
+			return nil
+		}
+	}
 	return nil
 }
 
-func (m *mockSessionStore) CreateCollab(collabID, prompt, agent, tmuxWindow string) (string, *session.Session, error) {
-	key := "collab-" + collabID[:8]
+func (m *mockSessionStore) CreateCollab(collabID, prompt, agent, tmuxWindow string) (*session.Session, error) {
 	sess := &session.Session{
+		SessionID:  session.NewSessionID(),
 		Type:       session.SessionTypeCollab,
 		CollabID:   collabID,
 		Prompt:     prompt,
 		Agent:      agent,
 		TmuxWindow: tmuxWindow,
 	}
-	m.sessions[key] = sess
-	return key, sess, nil
+	m.sessions[sess.SessionID] = sess
+	return sess, nil
+}
+
+func (m *mockSessionStore) SetAgentSessionID(sessionID, agentSessionID string) error {
+	if sess, ok := m.sessions[sessionID]; ok {
+		sess.AgentSessionID = agentSessionID
+	}
+	return nil
 }
 
 // mockTmuxManager implements TmuxManagerInterface for testing.
@@ -291,11 +339,7 @@ func TestSpawn_TicketAgent_AlreadyActive(t *testing.T) {
 	store.tickets["ticket-1"] = testTicket
 
 	// Create an existing session
-	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
-		TicketID:   "ticket-1",
-		TmuxWindow: "test-ticket",
-		StartedAt:  time.Now(),
-	}
+	_ = sessStore.addTicketSession("ticket-1", "test-window-prepop")
 
 	spawner := NewSpawner(Dependencies{
 		Store:        store,
@@ -370,9 +414,9 @@ func TestSpawn_CleanupOnFailure(t *testing.T) {
 		t.Error("expected failure")
 	}
 
-	// Session should have been cleaned up (End called)
-	shortID := storage.ShortID("ticket-1")
-	if !slices.Contains(sessStore.endCalls, shortID) {
+	// Session should have been cleaned up (End called). endCalls holds the
+	// SessionID UUID in our UUID-keyed mock — just assert at least one call.
+	if len(sessStore.endCalls) == 0 {
 		t.Error("expected End to be called for session cleanup")
 	}
 }
@@ -467,12 +511,7 @@ func TestFresh_ClearsExisting(t *testing.T) {
 	store.tickets["ticket-1"] = testTicket
 
 	// Create an existing session
-	shortID := storage.ShortID("ticket-1")
-	sessStore.sessions[shortID] = &session.Session{
-		TicketID:   "ticket-1",
-		TmuxWindow: "old-window",
-		StartedAt:  time.Now(),
-	}
+	existingID := sessStore.addTicketSession("ticket-1", "old-window")
 
 	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
 
@@ -503,9 +542,9 @@ func TestFresh_ClearsExisting(t *testing.T) {
 		t.Fatalf("expected success, got: %s", result.Message)
 	}
 
-	// End should have been called for the old session
-	if !slices.Contains(sessStore.endCalls, shortID) {
-		t.Error("expected End to be called for old session")
+	// End should have been called for the old session's SessionID.
+	if !slices.Contains(sessStore.endCalls, existingID) {
+		t.Errorf("expected End to be called for old session %q, endCalls=%v", existingID, sessStore.endCalls)
 	}
 }
 
@@ -1149,11 +1188,7 @@ func TestOrchestrate_Normal_Active(t *testing.T) {
 	tmuxMgr.windowExists = true
 
 	// Create an active session
-	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
-		TicketID:   "ticket-1",
-		TmuxWindow: "test-ticket",
-		StartedAt:  time.Now(),
-	}
+	_ = sessStore.addTicketSession("ticket-1", "test-window-prepop")
 
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:      "ticket-1",
@@ -1183,11 +1218,7 @@ func TestOrchestrate_Normal_Orphaned(t *testing.T) {
 	tmuxMgr.windowExists = false
 
 	// Create an orphaned session (session exists, tmux window gone)
-	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
-		TicketID:   "ticket-1",
-		TmuxWindow: "test-ticket",
-		StartedAt:  time.Now(),
-	}
+	_ = sessStore.addTicketSession("ticket-1", "test-window-prepop")
 
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:      "ticket-1",
@@ -1236,11 +1267,7 @@ func TestOrchestrate_Resume_Active(t *testing.T) {
 	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
 	tmuxMgr.windowExists = true
 
-	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
-		TicketID:   "ticket-1",
-		TmuxWindow: "test-ticket",
-		StartedAt:  time.Now(),
-	}
+	_ = sessStore.addTicketSession("ticket-1", "test-window-prepop")
 
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:      "ticket-1",
@@ -1266,11 +1293,7 @@ func TestOrchestrate_Resume_Orphaned(t *testing.T) {
 	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
 	tmuxMgr.windowExists = false
 
-	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
-		TicketID:   "ticket-1",
-		TmuxWindow: "test-ticket",
-		StartedAt:  time.Now(),
-	}
+	_ = sessStore.addTicketSession("ticket-1", "test-window-prepop")
 
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:      "ticket-1",
@@ -1322,11 +1345,7 @@ func TestOrchestrate_Fresh_Active(t *testing.T) {
 	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
 	tmuxMgr.windowExists = true
 
-	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
-		TicketID:   "ticket-1",
-		TmuxWindow: "test-ticket",
-		StartedAt:  time.Now(),
-	}
+	_ = sessStore.addTicketSession("ticket-1", "test-window-prepop")
 
 	_, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:      "ticket-1",
@@ -1352,11 +1371,7 @@ func TestOrchestrate_Fresh_Orphaned(t *testing.T) {
 	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
 	tmuxMgr.windowExists = false
 
-	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
-		TicketID:   "ticket-1",
-		TmuxWindow: "test-ticket",
-		StartedAt:  time.Now(),
-	}
+	_ = sessStore.addTicketSession("ticket-1", "test-window-prepop")
 
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:      "ticket-1",
@@ -1967,11 +1982,7 @@ func TestOrchestrate_OpenCode_Resume_Orphaned(t *testing.T) {
 	tmuxMgr.windowExists = false
 
 	// Create an orphaned session
-	sessStore.sessions[storage.ShortID("ticket-1")] = &session.Session{
-		TicketID:   "ticket-1",
-		TmuxWindow: "test-ticket",
-		StartedAt:  time.Now(),
-	}
+	_ = sessStore.addTicketSession("ticket-1", "test-window-prepop")
 
 	result, err := Orchestrate(context.Background(), OrchestrateRequest{
 		TicketID:      "ticket-1",

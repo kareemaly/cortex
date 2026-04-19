@@ -114,11 +114,13 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	spawner := spawn.NewSpawner(spawn.Dependencies{
-		TmuxManager:  h.deps.TmuxManager,
-		SessionStore: sessStore,
-		CortexdPath:  h.deps.CortexdPath,
-		Logger:       h.deps.Logger,
-		DefaultsDir:  h.deps.DefaultsDir,
+		TmuxManager:   h.deps.TmuxManager,
+		SessionStore:  sessStore,
+		PaneObserver:  h.deps.PaneObserver,
+		SupervisorCtx: h.deps.SupervisorCtx,
+		CortexdPath:   h.deps.CortexdPath,
+		Logger:        h.deps.Logger,
+		DefaultsDir:   h.deps.DefaultsDir,
 	})
 
 	result, err := spawner.SpawnCollab(r.Context(), spawn.CollabSpawnRequest{
@@ -167,28 +169,23 @@ func (h *CollabHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get session info before ending
+	// Get session info before ending. Repo is only available from the
+	// request body — the session record carries CollabID, not the working
+	// directory the collab was started against.
 	var tmuxWindow string
 	var prompt string
-	var repo string
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
 		if sess, err := sessStore.GetByCollabID(collabID); err == nil && sess != nil {
 			tmuxWindow = sess.TmuxWindow
 			prompt = sess.Prompt
-			repo = sess.CollabID // repo is not stored in session; use Repo from req if available
-			_ = repo
 		}
-		// End the ephemeral session
 		if endErr := sessStore.EndCollab(collabID); endErr != nil {
 			h.deps.Logger.Warn("failed to end collab session", "error", endErr)
 		}
 	}
 
-	// Use repo from request if provided
-	if req.Repo != "" {
-		repo = req.Repo
-	}
+	repo := req.Repo
 
 	h.deps.Bus.Emit(events.Event{
 		Type:          events.SessionEnded,
@@ -231,14 +228,14 @@ func (h *CollabHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	sessionID := chi.URLParam(r, "id")
 
-	// Look up session from session manager by short ID (the key in the session store)
 	if h.deps.SessionManager == nil {
-		writeError(w, http.StatusNotFound, "no_active_session", "no session manager available")
+		writeError(w, http.StatusServiceUnavailable, "sessions_unavailable",
+			"session manager is not configured")
 		return
 	}
 
 	sessStore := h.deps.SessionManager.GetStore(projectPath)
-	sess, err := sessStore.Get(sessionID)
+	sess, err := sessStore.GetBySessionID(sessionID)
 	if err != nil || sess == nil || sess.TmuxWindow == "" {
 		writeError(w, http.StatusNotFound, "no_active_session", "collab has no active session with a tmux window")
 		return

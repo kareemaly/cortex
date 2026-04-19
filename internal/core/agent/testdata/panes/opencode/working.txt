@@ -1,0 +1,7 @@
+opencode
+
+  Reading internal/core/agent/adapter_opencode.go
+  Writing tests
+  Running static analysis
+
+>

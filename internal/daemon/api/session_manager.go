@@ -23,6 +23,26 @@ func NewSessionManager(logger *slog.Logger) *SessionManager {
 	}
 }
 
+// TotalSessionCount returns the number of active sessions across every
+// known architect. Used by /agent/status/debug to verify supervisors are
+// actually running.
+func (m *SessionManager) TotalSessionCount() int {
+	m.mu.RLock()
+	stores := make([]*session.Store, 0, len(m.stores))
+	for _, s := range m.stores {
+		stores = append(stores, s)
+	}
+	m.mu.RUnlock()
+
+	total := 0
+	for _, s := range stores {
+		if sessions, err := s.List(); err == nil {
+			total += len(sessions)
+		}
+	}
+	return total
+}
+
 // GetStore returns the session store for the given project path.
 // Creates a new store if one doesn't exist for the path.
 func (m *SessionManager) GetStore(projectPath string) *session.Store {

@@ -69,6 +69,7 @@ func (h *ArchitectHandlers) GetState(w http.ResponseWriter, r *http.Request) {
 			TmuxWindow:  "architect",
 		}
 		if sess != nil {
+			archResp.ID = sess.SessionID
 			archResp.StartedAt = sess.StartedAt
 			status := string(sess.Status)
 			archResp.Status = &status
@@ -123,6 +124,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 			TmuxWindow:  "architect",
 		}
 		if sess != nil {
+			archResp.ID = sess.SessionID
 			archResp.StartedAt = sess.StartedAt
 			status := string(sess.Status)
 			archResp.Status = &status
@@ -215,11 +217,13 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 	}
 
 	spawner := spawn.NewSpawner(spawn.Dependencies{
-		TmuxManager:  h.deps.TmuxManager,
-		SessionStore: sessStore,
-		CortexdPath:  h.deps.CortexdPath,
-		Logger:       h.deps.Logger,
-		DefaultsDir:  h.deps.DefaultsDir,
+		TmuxManager:   h.deps.TmuxManager,
+		SessionStore:  sessStore,
+		PaneObserver:  h.deps.PaneObserver,
+		SupervisorCtx: h.deps.SupervisorCtx,
+		CortexdPath:   h.deps.CortexdPath,
+		Logger:        h.deps.Logger,
+		DefaultsDir:   h.deps.DefaultsDir,
 	})
 
 	var result *spawn.SpawnResult

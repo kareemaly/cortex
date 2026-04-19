@@ -1,6 +1,8 @@
 package session
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,7 +13,11 @@ import (
 )
 
 // Store manages session state backed by a single JSON file.
-// Sessions are keyed by ticket short ID.
+//
+// The on-disk map is keyed by the canonical SessionID UUID, minted at
+// creation time. Architect, ticket and collab sessions share the same
+// routing key so callers can address every session uniformly via
+// /agent/status?session_id=<uuid>.
 type Store struct {
 	path string
 	mu   sync.Mutex
@@ -22,80 +28,20 @@ func NewStore(path string) *Store {
 	return &Store{path: path}
 }
 
-// Create adds a new session for the given ticket.
-// Returns the key (ticket short ID) and the created session.
-func (s *Store) Create(ticketID, agent, tmuxWindow string) (string, *Session, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	sessions, err := s.load()
-	if err != nil {
-		return "", nil, err
+// NewSessionID mints a 16-byte hex UUID for a session. A failing entropy
+// source is fatal — a secure RNG is a hard requirement, not something to
+// paper over.
+func NewSessionID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(fmt.Errorf("session: crypto/rand.Read failed: %w", err))
 	}
-
-	key := storage.ShortID(ticketID)
-	session := &Session{
-		Type:       SessionTypeTicket,
-		TicketID:   ticketID,
-		Agent:      agent,
-		TmuxWindow: tmuxWindow,
-		StartedAt:  time.Now().UTC(),
-		Status:     AgentStatusStarting,
-	}
-
-	sessions[key] = session
-
-	if err := s.save(sessions); err != nil {
-		return "", nil, err
-	}
-
-	return key, session, nil
+	return hex.EncodeToString(b[:])
 }
 
-// CreateCollab adds a new collab session.
-// Key is "collab-" + storage.ShortID(collabID).
-func (s *Store) CreateCollab(collabID, prompt, agent, tmuxWindow string) (string, *Session, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	sessions, err := s.load()
-	if err != nil {
-		return "", nil, err
-	}
-
-	key := "collab-" + storage.ShortID(collabID)
-	sess := &Session{
-		Type:       SessionTypeCollab,
-		CollabID:   collabID,
-		Prompt:     prompt,
-		Agent:      agent,
-		TmuxWindow: tmuxWindow,
-		StartedAt:  time.Now().UTC(),
-		Status:     AgentStatusStarting,
-	}
-
-	sessions[key] = sess
-
-	if err := s.save(sessions); err != nil {
-		return "", nil, err
-	}
-
-	return key, sess, nil
-}
-
-// GetByCollabID retrieves a collab session by its full collab ID.
-func (s *Store) GetByCollabID(collabID string) (*Session, error) {
-	return s.Get("collab-" + storage.ShortID(collabID))
-}
-
-// EndCollab removes a collab session entry.
-func (s *Store) EndCollab(collabID string) error {
-	return s.End("collab-" + storage.ShortID(collabID))
-}
-
-// CreateArchitect adds a new architect session.
-// Uses ArchitectSessionKey as the literal key (not shortened via ShortID).
-func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
+// Create adds a new ticket session and returns the created session. The
+// session's SessionID field holds the canonical UUID routing key.
+func (s *Store) Create(ticketID, agent, tmuxWindow string) (*Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -105,6 +51,107 @@ func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
 	}
 
 	sess := &Session{
+		SessionID:  NewSessionID(),
+		Type:       SessionTypeTicket,
+		TicketID:   ticketID,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now().UTC(),
+		Status:     AgentStatusStarting,
+	}
+
+	sessions[sess.SessionID] = sess
+
+	if err := s.save(sessions); err != nil {
+		return nil, err
+	}
+
+	return sess, nil
+}
+
+// CreateCollab adds a new collab session.
+func (s *Store) CreateCollab(collabID, prompt, agent, tmuxWindow string) (*Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sessions, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+
+	sess := &Session{
+		SessionID:  NewSessionID(),
+		Type:       SessionTypeCollab,
+		CollabID:   collabID,
+		Prompt:     prompt,
+		Agent:      agent,
+		TmuxWindow: tmuxWindow,
+		StartedAt:  time.Now().UTC(),
+		Status:     AgentStatusStarting,
+	}
+
+	sessions[sess.SessionID] = sess
+
+	if err := s.save(sessions); err != nil {
+		return nil, err
+	}
+
+	return sess, nil
+}
+
+// GetByCollabID retrieves a collab session by its full collab ID.
+func (s *Store) GetByCollabID(collabID string) (*Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sessions, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	for _, sess := range sessions {
+		if sess.Type == SessionTypeCollab && sess.CollabID == collabID {
+			return sess, nil
+		}
+	}
+	return nil, &storage.NotFoundError{Resource: "session", ID: collabID}
+}
+
+// EndCollab removes a collab session entry by its collab ID.
+func (s *Store) EndCollab(collabID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sessions, err := s.load()
+	if err != nil {
+		return err
+	}
+	for id, sess := range sessions {
+		if sess.Type == SessionTypeCollab && sess.CollabID == collabID {
+			delete(sessions, id)
+			return s.save(sessions)
+		}
+	}
+	return &storage.NotFoundError{Resource: "session", ID: collabID}
+}
+
+// CreateArchitect adds the architect session. There is at most one
+// architect session per store; any existing architect is replaced.
+func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sessions, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove any prior architect entry.
+	for id, sess := range sessions {
+		if sess.Type == SessionTypeArchitect {
+			delete(sessions, id)
+		}
+	}
+
+	sess := &Session{
+		SessionID:  NewSessionID(),
 		Type:       SessionTypeArchitect,
 		Agent:      agent,
 		TmuxWindow: tmuxWindow,
@@ -112,7 +159,7 @@ func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
 		Status:     AgentStatusStarting,
 	}
 
-	sessions[ArchitectSessionKey] = sess
+	sessions[sess.SessionID] = sess
 
 	if err := s.save(sessions); err != nil {
 		return nil, err
@@ -123,87 +170,144 @@ func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
 
 // GetArchitect retrieves the architect session.
 func (s *Store) GetArchitect() (*Session, error) {
-	return s.Get(ArchitectSessionKey)
-}
-
-// EndArchitect removes the architect session entry.
-func (s *Store) EndArchitect() error {
-	return s.End(ArchitectSessionKey)
-}
-
-// Get retrieves a session by ticket short ID.
-func (s *Store) Get(ticketShortID string) (*Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	sessions, err := s.load()
 	if err != nil {
 		return nil, err
 	}
-
-	session, ok := sessions[ticketShortID]
-	if !ok {
-		return nil, &storage.NotFoundError{Resource: "session", ID: ticketShortID}
+	for _, sess := range sessions {
+		if sess.Type == SessionTypeArchitect {
+			return sess, nil
+		}
 	}
-
-	return session, nil
+	return nil, &storage.NotFoundError{Resource: "session", ID: ArchitectSessionKey}
 }
 
-// GetByTicketID retrieves a session by full ticket ID.
+// EndArchitect removes the architect session entry.
+func (s *Store) EndArchitect() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sessions, err := s.load()
+	if err != nil {
+		return err
+	}
+	for id, sess := range sessions {
+		if sess.Type == SessionTypeArchitect {
+			delete(sessions, id)
+			return s.save(sessions)
+		}
+	}
+	return &storage.NotFoundError{Resource: "session", ID: ArchitectSessionKey}
+}
+
+// GetByTicketID retrieves a ticket session by full ticket ID.
 func (s *Store) GetByTicketID(ticketID string) (*Session, error) {
-	return s.Get(storage.ShortID(ticketID))
-}
-
-// UpdateStatus updates the status, optional tool, and optional work description for a session.
-func (s *Store) UpdateStatus(ticketShortID string, status AgentStatus, tool *string, work *string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	sessions, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	for _, sess := range sessions {
+		if sess.Type == SessionTypeTicket && sess.TicketID == ticketID {
+			return sess, nil
+		}
+	}
+	return nil, &storage.NotFoundError{Resource: "session", ID: ticketID}
+}
 
+// EndByTicketID removes a ticket session identified by its ticket ID.
+func (s *Store) EndByTicketID(ticketID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	sessions, err := s.load()
 	if err != nil {
 		return err
 	}
-
-	session, ok := sessions[ticketShortID]
-	if !ok {
-		return &storage.NotFoundError{Resource: "session", ID: ticketShortID}
+	for id, sess := range sessions {
+		if sess.Type == SessionTypeTicket && sess.TicketID == ticketID {
+			delete(sessions, id)
+			return s.save(sessions)
+		}
 	}
-
-	session.Status = status
-	session.Tool = tool
-	session.Work = work
-
-	return s.save(sessions)
+	return &storage.NotFoundError{Resource: "session", ID: ticketID}
 }
 
-// End removes a session entry (ephemeral — deleted on end).
-func (s *Store) End(ticketShortID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	sessions, err := s.load()
-	if err != nil {
-		return err
-	}
-
-	if _, ok := sessions[ticketShortID]; !ok {
-		return &storage.NotFoundError{Resource: "session", ID: ticketShortID}
-	}
-
-	delete(sessions, ticketShortID)
-
-	return s.save(sessions)
-}
-
-// List returns all active sessions.
+// List returns all active sessions keyed by SessionID UUID.
 func (s *Store) List() (map[string]*Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	return s.load()
 }
 
-// load reads sessions from the JSON file. Returns empty map if file doesn't exist or is empty.
+// GetBySessionID retrieves a session by its canonical UUID.
+func (s *Store) GetBySessionID(sessionID string) (*Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sessions, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	if sess, ok := sessions[sessionID]; ok {
+		return sess, nil
+	}
+	return nil, &storage.NotFoundError{Resource: "session", ID: sessionID}
+}
+
+// EndBySessionID removes a session entry by its canonical UUID.
+func (s *Store) EndBySessionID(sessionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sessions, err := s.load()
+	if err != nil {
+		return err
+	}
+	if _, ok := sessions[sessionID]; !ok {
+		return &storage.NotFoundError{Resource: "session", ID: sessionID}
+	}
+	delete(sessions, sessionID)
+	return s.save(sessions)
+}
+
+// SetAgentSessionID records the agent tool's internal session identifier
+// (Claude's --session-id UUID, Codex's rollout filename). Used by resume
+// so the decision machine can re-attach to the existing transcript.
+func (s *Store) SetAgentSessionID(sessionID, agentSessionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sessions, err := s.load()
+	if err != nil {
+		return err
+	}
+	sess, ok := sessions[sessionID]
+	if !ok {
+		return &storage.NotFoundError{Resource: "session", ID: sessionID}
+	}
+	sess.AgentSessionID = agentSessionID
+	return s.save(sessions)
+}
+
+// UpdateStatusBySessionID updates status/tool/work by session UUID.
+func (s *Store) UpdateStatusBySessionID(sessionID string, status AgentStatus, tool, work *string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sessions, err := s.load()
+	if err != nil {
+		return err
+	}
+	sess, ok := sessions[sessionID]
+	if !ok {
+		return &storage.NotFoundError{Resource: "session", ID: sessionID}
+	}
+	sess.Status = status
+	sess.Tool = tool
+	sess.Work = work
+	return s.save(sessions)
+}
+
+// load reads sessions from the JSON file. Returns empty map if file
+// doesn't exist or is empty.
 func (s *Store) load() (map[string]*Session, error) {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
@@ -226,18 +330,6 @@ func (s *Store) load() (map[string]*Session, error) {
 		sessions = make(map[string]*Session)
 	}
 
-	// Migrate old sessions missing the Type field.
-	for _, sess := range sessions {
-		if sess.Type == "" {
-			if sess.TicketID == ArchitectSessionKey {
-				sess.Type = SessionTypeArchitect
-				sess.TicketID = ""
-			} else {
-				sess.Type = SessionTypeTicket
-			}
-		}
-	}
-
 	return sessions, nil
 }
 
@@ -247,6 +339,5 @@ func (s *Store) save(sessions map[string]*Session) error {
 	if err != nil {
 		return fmt.Errorf("marshal sessions: %w", err)
 	}
-
 	return storage.AtomicWriteFile(s.path, data)
 }

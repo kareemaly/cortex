@@ -42,6 +42,11 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 	r.Get("/daemon/logs", logsHandlers.ReadDaemonLogs)
 	r.Get("/daemon/status", logsHandlers.DaemonStatus)
 
+	// Agent status telemetry — global (no project scope) so one call
+	// covers every architect's pattern counters and observer metrics.
+	globalAgentHandlers := NewAgentHandlers(deps)
+	r.Get("/agent/status/debug", globalAgentHandlers.DebugStatus)
+
 	// Project-scoped routes
 	r.Group(func(r chi.Router) {
 		r.Use(ArchitectRequired())

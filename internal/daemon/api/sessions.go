@@ -55,13 +55,14 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items := make([]sessionListItem, 0, len(sessions))
-	for shortID, sess := range sessions {
+	for _, sess := range sessions {
 		sessionType := "ticket"
 		title := ""
-		if sess.Type == session.SessionTypeArchitect {
+		switch sess.Type {
+		case session.SessionTypeArchitect:
 			sessionType = "architect"
 			title = "Architect"
-		} else if sess.Type == session.SessionTypeCollab {
+		case session.SessionTypeCollab:
 			sessionType = "collab"
 			if sess.Prompt != "" {
 				if len(sess.Prompt) > 50 {
@@ -72,13 +73,15 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 			} else {
 				title = "Collab"
 			}
-		} else if ticketStore != nil {
-			if t, _, err := ticketStore.Get(sess.TicketID); err == nil {
-				title = t.Title
+		default:
+			if ticketStore != nil {
+				if t, _, err := ticketStore.Get(sess.TicketID); err == nil {
+					title = t.Title
+				}
 			}
 		}
 		items = append(items, sessionListItem{
-			SessionID:   shortID,
+			SessionID:   sess.SessionID,
 			SessionType: sessionType,
 			TicketID:    sess.TicketID,
 			TicketTitle: title,
@@ -96,31 +99,32 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Kill handles DELETE /sessions/{id} - kills a session.
-// The {id} parameter is the ticket short ID (first 8 chars of the ticket ID).
+// Kill handles DELETE /sessions/{id} - kills a session by its canonical
+// SessionID UUID.
 func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
+	if h.deps.SessionManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "sessions_unavailable",
+			"session manager is not configured")
+		return
+	}
 	projectPath := GetArchitectPath(r.Context())
 
 	sessStore := h.deps.SessionManager.GetStore(projectPath)
 
-	// Search all sessions for a match
-	shortID, sess := h.findSession(sessStore, sessionID)
-	if sess == nil {
+	sess, err := sessStore.GetBySessionID(sessionID)
+	if err != nil || sess == nil {
 		writeError(w, http.StatusNotFound, "not_found", "session not found")
 		return
 	}
 
 	// If session is active and tmux is available, kill the window
 	if h.deps.TmuxManager != nil && sess.TmuxWindow != "" {
-		// Load project config for session name
 		projectCfg, _ := architectconfig.Load(projectPath)
 		sessionName := projectCfg.GetTmuxSessionName()
 
-		err := h.deps.TmuxManager.KillWindow(sessionName, sess.TmuxWindow)
-		if err != nil {
-			// Log but don't fail - window might already be closed
+		if err := h.deps.TmuxManager.KillWindow(sessionName, sess.TmuxWindow); err != nil {
 			if !tmux.IsWindowNotFound(err) && !tmux.IsSessionNotFound(err) {
 				h.deps.Logger.Warn("failed to kill tmux window", "error", err)
 			}
@@ -128,7 +132,7 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// End the session in the store
-	if err := sessStore.End(shortID); err != nil {
+	if err := sessStore.EndBySessionID(sess.SessionID); err != nil {
 		h.deps.Logger.Error("failed to end session", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to end session")
 		return
@@ -137,41 +141,28 @@ func (h *SessionHandlers) Kill(w http.ResponseWriter, r *http.Request) {
 	h.deps.Bus.Emit(events.Event{
 		Type:          events.SessionEnded,
 		ArchitectPath: projectPath,
-		TicketID:      shortID,
+		TicketID:      sess.TicketID,
+		SessionID:     sess.SessionID,
 	})
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// findSession searches all sessions for one matching the given ID.
-// The ID can be a ticket short ID or a ticket full ID (prefix match).
-// Returns the short ID key and session, or ("", nil) if not found.
-func (h *SessionHandlers) findSession(sessStore *session.Store, id string) (string, *session.Session) {
-	sessions, _ := sessStore.List()
-	for shortID, sess := range sessions {
-		// Match by ticket short ID
-		if shortID == id {
-			return shortID, sess
-		}
-		// Match by ticket full ID prefix
-		if len(sess.TicketID) >= len(id) && sess.TicketID[:len(id)] == id {
-			return shortID, sess
-		}
-	}
-	return "", nil
 }
 
 // Approve handles POST /sessions/{id}/approve - sends approve prompt to agent.
 func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
+	if h.deps.SessionManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "sessions_unavailable",
+			"session manager is not configured")
+		return
+	}
 	projectPath := GetArchitectPath(r.Context())
 
 	sessStore := h.deps.SessionManager.GetStore(projectPath)
 
-	// Find the session
-	_, sess := h.findSession(sessStore, sessionID)
-	if sess == nil {
+	sess, err := sessStore.GetBySessionID(sessionID)
+	if err != nil || sess == nil {
 		writeError(w, http.StatusNotFound, "not_found", "session not found")
 		return
 	}
@@ -206,8 +197,7 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		tmuxSession = projectCfg.Name
 	}
 
-	// In V2, agents call concludeSession directly - no approve stage
-	// Send a generic message to remind agent to conclude
+	// Agents call concludeSession themselves — Approve just nudges them.
 	approveContent := "Please call `concludeSession` with a summary of your work when you are done."
 
 	// Render template variables
@@ -252,7 +242,7 @@ func (h *SessionHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		h.deps.Logger.Warn("failed to switch tmux client", "session", tmuxSession, "error", err)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"success":    true,
 		"session_id": sessionID,
 		"message":    "Approve prompt sent to agent",

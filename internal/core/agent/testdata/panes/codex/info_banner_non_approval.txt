@@ -1,0 +1,9 @@
+│ codex
+│
+│   Session started.
+│   Workspace: /Users/kareem/projects/cortex1
+│   Model: codex-2
+│
+│   Waiting for a prompt...
+│
+>

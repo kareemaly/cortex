@@ -1,0 +1,8 @@
+  ⏺ Running tests now.
+
+  ⏺ Bash(make test)
+  ⎿ ok  	github.com/kareemaly/cortex/internal/session	0.145s
+  ⎿ ok  	github.com/kareemaly/cortex/internal/daemon/api	0.233s
+  ⎿ ok  	github.com/kareemaly/cortex/internal/core/agent	0.158s
+
+  ⏺ Tests pass — moving on to the next task.

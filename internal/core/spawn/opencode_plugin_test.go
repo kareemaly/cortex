@@ -56,10 +56,16 @@ func TestGenerateOpenCodeStatusPlugin(t *testing.T) {
 		t.Error("expected plugin to have tool.execute.after as a hook key")
 	}
 
-	// Status mappings still present.
-	for _, want := range []string{`"in_progress"`, `"idle"`, `"error"`, `"waiting_permission"`} {
+	// Status mappings still present — canonical names only.
+	for _, want := range []string{`"working"`, `"idle"`, `"error"`, `"awaiting_input"`} {
 		if !strings.Contains(plugin, want) {
 			t.Errorf("expected plugin to emit status %s", want)
+		}
+	}
+	// Deprecated spellings must not appear.
+	for _, deprecated := range []string{`"in_progress"`, `"waiting_permission"`} {
+		if strings.Contains(plugin, deprecated) {
+			t.Errorf("plugin still emits deprecated status %s", deprecated)
 		}
 	}
 }
@@ -162,7 +168,7 @@ func TestOpenCodeSpawnIncludesPluginDir(t *testing.T) {
 	}
 
 	// Extract the OPENCODE_CONFIG_DIR value and verify the plugin file exists
-	for _, line := range strings.Split(script, "\n") {
+	for line := range strings.SplitSeq(script, "\n") {
 		if strings.Contains(line, "export OPENCODE_CONFIG_DIR=") {
 			// Extract path between single quotes
 			parts := strings.SplitN(line, "'", 3)

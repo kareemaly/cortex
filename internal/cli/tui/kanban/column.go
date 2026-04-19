@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/tui/status"
 )
 
 // Column represents a kanban column with tickets.
@@ -296,26 +297,14 @@ func (c *Column) View(width int, isActive bool, maxHeight int, repoColors map[st
 func agentStatusIcon(t sdk.TicketSummary) string {
 	// Orphaned sessions get a distinct icon.
 	if t.IsOrphaned {
-		return "◌"
+		return status.OrphanedIcon
 	}
 
 	if t.AgentStatus == nil {
-		return "●"
+		return status.Icon("")
 	}
 
-	symbols := map[string]string{
-		"starting":           "▶",
-		"in_progress":        "●",
-		"idle":               "○",
-		"waiting_permission": "⏸",
-		"error":              "✗",
-	}
-
-	symbol := symbols[*t.AgentStatus]
-	if symbol == "" {
-		symbol = "●"
-	}
-	return symbol
+	return status.Icon(*t.AgentStatus)
 }
 
 // agentStatusLabel returns the icon + truncated tool name (unstyled) for the metadata line.
@@ -324,14 +313,18 @@ func agentStatusLabel(t sdk.TicketSummary) string {
 	if t.IsOrphaned {
 		return icon + " orphaned"
 	}
+	label := icon
 	if t.AgentTool != nil && *t.AgentTool != "" {
 		tool := *t.AgentTool
 		if len(tool) > 8 {
 			tool = tool[:8]
 		}
-		return icon + " " + tool
+		label = icon + " " + tool
 	}
-	return icon
+	if t.AgentStatus != nil {
+		label = status.ApplyEnded(*t.AgentStatus, label)
+	}
+	return label
 }
 
 // wrapText wraps text to fit within width, returning all wrapped lines.

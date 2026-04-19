@@ -7,10 +7,10 @@ import (
 )
 
 // GenerateOpenCodeStatusPlugin returns a TypeScript plugin string that
-// appends JSONL status events to statusFilePath. The cortex daemon's shared
-// status tailer reads that file and forwards the events to /agent/status —
-// matching the claude and codex tailers, so all three agents share one
-// transport.
+// appends JSONL status events to statusFilePath. The cortex daemon reads
+// that file via the opencode supervisor and forwards events to /agent/status.
+// The plugin emits only canonical status names (working, idle, awaiting_input,
+// error) — no wire-format translation happens on the Go side.
 //
 // The plugin runs in Bun inside opencode; fs calls use node:fs. Values are
 // baked in via string interpolation (no env var lookups at runtime).
@@ -37,24 +37,24 @@ export default async (_input: any) => ({
     switch (event.type) {
       case "session.status": {
         const s = event.properties?.status?.type;
-        if (s === "busy") emit("in_progress");
+        if (s === "busy") emit("working");
         else if (s === "idle") emit("idle");
         else if (s === "retry") emit("error");
         break;
       }
       case "permission.asked":
-        emit("waiting_permission");
+        emit("awaiting_input");
         break;
       case "permission.replied":
-        emit("in_progress");
+        emit("working");
         break;
     }
   },
   "tool.execute.before": async (hookInput: any) => {
-    emit("in_progress", hookInput?.tool as string | undefined);
+    emit("working", hookInput?.tool as string | undefined);
   },
   "tool.execute.after": async () => {
-    emit("in_progress");
+    emit("working");
   },
 });
 `, statusFilePath)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
+	"github.com/kareemaly/cortex/internal/cli/tui/status"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -259,19 +260,9 @@ func (m Model) renderGroupRow(r row, selected bool) string {
 
 func architectSessionIcon(arch *sdk.ArchitectStateResponse) string {
 	if arch.Session == nil || arch.Session.Status == nil {
-		return "●"
+		return status.Icon("")
 	}
-	symbols := map[string]string{
-		"starting":           "▶",
-		"in_progress":        "●",
-		"idle":               "○",
-		"waiting_permission": "⏸",
-		"error":              "✗",
-	}
-	if s, ok := symbols[*arch.Session.Status]; ok {
-		return s
-	}
-	return "●"
+	return status.Icon(*arch.Session.Status)
 }
 
 func architectStatusBadge(sess *sdk.ArchitectSessionResponse) string {

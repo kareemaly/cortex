@@ -378,15 +378,24 @@ func (m Model) handleKillSession() (tea.Model, tea.Cmd) {
 		if pd.architect == nil || (pd.architect.State != "active" && pd.architect.State != "orphaned") {
 			return m, nil
 		}
+		// Sessions route by UUID — without a real SessionID, the DELETE
+		// /sessions/{id} request would 404 against the store. Skip the
+		// action rather than fire a no-op.
+		if pd.architect.Session == nil || pd.architect.Session.ID == "" {
+			m.statusMsg = "Architect session has no known ID yet; try again in a moment"
+			m.statusIsError = true
+			return m, m.clearStatusAfterDelay()
+		}
+		archSessionID := pd.architect.Session.ID
 		if pd.architect.State == "orphaned" {
 			m.killing = true
 			m.statusMsg = "Killing orphaned architect..."
 			m.statusIsError = false
-			return m, m.killSession(pd.project.Path, "architect")
+			return m, m.killSession(pd.project.Path, archSessionID)
 		}
 		m.showKillConfirm = true
 		m.killProjectPath = pd.project.Path
-		m.killSessionID = "architect"
+		m.killSessionID = archSessionID
 		title := pd.project.Title
 		if title == "" {
 			title = filepath.Base(pd.project.Path)
