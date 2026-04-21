@@ -27,13 +27,17 @@ Single `cortexd` daemon serves all projects. **All clients communicate exclusive
 ┌─────────────────┐
 │  cortex CLI/TUI │──┐
 └─────────────────┘  │
-┌─────────────────┐  │  HTTP :4200   ┌──────────────────────┐
-│  MCP Architect  │──┤──────────────▶│      cortexd         │
-└─────────────────┘  │               │  ├─ HTTP API         │
-┌─────────────────┐  │               │  ├─ StoreManager     │
-│  MCP Ticket     │──┘               │  ├─ Tmux management  │
-└─────────────────┘                  │  └─ SSE event bus    │
-                                     └──────────────────────┘
+┌─────────────────┐  │  HTTP :4200   ┌──────────────────────────┐
+│  MCP Architect  │──┤──────────────▶│      cortexd             │
+└─────────────────┘  │               │  ├─ HTTP API             │
+┌─────────────────┐  │               │  ├─ StoreManager         │
+│  MCP Ticket     │──┘               │  ├─ SessionManager       │
+└─────────────────┘                  │  ├─ HubManager (hooks)   │
+┌──────────────────┐                 │  ├─ Tmux management      │
+│ Agent Hooks      │────────────────▶│  ├─ SSE event bus        │
+│ (Claude/Codex/   │   POST /hook    │  └─ Pane observer        │
+│  OpenCode)       │                 └──────────────────────────┘
+└──────────────────┘
 ```
 
 Three session types: **architect** (project-scoped), **ticket** (ticket-scoped worker), **collab** (ticketless interactive). The architect spawns ticket and collab sessions. Each type gets a different MCP tool set (see `internal/daemon/mcp/server.go`).
@@ -58,6 +62,7 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 - **SessionManager**: Manages ephemeral session stores per architect. Located in `internal/daemon/api/session_manager.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 - **Agent status supervision**: Per-session supervisor per spawned agent, wired via `startAgentSupervisor` in `internal/core/spawn/supervisor.go`. Adapter-based — each agent (claude/codex/opencode) registers an `agent.Adapter` in `internal/core/agent/adapter_*.go` with a transcript parser + a list of `AwaitingInputPhrases` (literal substrings matched against raw pane captures). A single `tmux/observer.Observer` polls all supervised panes every 500 ms; each tick emits a `Snapshot{Hash, Content, Changed}` that feeds both the supervisor's substring match and the idle-window timer. Decision logic in `internal/core/agent/decision.go` is a six-row precedence table (ended > error > authoritative transcript > phrase match > change-activity > idle-window). Supervisors bind to daemon-root `SupervisorCtx` so they outlive the HTTP spawn handler. Sessions route by canonical `SessionID` UUID everywhere (store, events, `/agent/status`).
+- **Agent status from hooks**: `HubManager` in `internal/daemon/api/hub_manager.go` wraps the `agentstatus.Hub` library, maintaining an in-memory `sessionCache` (sync.Map) keyed by `session.AgentSessionID`. Hook payloads POST to `POST /hook/{agent}` (global, no architect header). The event loop drains `hub.Events()` into the cache. API responses overlay cached status/tool on ticket summaries and session lists. If cache misses (e.g., non-Claude agents), responses fall back to pane-scraped values from the session store. Hub creation is non-fatal — daemon continues with pane-scraping only if Hub fails.
 
 ## Anti-Patterns
 
@@ -73,6 +78,7 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Call `architectconfig.Load()` directly to resolve variants | Use `mergeProjectConfig()` in `internal/daemon/api/config_merge.go` | Direct load misses global agents from `~/.cortex/settings.yaml`; only the daemon merges project + global |
 | Add a per-agent status supervisor wrapper | Extend `startAgentSupervisor` in `internal/core/spawn/supervisor.go` + register a new `agent.Adapter` | The unified helper owns ctx-lifetime, logger wiring, and observer registration; per-agent wrappers drift |
 | Post `ended` to `POST /agent/status` | `ended` is terminal and produced only by the supervisor's liveness loop | Accepting client-sent `ended` jams the decision machine's terminal guard |
+| Mount `hub.Handler()` into chi router | Write a manual chi handler that reads `chi.URLParam("agent")` and calls `hubManager.Ingest()` | `hub.Handler()` uses stdlib mux `r.PathValue()` (Go 1.22), which returns `""` when called inside chi |
 
 ## Debugging
 
@@ -96,6 +102,8 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | SDK client | `internal/cli/sdk/client.go` |
 | Spawn orchestration | `internal/core/spawn/` |
 | Agent status adapters | `internal/core/agent/` (`adapter_{claude,codex,opencode}.go`, supervisor, decision machine, phrase matcher) |
+| Hub manager | `internal/daemon/api/hub_manager.go` (wraps agentstatus.Hub, maintains sessionCache) |
+| Hook endpoint | `internal/daemon/api/hook.go` (chi handler for `POST /hook/{agent}`) |
 | Tmux pane observer | `internal/tmux/observer/` (shared per-tick raw-hash goroutine) |
 | Architect config | `internal/architect/config/` |
 | Daemon config | `internal/daemon/config/` |
@@ -128,7 +136,7 @@ Agent variant resolution always merges global (`settings.yaml`) + project (`cort
 
 | Command | Description |
 |---------|-------------|
-| `cortex init <name>` | Initialize architect workspace in `./<name>/` |
+| `cortex init <name>` | Initialize architect workspace in `./<name>/` (also installs agent hooks) |
 | `cortex architect list` | List all registered architects (TUI or table) |
 | `cortex architect start [name] [--mode fresh\|resume]` | Start/attach architect session |
 | `cortex architect show [name]` | Open architect project TUI |
@@ -142,7 +150,7 @@ Agent variant resolution always merges global (`settings.yaml`) + project (`cort
 
 Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/sdk/client.go`.
 
-**Global** (no architect header): `GET /health`, `GET /architects`, `POST /architects`, global config (`/config/global`), daemon logs/status (`/daemon/logs`, `/daemon/status`).
+**Global** (no architect header): `GET /health`, `GET /architects`, `POST /architects`, global config (`/config/global`), daemon logs/status (`/daemon/logs`, `/daemon/status`), agent hook ingestion (`POST /hook/{agent}`).
 
 **Architect-scoped** (requires `X-Cortex-Architect`): Ticket CRUD, spawn, move, conclude, architect spawn/conclude, session kill/approve, SSE events, conclusions (`/conclusions`), architect config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`, `/prompts/reset`).
 
