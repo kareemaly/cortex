@@ -47,6 +47,10 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 	globalAgentHandlers := NewAgentHandlers(deps)
 	r.Get("/agent/status/debug", globalAgentHandlers.DebugStatus)
 
+	// Hook ingestion endpoint (global)
+	hookHandlers := NewHookHandlers(deps)
+	r.Post("/hook/{agent}", hookHandlers.IngestHook)
+
 	// Project-scoped routes
 	r.Group(func(r chi.Router) {
 		r.Use(ArchitectRequired())

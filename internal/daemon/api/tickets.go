@@ -61,9 +61,9 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	tmuxSession := projectCfg.GetTmuxSessionName()
 
 	resp := ListAllTicketsResponse{
-		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
-		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.HubManager),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.HubManager),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.HubManager),
 	}
 
 	sortByCreated := func(a, b TicketSummary) int {
@@ -115,7 +115,7 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	tmuxSession := projectCfg.GetTmuxSessionName()
 
 	resp := ListTicketsResponse{
-		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath),
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.HubManager),
 	}
 
 	slices.SortFunc(resp.Tickets, func(a, b TicketSummary) int {

@@ -26,4 +26,5 @@ type Dependencies struct {
 	SupervisorCtx          context.Context
 	CortexdPath            string
 	DefaultsDir            string
+	HubManager             *HubManager
 }

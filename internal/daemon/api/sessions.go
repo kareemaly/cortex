@@ -80,7 +80,7 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		items = append(items, sessionListItem{
+		item := sessionListItem{
 			SessionID:   sess.SessionID,
 			SessionType: sessionType,
 			TicketID:    sess.TicketID,
@@ -90,7 +90,22 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 			StartedAt:   sess.StartedAt,
 			Status:      string(sess.Status),
 			Tool:        sess.Tool,
-		})
+		}
+
+		// Overlay Hub-sourced status/tool if available.
+		if h.deps.HubManager != nil && sess.AgentSessionID != "" {
+			if ev, ok := h.deps.HubManager.GetEvent(sess.AgentSessionID); ok {
+				item.Status = string(ev.Status)
+				if ev.Tool != "" {
+					tool := ev.Tool
+					item.Tool = &tool
+				} else {
+					item.Tool = nil
+				}
+			}
+		}
+
+		items = append(items, item)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

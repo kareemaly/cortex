@@ -105,6 +105,17 @@ func runServe(cmd *cobra.Command, args []string) error {
 		defer paneObserver.Stop()
 	}
 
+	// Start Hub-based agent status. Non-fatal if it fails — falls back to
+	// pane-scraping only.
+	var hubManager *api.HubManager
+	if hm, err := api.NewHubManager(logger); err != nil {
+		logger.Warn("failed to create hub manager, hook-based agent status unavailable", "error", err)
+	} else {
+		hubManager = hm
+		hubManager.StartEventLoop(ctx)
+		defer func() { _ = hubManager.Close() }()
+	}
+
 	deps := &api.Dependencies{
 		StoreManager:           storeManager,
 		ConclusionStoreManager: conclusionStoreManager,
@@ -115,6 +126,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Logger:                 logger,
 		SupervisorCtx:          ctx,
 		DefaultsDir:            filepath.Join(homeDir, ".cortex", "defaults", "main"),
+		HubManager:             hubManager,
 	}
 
 	// Create and run server

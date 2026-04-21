@@ -72,6 +72,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Register with daemon
 	registered, regErr := install.RegisterArchitect(projectPath, name)
 
+	// Install agent hooks (non-fatal: daemon may not be running yet)
+	hookResults, hookErr := install.InstallAgentHooks()
+
 	// Print summary
 	fmt.Println()
 	for _, gi := range globalItems {
@@ -87,6 +90,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Registered architect %q with daemon\n", name)
 	} else if regErr != nil {
 		fmt.Printf("  Warning: failed to register architect: %v\n", regErr)
+	}
+
+	if hookErr != nil {
+		fmt.Printf("  Warning: failed to install agent hooks: %v\n", hookErr)
+	} else {
+		for _, r := range hookResults {
+			switch {
+			case r.Installed:
+				fmt.Printf("  + hooks installed for %s → %s\n", r.Agent, r.Path)
+			case r.Skipped:
+				fmt.Printf("  · %s hooks skipped: %s\n", r.Agent, r.Reason)
+			default:
+				fmt.Printf("  · %s hooks: %s\n", r.Agent, r.Reason)
+			}
+		}
 	}
 
 	fmt.Printf("\nArchitect %q initialized.\n", name)

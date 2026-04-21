@@ -1,9 +1,14 @@
 package install
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/kareemaly/agentstatus"
+	_ "github.com/kareemaly/agentstatus/adapters/claude"
+	_ "github.com/kareemaly/agentstatus/adapters/codex"
+	_ "github.com/kareemaly/agentstatus/adapters/opencode"
 	"github.com/kareemaly/cortex/internal/daemon/config"
 )
 
@@ -189,4 +194,19 @@ type PathNotDirectoryError struct {
 
 func (e *PathNotDirectoryError) Error() string {
 	return "path exists but is not a directory: " + e.Path
+}
+
+// InstallAgentHooks installs agentstatus hooks for all registered agents.
+// Reads daemon port from ~/.cortex/settings.yaml. Non-fatal per-agent errors
+// are returned in the result slice; only a systemic failure returns a non-nil error.
+func InstallAgentHooks() ([]agentstatus.InstallResult, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config for hook install: %w", err)
+	}
+	endpoint := fmt.Sprintf("http://localhost:%d/hook", cfg.Port)
+	return agentstatus.InstallHooks(agentstatus.InstallConfig{
+		Endpoint: endpoint,
+		// Agents: nil → all registered adapters (claude, codex, opencode)
+	})
 }
