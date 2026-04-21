@@ -207,6 +207,6 @@ func InstallAgentHooks() ([]agentstatus.InstallResult, error) {
 	endpoint := fmt.Sprintf("http://localhost:%d/hook", cfg.Port)
 	return agentstatus.InstallHooks(agentstatus.InstallConfig{
 		Endpoint: endpoint,
-		// Agents: nil → all registered adapters (claude, codex, opencode)
+		Marker:   "cortex",
 	})
 }
