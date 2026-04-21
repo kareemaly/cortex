@@ -1,11 +1,9 @@
 package agent
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -19,9 +17,9 @@ import (
 // cortexd's /agent/status endpoint; tests substitute an in-memory recorder.
 type Publisher func(Transition)
 
-// Transition is a single status change observed by the decision machine. Only
-// transitions are emitted — identical-to-previous status updates are
-// collapsed by the supervisor before the publisher is called.
+// Transition is a single status change forwarded from the Hub. The supervisor
+// calls the publisher for every Hub event — deduplication is left to the
+// server side.
 type Transition struct {
 	SessionID string
 	TicketID  string
@@ -32,66 +30,51 @@ type Transition struct {
 }
 
 // SupervisorConfig carries everything a supervisor needs to run for one
-// session: identity, the adapter (parser + transcript), file paths for
-// discovery & liveness, and the publisher for state transitions.
+// session: identity, the Hub event source, file paths for liveness, and the
+// publisher for state transitions.
 type SupervisorConfig struct {
 	SessionID     string
 	TicketID      string
 	ArchitectPath string
-	WorkingDir    string
 	LivenessPath  string
 
-	Adapter *Adapter
+	// HubEventSource, when non-nil, is called once during StartSupervisor to
+	// obtain a channel of Hub-sourced status events bound to the given context.
+	// When nil, no Hub forwarding occurs (liveness-only supervision).
+	HubEventSource func(ctx context.Context) <-chan HubEvent
 
-	// Runtime carries adapter-specific context for ResolveTranscript (env,
-	// transcript hint from Prepare).
-	Runtime RuntimeCtx
+	// EndFunc is called when the liveness loop detects the session has ended.
+	// Defaults to calling DELETE {DaemonURL}/sessions/{SessionID} when nil.
+	EndFunc func()
 
 	// Publisher reports status transitions. Defaults to HTTPPublisher against
 	// DaemonURL when nil.
 	Publisher Publisher
 	DaemonURL string
 
-	// Logger is used for noisy warnings (discovery timeout, unexpected
-	// errors). Defaults to slog.Default() when nil.
+	// Logger is used for warnings. Defaults to slog.Default() when nil.
 	Logger *slog.Logger
 
-	// Timing knobs — zero values pick sensible defaults.
-	DiscoveryInterval time.Duration
-	FollowInterval    time.Duration
-	LivenessInterval  time.Duration
+	// LivenessInterval controls how often the liveness file is stat-ed.
+	// Zero picks defaultLivenessInterval.
+	LivenessInterval time.Duration
 
 	// now returns the current time. Tests override it for determinism.
 	now func() time.Time
 }
 
-// Defaults used when the caller leaves timing knobs zero.
-const (
-	defaultDiscoveryInterval   = 250 * time.Millisecond
-	defaultFollowInterval      = 100 * time.Millisecond
-	defaultLivenessInterval    = 1 * time.Second
-	transcriptLineBufferMaxLen = 1 << 20 // 1 MiB; oversized lines trigger loud fallback
-)
+const defaultLivenessInterval = 1 * time.Second
 
 // StartSupervisor wires a supervisor for one session and starts its
 // goroutines. The returned cancel func tears them down.
 //
-// Required: Adapter, SessionID-or-TicketID, and LivenessPath.
+// Required: SessionID-or-TicketID and LivenessPath.
 func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelFunc, error) {
-	if cfg.Adapter == nil {
-		return nil, errMissing("Adapter")
-	}
 	if cfg.SessionID == "" && cfg.TicketID == "" {
 		return nil, errMissing("SessionID or TicketID")
 	}
 	if cfg.LivenessPath == "" {
 		return nil, errMissing("LivenessPath")
-	}
-	if cfg.DiscoveryInterval == 0 {
-		cfg.DiscoveryInterval = defaultDiscoveryInterval
-	}
-	if cfg.FollowInterval == 0 {
-		cfg.FollowInterval = defaultFollowInterval
 	}
 	if cfg.LivenessInterval == 0 {
 		cfg.LivenessInterval = defaultLivenessInterval
@@ -107,22 +90,22 @@ func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelF
 	}
 
 	ctx, cancelCtx := context.WithCancel(ctx)
-	decision := NewDecision(DecisionConfig{
-		InitialStatus: session.AgentStatusStarting,
-	})
 
-	sup := &supervisor{
-		cfg:            cfg,
-		ctx:            ctx,
-		decision:       decision,
-		signals:        make(chan Signal, 64),
-		statusSnapshot: session.AgentStatusStarting,
+	var hubEvents <-chan HubEvent
+	if cfg.HubEventSource != nil {
+		hubEvents = cfg.HubEventSource(ctx)
 	}
 
-	sup.wg.Add(1)
-	go sup.decisionLoop()
-	sup.wg.Add(1)
-	go sup.transcriptLoop()
+	sup := &supervisor{
+		cfg:       cfg,
+		ctx:       ctx,
+		hubEvents: hubEvents,
+	}
+
+	if hubEvents != nil {
+		sup.wg.Add(1)
+		go sup.hubLoop()
+	}
 	sup.wg.Add(1)
 	go sup.livenessLoop()
 
@@ -140,146 +123,44 @@ func errMissing(field string) error { return missingFieldError(field) }
 
 // supervisor holds the runtime state for one session.
 type supervisor struct {
-	cfg      SupervisorConfig
-	ctx      context.Context
-	decision *Decision
-
-	signals chan Signal
-
-	wg sync.WaitGroup
-
-	statusMu       sync.Mutex // guards statusSnapshot
-	statusSnapshot session.AgentStatus
+	cfg       SupervisorConfig
+	ctx       context.Context
+	hubEvents <-chan HubEvent
+	wg        sync.WaitGroup
 }
 
-func (s *supervisor) decisionLoop() {
+// hubLoop reads Hub events and forwards each one to the Publisher.
+func (s *supervisor) hubLoop() {
 	defer s.wg.Done()
-	publish := func(trans Transition) {
-		s.statusMu.Lock()
-		s.statusSnapshot = trans.Status
-		s.statusMu.Unlock()
-		s.cfg.Publisher(trans)
-	}
-
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
-		case sig := <-s.signals:
-			status, changed := s.decision.Apply(sig)
-			if !changed {
-				continue
+		case ev, ok := <-s.hubEvents:
+			if !ok {
+				return
 			}
-			publish(Transition{
+			trans := Transition{
 				SessionID: s.cfg.SessionID,
 				TicketID:  s.cfg.TicketID,
-				Status:    status,
-				Tool:      s.decision.Tool(),
-				Work:      s.decision.Work(),
-				At:        sig.At,
-			})
-		}
-	}
-}
-
-func (s *supervisor) transcriptLoop() {
-	defer s.wg.Done()
-	if s.cfg.Adapter.ResolveTranscript == nil || s.cfg.Adapter.ParseTranscriptLine == nil {
-		return
-	}
-
-	// Phase 1: discovery — poll ResolveTranscript until it returns a path or
-	// DiscoveryTimeout elapses. Liveness disappearance exits early.
-	deadline := time.Time{}
-	if s.cfg.Adapter.DiscoveryTimeout > 0 {
-		deadline = s.cfg.now().Add(s.cfg.Adapter.DiscoveryTimeout)
-	}
-	var transcriptPath string
-	for {
-		if _, err := os.Stat(s.cfg.LivenessPath); os.IsNotExist(err) {
-			return
-		}
-		if p := s.cfg.Adapter.ResolveTranscript(s.cfg.Runtime); p != "" {
-			transcriptPath = p
-			break
-		}
-		if !deadline.IsZero() && s.cfg.now().After(deadline) {
-			s.cfg.Logger.Warn("agent supervisor: discovery_timeout",
-				"session_id", s.cfg.SessionID,
-				"ticket_id", s.cfg.TicketID,
-				"agent", s.cfg.Adapter.Name,
-			)
-			s.send(Signal{Source: SourceTranscript, IsError: true, At: s.cfg.now()})
-			return
-		}
-		if !sleep(s.ctx, s.cfg.DiscoveryInterval) {
-			return
-		}
-	}
-
-	f, err := os.Open(transcriptPath)
-	if err != nil {
-		s.cfg.Logger.Warn("agent supervisor: transcript open failed",
-			"error", err, "path", transcriptPath, "session_id", s.cfg.SessionID)
-		return
-	}
-	defer func() { _ = f.Close() }()
-	if _, err := f.Seek(0, io.SeekEnd); err != nil {
-		s.cfg.Logger.Warn("agent supervisor: transcript seek failed",
-			"error", err, "path", transcriptPath, "session_id", s.cfg.SessionID)
-		return
-	}
-
-	reader := bufio.NewScanner(f)
-	reader.Buffer(make([]byte, 64*1024), transcriptLineBufferMaxLen)
-
-	for {
-		for reader.Scan() {
-			line := reader.Bytes()
-			if len(line) == 0 {
-				continue
+				Status:    ev.Status,
+				At:        s.cfg.now(),
 			}
-			ev := s.cfg.Adapter.ParseTranscriptLine(line)
-			sig := Signal{Source: SourceTranscript, At: s.cfg.now()}
-			sig.Activity = ev.Activity
-			sig.Status = ev.Status
-			sig.IsError = ev.IsError
 			if ev.Tool != "" {
 				t := ev.Tool
-				sig.Tool = &t
+				trans.Tool = &t
 			}
 			if ev.Work != "" {
 				w := ev.Work
-				sig.Work = &w
+				trans.Work = &w
 			}
-			// Drop the signal if nothing useful is in it — keeps the decision
-			// loop from doing busywork on blank lines.
-			if !sig.Activity && sig.Status == "" && !sig.IsError && sig.Tool == nil && sig.Work == nil {
-				continue
-			}
-			s.send(sig)
+			s.cfg.Publisher(trans)
 		}
-		if err := reader.Err(); err != nil {
-			// ErrTooLong: a single transcript line exceeded the 1 MiB cap.
-			// Skip past it and reopen the scanner at the current offset so we
-			// don't lose the rest of the transcript.
-			s.cfg.Logger.Warn("agent supervisor: transcript scanner error",
-				"error", err, "session_id", s.cfg.SessionID)
-			reader = bufio.NewScanner(f)
-			reader.Buffer(make([]byte, 64*1024), transcriptLineBufferMaxLen)
-			continue
-		}
-		if _, err := os.Stat(s.cfg.LivenessPath); os.IsNotExist(err) {
-			return
-		}
-		if !sleep(s.ctx, s.cfg.FollowInterval) {
-			return
-		}
-		reader = bufio.NewScanner(f)
-		reader.Buffer(make([]byte, 64*1024), transcriptLineBufferMaxLen)
 	}
 }
 
+// livenessLoop polls the liveness file. When it disappears the session has
+// ended: call EndFunc (or DELETE /sessions/{id} by default) and exit.
 func (s *supervisor) livenessLoop() {
 	defer s.wg.Done()
 	for {
@@ -287,21 +168,41 @@ func (s *supervisor) livenessLoop() {
 			return
 		}
 		if _, err := os.Stat(s.cfg.LivenessPath); os.IsNotExist(err) {
-			s.send(Signal{Source: SourceLiveness, At: s.cfg.now()})
+			s.endSession()
 			return
 		}
 	}
 }
 
-func (s *supervisor) send(sig Signal) {
-	// Non-blocking send: if the decision loop has already returned and the
-	// channel is full, drop the signal rather than leak the producer
-	// goroutine. Under normal operation signals is buffered (64) and the
-	// decision loop drains fast enough that the default branch is rare.
-	select {
-	case <-s.ctx.Done():
-	case s.signals <- sig:
-	default:
+func (s *supervisor) endSession() {
+	if s.cfg.EndFunc != nil {
+		s.cfg.EndFunc()
+		return
+	}
+	if s.cfg.DaemonURL == "" || s.cfg.SessionID == "" {
+		return
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequest(http.MethodDelete,
+		s.cfg.DaemonURL+"/sessions/"+s.cfg.SessionID, nil)
+	if err != nil {
+		s.cfg.Logger.Warn("supervisor: end session request failed",
+			"error", err, "session_id", s.cfg.SessionID)
+		return
+	}
+	if s.cfg.ArchitectPath != "" {
+		req.Header.Set("X-Cortex-Architect", s.cfg.ArchitectPath)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		s.cfg.Logger.Warn("supervisor: end session DELETE failed",
+			"error", err, "session_id", s.cfg.SessionID)
+		return
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
+		s.cfg.Logger.Warn("supervisor: end session returned error",
+			"status_code", resp.StatusCode, "session_id", s.cfg.SessionID)
 	}
 }
 
@@ -327,17 +228,13 @@ func sleep(ctx context.Context, d time.Duration) bool {
 }
 
 // HTTPPublisher returns a Publisher that posts transitions to cortexd's
-// /agent/status endpoint. daemonURL and architectPath are captured by
-// closure so callers don't need to thread them per-call. Failures are
-// logged but not retried — the next transition carries the full state, so
-// one dropped call causes at most one frame of stale UI.
+// /agent/status endpoint. daemonURL and architectPath are captured by closure.
+// Failures are logged but not retried.
 func HTTPPublisher(daemonURL, architectPath string) Publisher {
 	return HTTPPublisherWithLogger(daemonURL, architectPath, nil)
 }
 
-// HTTPPublisherWithLogger is HTTPPublisher with an injectable logger. The
-// supervisor uses this internally so transition drops surface under the
-// session's log attributes.
+// HTTPPublisherWithLogger is HTTPPublisher with an injectable logger.
 func HTTPPublisherWithLogger(daemonURL, architectPath string, logger *slog.Logger) Publisher {
 	if logger == nil {
 		logger = slog.Default()

@@ -114,12 +114,13 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	spawner := spawn.NewSpawner(spawn.Dependencies{
-		TmuxManager:   h.deps.TmuxManager,
-		SessionStore:  sessStore,
-		SupervisorCtx: h.deps.SupervisorCtx,
-		CortexdPath:   h.deps.CortexdPath,
-		Logger:        h.deps.Logger,
-		DefaultsDir:   h.deps.DefaultsDir,
+		TmuxManager:    h.deps.TmuxManager,
+		SessionStore:   sessStore,
+		SupervisorCtx:  h.deps.SupervisorCtx,
+		CortexdPath:    h.deps.CortexdPath,
+		Logger:         h.deps.Logger,
+		DefaultsDir:    h.deps.DefaultsDir,
+		HubEventSource: hubEventSource(h.deps.HubManager),
 	})
 
 	result, err := spawner.SpawnCollab(r.Context(), spawn.CollabSpawnRequest{

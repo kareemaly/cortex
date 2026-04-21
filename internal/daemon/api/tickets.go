@@ -501,13 +501,14 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		Companion:     projectCfg.Companion,
 		ArchitectPath: projectPath,
 	}, spawn.OrchestrateDeps{
-		Store:         store,
-		SessionStore:  sessionStore,
-		TmuxManager:   h.deps.TmuxManager,
-		SupervisorCtx: h.deps.SupervisorCtx,
-		Logger:        h.deps.Logger,
-		CortexdPath:   h.deps.CortexdPath,
-		DefaultsDir:   h.deps.DefaultsDir,
+		Store:          store,
+		SessionStore:   sessionStore,
+		TmuxManager:    h.deps.TmuxManager,
+		SupervisorCtx:  h.deps.SupervisorCtx,
+		Logger:         h.deps.Logger,
+		CortexdPath:    h.deps.CortexdPath,
+		DefaultsDir:    h.deps.DefaultsDir,
+		HubEventSource: hubEventSource(h.deps.HubManager),
 	})
 	if err != nil {
 		switch {

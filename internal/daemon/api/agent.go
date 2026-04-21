@@ -8,10 +8,10 @@ import (
 	"github.com/kareemaly/cortex/internal/session"
 )
 
-// internalAgentStatuses is the set of statuses the supervisor owns and
-// may not be set by client POST. `ended` in particular is a terminal
-// state produced by the liveness watcher — allowing clients to post it
-// would jam the decision machine's terminal guard.
+// internalAgentStatuses is the set of statuses that may not be set via
+// POST /agent/status. `ended` is produced by the liveness watcher via
+// DELETE /sessions/{id} — accepting it here would bypass the clean
+// session teardown that EndBySessionID + SessionEnded event provides.
 var internalAgentStatuses = map[session.AgentStatus]struct{}{
 	session.AgentStatusEnded: {},
 }

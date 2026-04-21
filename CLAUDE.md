@@ -61,8 +61,8 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 - **ConclusionStoreManager**: Manages conclusion stores per architect. Located in `internal/daemon/api/conclusion_store_manager.go`.
 - **SessionManager**: Manages ephemeral session stores per architect. Located in `internal/daemon/api/session_manager.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
-- **Agent status supervision**: Per-session supervisor per spawned agent, wired via `startAgentSupervisor` in `internal/core/spawn/supervisor.go`. Adapter-based — each agent (claude/codex/opencode) registers an `agent.Adapter` in `internal/core/agent/adapter_*.go` with a transcript parser + callback. Decision logic in `internal/core/agent/decision.go` is a four-row precedence table (ended > error > authoritative transcript > activity). Supervisors bind to daemon-root `SupervisorCtx` so they outlive the HTTP spawn handler. Sessions route by canonical `SessionID` UUID everywhere (store, events, `/agent/status`).
-- **Agent status from hooks**: `HubManager` in `internal/daemon/api/hub_manager.go` wraps the `agentstatus.Hub` library, maintaining an in-memory `sessionCache` (sync.Map) keyed by `session.AgentSessionID`. Hook payloads POST to `POST /hook/{agent}` (global, no architect header). The event loop drains `hub.Events()` into the cache. API responses overlay cached status/tool on ticket summaries and session lists. Hub creation is non-fatal — daemon continues with transcript-only status if Hub fails.
+- **Agent status supervision**: Per-session supervisor per spawned agent, wired via `startAgentSupervisor` in `internal/core/spawn/supervisor.go`. **Hub is the sole status source — transcript parsing has been removed.** The supervisor does two things: (1) subscribe to Hub events for this session and forward them to `/agent/status` → SSE; (2) monitor liveness (file stat) and call `DELETE /sessions/{id}` when the agent disappears. Supervisors bind to daemon-root `SupervisorCtx` so they outlive the HTTP spawn handler. Sessions route by canonical `SessionID` UUID everywhere (store, events, `/agent/status`).
+- **Agent status from hooks**: `HubManager` in `internal/daemon/api/hub_manager.go` wraps the `agentstatus.Hub` library, maintaining an in-memory `sessionCache` (sync.Map) keyed by `session.AgentSessionID`. Hook payloads POST to `POST /hook/{agent}` (global, no architect header). The event loop drains `hub.Events()` into the cache. API responses overlay cached status/tool on ticket summaries and session lists. Per-session supervisors also subscribe via `HubManager.EventsFor(ctx, agentSessionID)` to forward Hub events to SSE in real time. Hub creation is non-fatal — daemon continues with liveness-only supervision if Hub fails.
 
 ## Anti-Patterns
 
@@ -76,8 +76,8 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Import `internal/architect` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
 | Call `architectconfig.Load()` in MCP tools | Call the daemon HTTP API via SDK client | MCP is a dumb client — all config resolution (including global agent merge) lives in the daemon |
 | Call `architectconfig.Load()` directly to resolve variants | Use `mergeProjectConfig()` in `internal/daemon/api/config_merge.go` | Direct load misses global agents from `~/.cortex/settings.yaml`; only the daemon merges project + global |
-| Add a per-agent status supervisor wrapper | Extend `startAgentSupervisor` in `internal/core/spawn/supervisor.go` + register a new `agent.Adapter` | The unified helper owns ctx-lifetime, logger wiring, and observer registration; per-agent wrappers drift |
-| Post `ended` to `POST /agent/status` | `ended` is terminal and produced only by the supervisor's liveness loop | Accepting client-sent `ended` jams the decision machine's terminal guard |
+| Add a per-agent status supervisor wrapper | Extend `startAgentSupervisor` in `internal/core/spawn/supervisor.go` and add a Hub adapter in the `agentstatus` library | The unified helper owns ctx-lifetime, logger wiring, and Hub subscription; per-agent wrappers in cortex drift |
+| Post `ended` to `POST /agent/status` | `ended` is produced by the liveness watcher via `DELETE /sessions/{id}` | This path calls `EndBySessionID` + emits `SessionEnded` — accepting `ended` via status POST bypasses clean teardown |
 | Mount `hub.Handler()` into chi router | Write a manual chi handler that reads `chi.URLParam("agent")` and calls `hubManager.Ingest()` | `hub.Handler()` uses stdlib mux `r.PathValue()` (Go 1.22), which returns `""` when called inside chi |
 | Pane-based status detection (removed) | Use Hook-based agentstatus Hub for agent status | Pane detection was unreliable; Hook provides ground-truth from agents themselves |
 
@@ -102,7 +102,7 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Conclusion store | `internal/conclusion/` |
 | SDK client | `internal/cli/sdk/client.go` |
 | Spawn orchestration | `internal/core/spawn/` |
-| Agent status adapters | `internal/core/agent/` (`adapter_{claude,codex,opencode}.go`, supervisor, decision machine, phrase matcher) |
+| Agent status | `internal/core/agent/` (`supervisor.go` — Hub forwarding + liveness; `adapter.go` — `HubEvent` type) |
 | Hub manager | `internal/daemon/api/hub_manager.go` (wraps agentstatus.Hub, maintains sessionCache) |
 | Hook endpoint | `internal/daemon/api/hook.go` (chi handler for `POST /hook/{agent}`) |
 | Tmux pane observer | `internal/tmux/observer/` (shared per-tick raw-hash goroutine) |

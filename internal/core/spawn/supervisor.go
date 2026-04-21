@@ -9,54 +9,57 @@ import (
 )
 
 // agentSupervisorParams is the unified input for starting a per-session
-// status supervisor. Agent-specific discovery inputs (claude's transcript
-// path, codex's $CODEX_HOME, opencode's status file) are all expressed as
-// TranscriptHint — each adapter's ResolveTranscript knows how to turn the
-// hint into the real transcript path.
+// status supervisor. The supervisor monitors liveness (process death) and
+// forwards Hub events to SSE. AgentSessionID, when set, is the agent tool's
+// internal session identifier used to filter Hub events for this session.
 type agentSupervisorParams struct {
-	Agent          string // "claude" | "codex" | "opencode"
-	TranscriptHint string
+	AgentSessionID string // agent-internal ID (e.g. Claude --session-id UUID)
 	LivenessPath   string
 	SessionID      string
 	TicketID       string
 	ArchitectPath  string
-	Logger         *slog.Logger
+
+	// HubEventSource, when non-nil, creates a filtered Hub event channel for
+	// the given agent session ID. Nil means liveness-only supervision.
+	HubEventSource func(ctx context.Context, agentSessionID string) <-chan agent.HubEvent
+
+	Logger *slog.Logger
 }
 
-// startAgentSupervisor wires the adapter-based supervisor for one agent
-// session. It returns (nil, nil) when supervision isn't possible (missing
-// required inputs or no adapter registered); the caller then runs the
-// session unsupervised rather than failing the spawn. Any diagnostic is
-// logged so the skip isn't silent.
+// startAgentSupervisor wires the supervisor for one agent session. It returns
+// (nil, nil) when supervision is not possible (missing LivenessPath or both
+// IDs empty); the caller then runs the session unsupervised rather than
+// failing the spawn. Diagnostics are logged so the skip isn't silent.
 func startAgentSupervisor(ctx context.Context, p agentSupervisorParams) (context.CancelFunc, error) {
-	if p.Agent == "" || p.TranscriptHint == "" || p.LivenessPath == "" {
+	if p.LivenessPath == "" {
 		return nil, nil
 	}
 	if p.SessionID == "" && p.TicketID == "" {
 		if p.Logger != nil {
 			p.Logger.Warn("agent supervisor skipped: both SessionID and TicketID empty",
-				"agent", p.Agent, "architect_path", p.ArchitectPath)
-		}
-		return nil, nil
-	}
-	adapter, ok := agent.Get(p.Agent)
-	if !ok {
-		if p.Logger != nil {
-			p.Logger.Warn("agent supervisor skipped: no adapter registered", "agent", p.Agent)
+				"architect_path", p.ArchitectPath)
 		}
 		return nil, nil
 	}
 	if p.Logger == nil {
 		p.Logger = slog.Default()
 	}
+
+	var hubEventSource func(ctx context.Context) <-chan agent.HubEvent
+	if p.HubEventSource != nil && p.AgentSessionID != "" {
+		agentSessionID := p.AgentSessionID
+		hubEventSource = func(ctx context.Context) <-chan agent.HubEvent {
+			return p.HubEventSource(ctx, agentSessionID)
+		}
+	}
+
 	return agent.StartSupervisor(ctx, agent.SupervisorConfig{
-		SessionID:     p.SessionID,
-		TicketID:      p.TicketID,
-		ArchitectPath: p.ArchitectPath,
-		LivenessPath:  p.LivenessPath,
-		Adapter:       adapter,
-		Runtime:       agent.RuntimeCtx{TranscriptHint: p.TranscriptHint},
-		DaemonURL:     daemonconfig.DefaultDaemonURL,
-		Logger:        p.Logger,
+		SessionID:      p.SessionID,
+		TicketID:       p.TicketID,
+		ArchitectPath:  p.ArchitectPath,
+		LivenessPath:   p.LivenessPath,
+		HubEventSource: hubEventSource,
+		DaemonURL:      daemonconfig.DefaultDaemonURL,
+		Logger:         p.Logger,
 	})
 }

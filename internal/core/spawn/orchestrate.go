@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
+	"github.com/kareemaly/cortex/internal/core/agent"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
@@ -59,6 +60,10 @@ type OrchestrateDeps struct {
 	CortexdPath   string          // optional: empty means auto-discover via binpath
 	Logger        *slog.Logger    // optional
 	DefaultsDir   string          // path to defaults for prompt fallback
+
+	// HubEventSource, when non-nil, supplies per-session Hub event streams to
+	// the supervisor. The supervisor forwards these to /agent/status → SSE.
+	HubEventSource func(ctx context.Context, agentSessionID string) <-chan agent.HubEvent
 }
 
 // Orchestrate is the single source of truth for spawning ticket agent sessions.
@@ -131,13 +136,14 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 
 	// 9. State/mode matrix
 	spawner := NewSpawner(Dependencies{
-		Store:         deps.Store,
-		SessionStore:  deps.SessionStore,
-		TmuxManager:   deps.TmuxManager,
-		SupervisorCtx: deps.SupervisorCtx,
-		CortexdPath:   deps.CortexdPath,
-		Logger:        deps.Logger,
-		DefaultsDir:   deps.DefaultsDir,
+		Store:          deps.Store,
+		SessionStore:   deps.SessionStore,
+		TmuxManager:    deps.TmuxManager,
+		SupervisorCtx:  deps.SupervisorCtx,
+		CortexdPath:    deps.CortexdPath,
+		Logger:         deps.Logger,
+		DefaultsDir:    deps.DefaultsDir,
+		HubEventSource: deps.HubEventSource,
 	})
 
 	buildSpawnReq := func() SpawnRequest {

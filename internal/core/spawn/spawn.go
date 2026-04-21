@@ -65,6 +65,10 @@ type Dependencies struct {
 	CortexdPath   string          // optional override for cortexd binary path
 	MCPConfigDir  string          // optional override for MCP config directory
 	DefaultsDir   string          // path to defaults (e.g., ~/.cortex/defaults/main) for prompt fallback
+
+	// HubEventSource, when non-nil, supplies per-session Hub event streams to
+	// the supervisor. The supervisor forwards these to /agent/status → SSE.
+	HubEventSource func(ctx context.Context, agentSessionID string) <-chan agent.HubEvent
 }
 
 // Spawner handles spawning agent sessions.
@@ -368,22 +372,6 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
 	}
 
-	// Inject OpenCode status plugin — the plugin appends JSONL status events
-	// to a per-spawn file, which the daemon's shared status tailer reads.
-	var opencodeStatusFile string
-	if req.Agent == "opencode" {
-		opencodeStatusFile = OpenCodeStatusFilePath(identifier, s.deps.MCPConfigDir)
-		pluginContent := GenerateOpenCodeStatusPlugin(opencodeStatusFile)
-		pluginDir, pluginErr := WriteOpenCodePluginDir(pluginContent, identifier)
-		if pluginErr != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles)
-			return nil, pluginErr
-		}
-		launcherParams.CleanupDirs = []string{pluginDir}
-		launcherParams.CleanupFiles = append(launcherParams.CleanupFiles, opencodeStatusFile)
-		launcherParams.EnvVars["OPENCODE_CONFIG_DIR"] = pluginDir
-	}
-
 	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
 	if err != nil {
 		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles)
@@ -410,23 +398,19 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	ticketIDForStatus := launcherParams.EnvVars["CORTEX_TICKET_ID"]
 	supCtx := s.deps.SupervisorCtx
 	supParams := agentSupervisorParams{
-		Agent:         req.Agent,
-		SessionID:     sessionIDForStatus,
-		TicketID:      ticketIDForStatus,
-		ArchitectPath: req.ArchitectPath,
-		Logger:        s.deps.Logger,
+		SessionID:      sessionIDForStatus,
+		TicketID:       ticketIDForStatus,
+		ArchitectPath:  req.ArchitectPath,
+		HubEventSource: s.deps.HubEventSource,
+		Logger:         s.deps.Logger,
 	}
 	switch req.Agent {
 	case "codex":
-		supParams.TranscriptHint = codexConfigDir
 		supParams.LivenessPath = codexConfigDir
 	case "claude":
-		if claudeSessionID != "" {
-			supParams.TranscriptHint = agent.ClaudeTranscriptPath(workingDir, claudeSessionID)
-			supParams.LivenessPath = mcpConfigPath
-		}
+		supParams.LivenessPath = mcpConfigPath
+		supParams.AgentSessionID = claudeSessionID
 	case "opencode":
-		supParams.TranscriptHint = opencodeStatusFile
 		supParams.LivenessPath = mcpConfigPath
 	}
 	if _, err := startAgentSupervisor(supCtx, supParams); err != nil {
@@ -542,25 +526,6 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
 	}
 
-	// Inject OpenCode status plugin for agent status reporting.
-	var opencodeStatusFile string
-	if req.Agent == "opencode" {
-		opencodeStatusFile = OpenCodeStatusFilePath(identifier, s.deps.MCPConfigDir)
-		pluginContent := GenerateOpenCodeStatusPlugin(opencodeStatusFile)
-		pluginDir, pluginErr := WriteOpenCodePluginDir(pluginContent, identifier)
-		if pluginErr != nil {
-			for _, path := range tempFiles {
-				if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
-					s.logWarn("cleanup: failed to remove temp file", "path", path, "error", rmErr)
-				}
-			}
-			return nil, pluginErr
-		}
-		launcherParams.CleanupDirs = []string{pluginDir}
-		launcherParams.CleanupFiles = append(launcherParams.CleanupFiles, opencodeStatusFile)
-		launcherParams.EnvVars["OPENCODE_CONFIG_DIR"] = pluginDir
-	}
-
 	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
 	if err != nil {
 		for _, path := range tempFiles {
@@ -630,25 +595,19 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	ticketIDForStatus := envVars["CORTEX_TICKET_ID"]
 	supCtx := s.deps.SupervisorCtx
 	supParams := agentSupervisorParams{
-		Agent:         req.Agent,
-		SessionID:     resumeSessionID,
-		TicketID:      ticketIDForStatus,
-		ArchitectPath: req.ArchitectPath,
-		Logger:        s.deps.Logger,
+		SessionID:      resumeSessionID,
+		TicketID:       ticketIDForStatus,
+		ArchitectPath:  req.ArchitectPath,
+		HubEventSource: s.deps.HubEventSource,
+		Logger:         s.deps.Logger,
 	}
 	switch req.Agent {
 	case "codex":
-		supParams.TranscriptHint = codexConfigDir
 		supParams.LivenessPath = codexConfigDir
 	case "claude":
-		// Recover the Claude --session-id so the transcript tailer can
-		// re-attach to the existing projects/<slug>/<uuid>.jsonl. Priority:
+		// Recover the Claude --session-id to wire Hub event filtering. Priority:
 		//  1. req.SessionID (caller explicitly passes the UUID)
 		//  2. stored AgentSessionID on the session (saved at spawn time)
-		//
-		// If neither is available, the resumed Claude will still run, but
-		// status wiring is impossible — surface that loudly rather than
-		// silently showing nothing on the dashboard.
 		claudeUUID := req.SessionID
 		if claudeUUID == "" && s.deps.SessionStore != nil {
 			var stored *session.Session
@@ -662,17 +621,16 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 				claudeUUID = stored.AgentSessionID
 			}
 		}
-		if claudeUUID == "" {
-			s.logWarn("claude resume: unable to recover prior session UUID; status wiring disabled for this resume",
+		supParams.LivenessPath = mcpConfigPath
+		if claudeUUID != "" {
+			supParams.AgentSessionID = claudeUUID
+		} else {
+			s.logWarn("claude resume: unable to recover prior session UUID; Hub wiring disabled",
 				"ticket_id", req.TicketID,
 				"architect_path", req.ArchitectPath,
 			)
-		} else {
-			supParams.TranscriptHint = agent.ClaudeTranscriptPath(workingDir, claudeUUID)
-			supParams.LivenessPath = mcpConfigPath
 		}
 	case "opencode":
-		supParams.TranscriptHint = opencodeStatusFile
 		supParams.LivenessPath = mcpConfigPath
 	}
 	if _, err := startAgentSupervisor(supCtx, supParams); err != nil {
