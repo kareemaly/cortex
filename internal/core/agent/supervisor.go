@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/kareemaly/cortex/internal/session"
-	"github.com/kareemaly/cortex/internal/tmux/observer"
 )
 
 // Publisher is the sink for status transitions. The production path posts to
@@ -33,9 +32,8 @@ type Transition struct {
 }
 
 // SupervisorConfig carries everything a supervisor needs to run for one
-// session: identity, the adapter (parser + phrases + window), the observer
-// to subscribe to, file paths for discovery & liveness, and the publisher
-// for state transitions.
+// session: identity, the adapter (parser + transcript), file paths for
+// discovery & liveness, and the publisher for state transitions.
 type SupervisorConfig struct {
 	SessionID     string
 	TicketID      string
@@ -43,14 +41,7 @@ type SupervisorConfig struct {
 	WorkingDir    string
 	LivenessPath  string
 
-	Adapter  *Adapter
-	Observer *observer.Observer
-
-	// PaneTarget is the tmux "session:window.pane" string to register with
-	// the observer. Empty disables pane observation for this session — OK
-	// for agents whose plugin gives authoritative status (opencode), but
-	// means Claude/Codex lose their awaiting_input signal.
-	PaneTarget string
+	Adapter *Adapter
 
 	// Runtime carries adapter-specific context for ResolveTranscript (env,
 	// transcript hint from Prepare).
@@ -85,10 +76,7 @@ const (
 // StartSupervisor wires a supervisor for one session and starts its
 // goroutines. The returned cancel func tears them down.
 //
-// Required: Adapter, SessionID-or-TicketID, and LivenessPath. If the
-// Adapter has AwaitingInputPhrases configured and Observer+PaneTarget are
-// set, pane observation is registered; otherwise the supervisor runs on
-// transcript + liveness alone.
+// Required: Adapter, SessionID-or-TicketID, and LivenessPath.
 func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelFunc, error) {
 	if cfg.Adapter == nil {
 		return nil, errMissing("Adapter")
@@ -121,7 +109,6 @@ func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelF
 	ctx, cancelCtx := context.WithCancel(ctx)
 	decision := NewDecision(DecisionConfig{
 		InitialStatus: session.AgentStatusStarting,
-		IdleWindow:    cfg.Adapter.IdleWindow,
 	})
 
 	sup := &supervisor{
@@ -129,18 +116,7 @@ func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelF
 		ctx:            ctx,
 		decision:       decision,
 		signals:        make(chan Signal, 64),
-		paneSink:       make(chan observer.Snapshot, 4),
 		statusSnapshot: session.AgentStatusStarting,
-	}
-
-	// Observer registration — optional but cheap. Only worth registering if
-	// the adapter has at least one phrase to match against the pane.
-	if cfg.Observer != nil && cfg.PaneTarget != "" && len(cfg.Adapter.AwaitingInputPhrases) > 0 {
-		sup.paneCancel = cfg.Observer.Register(observer.Pane{
-			SessionID: cfg.SessionID,
-			Target:    cfg.PaneTarget,
-			Sink:      sup.paneSink,
-		})
 	}
 
 	sup.wg.Add(1)
@@ -149,16 +125,8 @@ func StartSupervisor(ctx context.Context, cfg SupervisorConfig) (context.CancelF
 	go sup.transcriptLoop()
 	sup.wg.Add(1)
 	go sup.livenessLoop()
-	sup.wg.Add(1)
-	go sup.paneLoop()
 
 	return func() {
-		// Unregister the pane observer FIRST so it stops publishing into
-		// paneSink before the decision loop drains; only then cancel the
-		// context so producer goroutines exit cleanly.
-		if sup.paneCancel != nil {
-			sup.paneCancel()
-		}
 		cancelCtx()
 		sup.wg.Wait()
 	}, nil
@@ -176,9 +144,7 @@ type supervisor struct {
 	ctx      context.Context
 	decision *Decision
 
-	signals    chan Signal
-	paneSink   chan observer.Snapshot
-	paneCancel func()
+	signals chan Signal
 
 	wg sync.WaitGroup
 
@@ -323,35 +289,6 @@ func (s *supervisor) livenessLoop() {
 		if _, err := os.Stat(s.cfg.LivenessPath); os.IsNotExist(err) {
 			s.send(Signal{Source: SourceLiveness, At: s.cfg.now()})
 			return
-		}
-	}
-}
-
-// paneLoop translates observer snapshots into decision signals. Each tick
-// produces one Signal; substring match against AwaitingInputPhrases is the
-// only pane-derived disambiguation the decision machine gets. The observer's
-// per-tick heartbeat doubles as the idle-timer drive — no separate timer
-// goroutine required.
-func (s *supervisor) paneLoop() {
-	defer s.wg.Done()
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		case snap, ok := <-s.paneSink:
-			if !ok {
-				return
-			}
-			sig := Signal{
-				Source:  SourcePane,
-				At:      snap.At,
-				Changed: snap.Changed,
-			}
-			if phrase := s.cfg.Adapter.MatchAwaitingInput(snap.Content); phrase != "" {
-				sig.HasAwaitingPhrase = true
-				RecordPhraseHit(s.cfg.Adapter.Name, phrase)
-			}
-			s.send(sig)
 		}
 	}
 }

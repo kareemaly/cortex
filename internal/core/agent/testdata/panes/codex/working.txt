@@ -1,9 +1,0 @@
-│ codex
-│
-│   Reading internal/core/agent/supervisor.go
-│   Reading internal/core/agent/adapter.go
-│   Writing internal/core/agent/adapter_codex.go
-│
-│   Thinking about the decision machine...
-│
->

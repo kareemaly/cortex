@@ -288,7 +288,14 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 
 		badge := "collab"
 		dur := formatDuration(time.Since(session.StartedAt))
-		nameWidth := m.width - len(indent) - 2 - 1 - len(badge) - 1 - len(dur)
+
+		agentLabel := buildAgentLabel(session.Agent, session.Tool)
+		agentLabelLen := len(agentLabel)
+		if agentLabelLen > 0 {
+			agentLabelLen++ // extra space
+		}
+
+		nameWidth := m.width - len(indent) - 2 - 1 - agentLabelLen - 1 - len(badge) - 1 - len(dur)
 		name := truncateToWidth(session.TicketTitle, nameWidth)
 
 		icon := "●"
@@ -296,10 +303,13 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 		badgeStyled := progressBadgeStyle.Render(badge)
 
 		if selected {
-			plain := fmt.Sprintf("%s%s %s %s %s", indent, icon, name, badge, dur)
+			plain := fmt.Sprintf("%s%s %s %s %s %s", indent, icon, agentLabel, name, badge, dur)
 			return selectedStyle.Render(plain)
 		}
 
+		if agentLabelLen > 0 {
+			return fmt.Sprintf("%s%s %s %s %s %s", indent, styledIcon, agentLabel, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
+		}
 		return fmt.Sprintf("%s%s %s %s %s", indent, styledIcon, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
 	}
 
@@ -329,14 +339,23 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 		dur = formatDuration(time.Since(*ticket.SessionStartedAt))
 	}
 
-	nameWidth := m.width - len(indent) - 2 - 1 - len(badge) - 1 - len(dur)
+	agentLabel := buildAgentLabel(ticket.Agent, ticket.AgentTool)
+	agentLabelLen := len(agentLabel)
+	if agentLabelLen > 0 {
+		agentLabelLen++ // extra space
+	}
+
+	nameWidth := m.width - len(indent) - 2 - 1 - agentLabelLen - 1 - len(badge) - 1 - len(dur)
 	name = truncateToWidth(name, nameWidth)
 
 	if selected {
-		plain := fmt.Sprintf("%s%s %s %s %s", indent, icon, name, badge, dur)
+		plain := fmt.Sprintf("%s%s %s %s %s %s", indent, icon, agentLabel, name, badge, dur)
 		return selectedStyle.Render(plain)
 	}
 
+	if agentLabelLen > 0 {
+		return fmt.Sprintf("%s%s %s %s %s %s", indent, styledIcon, agentLabel, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
+	}
 	return fmt.Sprintf("%s%s %s %s %s", indent, styledIcon, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
 }
 
@@ -356,4 +375,16 @@ func truncateToWidth(s string, maxWidth int) string {
 		}
 	}
 	return s
+}
+
+// buildAgentLabel returns "agent_name [Tool]" format, or "agent_name" if no tool,
+// or "" if no agent.
+func buildAgentLabel(agent string, tool *string) string {
+	if agent == "" {
+		return ""
+	}
+	if tool != nil && *tool != "" {
+		return fmt.Sprintf("%s [%s]", agent, *tool)
+	}
+	return agent
 }

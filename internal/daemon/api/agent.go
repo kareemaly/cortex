@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kareemaly/cortex/internal/core/agent"
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/session"
-	"github.com/kareemaly/cortex/internal/tmux/observer"
 )
 
 // internalAgentStatuses is the set of statuses the supervisor owns and
@@ -106,27 +104,16 @@ func (h *AgentHandlers) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// DebugStatusResponse is what GET /agent/status/debug returns: every piece
-// of observability data the agent-status machinery exposes in one payload
-// so an operator can verify "phrase X is firing N times per hour" without
-// stitching together log lines.
+// DebugStatusResponse is what GET /agent/status/debug returns: session and
+// supervision counts.
 type DebugStatusResponse struct {
-	PhraseStats     []agent.PhraseStats `json:"phrase_stats"`
-	ObserverMetrics *observer.Metrics   `json:"observer_metrics,omitempty"`
-	SupervisedCount int                 `json:"supervised_count"`
+	SupervisedCount int `json:"supervised_count"`
 }
 
 // DebugStatus handles GET /agent/status/debug. Intentionally global
-// (no architect scope) — one call covers every architect's agent-status
-// observability.
+// (no architect scope) — returns counts across all architects.
 func (h *AgentHandlers) DebugStatus(w http.ResponseWriter, r *http.Request) {
-	resp := DebugStatusResponse{
-		PhraseStats: agent.AllPhraseStats(),
-	}
-	if h.deps.PaneObserver != nil {
-		m := h.deps.PaneObserver.Metrics()
-		resp.ObserverMetrics = &m
-	}
+	resp := DebugStatusResponse{}
 	if h.deps.SessionManager != nil {
 		resp.SupervisedCount = h.deps.SessionManager.TotalSessionCount()
 	}

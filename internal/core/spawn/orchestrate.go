@@ -8,7 +8,6 @@ import (
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/ticket"
-	"github.com/kareemaly/cortex/internal/tmux/observer"
 )
 
 // OrchestrateStore defines the ticket store operations for orchestration.
@@ -56,11 +55,10 @@ type OrchestrateDeps struct {
 	Store         OrchestrateStore
 	SessionStore  SessionStoreInterface
 	TmuxManager   TmuxManagerInterface
-	PaneObserver  *observer.Observer // optional: shared tmux pane observer
-	SupervisorCtx context.Context    // daemon-root context for agent supervisors
-	CortexdPath   string             // optional: empty means auto-discover via binpath
-	Logger        *slog.Logger       // optional
-	DefaultsDir   string             // path to defaults for prompt fallback
+	SupervisorCtx context.Context // daemon-root context for agent supervisors
+	CortexdPath   string          // optional: empty means auto-discover via binpath
+	Logger        *slog.Logger    // optional
+	DefaultsDir   string          // path to defaults for prompt fallback
 }
 
 // Orchestrate is the single source of truth for spawning ticket agent sessions.
@@ -136,7 +134,6 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 		Store:         deps.Store,
 		SessionStore:  deps.SessionStore,
 		TmuxManager:   deps.TmuxManager,
-		PaneObserver:  deps.PaneObserver,
 		SupervisorCtx: deps.SupervisorCtx,
 		CortexdPath:   deps.CortexdPath,
 		Logger:        deps.Logger,

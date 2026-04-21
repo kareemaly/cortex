@@ -13,7 +13,6 @@ import (
 	"github.com/kareemaly/cortex/internal/daemon/logging"
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/tmux"
-	"github.com/kareemaly/cortex/internal/tmux/observer"
 	"github.com/kareemaly/cortex/pkg/version"
 	"github.com/spf13/cobra"
 )
@@ -93,20 +92,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	// Shared pane observer — one per daemon. Agent supervisors register
-	// and unregister their tmux panes against it. Only run when tmux is
-	// available; without tmux there's nothing to capture.
-	var paneObserver *observer.Observer
-	if tmuxManager != nil {
-		paneObserver = observer.New(observer.Options{
-			Capture: tmuxManager.CapturePane,
-		})
-		paneObserver.Start()
-		defer paneObserver.Stop()
-	}
-
-	// Start Hub-based agent status. Non-fatal if it fails — falls back to
-	// pane-scraping only.
+	// Start Hub-based agent status. Non-fatal if it fails — daemon continues
+	// with transcript-only status.
 	var hubManager *api.HubManager
 	if hm, err := api.NewHubManager(logger); err != nil {
 		logger.Warn("failed to create hub manager, hook-based agent status unavailable", "error", err)
@@ -121,7 +108,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ConclusionStoreManager: conclusionStoreManager,
 		SessionManager:         sessionManager,
 		TmuxManager:            tmuxManager,
-		PaneObserver:           paneObserver,
 		Bus:                    bus,
 		Logger:                 logger,
 		SupervisorCtx:          ctx,

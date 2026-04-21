@@ -88,19 +88,8 @@ func findCodexRollout(codexHome string) string {
 }
 
 var codexAdapter = &Adapter{
-	Name: "codex",
-	// Codex emits task_started/task_complete explicitly, so transcript
-	// status is authoritative and IdleWindow is only a fallback for long
-	// gaps between transcript events with no pane change.
-	IdleWindow:       3 * time.Second,
+	Name:             "codex",
 	DiscoveryTimeout: 30 * time.Second,
-
-	// Codex approval prompts render "Allow this command?" verbatim. Narrower
-	// than matching on "(y/n)", which could collide with content inside
-	// tool stdout (e.g. an installer's own confirmation prompt echoed back).
-	AwaitingInputPhrases: []string{
-		"Allow this command?",
-	},
 
 	ResolveTranscript: func(rt RuntimeCtx) string {
 		// TranscriptHint, when set by Prepare, is the per-session codex home

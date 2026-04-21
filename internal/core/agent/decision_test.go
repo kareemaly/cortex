@@ -47,32 +47,6 @@ func TestAuthoritativeTranscriptStatusOverrides(t *testing.T) {
 	}
 }
 
-func TestPanePhraseMatchBecomesAwaitingInput(t *testing.T) {
-	d := NewDecision(DecisionConfig{InitialStatus: session.AgentStatusWorking})
-	got, changed := d.Apply(Signal{
-		Source: SourcePane, HasAwaitingPhrase: true, At: time.Now(),
-	})
-	if !changed || got != session.AgentStatusAwaitingInput {
-		t.Errorf("got = %v changed=%v, want awaiting_input/true", got, changed)
-	}
-}
-
-func TestPaneChangePromotesIdleToWorking(t *testing.T) {
-	d := NewDecision(DecisionConfig{InitialStatus: session.AgentStatusIdle})
-	got, _ := d.Apply(Signal{Source: SourcePane, Changed: true, At: time.Now()})
-	if got != session.AgentStatusWorking {
-		t.Errorf("got = %v, want working", got)
-	}
-}
-
-func TestPaneChangeClearsAwaitingInput(t *testing.T) {
-	// Dialog dismissed → pane moves → back to working, even though no phrase.
-	d := NewDecision(DecisionConfig{InitialStatus: session.AgentStatusAwaitingInput})
-	got, _ := d.Apply(Signal{Source: SourcePane, Changed: true, At: time.Now()})
-	if got != session.AgentStatusWorking {
-		t.Errorf("got = %v, want working", got)
-	}
-}
 
 func TestTranscriptActivityHoldsAwaitingInput(t *testing.T) {
 	// Plugin/agent might emit a non-status transcript line while the user is
@@ -96,69 +70,6 @@ func TestStaleIdleStatusIgnoredWhileAwaitingInput(t *testing.T) {
 	}
 }
 
-func TestIdleWindowOnlyAppliesToWorking(t *testing.T) {
-	d := NewDecision(DecisionConfig{
-		InitialStatus: session.AgentStatusStarting,
-		IdleWindow:    1 * time.Second,
-	})
-	t0 := time.Now()
-	got, _ := d.Apply(Signal{Source: SourcePane, At: t0.Add(10 * time.Second)})
-	if got != session.AgentStatusStarting {
-		t.Errorf("starting must not decay to idle; got %v", got)
-	}
-}
-
-func TestIdleWindowFiresAfterQuiet(t *testing.T) {
-	d := NewDecision(DecisionConfig{IdleWindow: 1 * time.Second})
-	t0 := time.Now()
-	d.Apply(Signal{Source: SourceTranscript, Activity: true, At: t0})
-	// Quiet pane tick well past the window → idle.
-	got, _ := d.Apply(Signal{Source: SourcePane, At: t0.Add(2 * time.Second)})
-	if got != session.AgentStatusIdle {
-		t.Errorf("got = %v, want idle after quiet window", got)
-	}
-}
-
-func TestActivityResetsIdleClock(t *testing.T) {
-	// New transcript activity must push the idle deadline back.
-	d := NewDecision(DecisionConfig{IdleWindow: 1 * time.Second})
-	t0 := time.Now()
-	d.Apply(Signal{Source: SourceTranscript, Activity: true, At: t0})
-	d.Apply(Signal{Source: SourceTranscript, Activity: true, At: t0.Add(800 * time.Millisecond)})
-	// Pane tick at t0+1.5s — past the original deadline but within IdleWindow
-	// of the second activity. Must not flip.
-	got, _ := d.Apply(Signal{Source: SourcePane, At: t0.Add(1500 * time.Millisecond)})
-	if got != session.AgentStatusWorking {
-		t.Errorf("got = %v, want working (activity reset clock)", got)
-	}
-}
-
-func TestPaneChangeKeepsWorkingFromDecaying(t *testing.T) {
-	// Bug 0d8abcaa root-cause regression: pane that keeps changing (live
-	// counter, scrolling output, spinner glyph) should never decay to idle.
-	d := NewDecision(DecisionConfig{IdleWindow: 1 * time.Second})
-	t0 := time.Now()
-	d.Apply(Signal{Source: SourceTranscript, Activity: true, At: t0})
-	// Pane keeps moving every tick.
-	for i := 1; i < 6; i++ {
-		d.Apply(Signal{Source: SourcePane, Changed: true, At: t0.Add(time.Duration(i) * 500 * time.Millisecond)})
-	}
-	if got := d.Current(); got != session.AgentStatusWorking {
-		t.Errorf("got = %v, want working held by pane changes", got)
-	}
-}
-
-func TestNoIdleWindowMeansNoTimeoutDecay(t *testing.T) {
-	// Adapters with IdleWindow=0 stay on working until something else moves
-	// them.
-	d := NewDecision(DecisionConfig{IdleWindow: 0})
-	t0 := time.Now()
-	d.Apply(Signal{Source: SourceTranscript, Activity: true, At: t0})
-	got, _ := d.Apply(Signal{Source: SourcePane, At: t0.Add(time.Hour)})
-	if got != session.AgentStatusWorking {
-		t.Errorf("got = %v, want working held with IdleWindow=0", got)
-	}
-}
 
 func TestTranscriptToolWorkPropagated(t *testing.T) {
 	d := NewDecision(DecisionConfig{})

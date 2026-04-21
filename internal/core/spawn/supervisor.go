@@ -6,18 +6,7 @@ import (
 
 	"github.com/kareemaly/cortex/internal/core/agent"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
-	"github.com/kareemaly/cortex/internal/tmux/observer"
 )
-
-// agentPaneTarget builds the tmux target string for an agent's pane.
-// SpawnAgent creates a two-pane window with the agent occupying pane 0
-// (left, 30% width); the observer captures from there.
-func agentPaneTarget(tmuxSession, windowName string) string {
-	if tmuxSession == "" || windowName == "" {
-		return ""
-	}
-	return tmuxSession + ":" + windowName + ".0"
-}
 
 // agentSupervisorParams is the unified input for starting a per-session
 // status supervisor. Agent-specific discovery inputs (claude's transcript
@@ -31,8 +20,6 @@ type agentSupervisorParams struct {
 	SessionID      string
 	TicketID       string
 	ArchitectPath  string
-	PaneTarget     string // tmux "session:window.0" — empty disables pane observation
-	Observer       *observer.Observer
 	Logger         *slog.Logger
 }
 
@@ -68,8 +55,6 @@ func startAgentSupervisor(ctx context.Context, p agentSupervisorParams) (context
 		ArchitectPath: p.ArchitectPath,
 		LivenessPath:  p.LivenessPath,
 		Adapter:       adapter,
-		Observer:      p.Observer,
-		PaneTarget:    p.PaneTarget,
 		Runtime:       agent.RuntimeCtx{TranscriptHint: p.TranscriptHint},
 		DaemonURL:     daemonconfig.DefaultDaemonURL,
 		Logger:        p.Logger,

@@ -6,7 +6,6 @@ import (
 
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/tmux"
-	"github.com/kareemaly/cortex/internal/tmux/observer"
 )
 
 // Dependencies holds all dependencies required by API handlers.
@@ -20,7 +19,6 @@ type Dependencies struct {
 	ConclusionStoreManager *ConclusionStoreManager
 	SessionManager         *SessionManager
 	TmuxManager            *tmux.Manager
-	PaneObserver           *observer.Observer
 	Bus                    *events.Bus
 	Logger                 *slog.Logger
 	SupervisorCtx          context.Context

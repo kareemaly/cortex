@@ -8,17 +8,16 @@ import (
 
 // Source tags which part of the supervisor produced a Signal. The decision
 // machine reads Source to route — e.g. liveness always wins, transcript with
-// an explicit status overrides pane signals.
+// an explicit status takes precedence.
 type Source string
 
 const (
 	SourceTranscript Source = "transcript"
-	SourcePane       Source = "pane"
 	SourceLiveness   Source = "liveness"
 )
 
 // Signal is the internal event fed to Decision.Apply. One signal per tick
-// per input source — the supervisor fans transcript / pane / liveness into a
+// per input source — the supervisor fans transcript / liveness into a
 // single stream and the decision machine is the sole writer of status.
 type Signal struct {
 	Source Source
@@ -30,22 +29,11 @@ type Signal struct {
 	Tool     *string
 	Work     *string
 	IsError  bool
-
-	// HasAwaitingPhrase, Changed: populated when Source==pane.
-	// HasAwaitingPhrase is true when the pane content contains one of the
-	// adapter's AwaitingInputPhrases. Changed is true when the pane hash
-	// moved since the prior tick.
-	HasAwaitingPhrase bool
-	Changed           bool
 }
 
-// DecisionConfig seeds the starting state and picks the idle window — how
-// long without transcript activity OR pane change before flipping to idle.
-// Zero IdleWindow disables time-based idle (the status then lives entirely
-// on authoritative transcript signals).
+// DecisionConfig seeds the starting state.
 type DecisionConfig struct {
 	InitialStatus session.AgentStatus
-	IdleWindow    time.Duration
 }
 
 // Decision is the single writer of a session's current status. One lives per
@@ -57,8 +45,6 @@ type Decision struct {
 	current session.AgentStatus
 	tool    *string
 	work    *string
-
-	lastActivityAt time.Time // last transcript activity OR pane change
 }
 
 // NewDecision seeds state from the config's InitialStatus (defaults to
@@ -89,16 +75,10 @@ func (d *Decision) Work() *string { return d.work }
 //  2. Source==transcript && IsError → error
 //  3. Source==transcript && Status != "" → that status (authoritative:
 //     opencode plugin, codex task events)
-//  4. Source==pane && HasAwaitingPhrase → awaiting_input
-//  5. Source==pane && Changed OR Source==transcript && Activity → working
-//     (unless HasAwaitingPhrase overrode us above)
-//  6. Source==pane && quiet for ≥ IdleWindow → idle
+//  4. Source==transcript && Activity → working
 //
-// The previous design carried a mess of "stable pane seen" flags plus a
-// conjunction timer rule; that rule fired idle on a stable-pane-without-
-// dialog-box heuristic which turned silent tool calls into false idles.
-// This model drops the heuristic entirely — idle is computed from elapsed
-// time since any signal of life, nothing more.
+// Only authoritative transcript signals and liveness matter — pane-based
+// idle decay was removed after integration with agentstatus Hub.
 func (d *Decision) Apply(s Signal) (session.AgentStatus, bool) {
 	prev := d.current
 
@@ -123,19 +103,16 @@ func (d *Decision) Apply(s Signal) (session.AgentStatus, bool) {
 		switch {
 		case s.IsError:
 			d.current = session.AgentStatusError
-			d.lastActivityAt = s.At
 		case s.Status != "":
-			// Authoritative transcript status wins over pane-derived state,
-			// with one carve-out: a plugin that belatedly says "idle" while a
-			// pane-matched permission dialog is still visible shouldn't undo
-			// the awaiting_input flip. In practice plugins and panes agree
-			// within a tick or two, so this only bites at the edges.
+			// Authoritative transcript status — issued by plugin (opencode) or
+			// agent event (codex). With one carve-out: a plugin that belatedly
+			// says "idle" while already in awaiting_input shouldn't undo it —
+			// in practice they agree within a tick, but edge case protection.
 			if d.current == session.AgentStatusAwaitingInput && s.Status == session.AgentStatusIdle {
-				// Keep awaiting_input; wait for the pane to clear first.
+				// Keep awaiting_input; transcript agreement will follow.
 			} else {
 				d.current = s.Status
 			}
-			d.lastActivityAt = s.At
 		case s.Activity:
 			// Activity without explicit status is a liveness beat. Promote
 			// out of starting/idle, hold awaiting_input (user is still
@@ -143,37 +120,6 @@ func (d *Decision) Apply(s Signal) (session.AgentStatus, bool) {
 			// something internally).
 			if d.current != session.AgentStatusAwaitingInput {
 				d.current = session.AgentStatusWorking
-			}
-			d.lastActivityAt = s.At
-		}
-
-	case SourcePane:
-		switch {
-		case s.HasAwaitingPhrase:
-			d.current = session.AgentStatusAwaitingInput
-			// Don't update lastActivityAt: the phrase is visible precisely
-			// because the agent has stopped producing output.
-		case s.Changed:
-			// The pane moved. If we were awaiting_input and the dialog just
-			// cleared, pane change counts as the agent resuming work.
-			d.current = session.AgentStatusWorking
-			d.lastActivityAt = s.At
-		default:
-			// No phrase, no change. Evaluate idle-by-timeout. Only `working`
-			// can decay into `idle` — starting stays until something
-			// happens; awaiting_input holds until the pane clears;
-			// error/ended are terminal enough to not bother.
-			if d.current != session.AgentStatusWorking {
-				break
-			}
-			if d.cfg.IdleWindow == 0 {
-				break
-			}
-			if d.lastActivityAt.IsZero() {
-				break
-			}
-			if s.At.Sub(d.lastActivityAt) >= d.cfg.IdleWindow {
-				d.current = session.AgentStatusIdle
 			}
 		}
 	}

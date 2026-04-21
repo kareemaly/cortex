@@ -63,6 +63,7 @@ func ToTicketSummary(t *ticket.Ticket, status ticket.Status, sess *session.Sessi
 		statusStr := string(sess.Status)
 		summary.AgentStatus = &statusStr
 		summary.AgentTool = sess.Tool
+		summary.Agent = sess.Agent
 		summary.SessionStartedAt = &sess.StartedAt
 	}
 

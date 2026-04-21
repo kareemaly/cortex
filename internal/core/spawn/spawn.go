@@ -12,7 +12,6 @@ import (
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
-	"github.com/kareemaly/cortex/internal/tmux/observer"
 )
 
 // newClaudeSessionID generates a UUID for a fresh claude-code session. Stored
@@ -61,12 +60,11 @@ type Dependencies struct {
 	Store         StoreInterface
 	SessionStore  SessionStoreInterface
 	TmuxManager   TmuxManagerInterface
-	PaneObserver  *observer.Observer // optional: shared tmux pane observer for adapter supervisors
-	Logger        *slog.Logger       // optional logger for warnings
-	SupervisorCtx context.Context    // daemon-root context for long-lived agent supervisors; nil → context.Background
-	CortexdPath   string             // optional override for cortexd binary path
-	MCPConfigDir  string             // optional override for MCP config directory
-	DefaultsDir   string             // path to defaults (e.g., ~/.cortex/defaults/main) for prompt fallback
+	Logger        *slog.Logger    // optional logger for warnings
+	SupervisorCtx context.Context // daemon-root context for long-lived agent supervisors; nil → context.Background
+	CortexdPath   string          // optional override for cortexd binary path
+	MCPConfigDir  string          // optional override for MCP config directory
+	DefaultsDir   string          // path to defaults (e.g., ~/.cortex/defaults/main) for prompt fallback
 }
 
 // Spawner handles spawning agent sessions.
@@ -410,15 +408,12 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	// loop when the launcher's trap EXIT cleans up mcpConfigPath on session
 	// end; daemon shutdown cancels SupervisorCtx.
 	ticketIDForStatus := launcherParams.EnvVars["CORTEX_TICKET_ID"]
-	paneTarget := agentPaneTarget(req.TmuxSession, windowName)
 	supCtx := s.deps.SupervisorCtx
 	supParams := agentSupervisorParams{
 		Agent:         req.Agent,
 		SessionID:     sessionIDForStatus,
 		TicketID:      ticketIDForStatus,
 		ArchitectPath: req.ArchitectPath,
-		PaneTarget:    paneTarget,
-		Observer:      s.deps.PaneObserver,
 		Logger:        s.deps.Logger,
 	}
 	switch req.Agent {
@@ -633,15 +628,12 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	// Start the live status supervisor for the resumed agent. Bind to the
 	// daemon-root context so the supervisor outlives the resume handler.
 	ticketIDForStatus := envVars["CORTEX_TICKET_ID"]
-	resumePaneTarget := agentPaneTarget(req.TmuxSession, req.WindowName)
 	supCtx := s.deps.SupervisorCtx
 	supParams := agentSupervisorParams{
 		Agent:         req.Agent,
 		SessionID:     resumeSessionID,
 		TicketID:      ticketIDForStatus,
 		ArchitectPath: req.ArchitectPath,
-		PaneTarget:    resumePaneTarget,
-		Observer:      s.deps.PaneObserver,
 		Logger:        s.deps.Logger,
 	}
 	switch req.Agent {

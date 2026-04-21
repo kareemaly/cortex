@@ -7,11 +7,6 @@ import (
 	"time"
 )
 
-// claudeIdleWindow: how long without transcript activity OR pane hash movement
-// before reporting idle. Chosen short enough that the dashboard feels live and
-// long enough to not flap on one-off tool-result pauses.
-const claudeIdleWindow = 2 * time.Second
-
 // ClaudeTranscriptPath returns the Claude Code transcript jsonl path for a
 // given working directory and Claude session UUID. Claude writes transcripts
 // to $HOME/.claude/projects/<slug>/<session-id>.jsonl, where <slug> is the
@@ -53,16 +48,7 @@ func parseClaudeLine(line []byte) TranscriptEvent {
 
 var claudeAdapter = &Adapter{
 	Name:             "claude",
-	IdleWindow:       claudeIdleWindow,
 	DiscoveryTimeout: 30 * time.Second,
-
-	// Every Claude permission / tool-use confirmation dialog renders the
-	// exact phrase "tell Claude what to do differently" as the third option.
-	// Matching that phrase is how we know the user is blocking the agent.
-	// The phrase never appears in normal tool output or assistant text.
-	AwaitingInputPhrases: []string{
-		"tell Claude what to do differently",
-	},
 
 	ResolveTranscript: func(rt RuntimeCtx) string {
 		if rt.TranscriptHint != "" {

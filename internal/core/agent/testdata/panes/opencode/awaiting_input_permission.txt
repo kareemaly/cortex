@@ -1,8 +1,0 @@
-opencode: running make test
-
-──────────────────────────────────────
-Permission required to run this command
-Allow (y) or deny (n)?
-──────────────────────────────────────
-
->

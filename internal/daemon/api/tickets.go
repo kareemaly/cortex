@@ -504,7 +504,6 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		Store:         store,
 		SessionStore:  sessionStore,
 		TmuxManager:   h.deps.TmuxManager,
-		PaneObserver:  h.deps.PaneObserver,
 		SupervisorCtx: h.deps.SupervisorCtx,
 		Logger:        h.deps.Logger,
 		CortexdPath:   h.deps.CortexdPath,

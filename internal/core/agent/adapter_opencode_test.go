@@ -1,21 +1,10 @@
 package agent
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/kareemaly/cortex/internal/session"
 )
-
-func opencodeFixture(t *testing.T, name string) []byte {
-	t.Helper()
-	b, err := os.ReadFile(filepath.Join("testdata", "panes", "opencode", name+".txt"))
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
-	}
-	return b
-}
 
 func TestOpenCodeParseTranscriptLineCanonicalStatuses(t *testing.T) {
 	// The plugin emits only canonical names; ParseTranscriptLine forwards them verbatim.
@@ -43,23 +32,5 @@ func TestOpenCodeParseTranscriptLineCarriesToolAndWork(t *testing.T) {
 	}
 	if got.Work != "make test" {
 		t.Errorf("work = %q, want 'make test'", got.Work)
-	}
-}
-
-func TestOpenCodePhraseMatchesPermissionFallback(t *testing.T) {
-	a, _ := Get("opencode")
-	if phrase := a.MatchAwaitingInput(opencodeFixture(t, "awaiting_input_permission")); phrase == "" {
-		t.Error("expected phrase match on permission fixture")
-	}
-}
-
-func TestOpenCodePhraseRejectsNonPermission(t *testing.T) {
-	a, _ := Get("opencode")
-	for _, name := range []string{"working", "info_divider_non_permission"} {
-		t.Run(name, func(t *testing.T) {
-			if phrase := a.MatchAwaitingInput(opencodeFixture(t, name)); phrase != "" {
-				t.Errorf("%s: unexpected phrase match %q", name, phrase)
-			}
-		})
 	}
 }

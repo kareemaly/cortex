@@ -219,7 +219,6 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 	spawner := spawn.NewSpawner(spawn.Dependencies{
 		TmuxManager:   h.deps.TmuxManager,
 		SessionStore:  sessStore,
-		PaneObserver:  h.deps.PaneObserver,
 		SupervisorCtx: h.deps.SupervisorCtx,
 		CortexdPath:   h.deps.CortexdPath,
 		Logger:        h.deps.Logger,

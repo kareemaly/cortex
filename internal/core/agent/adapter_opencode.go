@@ -33,17 +33,8 @@ func parseOpenCodeLine(line []byte) TranscriptEvent {
 }
 
 var opencodeAdapter = &Adapter{
-	Name: "opencode",
-	// Plugin pushes status authoritatively. IdleWindow is only a fallback if
-	// the plugin wedges (shouldn't happen, but it's cheap insurance).
-	IdleWindow:       5 * time.Second,
+	Name:             "opencode",
 	DiscoveryTimeout: 30 * time.Second,
-
-	// Backup only — the plugin is primary. If the plugin hiccups we can still
-	// surface the waiting-for-permission state from the pane itself.
-	AwaitingInputPhrases: []string{
-		"Permission required to run this command",
-	},
 
 	ResolveTranscript: func(rt RuntimeCtx) string {
 		if rt.TranscriptHint == "" {
