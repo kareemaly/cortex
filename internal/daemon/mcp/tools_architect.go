@@ -598,6 +598,66 @@ func (s *Server) handleListVariants(
 	return nil, ListVariantsOutput{Variants: variants}, nil
 }
 
+// handleCreateFollowUpTicket creates a follow-up work ticket.
+// For ticket sessions (s.session.TicketID != ""), it auto-links bidirectionally
+// with the originating ticket. For collab sessions, it creates the ticket with no references.
+func (s *Server) handleCreateFollowUpTicket(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input CreateFollowUpTicketInput,
+) (*mcp.CallToolResult, CreateFollowUpTicketOutput, error) {
+	if input.Title == "" {
+		return nil, CreateFollowUpTicketOutput{}, NewValidationError("title", "is required")
+	}
+	if input.Repo == "" {
+		return nil, CreateFollowUpTicketOutput{}, NewValidationError("repo", "is required for work tickets")
+	}
+
+	var dueDate *time.Time
+	if input.DueDate != "" {
+		parsed, err := time.Parse(time.RFC3339, input.DueDate)
+		if err != nil {
+			return nil, CreateFollowUpTicketOutput{}, NewValidationError("due_date", "must be in RFC3339 format")
+		}
+		dueDate = &parsed
+	}
+
+	originID := s.session.TicketID
+	var references []string
+	if originID != "" {
+		references = []string{originID}
+	}
+
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, "work", input.Repo, "", dueDate, references)
+	if err != nil {
+		return nil, CreateFollowUpTicketOutput{}, wrapSDKError(err)
+	}
+
+	newID := resp.ID
+
+	if originID != "" {
+		origin, err := s.sdkClient.GetTicketByID(originID)
+		if err != nil {
+			return nil, CreateFollowUpTicketOutput{}, NewInternalError(fmt.Sprintf(
+				"follow-up ticket %s was created but failed to fetch origin ticket %s: %s",
+				newID, originID, err,
+			))
+		}
+
+		updatedRefs := append(origin.References, newID)
+		if _, err := s.sdkClient.UpdateTicket(originID, nil, nil, &updatedRefs); err != nil {
+			return nil, CreateFollowUpTicketOutput{}, NewInternalError(fmt.Sprintf(
+				"follow-up ticket %s was created but failed to update origin ticket %s references: %s",
+				newID, originID, err,
+			))
+		}
+	}
+
+	return nil, CreateFollowUpTicketOutput{
+		Ticket: ticketResponseToOutput(resp),
+	}, nil
+}
+
 // handleSearch searches across all tickets (all statuses) and conclusions.
 func (s *Server) handleSearch(
 	ctx context.Context,

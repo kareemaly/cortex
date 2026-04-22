@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
@@ -805,6 +806,190 @@ func TestHandleSpawnSession_StateOrphaned_ModeFresh(t *testing.T) {
 
 	if !output.Success {
 		t.Errorf("expected success, got message: %s", output.Message)
+	}
+}
+
+// setupCollabSession creates a collab session backed by a real HTTP test server.
+// The MCP collab handlers route through the daemon API via the SDK client.
+func setupCollabSession(t *testing.T) (*Server, func()) {
+	t.Helper()
+
+	tmpDir, err := os.MkdirTemp("", "mcp-collab-test")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "cortex.yaml"), []byte("name: test-project\n"), 0644); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create cortex.yaml: %v", err)
+	}
+
+	logger := slog.Default()
+	storeManager := api.NewStoreManager(logger, nil)
+	sessionManager := api.NewSessionManager(logger)
+	deps := &api.Dependencies{
+		StoreManager:   storeManager,
+		SessionManager: sessionManager,
+		Bus:            events.NewBus(),
+		Logger:         logger,
+		CortexdPath:    "/mock/cortexd",
+	}
+	router := api.NewRouter(deps, logger)
+	ts := httptest.NewServer(router)
+
+	sdkClient := sdk.NewClient(ts.URL, tmpDir)
+
+	cfg := &Config{
+		CollabID:      "test-collab-id",
+		DaemonURL:     ts.URL,
+		ArchitectPath: tmpDir,
+	}
+
+	mcpServer, err := NewServer(cfg)
+	if err != nil {
+		ts.Close()
+		_ = os.RemoveAll(tmpDir)
+		t.Fatalf("create server: %v", err)
+	}
+
+	mcpServer.sdkClient = sdkClient
+
+	cleanup := func() {
+		ts.Close()
+		_ = os.RemoveAll(tmpDir)
+	}
+
+	return mcpServer, cleanup
+}
+
+// createFollowUpTicket tests
+
+func TestHandleCreateFollowUpTicket_TicketSession_BidirectionalLink(t *testing.T) {
+	server, parentID, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, output, err := server.handleCreateFollowUpTicket(context.Background(), nil, CreateFollowUpTicketInput{
+		Title: "Follow-up task",
+		Body:  "This follows from the parent",
+		Repo:  "/some/repo",
+	})
+	if err != nil {
+		t.Fatalf("handleCreateFollowUpTicket failed: %v", err)
+	}
+
+	newID := output.Ticket.ID
+	if newID == "" {
+		t.Fatal("expected non-empty ticket ID")
+	}
+
+	// New ticket should reference the parent
+	if !slices.Contains(output.Ticket.References, parentID) {
+		t.Errorf("new ticket references = %v, want to contain %s", output.Ticket.References, parentID)
+	}
+
+	// Parent ticket should now reference the new ticket
+	_, parentOut, err := server.handleReadTicket(context.Background(), nil, ReadTicketInput{ID: parentID})
+	if err != nil {
+		t.Fatalf("handleReadTicket failed: %v", err)
+	}
+	if !slices.Contains(parentOut.Ticket.References, newID) {
+		t.Errorf("parent ticket references = %v, want to contain %s", parentOut.Ticket.References, newID)
+	}
+}
+
+func TestHandleCreateFollowUpTicket_CrossRepo(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, output, err := server.handleCreateFollowUpTicket(context.Background(), nil, CreateFollowUpTicketInput{
+		Title: "Cross-repo follow-up",
+		Repo:  "/different/repo",
+	})
+	if err != nil {
+		t.Fatalf("handleCreateFollowUpTicket failed: %v", err)
+	}
+
+	if output.Ticket.Repo != "/different/repo" {
+		t.Errorf("repo = %q, want %q", output.Ticket.Repo, "/different/repo")
+	}
+}
+
+func TestHandleCreateFollowUpTicket_CollabSession_NoReferences(t *testing.T) {
+	server, cleanup := setupCollabSession(t)
+	defer cleanup()
+
+	_, output, err := server.handleCreateFollowUpTicket(context.Background(), nil, CreateFollowUpTicketInput{
+		Title: "Backlog task from collab",
+		Repo:  "/some/repo",
+	})
+	if err != nil {
+		t.Fatalf("handleCreateFollowUpTicket failed: %v", err)
+	}
+
+	if output.Ticket.ID == "" {
+		t.Error("expected non-empty ticket ID")
+	}
+	if len(output.Ticket.References) != 0 {
+		t.Errorf("collab follow-up should have no references, got %v", output.Ticket.References)
+	}
+}
+
+func TestHandleCreateFollowUpTicket_MissingTitle(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, _, err := server.handleCreateFollowUpTicket(context.Background(), nil, CreateFollowUpTicketInput{
+		Repo: "/some/repo",
+	})
+	if err == nil {
+		t.Fatal("expected validation error for missing title")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected *ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("code = %q, want %q", toolErr.Code, ErrorCodeValidation)
+	}
+}
+
+func TestHandleCreateFollowUpTicket_MissingRepo(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, _, err := server.handleCreateFollowUpTicket(context.Background(), nil, CreateFollowUpTicketInput{
+		Title: "Some task",
+	})
+	if err == nil {
+		t.Fatal("expected validation error for missing repo")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected *ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("code = %q, want %q", toolErr.Code, ErrorCodeValidation)
+	}
+}
+
+func TestHandleCreateFollowUpTicket_InvalidDueDate(t *testing.T) {
+	server, _, cleanup := setupTicketSession(t)
+	defer cleanup()
+
+	_, _, err := server.handleCreateFollowUpTicket(context.Background(), nil, CreateFollowUpTicketInput{
+		Title:   "Some task",
+		Repo:    "/some/repo",
+		DueDate: "not-a-date",
+	})
+	if err == nil {
+		t.Fatal("expected validation error for invalid due_date")
+	}
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected *ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("code = %q, want %q", toolErr.Code, ErrorCodeValidation)
 	}
 }
 

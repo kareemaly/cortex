@@ -21,6 +21,11 @@ func (s *Server) registerCollabTools() {
 	}, s.handleUpdateTicket)
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "createFollowUpTicket",
+		Description: "Create a follow-up work ticket in backlog. Use this when you identify work that should be tracked separately.",
+	}, s.handleCreateFollowUpTicket)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
 		Description: "Conclude the collab session and create a conclusion record. Include the outcome, files changed, and follow-up work or blockers. commits is optional.",
 	}, s.handleCollabConcludeSession)

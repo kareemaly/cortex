@@ -69,6 +69,19 @@ type CreateWorkTicketInput struct {
 	References []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
 }
 
+// CreateFollowUpTicketInput is the input for the createFollowUpTicket tool.
+type CreateFollowUpTicketInput struct {
+	Title   string `json:"title" jsonschema:"The follow-up ticket title (required)"`
+	Body    string `json:"body,omitempty" jsonschema:"The ticket body/description"`
+	Repo    string `json:"repo" jsonschema:"Repository path for this ticket (required). Must be in the architect's repos whitelist."`
+	DueDate string `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')"`
+}
+
+// CreateFollowUpTicketOutput is the output for the createFollowUpTicket tool.
+type CreateFollowUpTicketOutput struct {
+	Ticket TicketOutput `json:"ticket"`
+}
+
 // UpdateTicketInput is the input for the updateTicket tool.
 type UpdateTicketInput struct {
 	ID         string    `json:"id" jsonschema:"The ticket ID to update"`

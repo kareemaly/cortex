@@ -17,6 +17,12 @@ func (s *Server) registerTicketTools() {
 		Description: "Read full ticket details by ID. Use this to get context on referenced tickets.",
 	}, s.handleReadTicket)
 
+	// Create follow-up ticket linked to the current ticket
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "createFollowUpTicket",
+		Description: "Create a follow-up work ticket in backlog, automatically linked to the current ticket. The new ticket's references will include the current ticket ID, and the current ticket's references will be updated to include the new ticket ID.",
+	}, s.handleCreateFollowUpTicket)
+
 	// Conclude session tool
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "concludeSession",
