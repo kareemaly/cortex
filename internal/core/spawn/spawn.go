@@ -116,6 +116,8 @@ type SpawnRequest struct {
 
 	// Extra CLI args appended to the agent command
 	AgentArgs []string
+	// Per-variant env vars merged on top of system env (variant wins on conflict)
+	EnvVars map[string]string
 }
 
 // ResumeRequest contains parameters for resuming an orphaned session.
@@ -135,6 +137,8 @@ type ResumeRequest struct {
 
 	// Extra CLI args appended to the agent command
 	AgentArgs []string
+	// Per-variant env vars merged on top of system env (variant wins on conflict)
+	EnvVars map[string]string
 }
 
 // SpawnResult contains the result of a spawn operation.
@@ -372,6 +376,11 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
 	}
 
+	// Variant env vars override all system-set env vars
+	for k, v := range req.EnvVars {
+		launcherParams.EnvVars[k] = v
+	}
+
 	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
 	if err != nil {
 		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles)
@@ -524,6 +533,11 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	if codexConfigDir != "" {
 		launcherParams.EnvVars["CODEX_HOME"] = codexConfigDir
 		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
+	}
+
+	// Variant env vars override all system-set env vars
+	for k, v := range req.EnvVars {
+		launcherParams.EnvVars[k] = v
 	}
 
 	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)

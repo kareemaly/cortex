@@ -187,7 +187,7 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 					h.deps.Logger.Warn("failed to end orphaned architect session for resume", "error", endErr)
 				}
 			}
-			h.spawnArchitectSession(w, r, projectPath, sessionName, projectCfg, agent, av.Args, "cortex architect show", true)
+			h.spawnArchitectSession(w, r, projectPath, sessionName, projectCfg, agent, av.Args, av.Env, "cortex architect show", true)
 			return
 		default:
 			writeError(w, http.StatusBadRequest, "invalid_mode", "mode must be 'normal', 'fresh', or 'resume'")
@@ -204,11 +204,11 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Spawn a new architect session
-	h.spawnArchitectSession(w, r, projectPath, sessionName, projectCfg, agent, av.Args, "cortex architect show", false)
+	h.spawnArchitectSession(w, r, projectPath, sessionName, projectCfg, agent, av.Args, av.Env, "cortex architect show", false)
 }
 
 // spawnArchitectSession spawns an architect session (new or resumed).
-func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http.Request, projectPath, sessionName string, projectCfg *architectconfig.Config, agent string, agentArgs []string, companion string, resume bool) {
+func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http.Request, projectPath, sessionName string, projectCfg *architectconfig.Config, agent string, agentArgs []string, agentEnv map[string]string, companion string, resume bool) {
 	ticketsDir := projectCfg.TicketsPath(projectPath)
 
 	var sessStore spawn.SessionStoreInterface
@@ -239,6 +239,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 			WindowName:    "architect",
 			Companion:     companion,
 			AgentArgs:     agentArgs,
+			EnvVars:       agentEnv,
 		})
 	} else {
 		result, err = spawner.Spawn(r.Context(), spawn.SpawnRequest{
@@ -250,6 +251,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 			ArchitectName: sessionName,
 			Companion:     companion,
 			AgentArgs:     agentArgs,
+			EnvVars:       agentEnv,
 		})
 	}
 

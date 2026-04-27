@@ -20,10 +20,11 @@ type OrchestrateStore interface {
 // OrchestrateRequest contains parameters for orchestrating a spawn operation.
 type OrchestrateRequest struct {
 	TicketID      string
-	Mode          string   // "normal", "resume", "fresh" (validated internally; defaults to "normal")
-	Agent         string   // pre-resolved by API handler; falls back to "claude"
-	AgentArgs     []string // pre-resolved by API handler
-	Companion     string   // pre-resolved by API handler
+	Mode          string            // "normal", "resume", "fresh" (validated internally; defaults to "normal")
+	Agent         string            // pre-resolved by API handler; falls back to "claude"
+	AgentArgs     []string          // pre-resolved by API handler
+	EnvVars       map[string]string // per-variant env vars, pre-resolved by API handler
+	Companion     string            // pre-resolved by API handler
 	ArchitectPath string
 	TicketsDir    string // optional: derived from ProjectPath if empty
 	TmuxSession   string // optional: derived from project config name if empty
@@ -157,6 +158,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 			Ticket:        t,
 			Companion:     req.Companion,
 			AgentArgs:     req.AgentArgs,
+			EnvVars:       req.EnvVars,
 		}
 	}
 
@@ -218,6 +220,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				TicketType:    t.Type,
 				Companion:     req.Companion,
 				AgentArgs:     req.AgentArgs,
+				EnvVars:       req.EnvVars,
 			})
 			outcome = OutcomeResumed
 		case "fresh":

@@ -132,6 +132,7 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		Agent:         collabAgent,
 		Companion:     projectCfg.Companion,
 		AgentArgs:     av.Args,
+		EnvVars:       av.Env,
 		TicketsDir:    ticketsDir,
 	})
 	if err != nil {

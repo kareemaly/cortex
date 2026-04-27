@@ -25,8 +25,9 @@ type ArchitectEntry struct {
 
 // AgentVariant is a named agent configuration stored in the global agents map.
 type AgentVariant struct {
-	Agent string   `yaml:"agent"`
-	Args  []string `yaml:"args,omitempty"`
+	Agent string            `yaml:"agent"`
+	Args  []string          `yaml:"args,omitempty"`
+	Env   map[string]string `yaml:"env,omitempty"`
 }
 
 // Config holds the daemon configuration.

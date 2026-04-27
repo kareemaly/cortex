@@ -14,6 +14,7 @@ type CollabSpawnRequest struct {
 	Agent         string
 	Companion     string
 	AgentArgs     []string
+	EnvVars       map[string]string
 	TicketsDir    string
 }
 
@@ -38,6 +39,7 @@ func (s *Spawner) SpawnCollab(ctx context.Context, req CollabSpawnRequest) (*Col
 		Repo:          req.Repo,
 		Companion:     req.Companion,
 		AgentArgs:     req.AgentArgs,
+		EnvVars:       req.EnvVars,
 	})
 	if err != nil {
 		return nil, err

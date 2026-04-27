@@ -327,6 +327,56 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 	}
 }
 
+func TestSpawn_VariantEnv_InLauncherScript(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := newMockStore()
+	sessStore := newMockSessionStore()
+	tmuxMgr := newMockTmuxManager()
+
+	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
+	store.tickets["ticket-1"] = testTicket
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
+
+	spawner := NewSpawner(Dependencies{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+		MCPConfigDir: tmpDir,
+	})
+
+	result, err := spawner.Spawn(context.Background(), SpawnRequest{
+		AgentType:     AgentTypeTicketAgent,
+		Agent:         "claude",
+		TmuxSession:   "test-session",
+		ArchitectPath: tmpDir,
+		TicketsDir:    filepath.Join(tmpDir, "tickets"),
+		TicketID:      "ticket-1",
+		Ticket:        testTicket,
+		EnvVars: map[string]string{
+			"CODEX_HOME":    "/Users/me/.codex-personal",
+			"MY_CUSTOM_VAR": "hello world",
+		},
+	})
+	if err != nil || !result.Success {
+		t.Fatalf("spawn failed: err=%v result=%v", err, result)
+	}
+
+	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
+	data, err := os.ReadFile(launcherPath)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+
+	if !containsSubstr(script, "export CODEX_HOME='/Users/me/.codex-personal'") {
+		t.Errorf("expected CODEX_HOME variant env in launcher; script:\n%s", script)
+	}
+	if !containsSubstr(script, "export MY_CUSTOM_VAR='hello world'") {
+		t.Errorf("expected MY_CUSTOM_VAR variant env in launcher; script:\n%s", script)
+	}
+}
+
 func TestSpawn_TicketAgent_AlreadyActive(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()
@@ -775,6 +825,43 @@ func TestWriteLauncherScript(t *testing.T) {
 	}
 	if info.Mode().Perm()&0100 == 0 {
 		t.Error("expected launcher script to be executable")
+	}
+}
+
+func TestWriteLauncherScript_VariantEnv(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	params := LauncherParams{
+		PromptFilePath: "/tmp/cortex-prompt-test.txt",
+		MCPConfigPath:  "/tmp/cortex-mcp-test.json",
+		EnvVars: map[string]string{
+			"CORTEX_TICKET_ID": "ticket-1",
+			"CODEX_HOME":       "/Users/me/.codex-personal",
+			"MY_CUSTOM_VAR":    "hello world",
+		},
+		CleanupFiles: []string{"/tmp/cortex-mcp-test.json"},
+	}
+
+	path, err := WriteLauncherScript(params, "variant-env-test", tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+
+	// All three env vars must be exported
+	if !containsSubstr(script, "export CORTEX_TICKET_ID='ticket-1'") {
+		t.Errorf("expected CORTEX_TICKET_ID export; script:\n%s", script)
+	}
+	if !containsSubstr(script, "export CODEX_HOME='/Users/me/.codex-personal'") {
+		t.Errorf("expected CODEX_HOME export; script:\n%s", script)
+	}
+	if !containsSubstr(script, "export MY_CUSTOM_VAR='hello world'") {
+		t.Errorf("expected MY_CUSTOM_VAR export; script:\n%s", script)
 	}
 }
 

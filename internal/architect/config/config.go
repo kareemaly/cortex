@@ -22,8 +22,9 @@ const (
 
 // AgentVariant is a named agent configuration used in the top-level agents map.
 type AgentVariant struct {
-	Agent AgentType `yaml:"agent"`
-	Args  []string  `yaml:"args,omitempty"`
+	Agent AgentType         `yaml:"agent"`
+	Args  []string          `yaml:"args,omitempty"`
+	Env   map[string]string `yaml:"env,omitempty"`
 }
 
 // Config holds the architect configuration.
@@ -81,6 +82,7 @@ func (c *Config) MergeAgents(global map[string]daemonconfig.AgentVariant) {
 			c.Agents[k] = AgentVariant{
 				Agent: AgentType(v.Agent),
 				Args:  v.Args,
+				Env:   v.Env,
 			}
 		}
 	}

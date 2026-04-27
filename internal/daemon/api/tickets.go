@@ -498,6 +498,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		Mode:          mode,
 		Agent:         resolvedAgent,
 		AgentArgs:     av.Args,
+		EnvVars:       av.Env,
 		Companion:     projectCfg.Companion,
 		ArchitectPath: projectPath,
 	}, spawn.OrchestrateDeps{
