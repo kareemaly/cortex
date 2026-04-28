@@ -298,7 +298,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	// Generate Codex config dir if needed
 	var codexConfigDir string
 	if req.Agent == "codex" {
-		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, pInfo.SystemPromptContent, req.AgentType, identifier)
+		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, pInfo.SystemPromptContent, req.AgentType, identifier, sessionIDForStatus)
 		if err != nil {
 			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, promptFilePath, systemPromptFilePath))
 			return nil, err
@@ -373,6 +373,13 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	// Expose the cortex session UUID to OpenCode so the hook plugin can include
 	// it in every payload, enabling back-correlation on session.created.
 	if req.Agent == "opencode" && sessionIDForStatus != "" {
+		launcherParams.EnvVars["CORTEX_SESSION_ID"] = sessionIDForStatus
+	}
+
+	// Expose the cortex session UUID to codex so it is available in the shell
+	// environment of hook commands. The hooks.json also embeds it as a query
+	// parameter — this env export is belt-and-suspenders for any wrapper scripts.
+	if req.Agent == "codex" && sessionIDForStatus != "" {
 		launcherParams.EnvVars["CORTEX_SESSION_ID"] = sessionIDForStatus
 	}
 
@@ -496,6 +503,14 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		}
 	}
 
+	// For codex ticket agents, expose the cortex session UUID as belt-and-suspenders
+	// alongside the query parameter already embedded in hooks.json.
+	if req.Agent == "codex" && req.AgentType == AgentTypeTicketAgent && s.deps.SessionStore != nil {
+		if existing, _ := s.deps.SessionStore.GetByTicketID(req.TicketID); existing != nil {
+			envVars["CORTEX_SESSION_ID"] = existing.SessionID
+		}
+	}
+
 	// Generate OpenCode config content for resume (empty system prompt -- resume has no prompts)
 	var openCodeConfigJSON string
 	if req.Agent == "opencode" {
@@ -508,10 +523,18 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		}
 	}
 
-	// Generate Codex config dir for resume (empty system prompt -- resume has no prompts)
+	// Generate Codex config dir for resume (empty system prompt -- resume has no prompts).
+	// Pass the cortex session UUID so the embedded hooks.json query param enables
+	// back-correlation on the new native codex session ID.
 	var codexConfigDir string
 	if req.Agent == "codex" {
-		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, "", req.AgentType, identifier)
+		var codexCortexSessionID string
+		if req.AgentType == AgentTypeTicketAgent && s.deps.SessionStore != nil {
+			if existing, _ := s.deps.SessionStore.GetByTicketID(req.TicketID); existing != nil {
+				codexCortexSessionID = existing.SessionID
+			}
+		}
+		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, "", req.AgentType, identifier, codexCortexSessionID)
 		if err != nil {
 			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
 				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)

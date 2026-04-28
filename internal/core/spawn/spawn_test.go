@@ -2480,3 +2480,106 @@ func TestWriteLauncherScript_OpenCode_WithModelArg(t *testing.T) {
 		t.Error("expected 'anthropic/claude-sonnet-4' model value in script from AgentArgs")
 	}
 }
+
+func TestSpawn_Codex_HooksAndFeatureFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := newMockStore()
+	sessStore := newMockSessionStore()
+	tmuxMgr := newMockTmuxManager()
+
+	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
+	store.tickets["ticket-1"] = testTicket
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Instructions")
+
+	spawner := NewSpawner(Dependencies{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+		MCPConfigDir: tmpDir,
+	})
+
+	result, err := spawner.Spawn(context.Background(), SpawnRequest{
+		AgentType:     AgentTypeTicketAgent,
+		Agent:         "codex",
+		TmuxSession:   "test-session",
+		ArchitectPath: tmpDir,
+		TicketsDir:    filepath.Join(tmpDir, "tickets"),
+		TicketID:      "ticket-1",
+		Ticket:        testTicket,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success, got: %s", result.Message)
+	}
+
+	// Read launcher to locate the CODEX_HOME directory.
+	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
+	data, err := os.ReadFile(launcherPath)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+
+	// CORTEX_SESSION_ID must be exported for belt-and-suspenders env access.
+	if !containsSubstr(script, "export CORTEX_SESSION_ID=") {
+		t.Error("expected CORTEX_SESSION_ID export for codex agent")
+	}
+
+	// CODEX_HOME must be exported and point to the temp config dir.
+	if !containsSubstr(script, "export CODEX_HOME=") {
+		t.Fatal("expected CODEX_HOME export for codex agent")
+	}
+	codexHome := extractExportedEnvVar(t, script, "CODEX_HOME")
+
+	// config.toml must contain [features] + codex_hooks = true.
+	configTOML, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
+	if err != nil {
+		t.Fatalf("failed to read codex config.toml: %v", err)
+	}
+	tomlStr := string(configTOML)
+	if !containsSubstr(tomlStr, "[features]") {
+		t.Error("codex config.toml must contain [features] section")
+	}
+	if !containsSubstr(tomlStr, "codex_hooks = true") {
+		t.Error("codex config.toml must contain codex_hooks = true")
+	}
+
+	// hooks.json must exist and point to the cortexd hook endpoint.
+	hooksJSON, err := os.ReadFile(filepath.Join(codexHome, "hooks.json"))
+	if err != nil {
+		t.Fatalf("failed to read codex hooks.json: %v", err)
+	}
+	hooksStr := string(hooksJSON)
+	if !containsSubstr(hooksStr, "/hook/codex") {
+		t.Error("hooks.json must reference /hook/codex endpoint")
+	}
+	if !containsSubstr(hooksStr, "cortex_session_id=") {
+		t.Error("hooks.json must embed cortex_session_id query parameter for back-correlation")
+	}
+	cortexSessionID := extractExportedEnvVar(t, script, "CORTEX_SESSION_ID")
+	if !containsSubstr(hooksStr, "cortex_session_id="+cortexSessionID) {
+		t.Errorf("hooks.json cortex_session_id mismatch: want %q", cortexSessionID)
+	}
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"} {
+		if !containsSubstr(hooksStr, event) {
+			t.Errorf("hooks.json missing event %q", event)
+		}
+	}
+}
+
+func TestBuildCodexHooksJSON_NoSessionID(t *testing.T) {
+	data, err := buildCodexHooksJSON("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hooksStr := string(data)
+	if !containsSubstr(hooksStr, "/hook/codex") {
+		t.Error("hooks.json must reference /hook/codex even without cortex_session_id")
+	}
+	if containsSubstr(hooksStr, "cortex_session_id=") {
+		t.Error("hooks.json must not have cortex_session_id when session ID is empty")
+	}
+}
