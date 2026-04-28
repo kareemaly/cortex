@@ -370,6 +370,12 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		launcherParams.EnvVars["OPENCODE_CONFIG_CONTENT"] = openCodeConfigJSON
 	}
 
+	// Expose the cortex session UUID to OpenCode so the hook plugin can include
+	// it in every payload, enabling back-correlation on session.created.
+	if req.Agent == "opencode" && sessionIDForStatus != "" {
+		launcherParams.EnvVars["CORTEX_SESSION_ID"] = sessionIDForStatus
+	}
+
 	// Set CODEX_HOME for codex agents
 	if codexConfigDir != "" {
 		launcherParams.EnvVars["CODEX_HOME"] = codexConfigDir
@@ -479,6 +485,15 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		envVars["CORTEX_TICKET_TYPE"] = req.TicketType
 	case AgentTypeArchitect:
 		envVars["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
+	}
+
+	// For OpenCode ticket agents, expose the cortex session UUID so the hook plugin
+	// can include it in every payload, enabling back-correlation on session.created.
+	// Ticket sessions already exist in the store at resume time (read-only lookup).
+	if req.Agent == "opencode" && req.AgentType == AgentTypeTicketAgent && s.deps.SessionStore != nil {
+		if existing, _ := s.deps.SessionStore.GetByTicketID(req.TicketID); existing != nil {
+			envVars["CORTEX_SESSION_ID"] = existing.SessionID
+		}
 	}
 
 	// Generate OpenCode config content for resume (empty system prompt -- resume has no prompts)

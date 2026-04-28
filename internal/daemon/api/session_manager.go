@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/kareemaly/cortex/internal/session"
+	"github.com/kareemaly/cortex/internal/storage"
 )
 
 // SessionManager manages per-project session stores.
@@ -41,6 +42,30 @@ func (m *SessionManager) TotalSessionCount() int {
 		}
 	}
 	return total
+}
+
+// SetAgentSessionIDBySessionID finds the session with the given cortex UUID
+// across all known architect session stores and records agentSessionID as its
+// AgentSessionID. Returns nil on success, storage.NotFoundError when no
+// matching session exists.
+func (m *SessionManager) SetAgentSessionIDBySessionID(cortexSessionID, agentSessionID string) error {
+	m.mu.RLock()
+	stores := make([]*session.Store, 0, len(m.stores))
+	for _, s := range m.stores {
+		stores = append(stores, s)
+	}
+	m.mu.RUnlock()
+
+	for _, store := range stores {
+		err := store.SetAgentSessionID(cortexSessionID, agentSessionID)
+		if err == nil {
+			return nil
+		}
+		if !storage.IsNotFound(err) {
+			return err
+		}
+	}
+	return &storage.NotFoundError{Resource: "session", ID: cortexSessionID}
 }
 
 // GetStore returns the session store for the given project path.

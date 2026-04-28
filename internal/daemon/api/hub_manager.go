@@ -109,6 +109,15 @@ func (m *HubManager) EventsFor(ctx context.Context, agentSessionID string) <-cha
 	return ch
 }
 
+// RegisterOpenCodeSession tags an OpenCode session with the cortex session ID.
+// Subsequent Hub events from openCodeSessionID will carry a "cortex_session_id"
+// tag, enabling tag-based filtering in future real-time supervisor paths.
+func (m *HubManager) RegisterOpenCodeSession(openCodeSessionID, cortexSessionID string) {
+	m.hub.RegisterSession(openCodeSessionID, map[string]string{
+		"cortex_session_id": cortexSessionID,
+	})
+}
+
 // hubEventSource returns the HubManager's EventsFor method as a function
 // suitable for spawn.Dependencies.HubEventSource. Returns nil when hm is nil
 // so supervisors run in liveness-only mode.

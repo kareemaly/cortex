@@ -1909,6 +1909,12 @@ func TestSpawn_OpenCode_Success(t *testing.T) {
 	if sessStore.lastCreateAgent != "opencode" {
 		t.Errorf("expected session agent 'opencode', got: %s", sessStore.lastCreateAgent)
 	}
+
+	// Verify CORTEX_SESSION_ID is exported so the hook plugin can back-correlate
+	// the OpenCode native session ID to this cortex session on session.created.
+	if !containsSubstr(script, "export CORTEX_SESSION_ID=") {
+		t.Error("expected CORTEX_SESSION_ID export for opencode agent")
+	}
 }
 
 func TestSpawn_OpenCode_ConfigContent(t *testing.T) {
