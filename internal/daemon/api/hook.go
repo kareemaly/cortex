@@ -67,47 +67,7 @@ func (h *HookHandlers) IngestHook(w http.ResponseWriter, r *http.Request) {
 		h.tryCorrelateOpenCodeSession(body)
 	}
 
-	// For codex: on SessionStart, the cortex session UUID arrives as a query
-	// parameter (?cortex_session_id=) embedded in the per-session hooks.json URL.
-	if agentName == "codex" && h.deps.SessionManager != nil {
-		h.tryCorrelateCodexSession(r, body)
-	}
-
 	w.WriteHeader(http.StatusAccepted)
-}
-
-// tryCorrelateCodexSession parses a SessionStart payload and, when both
-// session_id (payload) and cortex_session_id (query param) are present,
-// records the mapping so that GetEvent(sess.AgentSessionID) resolves to the
-// correct Hub cache entry on the next TUI poll cycle.
-func (h *HookHandlers) tryCorrelateCodexSession(r *http.Request, body []byte) {
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return
-	}
-	if payload["hook_event_name"] != "SessionStart" {
-		return
-	}
-	codexSessionID, _ := payload["session_id"].(string)
-	cortexSessionID := r.URL.Query().Get("cortex_session_id")
-	if codexSessionID == "" || cortexSessionID == "" {
-		return
-	}
-	if err := h.deps.SessionManager.SetAgentSessionIDBySessionID(cortexSessionID, codexSessionID); err != nil {
-		if h.deps.Logger != nil {
-			h.deps.Logger.Debug("codex session correlation skipped",
-				"cortex_session_id", cortexSessionID,
-				"codex_session_id", codexSessionID,
-				"err", err)
-		}
-		return
-	}
-	h.deps.HubManager.RegisterCodexSession(codexSessionID, cortexSessionID)
-	if h.deps.Logger != nil {
-		h.deps.Logger.Info("codex session correlated",
-			"cortex_session_id", cortexSessionID,
-			"codex_session_id", codexSessionID)
-	}
 }
 
 // tryCorrelateOpenCodeSession parses a session.created payload and, when both

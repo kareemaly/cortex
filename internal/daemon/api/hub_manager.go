@@ -118,15 +118,6 @@ func (m *HubManager) RegisterOpenCodeSession(openCodeSessionID, cortexSessionID 
 	})
 }
 
-// RegisterCodexSession tags a codex session with the cortex session ID.
-// Identical semantics to RegisterOpenCodeSession — separated per agent for
-// clarity in logs and future per-agent supervisor wiring.
-func (m *HubManager) RegisterCodexSession(codexSessionID, cortexSessionID string) {
-	m.hub.RegisterSession(codexSessionID, map[string]string{
-		"cortex_session_id": cortexSessionID,
-	})
-}
-
 // hubEventSource returns the HubManager's EventsFor method as a function
 // suitable for spawn.Dependencies.HubEventSource. Returns nil when hm is nil
 // so supervisors run in liveness-only mode.
