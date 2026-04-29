@@ -29,11 +29,12 @@ var IsNotFound = storage.IsNotFound
 
 // TicketMeta holds the YAML frontmatter fields for a ticket.
 type TicketMeta struct {
-	ID         string     `yaml:"id"`
-	Title      string     `yaml:"title"`
-	Type       string     `yaml:"type"`
-	Repo       string     `yaml:"repo,omitempty"`
-	Path       string     `yaml:"path,omitempty"`
+	ID    string `yaml:"id"`
+	Title string `yaml:"title"`
+	Type  string `yaml:"type"`
+	Repo  string `yaml:"repo,omitempty"`
+	Path  string `yaml:"path,omitempty"`
+	// Session stores the linked conclusion ID once the ticket is concluded.
 	Session    string     `yaml:"session,omitempty"`
 	References []string   `yaml:"references,omitempty"`
 	Due        *time.Time `yaml:"due,omitempty"`

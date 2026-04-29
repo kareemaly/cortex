@@ -36,6 +36,14 @@ func resolveArchitectPath(name string) (string, error) {
 		return "", fmt.Errorf("architect %q not found", name)
 	}
 
+	if architectPath := os.Getenv("CORTEX_ARCHITECT_PATH"); architectPath != "" {
+		root, err := architectconfig.FindArchitectRoot(architectPath)
+		if err != nil {
+			return "", fmt.Errorf("CORTEX_ARCHITECT_PATH does not point to a cortex architect")
+		}
+		return root, nil
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("failed to get working directory: %w", err)

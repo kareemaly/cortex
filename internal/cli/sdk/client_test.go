@@ -627,6 +627,38 @@ func TestListConclusions_Success(t *testing.T) {
 	}
 }
 
+func TestGetConclusion_Success(t *testing.T) {
+	srv, rs := newRoutedServer(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	rs.setRoute("GET", "/conclusions/c1", http.StatusOK, ConclusionResponse{
+		ID:              "c1",
+		Type:            "work",
+		Ticket:          "t1",
+		Repo:            "/repo",
+		Body:            "done",
+		Commits:         []string{"abc123", "def456"},
+		Rejected:        true,
+		RejectionReason: "no code changes",
+		ConcludedAt:     now,
+		StartedAt:       now.Add(-time.Minute),
+	})
+
+	c := NewClient(srv.URL, "/p")
+	resp, err := c.GetConclusion("c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Commits) != 2 {
+		t.Fatalf("expected 2 commits, got %d", len(resp.Commits))
+	}
+	if !resp.Rejected {
+		t.Fatal("expected rejected conclusion")
+	}
+	if resp.RejectionReason != "no code changes" {
+		t.Fatalf("expected rejection reason, got %q", resp.RejectionReason)
+	}
+}
+
 func TestListSessions_Success(t *testing.T) {
 	srv, rs := newRoutedServer(t)
 	rs.setRoute("GET", "/sessions", http.StatusOK, ListSessionsResponse{
@@ -807,6 +839,26 @@ func TestFocusTicket_Success(t *testing.T) {
 	c := NewClient(srv.URL, "/p")
 	err := c.FocusTicket("t1")
 	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestShowTicket_Success(t *testing.T) {
+	srv, rs := newRoutedServer(t)
+	rs.setRoute("POST", "/tickets/t1/show", http.StatusOK, map[string]bool{"ok": true})
+
+	c := NewClient(srv.URL, "/p")
+	if err := c.ShowTicket("t1"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestShowConclusion_Success(t *testing.T) {
+	srv, rs := newRoutedServer(t)
+	rs.setRoute("POST", "/conclusions/c1/show", http.StatusOK, map[string]bool{"ok": true})
+
+	c := NewClient(srv.URL, "/p")
+	if err := c.ShowConclusion("c1"); err != nil {
 		t.Fatal(err)
 	}
 }

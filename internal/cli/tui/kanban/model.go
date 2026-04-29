@@ -111,11 +111,11 @@ type SessionDeleteErrorMsg struct {
 	Err error
 }
 
-// openEditorMsg is sent when the editor popup was launched successfully.
-type openEditorMsg struct{}
+// openViewerMsg is sent when the detail viewer popup was launched successfully.
+type openViewerMsg struct{}
 
-// openEditorErrMsg is sent when launching the editor popup fails.
-type openEditorErrMsg struct{ Err error }
+// openViewerErrMsg is sent when launching the detail viewer popup fails.
+type openViewerErrMsg struct{ Err error }
 
 // sseConnectedMsg is sent when the SSE connection is established.
 type sseConnectedMsg struct {
@@ -238,12 +238,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logBuf.Errorf("focus", "focus failed: %s", msg.Err)
 		return m, m.clearStatusAfterDelay()
 
-	case openEditorMsg:
-		m.statusMsg = "Editor opened"
+	case openViewerMsg:
+		m.statusMsg = "Viewer opened"
 		m.statusIsError = false
 		return m, m.clearStatusAfterDelay()
 
-	case openEditorErrMsg:
+	case openViewerErrMsg:
 		m.statusMsg = msg.Err.Error()
 		m.statusIsError = true
 		return m, m.clearStatusAfterDelay()
@@ -483,26 +483,13 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadTickets()
 	}
 
-	// Open ticket in editor.
+	// Open ticket detail viewer.
 	if isKey(msg, KeyOpenEditor, KeyEnter) {
 		t := m.columns[m.activeColumn].SelectedTicket()
 		if t != nil {
-			m.statusMsg = "Opening editor..."
+			m.statusMsg = "Opening ticket..."
 			m.statusIsError = false
-			return m, m.openTicketInEditor(t)
-		}
-		return m, nil
-	}
-
-	// Open conclusion for done ticket.
-	if isKey(msg, KeyOpenConclusion) {
-		if m.activeColumn == 2 {
-			t := m.columns[m.activeColumn].SelectedTicket()
-			if t != nil {
-				m.statusMsg = "Opening conclusion..."
-				m.statusIsError = false
-				return m, m.openConclusionInEditor(t)
-			}
+			return m, m.openTicketViewer(t)
 		}
 		return m, nil
 	}
@@ -777,24 +764,13 @@ func (m Model) focusTicket(ticket *sdk.TicketSummary) tea.Cmd {
 	}
 }
 
-// openTicketInEditor returns a command to open the ticket's index.md in $EDITOR
-// via a tmux popup.
-func (m Model) openTicketInEditor(ticket *sdk.TicketSummary) tea.Cmd {
+// openTicketViewer returns a command to open the ticket detail viewer in a tmux popup.
+func (m Model) openTicketViewer(ticket *sdk.TicketSummary) tea.Cmd {
 	return func() tea.Msg {
-		if err := m.client.EditTicket(ticket.ID); err != nil {
-			return openEditorErrMsg{Err: fmt.Errorf("open editor: %w", err)}
+		if err := m.client.ShowTicket(ticket.ID); err != nil {
+			return openViewerErrMsg{Err: fmt.Errorf("open ticket viewer: %w", err)}
 		}
-		return openEditorMsg{}
-	}
-}
-
-// openConclusionInEditor returns a command to open the conclusion for a done ticket in $EDITOR via tmux popup.
-func (m Model) openConclusionInEditor(ticket *sdk.TicketSummary) tea.Cmd {
-	return func() tea.Msg {
-		if err := m.client.EditTicketConclusion(ticket.ID); err != nil {
-			return openEditorErrMsg{Err: fmt.Errorf("open conclusion: %w", err)}
-		}
-		return openEditorMsg{}
+		return openViewerMsg{}
 	}
 }
 

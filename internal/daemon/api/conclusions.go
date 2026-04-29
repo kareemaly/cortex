@@ -161,14 +161,17 @@ func (h *ConclusionHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := types.ConclusionResponse{
-		ID:          c.ID,
-		Type:        string(c.Type),
-		Ticket:      c.Ticket,
-		Repo:        c.Repo,
-		Prompt:      c.Prompt,
-		Body:        c.Body,
-		ConcludedAt: c.ConcludedAt,
-		StartedAt:   c.StartedAt,
+		ID:              c.ID,
+		Type:            string(c.Type),
+		Ticket:          c.Ticket,
+		Repo:            c.Repo,
+		Prompt:          c.Prompt,
+		Body:            c.Body,
+		Commits:         c.Commits,
+		Rejected:        c.Rejected,
+		RejectionReason: c.RejectionReason,
+		ConcludedAt:     c.ConcludedAt,
+		StartedAt:       c.StartedAt,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -220,17 +223,57 @@ func (h *ConclusionHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := types.ConclusionResponse{
-		ID:          c.ID,
-		Type:        string(c.Type),
-		Ticket:      c.Ticket,
-		Repo:        c.Repo,
-		Prompt:      c.Prompt,
-		Body:        c.Body,
-		ConcludedAt: c.ConcludedAt,
-		StartedAt:   c.StartedAt,
+		ID:              c.ID,
+		Type:            string(c.Type),
+		Ticket:          c.Ticket,
+		Repo:            c.Repo,
+		Prompt:          c.Prompt,
+		Body:            c.Body,
+		Commits:         c.Commits,
+		Rejected:        c.Rejected,
+		RejectionReason: c.RejectionReason,
+		ConcludedAt:     c.ConcludedAt,
+		StartedAt:       c.StartedAt,
 	}
 
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// Show handles POST /conclusions/{id}/show - opens the read-only conclusion viewer in a tmux popup.
+func (h *ConclusionHandlers) Show(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetArchitectPath(r.Context())
+
+	if h.deps.ConclusionStoreManager == nil {
+		writeError(w, http.StatusInternalServerError, "store_error", "conclusion store not available")
+		return
+	}
+
+	store, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if _, err := store.Get(id); err != nil {
+		handleConclusionError(w, err, h.deps.Logger)
+		return
+	}
+
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	if err := openCortexPopup(projectPath, h.deps.TmuxManager, "conclusion", "show", id); err != nil {
+		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ExecuteActionResponse{
+		Success: true,
+		Message: "Conclusion viewer opened",
+	})
 }
 
 // EditByTicket handles POST /tickets/{id}/conclusion/edit - finds the most recent conclusion for a ticket and opens it.

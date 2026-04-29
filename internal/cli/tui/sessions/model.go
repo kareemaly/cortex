@@ -92,9 +92,9 @@ type sseReconnectTickMsg struct{}
 
 type pollTickMsg struct{}
 
-type openEditorMsg struct{}
+type openViewerMsg struct{}
 
-type openEditorErrMsg struct{ Err error }
+type openViewerErrMsg struct{ Err error }
 
 func New(client *sdk.Client, logBuf *tuilog.Buffer) Model {
 	renderer, _ := glamour.NewTermRenderer(
@@ -177,12 +177,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusIsError = false
 		return m, nil
 
-	case openEditorMsg:
-		m.statusMsg = "Editor closed"
+	case openViewerMsg:
+		m.statusMsg = "Viewer opened"
 		m.statusIsError = false
 		return m, clearStatusAfter(3 * time.Second)
 
-	case openEditorErrMsg:
+	case openViewerErrMsg:
 		m.statusMsg = fmt.Sprintf("Error: %s", msg.Err)
 		m.statusIsError = true
 		return m, clearStatusAfter(5 * time.Second)
@@ -319,22 +319,16 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	m.pendingG = false
 
-	// Open editor
+	// Open the appropriate detail viewer.
 	if isKey(msg, KeyOpenEditor, KeyEnter) {
 		if len(m.dateGroups) > 0 && m.cursor >= 0 && m.cursor < len(m.dateGroups[m.dateIdx].sessions) {
 			c := m.dateGroups[m.dateIdx].sessions[m.cursor]
-			return m, m.openConclusionInEditor(c)
-		}
-		return m, nil
-	}
-
-	// Open ticket for conclusion.
-	if isKey(msg, KeyOpenTicket) {
-		if len(m.dateGroups) > 0 && m.cursor >= 0 && m.cursor < len(m.dateGroups[m.dateIdx].sessions) {
-			c := m.dateGroups[m.dateIdx].sessions[m.cursor]
+			m.statusMsg = "Opening viewer..."
+			m.statusIsError = false
 			if c.Ticket != "" {
-				return m, m.openTicketInEditor(c)
+				return m, m.openTicketViewer(c)
 			}
+			return m, m.openConclusionViewer(c)
 		}
 		return m, nil
 	}
@@ -660,23 +654,23 @@ func (m Model) renderMarkdown(content string) string {
 	return strings.TrimSpace(rendered)
 }
 
-// openConclusionInEditor returns a Cmd that opens the conclusion's index.md in $EDITOR.
-func (m Model) openConclusionInEditor(c sdk.ConclusionSummary) tea.Cmd {
+// openConclusionViewer returns a Cmd that opens the conclusion viewer in a tmux popup.
+func (m Model) openConclusionViewer(c sdk.ConclusionSummary) tea.Cmd {
 	return func() tea.Msg {
-		if err := m.client.EditConclusion(c.ID); err != nil {
-			return openEditorErrMsg{Err: fmt.Errorf("open editor: %w", err)}
+		if err := m.client.ShowConclusion(c.ID); err != nil {
+			return openViewerErrMsg{Err: fmt.Errorf("open conclusion viewer: %w", err)}
 		}
-		return openEditorMsg{}
+		return openViewerMsg{}
 	}
 }
 
-// openTicketInEditor returns a Cmd that opens the ticket's index.md in $EDITOR.
-func (m Model) openTicketInEditor(c sdk.ConclusionSummary) tea.Cmd {
+// openTicketViewer returns a Cmd that opens the ticket viewer in a tmux popup.
+func (m Model) openTicketViewer(c sdk.ConclusionSummary) tea.Cmd {
 	return func() tea.Msg {
-		if err := m.client.EditTicket(c.Ticket); err != nil {
-			return openEditorErrMsg{Err: fmt.Errorf("open ticket: %w", err)}
+		if err := m.client.ShowTicket(c.Ticket); err != nil {
+			return openViewerErrMsg{Err: fmt.Errorf("open ticket viewer: %w", err)}
 		}
-		return openEditorMsg{}
+		return openViewerMsg{}
 	}
 }
 

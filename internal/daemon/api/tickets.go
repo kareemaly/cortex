@@ -757,6 +757,37 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// Show handles POST /tickets/{id}/show - opens the read-only ticket viewer in a tmux popup.
+func (h *TicketHandlers) Show(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetArchitectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	ticketID := chi.URLParam(r, "id")
+	if _, _, err := store.Get(ticketID); err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	if h.deps.TmuxManager == nil {
+		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
+		return
+	}
+
+	if err := openCortexPopup(projectPath, h.deps.TmuxManager, "ticket", "show", ticketID); err != nil {
+		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ExecuteActionResponse{
+		Success: true,
+		Message: "Ticket viewer opened",
+	})
+}
+
 // Edit handles POST /tickets/{id}/edit - opens the ticket's index.md in $EDITOR via tmux popup.
 func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())

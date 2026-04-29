@@ -65,6 +65,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Get("/", conclusionHandlers.List)
 			r.Post("/", conclusionHandlers.Create)
 			r.Get("/{id}", conclusionHandlers.Get)
+			r.Post("/{id}/show", conclusionHandlers.Show)
 			r.Post("/{id}/edit", conclusionHandlers.Edit)
 		})
 
@@ -82,6 +83,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Post("/{status}/{id}/spawn", ticketHandlers.Spawn)
 			r.Post("/{id}/focus", ticketHandlers.Focus)
 			r.Post("/{id}/conclude", ticketHandlers.Conclude)
+			r.Post("/{id}/show", ticketHandlers.Show)
 			r.Post("/{id}/edit", ticketHandlers.Edit)
 			r.Post("/{id}/conclusion/edit", conclusionHandlers.EditByTicket)
 			r.Patch("/{id}/due-date", ticketHandlers.SetDueDate)

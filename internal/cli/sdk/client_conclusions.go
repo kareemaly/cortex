@@ -138,6 +138,26 @@ func (c *Client) GetConclusion(id string) (*ConclusionResponse, error) {
 	return &result, nil
 }
 
+// ShowConclusion opens the read-only conclusion viewer in a tmux popup.
+func (c *Client) ShowConclusion(conclusionID string) error {
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/conclusions/"+conclusionID+"/show", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.parseError(resp)
+	}
+
+	return nil
+}
+
 // CreateConclusion creates a new conclusion.
 func (c *Client) CreateConclusion(conclusionType, ticket, repo, body string) (*ConclusionResponse, error) {
 	reqBody := map[string]string{

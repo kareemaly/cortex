@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kareemaly/cortex/internal/conclusion"
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
@@ -20,8 +21,9 @@ import (
 // unitServer wraps httptest.Server with test dependencies.
 type unitServer struct {
 	*httptest.Server
-	store       *ticket.Store
-	projectRoot string
+	store           *ticket.Store
+	conclusionStore *conclusion.Store
+	projectRoot     string
 }
 
 // makeRequest makes an HTTP request to the test server with the project header.
@@ -93,23 +95,31 @@ func setupUnitServer(t *testing.T) *unitServer {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	bus := events.NewBus()
 	storeManager := NewStoreManager(logger, nil)
 	storeManager.stores[tmpDir] = store
 
 	sessionManager := NewSessionManager(logger)
+	conclusionManager := NewConclusionStoreManager(logger, bus)
+	conclusionStore, err := conclusionManager.GetStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create conclusion store: %v", err)
+	}
 
 	deps := &Dependencies{
-		StoreManager:   storeManager,
-		SessionManager: sessionManager,
-		TmuxManager:    nil,
-		Bus:            events.NewBus(),
-		Logger:         logger,
+		StoreManager:           storeManager,
+		SessionManager:         sessionManager,
+		ConclusionStoreManager: conclusionManager,
+		TmuxManager:            nil,
+		Bus:                    bus,
+		Logger:                 logger,
 	}
 
 	return &unitServer{
-		Server:      httptest.NewServer(NewRouter(deps, deps.Logger)),
-		store:       store,
-		projectRoot: tmpDir,
+		Server:          httptest.NewServer(NewRouter(deps, deps.Logger)),
+		store:           store,
+		conclusionStore: conclusionStore,
+		projectRoot:     tmpDir,
 	}
 }
 

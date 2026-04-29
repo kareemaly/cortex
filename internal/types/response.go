@@ -23,12 +23,13 @@ type SessionResponse struct {
 
 // TicketResponse is the full ticket response with status.
 type TicketResponse struct {
-	ID         string     `json:"id"`
-	Type       string     `json:"type"`
-	Title      string     `json:"title"`
-	Body       string     `json:"body"`
-	Repo       string     `json:"repo,omitempty"`
-	Path       string     `json:"path,omitempty"`
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	Repo  string `json:"repo,omitempty"`
+	Path  string `json:"path,omitempty"`
+	// Session stores the linked conclusion ID once the ticket is concluded.
 	Session    string     `json:"session,omitempty"`
 	References []string   `json:"references,omitempty"`
 	Status     string     `json:"status"`
@@ -70,15 +71,18 @@ type ListAllTicketsResponse struct {
 
 // ConclusionResponse is the full conclusion response.
 type ConclusionResponse struct {
-	ID          string    `json:"id"`
-	Type        string    `json:"type"`
-	Ticket      string    `json:"ticket,omitempty"`
-	Repo        string    `json:"repo,omitempty"`
-	Prompt      string    `json:"prompt,omitempty"`
-	CollabID    string    `json:"collab_id,omitempty"`
-	Body        string    `json:"body"`
-	ConcludedAt time.Time `json:"concluded_at"`
-	StartedAt   time.Time `json:"started_at,omitempty"`
+	ID              string    `json:"id"`
+	Type            string    `json:"type"`
+	Ticket          string    `json:"ticket,omitempty"`
+	Repo            string    `json:"repo,omitempty"`
+	Prompt          string    `json:"prompt,omitempty"`
+	CollabID        string    `json:"collab_id,omitempty"`
+	Body            string    `json:"body"`
+	Commits         []string  `json:"commits,omitempty"`
+	Rejected        bool      `json:"rejected,omitempty"`
+	RejectionReason string    `json:"rejection_reason,omitempty"`
+	ConcludedAt     time.Time `json:"concluded_at"`
+	StartedAt       time.Time `json:"started_at,omitempty"`
 }
 
 // ConclusionSummary is metadata-only (no body) for list responses.
