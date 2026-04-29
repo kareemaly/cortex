@@ -27,7 +27,7 @@ type Session struct {
 // SpawnCollabSessionInput is the input for the spawnCollabSession tool.
 type SpawnCollabSessionInput struct {
 	Path    string `json:"path" jsonschema:"Any valid filesystem path where the collab agent will spawn (required). The path must exist on disk."`
-	Prompt  string `json:"prompt" jsonschema:"Brief question or topic to discuss. Keep it minimal — the collab agent starts in the directory with its own AGENTS.md/CLAUDE.md context."`
+	Prompt  string `json:"prompt" jsonschema:"Brief question or topic to discuss. Keep it minimal — the collab agent starts in the directory with its own AGENTS.md context."`
 	Variant string `json:"variant" jsonschema:"Agent variant name from the agents map in cortex.yaml (required). Use listVariants to see available names."`
 }
 

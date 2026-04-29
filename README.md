@@ -259,7 +259,7 @@ flowchart LR
 
 Because everything is HTTP, you can run `cortexd` on a remote VM and point your local `cortex` CLI at it with `CORTEX_DAEMON_URL`.
 
-See [CLAUDE.md](CLAUDE.md) for architecture details and code paths.
+See [AGENTS.md](AGENTS.md) for architecture details and code paths.
 
 ## Development
 

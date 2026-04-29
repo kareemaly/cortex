@@ -109,7 +109,7 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Architect config | `internal/architect/config/` |
 | Daemon config | `internal/daemon/config/` |
 | Tmux manager | `internal/tmux/` |
-| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `sessions/`, `config/`, `ticket/`, `status/` symbols) |
+| TUI components | `internal/cli/tui/` (`views/` wrapper, `kanban/`, `sessions/`, `config/`, `detail/`, `status/` symbols) |
 | Install/init logic | `internal/install/` |
 | Agent defaults | `internal/install/defaults/main/` (shared prompts for all agents) |
 | Shared storage | `internal/storage/` |
@@ -143,6 +143,8 @@ Agent variant resolution always merges global (`settings.yaml`) + project (`cort
 | `cortex architect show [name]` | Open architect project TUI |
 | `cortex architect delete <name>` | Unlink and optionally delete architect workspace |
 | `cortex dashboard` | Open global dashboard TUI across all registered architects |
+| `cortex ticket show <ticket-id>` | Open the read-only ticket detail viewer |
+| `cortex conclusion show <conclusion-id>` | Open the read-only conclusion detail viewer |
 | `cortex daemon status` | Check daemon status |
 | `cortex upgrade` | Refresh `~/.cortex/defaults/` with latest embedded defaults |
 | `cortex eject <path>` | Customize a default prompt |
@@ -153,7 +155,7 @@ Routes defined in `internal/daemon/api/server.go`. SDK client in `internal/cli/s
 
 **Global** (no architect header): `GET /health`, `GET /architects`, `POST /architects`, global config (`/config/global`), daemon logs/status (`/daemon/logs`, `/daemon/status`), agent hook ingestion (`POST /hook/{agent}`).
 
-**Architect-scoped** (requires `X-Cortex-Architect`): Ticket CRUD, spawn, move, conclude, architect spawn/conclude, session kill/approve, SSE events, conclusions (`/conclusions`), architect config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`, `/prompts/reset`).
+**Architect-scoped** (requires `X-Cortex-Architect`): Ticket CRUD, read-only ticket/conclusion popup viewers (`POST /tickets/{id}/show`, `POST /conclusions/{id}/show`), spawn, move, conclude, architect spawn/conclude, session kill/approve, SSE events, conclusions (`/conclusions`), architect config (`/config/project`, `/config/project/edit`), prompts (`/prompts`, `/prompts/resolve`, `/prompts/eject`, `/prompts/edit`, `/prompts/reset`).
 
 ## MCP Tools
 
