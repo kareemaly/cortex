@@ -377,6 +377,85 @@ func TestSpawn_VariantEnv_InLauncherScript(t *testing.T) {
 	}
 }
 
+func TestSpawn_CodexVariantCODEXHomeSeedsTempConfigButDoesNotOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := newMockStore()
+	sessStore := newMockSessionStore()
+	tmuxMgr := newMockTmuxManager()
+
+	sourceHome := filepath.Join(tmpDir, "codex-personal")
+	if err := os.MkdirAll(sourceHome, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sourceAuth := filepath.Join(sourceHome, "auth.json")
+	if err := os.WriteFile(sourceAuth, []byte(`{"profile":"personal"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
+	store.tickets["ticket-1"] = testTicket
+	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
+
+	spawner := NewSpawner(Dependencies{
+		Store:        store,
+		SessionStore: sessStore,
+		TmuxManager:  tmuxMgr,
+		CortexdPath:  "/usr/bin/cortexd",
+		MCPConfigDir: tmpDir,
+	})
+
+	result, err := spawner.Spawn(context.Background(), SpawnRequest{
+		AgentType:     AgentTypeTicketAgent,
+		Agent:         "codex",
+		TmuxSession:   "test-session",
+		ArchitectPath: tmpDir,
+		TicketsDir:    filepath.Join(tmpDir, "tickets"),
+		TicketID:      "ticket-1",
+		Ticket:        testTicket,
+		EnvVars: map[string]string{
+			"CODEX_HOME":    sourceHome,
+			"MY_CUSTOM_VAR": "hello world",
+		},
+	})
+	if err != nil || !result.Success {
+		t.Fatalf("spawn failed: err=%v result=%v", err, result)
+	}
+
+	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
+	data, err := os.ReadFile(launcherPath)
+	if err != nil {
+		t.Fatalf("failed to read launcher script: %v", err)
+	}
+	script := string(data)
+	codexHome := extractExportedEnvVar(t, script, "CODEX_HOME")
+
+	if codexHome == sourceHome {
+		t.Fatalf("variant CODEX_HOME should not override generated CODEX_HOME; script:\n%s", script)
+	}
+	if !strings.Contains(filepath.Base(codexHome), "cortex-codex-ticket-1-") {
+		t.Fatalf("expected generated cortex codex home, got %q", codexHome)
+	}
+	if !containsSubstr(script, "export MY_CUSTOM_VAR='hello world'") {
+		t.Errorf("expected non-CODEX_HOME variant env to remain in launcher; script:\n%s", script)
+	}
+
+	configData, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
+	if err != nil {
+		t.Fatalf("failed to read generated codex config: %v", err)
+	}
+	if !containsSubstr(string(configData), "[mcp_servers.cortex]") {
+		t.Fatalf("expected generated codex config to include cortex MCP server; config:\n%s", string(configData))
+	}
+
+	authTarget, err := os.Readlink(filepath.Join(codexHome, "auth.json"))
+	if err != nil {
+		t.Fatalf("expected generated codex home auth.json symlink: %v", err)
+	}
+	if authTarget != sourceAuth {
+		t.Fatalf("expected auth symlink to use variant CODEX_HOME auth, got %q want %q", authTarget, sourceAuth)
+	}
+}
+
 func TestSpawn_TicketAgent_AlreadyActive(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()

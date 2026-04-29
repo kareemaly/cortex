@@ -9,7 +9,7 @@ import (
 
 // WriteCodexConfigDir creates a temp CODEX_HOME directory with config.toml and cortex-system.md.
 // The caller is responsible for adding the returned path to CleanupDirs.
-func WriteCodexConfigDir(mcpConfig *ClaudeMCPConfig, systemPrompt string, agentType AgentType, identifier string) (string, error) {
+func WriteCodexConfigDir(mcpConfig *ClaudeMCPConfig, systemPrompt string, agentType AgentType, identifier, sourceHome string) (string, error) {
 	dir, err := os.MkdirTemp("", "cortex-codex-"+identifier+"-*")
 	if err != nil {
 		return "", fmt.Errorf("create codex config dir: %w", err)
@@ -36,7 +36,10 @@ func WriteCodexConfigDir(mcpConfig *ClaudeMCPConfig, systemPrompt string, agentT
 	// Symlink host auth.json so the user isn't prompted to log in on each spawn.
 	// Use a symlink (not a copy) so token refreshes flow back to the real file and
 	// credentials never get written to /tmp. Silently skip if the file doesn't exist.
-	hostAuth := filepath.Join(os.Getenv("HOME"), ".codex", "auth.json")
+	if sourceHome == "" {
+		sourceHome = filepath.Join(os.Getenv("HOME"), ".codex")
+	}
+	hostAuth := filepath.Join(sourceHome, "auth.json")
 	if _, err := os.Stat(hostAuth); err == nil {
 		_ = os.Symlink(hostAuth, filepath.Join(dir, "auth.json"))
 	}

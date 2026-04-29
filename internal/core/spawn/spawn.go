@@ -298,7 +298,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	// Generate Codex config dir if needed
 	var codexConfigDir string
 	if req.Agent == "codex" {
-		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, pInfo.SystemPromptContent, req.AgentType, identifier)
+		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, pInfo.SystemPromptContent, req.AgentType, identifier, req.EnvVars["CODEX_HOME"])
 		if err != nil {
 			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, promptFilePath, systemPromptFilePath))
 			return nil, err
@@ -382,8 +382,13 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
 	}
 
-	// Variant env vars override all system-set env vars
+	// Variant env vars override all system-set env vars. Codex is the exception:
+	// cortex owns CODEX_HOME for per-session MCP/system-prompt config, while a
+	// variant CODEX_HOME is used as the source profile when building that temp dir.
 	for k, v := range req.EnvVars {
+		if req.Agent == "codex" && k == "CODEX_HOME" {
+			continue
+		}
 		launcherParams.EnvVars[k] = v
 	}
 
@@ -511,7 +516,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	// Generate Codex config dir for resume (empty system prompt -- resume has no prompts)
 	var codexConfigDir string
 	if req.Agent == "codex" {
-		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, "", req.AgentType, identifier)
+		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, "", req.AgentType, identifier, req.EnvVars["CODEX_HOME"])
 		if err != nil {
 			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
 				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
@@ -550,8 +555,13 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
 	}
 
-	// Variant env vars override all system-set env vars
+	// Variant env vars override all system-set env vars. Codex is the exception:
+	// cortex owns CODEX_HOME for per-session MCP config, while a variant
+	// CODEX_HOME is used as the source profile when building that temp dir.
 	for k, v := range req.EnvVars {
+		if req.Agent == "codex" && k == "CODEX_HOME" {
+			continue
+		}
 		launcherParams.EnvVars[k] = v
 	}
 
