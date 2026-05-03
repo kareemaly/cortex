@@ -32,8 +32,9 @@ const ArchitectSessionKey = "architect"
 // Sessions are ephemeral — deleted when ended.
 //
 // SessionID is a stable UUID minted at creation time. It is the canonical
-// routing key for /agent/status updates so collab and architect sessions
-// (which don't have a TicketID) can be addressed uniformly.
+// routing key for /agent/status updates and Hub event correlation,
+// so collab and architect sessions (which don't have a TicketID) can be
+// addressed uniformly.
 type Session struct {
 	SessionID  string      `json:"session_id"`
 	Type       SessionType `json:"type"`
@@ -46,9 +47,4 @@ type Session struct {
 	Status     AgentStatus `json:"status"`
 	Tool       *string     `json:"tool,omitempty"`
 	Work       *string     `json:"work,omitempty"`
-	// AgentSessionID is the agent tool's internal session identifier
-	// (Claude Code's --session-id, Codex's rollout-file name). Cortex
-	// records it at spawn time so a Resume can re-attach to the existing
-	// transcript instead of starting stateless.
-	AgentSessionID string `json:"agent_session_id,omitempty"`
 }

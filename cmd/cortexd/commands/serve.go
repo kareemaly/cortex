@@ -92,16 +92,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	// Start Hub-based agent status. Non-fatal if it fails — daemon continues
-	// with transcript-only status.
-	var hubManager *api.HubManager
-	if hm, err := api.NewHubManager(logger); err != nil {
-		logger.Warn("failed to create hub manager, hook-based agent status unavailable", "error", err)
-	} else {
-		hubManager = hm
-		hubManager.StartEventLoop(ctx)
-		defer func() { _ = hubManager.Close() }()
-	}
+	// Start receiver-based agent status. Non-fatal.
+	receiverManager := api.NewReceiverManager(logger)
+	receiverManager.StartEventLoop(ctx)
 
 	deps := &api.Dependencies{
 		StoreManager:           storeManager,
@@ -112,7 +105,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Logger:                 logger,
 		SupervisorCtx:          ctx,
 		DefaultsDir:            filepath.Join(homeDir, ".cortex", "defaults", "main"),
-		HubManager:             hubManager,
+		ReceiverManager:        receiverManager,
 	}
 
 	// Create and run server

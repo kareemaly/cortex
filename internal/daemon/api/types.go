@@ -116,7 +116,7 @@ type CreateConclusionRequest struct {
 
 // filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
 // Looks up session from session manager for each ticket.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string, hubMgr *HubManager) []TicketSummary {
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string, receiverMgr *ReceiverManager) []TicketSummary {
 	var summaries []TicketSummary
 
 	var sessStore *session.Store
@@ -144,8 +144,8 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 		summary := types.ToTicketSummary(t, status, sess, tmuxSession, checker)
 
 		// Overlay Hub-sourced status/tool if available.
-		if hubMgr != nil && sess != nil && sess.AgentSessionID != "" {
-			if ev, ok := hubMgr.GetEvent(sess.AgentSessionID); ok {
+		if receiverMgr != nil && sess != nil && sess.SessionID != "" {
+			if ev, ok := receiverMgr.GetEvent(sess.SessionID); ok {
 				s := string(ev.Status)
 				summary.AgentStatus = &s
 				if ev.Tool != "" {

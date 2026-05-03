@@ -2,11 +2,16 @@ package spawn
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hiveryn/agentruntime"
+	"github.com/hiveryn/agentruntime/adapter/claude"
+	"github.com/hiveryn/agentruntime/adapter/codex"
+	"github.com/hiveryn/agentruntime/adapter/opencode"
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/core/agent"
 	"github.com/kareemaly/cortex/internal/session"
@@ -14,9 +19,9 @@ import (
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
-// newClaudeSessionID generates a UUID for a fresh claude-code session. Stored
-// as a package-level var so tests can substitute a deterministic generator.
-var newClaudeSessionID = func() string { return uuid.New().String() }
+// newResumeSessionID generates a placeholder UUID when no session store
+// is available during resume. Used only for satisfying StartRequest.ID.
+var newResumeSessionID = func() string { return uuid.New().String() }
 
 // AgentType represents the type of agent being spawned.
 type AgentType string
@@ -45,7 +50,6 @@ type SessionStoreInterface interface {
 	GetArchitect() (*session.Session, error)
 	EndArchitect() error
 	CreateCollab(collabID, prompt, agent, tmuxWindow string) (*session.Session, error)
-	SetAgentSessionID(sessionID, agentSessionID string) error
 }
 
 // TmuxManagerInterface defines the tmux operations needed for spawning.
@@ -68,7 +72,7 @@ type Dependencies struct {
 
 	// HubEventSource, when non-nil, supplies per-session Hub event streams to
 	// the supervisor. The supervisor forwards these to /agent/status → SSE.
-	HubEventSource func(ctx context.Context, agentSessionID string) <-chan agent.HubEvent
+	HubEventSource func(ctx context.Context, sessionID string) <-chan agent.HubEvent
 }
 
 // Spawner handles spawning agent sessions.
@@ -154,19 +158,15 @@ type SpawnResult struct {
 // Spawn creates a new agent session.
 func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, error) {
 	startedAt := time.Now().UTC().Format(time.RFC3339)
-	// Validate request
 	if err := s.validateSpawnRequest(req); err != nil {
 		return nil, err
 	}
 
-	// For ticket agents, check current state
 	if req.AgentType == AgentTypeTicketAgent {
-		// Look up existing session
 		var existingSess *session.Session
 		if s.deps.SessionStore != nil {
 			existingSess, _ = s.deps.SessionStore.GetByTicketID(req.TicketID)
 		}
-
 		stateInfo, err := DetectTicketState(existingSess, req.TmuxSession, s.deps.TmuxManager)
 		if err != nil {
 			return nil, err
@@ -180,24 +180,17 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}
 	}
 
-	// Find cortexd path
 	cortexdPath, err := s.getCortexdPath()
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate window name
 	windowName := s.generateWindowName(req)
-
-	// Determine working directory based on ticket type
 	workingDir, err := getWorkingDirectory(req)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create the session record up front — the supervisor posts status
-	// updates against the canonical SessionID UUID, which it needs before
-	// launching the agent.
 	var sessionIDForStatus string
 	if s.deps.SessionStore != nil {
 		switch req.AgentType {
@@ -228,8 +221,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}
 	}
 
-	// Generate and write MCP config
-	mcpConfig := GenerateMCPConfig(MCPConfigParams{
+	mcpServerConfig := BuildMCPServerConfig(MCPConfigParams{
 		CortexdPath: cortexdPath,
 		TicketID:    req.TicketID,
 		TicketType: func() string {
@@ -245,6 +237,15 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		CollabID:      req.CollabID,
 	})
 
+	pInfo, err := s.buildPrompt(req)
+	if err != nil {
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nil)
+		return &SpawnResult{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+
 	identifier := req.TicketID
 	if identifier == "" && req.CollabID != "" {
 		identifier = "collab-" + storage.ShortID(req.CollabID)
@@ -252,186 +253,81 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		identifier = "architect-" + req.TmuxSession
 	}
 
-	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
+	adapter, err := s.adapterFor(req.Agent, req.AgentType)
 	if err != nil {
 		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nil)
 		return nil, err
 	}
 
-	// Load and build prompt
-	pInfo, err := s.buildPrompt(req)
-	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath})
-		return &SpawnResult{
-			Success: false,
-			Message: err.Error(),
-		}, nil
+	startReq := agentruntime.StartRequest{
+		ID:           sessionIDForStatus,
+		Agent:        s.agentKind(req.Agent),
+		Args:         req.AgentArgs,
+		Workdir:      workingDir,
+		Prompt:       pInfo.PromptText,
+		Instructions: pInfo.SystemPromptContent,
+		MCPServers:   []agentruntime.MCPServerConfig{mcpServerConfig},
 	}
 
-	// Write prompt to temp file
-	promptFilePath, err := WritePromptFile(pInfo.PromptText, identifier, "prompt", s.deps.MCPConfigDir)
-	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath})
-		return nil, err
-	}
-
-	// Write system prompt to temp file
-	var systemPromptFilePath string
-	if pInfo.SystemPromptContent != "" {
-		systemPromptFilePath, err = WritePromptFile(pInfo.SystemPromptContent, identifier, "sysprompt", s.deps.MCPConfigDir)
-		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, []string{mcpConfigPath, promptFilePath})
-			return nil, err
-		}
-	}
-
-	// Generate OpenCode config content if needed
-	var openCodeConfigJSON string
-	if req.Agent == "opencode" {
-		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, pInfo.SystemPromptContent, req.AgentType, systemPromptFilePath)
-		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, promptFilePath, systemPromptFilePath))
-			return nil, err
-		}
-	}
-
-	// Generate Codex config dir if needed
-	var codexConfigDir string
-	if req.Agent == "codex" {
-		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, pInfo.SystemPromptContent, req.AgentType, identifier, req.EnvVars["CODEX_HOME"])
-		if err != nil {
-			s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nonEmptyStrings(mcpConfigPath, promptFilePath, systemPromptFilePath))
-			return nil, err
-		}
-	}
-
-	// For claude, generate a fresh session UUID and pass it to the CLI via
-	// --session-id. Knowing the UUID up front lets the transcript tailer
-	// compute the exact transcript path without polling the projects dir.
-	var claudeSessionID string
-	if req.Agent == "claude" {
-		claudeSessionID = newClaudeSessionID()
-		if sessionIDForStatus != "" && s.deps.SessionStore != nil {
-			if err := s.deps.SessionStore.SetAgentSessionID(sessionIDForStatus, claudeSessionID); err != nil {
-				s.logWarn("failed to record claude session id", "error", err)
+	if req.AgentType == AgentTypeArchitect {
+		if req.Agent == "opencode" {
+			startReq.OpenCodeProfile = "cortex"
+			startReq.OpenCodeAgentConfig = map[string]agentruntime.OpenCodeAgentConfig{
+				"cortex": {
+					Description: "Cortex architect agent",
+					Mode:        "primary",
+					Prompt:      pInfo.SystemPromptContent,
+					Permission:  map[string]string{"*": "allow"},
+				},
 			}
 		}
 	}
 
-	// Build launcher params based on agent type
-	tempFiles := nonEmptyStrings(mcpConfigPath, promptFilePath, systemPromptFilePath)
-	launcherParams := LauncherParams{
-		AgentType:            req.Agent,
-		PromptFilePath:       promptFilePath,
-		SystemPromptFilePath: systemPromptFilePath,
-		MCPConfigPath:        mcpConfigPath,
-		SessionID:            claudeSessionID,
-		AgentArgs:            req.AgentArgs,
-		CleanupFiles:         tempFiles,
-	}
+	cortexEnv := s.buildCortexEnv(req, startedAt)
+	startReq.Env = mergeEnvMaps(req.EnvVars, cortexEnv)
 
-	switch req.AgentType {
-	case AgentTypeArchitect:
-		launcherParams.ReplaceSystemPrompt = true
-		// For opencode architects, explicitly select the cortex agent
-		if req.Agent == "opencode" {
-			launcherParams.AgentArgs = append([]string{"--agent", "cortex"}, launcherParams.AgentArgs...)
-		}
-		launcherParams.EnvVars = map[string]string{
-			"CORTEX_TICKET_ID":  session.ArchitectSessionKey,
-			"CORTEX_STARTED_AT": startedAt,
-		}
-	case AgentTypeTicketAgent:
-		launcherParams.EnvVars = map[string]string{
-			"CORTEX_TICKET_ID": req.TicketID,
-			"CORTEX_TICKET_TYPE": func() string {
-				if req.Ticket != nil {
-					return req.Ticket.Type
-				}
-				return ""
-			}(),
-			"CORTEX_REPO": func() string {
-				if req.Ticket != nil {
-					return req.Ticket.Repo
-				}
-				return ""
-			}(),
-			"CORTEX_STARTED_AT": startedAt,
-		}
-	case AgentTypeCollabAgent:
-		launcherParams.EnvVars = map[string]string{
-			"CORTEX_COLLAB_ID":  req.CollabID,
-			"CORTEX_REPO":       req.Repo,
-			"CORTEX_STARTED_AT": startedAt,
-		}
-	}
-
-	if openCodeConfigJSON != "" {
-		launcherParams.EnvVars["OPENCODE_CONFIG_CONTENT"] = openCodeConfigJSON
-	}
-
-	// Expose the cortex session UUID to OpenCode so the hook plugin can include
-	// it in every payload, enabling back-correlation on session.created.
-	if req.Agent == "opencode" && sessionIDForStatus != "" {
-		launcherParams.EnvVars["CORTEX_SESSION_ID"] = sessionIDForStatus
-	}
-
-	// Set CODEX_HOME for codex agents
-	if codexConfigDir != "" {
-		launcherParams.EnvVars["CODEX_HOME"] = codexConfigDir
-		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
-	}
-
-	// Variant env vars override all system-set env vars. Codex is the exception:
-	// cortex owns CODEX_HOME for per-session MCP/system-prompt config, while a
-	// variant CODEX_HOME is used as the source profile when building that temp dir.
-	for k, v := range req.EnvVars {
-		if req.Agent == "codex" && k == "CODEX_HOME" {
-			continue
-		}
-		launcherParams.EnvVars[k] = v
-	}
-
-	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
+	spec, err := adapter.PrepareLaunch(ctx, startReq)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, tempFiles)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nil)
+		return &SpawnResult{
+			Success: false,
+			Message: "failed to prepare agent launch: " + err.Error(),
+		}, nil
+	}
+
+	launcherPath, err := WriteLauncherScript(spec, cortexEnv, identifier, s.deps.MCPConfigDir)
+	if err != nil {
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nil)
 		return nil, err
 	}
-	allTempFiles := append(tempFiles, launcherPath)
 
 	// Spawn in tmux
 	launchCmd := "bash " + launcherPath
+	allCleanupFiles := append([]string{launcherPath}, spec.CleanupPaths...)
+
 	windowIndex, err := s.spawnInTmux(req, windowName, launchCmd, workingDir)
 	if err != nil {
-		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, allTempFiles)
+		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, allCleanupFiles)
 		return &SpawnResult{
 			Success: false,
 			Message: "failed to spawn agent in tmux: " + err.Error(),
 		}, nil
 	}
 
-	// Start the live status supervisor for the spawned agent. Bind to the
-	// daemon-root context (not the HTTP request context) so the supervisor
-	// outlives the spawn handler. Normal teardown happens via the liveness
-	// loop when the launcher's trap EXIT cleans up mcpConfigPath on session
-	// end; daemon shutdown cancels SupervisorCtx.
-	ticketIDForStatus := launcherParams.EnvVars["CORTEX_TICKET_ID"]
+	livenessPath := launcherPath
+	if len(spec.CleanupPaths) > 0 {
+		livenessPath = spec.CleanupPaths[0]
+	}
+
+	ticketIDForStatus := cortexEnv["CORTEX_TICKET_ID"]
 	supCtx := s.deps.SupervisorCtx
 	supParams := agentSupervisorParams{
 		SessionID:      sessionIDForStatus,
 		TicketID:       ticketIDForStatus,
 		ArchitectPath:  req.ArchitectPath,
+		LivenessPath:   livenessPath,
 		HubEventSource: s.deps.HubEventSource,
 		Logger:         s.deps.Logger,
-	}
-	switch req.Agent {
-	case "codex":
-		supParams.LivenessPath = codexConfigDir
-	case "claude":
-		supParams.LivenessPath = mcpConfigPath
-		supParams.AgentSessionID = claudeSessionID
-	case "opencode":
-		supParams.LivenessPath = mcpConfigPath
 	}
 	if _, err := startAgentSupervisor(supCtx, supParams); err != nil {
 		s.logWarn("failed to start agent supervisor", "agent", req.Agent, "error", err)
@@ -453,20 +349,17 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 	startedAt := time.Now().UTC().Format(time.RFC3339)
 
-	// Find cortexd path
 	cortexdPath, err := s.getCortexdPath()
 	if err != nil {
 		return nil, err
 	}
 
-	// Determine identifier for file naming
 	identifier := req.TicketID
 	if identifier == "" {
 		identifier = "architect-" + req.TmuxSession
 	}
 
-	// Generate MCP config
-	mcpConfig := GenerateMCPConfig(MCPConfigParams{
+	mcpServerConfig := BuildMCPServerConfig(MCPConfigParams{
 		CortexdPath:   cortexdPath,
 		TicketID:      req.TicketID,
 		TicketType:    req.TicketType,
@@ -476,109 +369,23 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		StartedAt:     startedAt,
 	})
 
-	mcpConfigPath, err := WriteMCPConfig(mcpConfig, identifier, s.deps.MCPConfigDir)
+	adapter, err := s.adapterFor(req.Agent, req.AgentType)
 	if err != nil {
 		return nil, err
 	}
 
-	// Determine env vars based on agent type
-	envVars := map[string]string{}
-	envVars["CORTEX_STARTED_AT"] = startedAt
+	cortexEnv := map[string]string{
+		"CORTEX_STARTED_AT": startedAt,
+	}
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		envVars["CORTEX_TICKET_ID"] = req.TicketID
-		envVars["CORTEX_TICKET_TYPE"] = req.TicketType
+		cortexEnv["CORTEX_TICKET_ID"] = req.TicketID
+		cortexEnv["CORTEX_TICKET_TYPE"] = req.TicketType
 	case AgentTypeArchitect:
-		envVars["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
+		cortexEnv["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
 	}
 
-	// For OpenCode ticket agents, expose the cortex session UUID so the hook plugin
-	// can include it in every payload, enabling back-correlation on session.created.
-	// Ticket sessions already exist in the store at resume time (read-only lookup).
-	if req.Agent == "opencode" && req.AgentType == AgentTypeTicketAgent && s.deps.SessionStore != nil {
-		if existing, _ := s.deps.SessionStore.GetByTicketID(req.TicketID); existing != nil {
-			envVars["CORTEX_SESSION_ID"] = existing.SessionID
-		}
-	}
-
-	// Generate OpenCode config content for resume (empty system prompt -- resume has no prompts)
-	var openCodeConfigJSON string
-	if req.Agent == "opencode" {
-		openCodeConfigJSON, err = GenerateOpenCodeConfigContent(mcpConfig, "", req.AgentType, "")
-		if err != nil {
-			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
-				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
-			}
-			return nil, err
-		}
-	}
-
-	// Generate Codex config dir for resume (empty system prompt -- resume has no prompts)
-	var codexConfigDir string
-	if req.Agent == "codex" {
-		codexConfigDir, err = WriteCodexConfigDir(mcpConfig, "", req.AgentType, identifier, req.EnvVars["CODEX_HOME"])
-		if err != nil {
-			if rmErr := RemoveMCPConfig(mcpConfigPath); rmErr != nil {
-				s.logWarn("cleanup: failed to remove MCP config", "path", mcpConfigPath, "error", rmErr)
-			}
-			return nil, err
-		}
-	}
-
-	// Build launcher script for resume (no prompt files needed)
-	tempFiles := nonEmptyStrings(mcpConfigPath)
-	launcherParams := LauncherParams{
-		AgentType:     req.Agent,
-		MCPConfigPath: mcpConfigPath,
-		Resume:        req.SessionID == "",
-		ResumeID:      req.SessionID,
-		AgentArgs:     req.AgentArgs,
-		EnvVars:       envVars,
-		CleanupFiles:  tempFiles,
-	}
-
-	if req.AgentType == AgentTypeArchitect {
-		launcherParams.ReplaceSystemPrompt = true
-		// For opencode architects, explicitly select the cortex agent
-		if req.Agent == "opencode" {
-			launcherParams.AgentArgs = append([]string{"--agent", "cortex"}, launcherParams.AgentArgs...)
-		}
-	}
-
-	if openCodeConfigJSON != "" {
-		launcherParams.EnvVars["OPENCODE_CONFIG_CONTENT"] = openCodeConfigJSON
-	}
-
-	// Set CODEX_HOME for codex agents
-	if codexConfigDir != "" {
-		launcherParams.EnvVars["CODEX_HOME"] = codexConfigDir
-		launcherParams.CleanupDirs = append(launcherParams.CleanupDirs, codexConfigDir)
-	}
-
-	// Variant env vars override all system-set env vars. Codex is the exception:
-	// cortex owns CODEX_HOME for per-session MCP config, while a variant
-	// CODEX_HOME is used as the source profile when building that temp dir.
-	for k, v := range req.EnvVars {
-		if req.Agent == "codex" && k == "CODEX_HOME" {
-			continue
-		}
-		launcherParams.EnvVars[k] = v
-	}
-
-	launcherPath, err := WriteLauncherScript(launcherParams, identifier, s.deps.MCPConfigDir)
-	if err != nil {
-		for _, path := range tempFiles {
-			if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
-				s.logWarn("cleanup: failed to remove temp file", "path", path, "error", rmErr)
-			}
-		}
-		return nil, err
-	}
-	allTempFiles := append(tempFiles, launcherPath)
-
-	// Create or resolve the session in the store for the resume path so the
-	// tailer can address it by SessionID. For tickets we look up the already-
-	// active session; for architect resume we (re)create the singleton entry.
+	// Resolve the session ID first so it can be used as StartRequest.ID.
 	var resumeSessionID string
 	if s.deps.SessionStore != nil {
 		switch req.AgentType {
@@ -594,16 +401,42 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 			}
 		}
 	}
+	if resumeSessionID == "" {
+		resumeSessionID = newResumeSessionID()
+	}
 
-	// Spawn in tmux
+	startReq := agentruntime.StartRequest{
+		ID:         resumeSessionID,
+		Agent:      s.agentKind(req.Agent),
+		Args:       req.AgentArgs,
+		Workdir:    req.ArchitectPath,
+		MCPServers: []agentruntime.MCPServerConfig{mcpServerConfig},
+		Resume:     req.SessionID == "",
+		ResumeID:   req.SessionID,
+		Env:        mergeEnvMaps(cortexEnv, req.EnvVars),
+	}
+
+	if req.AgentType == AgentTypeArchitect {
+		if req.Agent == "opencode" {
+			startReq.OpenCodeProfile = "cortex"
+		}
+	}
+
+	spec, err := adapter.PrepareLaunch(ctx, startReq)
+	if err != nil {
+		return nil, err
+	}
+
+	launcherPath, err := WriteLauncherScript(spec, cortexEnv, identifier, s.deps.MCPConfigDir)
+	if err != nil {
+		return nil, err
+	}
+
 	launchCmd := "bash " + launcherPath
 	var windowIndex int
 
-	// Determine working directory and companion for resume
 	workingDir := req.ArchitectPath
 	if req.AgentType == AgentTypeTicketAgent && req.TicketType == "work" {
-		// For work tickets, we would need to look up the ticket to get the repo path
-		// but resume doesn't have access to the full ticket. Use project path for now.
 		workingDir = req.ArchitectPath
 	}
 
@@ -618,10 +451,13 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		windowIndex, err = s.deps.TmuxManager.SpawnAgent(req.TmuxSession, req.WindowName, launchCmd, req.Companion, workingDir, workingDir)
 	}
 	if err != nil {
-		for _, path := range allTempFiles {
-			if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
-				s.logWarn("cleanup: failed to remove temp file", "path", path, "error", rmErr)
+		{
+			for _, path := range spec.CleanupPaths {
+				if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
+					s.logWarn("cleanup: failed to remove temp file", "path", path, "error", rmErr)
+				}
 			}
+			os.Remove(launcherPath)
 		}
 		return &SpawnResult{
 			Success: false,
@@ -629,48 +465,20 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 		}, nil
 	}
 
-	// Start the live status supervisor for the resumed agent. Bind to the
-	// daemon-root context so the supervisor outlives the resume handler.
-	ticketIDForStatus := envVars["CORTEX_TICKET_ID"]
+	livenessPath := launcherPath
+	if len(spec.CleanupPaths) > 0 {
+		livenessPath = spec.CleanupPaths[0]
+	}
+
+	ticketIDForStatus := cortexEnv["CORTEX_TICKET_ID"]
 	supCtx := s.deps.SupervisorCtx
 	supParams := agentSupervisorParams{
 		SessionID:      resumeSessionID,
 		TicketID:       ticketIDForStatus,
 		ArchitectPath:  req.ArchitectPath,
+		LivenessPath:   livenessPath,
 		HubEventSource: s.deps.HubEventSource,
 		Logger:         s.deps.Logger,
-	}
-	switch req.Agent {
-	case "codex":
-		supParams.LivenessPath = codexConfigDir
-	case "claude":
-		// Recover the Claude --session-id to wire Hub event filtering. Priority:
-		//  1. req.SessionID (caller explicitly passes the UUID)
-		//  2. stored AgentSessionID on the session (saved at spawn time)
-		claudeUUID := req.SessionID
-		if claudeUUID == "" && s.deps.SessionStore != nil {
-			var stored *session.Session
-			switch req.AgentType {
-			case AgentTypeTicketAgent:
-				stored, _ = s.deps.SessionStore.GetByTicketID(req.TicketID)
-			case AgentTypeArchitect:
-				stored, _ = s.deps.SessionStore.GetArchitect()
-			}
-			if stored != nil {
-				claudeUUID = stored.AgentSessionID
-			}
-		}
-		supParams.LivenessPath = mcpConfigPath
-		if claudeUUID != "" {
-			supParams.AgentSessionID = claudeUUID
-		} else {
-			s.logWarn("claude resume: unable to recover prior session UUID; Hub wiring disabled",
-				"ticket_id", req.TicketID,
-				"architect_path", req.ArchitectPath,
-			)
-		}
-	case "opencode":
-		supParams.LivenessPath = mcpConfigPath
 	}
 	if _, err := startAgentSupervisor(supCtx, supParams); err != nil {
 		s.logWarn("resume: supervisor start failed", "agent", req.Agent, "error", err)
@@ -771,4 +579,69 @@ func nonEmptyStrings(values ...string) []string {
 		}
 	}
 	return result
+}
+
+// adapterFor returns an agentruntime adapter for the given agent string.
+// Architect sessions use --system-prompt (full replace); ticket/collab use
+// --append-system-prompt (additive) for Claude.
+func (s *Spawner) adapterFor(agent string, agentType AgentType) (agentruntime.Adapter, error) {
+	switch agent {
+	case "claude":
+		opts := claude.DefaultOptions()
+		opts.AppendInstructions = agentType != AgentTypeArchitect
+		return claude.New(opts), nil
+	case "codex":
+		return codex.New(codex.DefaultOptions()), nil
+	case "opencode":
+		return opencode.New(opencode.DefaultOptions()), nil
+	default:
+		return nil, fmt.Errorf("unknown agent: %s", agent)
+	}
+}
+
+// agentKind maps a cortex agent string to an agentruntime AgentKind.
+func (s *Spawner) agentKind(agent string) agentruntime.AgentKind {
+	switch agent {
+	case "claude":
+		return agentruntime.AgentClaude
+	case "codex":
+		return agentruntime.AgentCodex
+	case "opencode":
+		return agentruntime.AgentOpenCode
+	default:
+		return agentruntime.AgentKind(agent)
+	}
+}
+
+// buildCortexEnv returns the per-session agent env vars set by Cortex.
+func (s *Spawner) buildCortexEnv(req SpawnRequest, startedAt string) map[string]string {
+	env := map[string]string{
+		"CORTEX_STARTED_AT": startedAt,
+	}
+	switch req.AgentType {
+	case AgentTypeArchitect:
+		env["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
+	case AgentTypeTicketAgent:
+		env["CORTEX_TICKET_ID"] = req.TicketID
+		if req.Ticket != nil {
+			env["CORTEX_TICKET_TYPE"] = req.Ticket.Type
+			env["CORTEX_REPO"] = req.Ticket.Repo
+		}
+	case AgentTypeCollabAgent:
+		env["CORTEX_COLLAB_ID"] = req.CollabID
+		env["CORTEX_REPO"] = req.Repo
+	}
+	return env
+}
+
+// mergeEnvMaps merges cortex env with variant env, where variant wins.
+func mergeEnvMaps(cortexEnv, variantEnv map[string]string) map[string]string {
+	out := make(map[string]string, len(cortexEnv)+len(variantEnv))
+	for k, v := range cortexEnv {
+		out[k] = v
+	}
+	for k, v := range variantEnv {
+		out[k] = v
+	}
+	return out
 }

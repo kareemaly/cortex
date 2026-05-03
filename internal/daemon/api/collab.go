@@ -120,7 +120,7 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		CortexdPath:    h.deps.CortexdPath,
 		Logger:         h.deps.Logger,
 		DefaultsDir:    h.deps.DefaultsDir,
-		HubEventSource: hubEventSource(h.deps.HubManager),
+		HubEventSource: hubEventSource(h.deps.ReceiverManager),
 	})
 
 	result, err := spawner.SpawnCollab(r.Context(), spawn.CollabSpawnRequest{

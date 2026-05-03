@@ -1,14 +1,15 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/kareemaly/agentstatus"
-	_ "github.com/kareemaly/agentstatus/adapters/claude"
-	_ "github.com/kareemaly/agentstatus/adapters/codex"
-	_ "github.com/kareemaly/agentstatus/adapters/opencode"
+	"github.com/hiveryn/agentruntime"
+	"github.com/hiveryn/agentruntime/adapter/claude"
+	"github.com/hiveryn/agentruntime/adapter/codex"
+	"github.com/hiveryn/agentruntime/adapter/opencode"
 	"github.com/kareemaly/cortex/internal/daemon/config"
 )
 
@@ -196,17 +197,65 @@ func (e *PathNotDirectoryError) Error() string {
 	return "path exists but is not a directory: " + e.Path
 }
 
-// InstallAgentHooks installs agentstatus hooks for all registered agents.
-// Reads daemon port from ~/.cortex/settings.yaml. Non-fatal per-agent errors
-// are returned in the result slice; only a systemic failure returns a non-nil error.
-func InstallAgentHooks() ([]agentstatus.InstallResult, error) {
+// HookInstallResult describes the outcome of hook setup for one agent.
+type HookInstallResult struct {
+	Agent     string
+	Installed bool
+	Skipped   bool
+	Reason    string
+	Path      string
+}
+
+// InstallAgentHooks installs agentruntime hooks for all supported agents.
+// Reads daemon port from ~/.cortex/settings.yaml. Per-agent failures are
+// captured in the result slice; only a systemic failure returns a non-nil error.
+func InstallAgentHooks() ([]HookInstallResult, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config for hook install: %w", err)
 	}
 	endpoint := fmt.Sprintf("http://localhost:%d/hook", cfg.Port)
-	return agentstatus.InstallHooks(agentstatus.InstallConfig{
-		Endpoint: endpoint,
-		Marker:   "cortex",
+
+	var results []HookInstallResult
+
+	claudeAdapter := claude.New(claude.DefaultOptions())
+	res, err := claudeAdapter.EnsureSetup(context.Background(), agentruntime.SetupRequest{
+		Marker: "cortex",
+		Hook:   claude.HookCommand(endpoint),
 	})
+	results = append(results, hookResult("claude", res, err))
+
+	codexAdapter := codex.New(codex.DefaultOptions())
+	res, err = codexAdapter.EnsureSetup(context.Background(), agentruntime.SetupRequest{
+		Marker: "cortex",
+		Hook:   codex.HookCommand(endpoint),
+	})
+	results = append(results, hookResult("codex", res, err))
+
+	opencodeAdapter := opencode.New(opencode.DefaultOptions())
+	res, err = opencodeAdapter.EnsureSetup(context.Background(), agentruntime.SetupRequest{
+		Marker: "cortex",
+		Hook:   agentruntime.HookCommand{Endpoint: endpoint},
+	})
+	results = append(results, hookResult("opencode", res, err))
+
+	return results, nil
+}
+
+func hookResult(agent string, res agentruntime.SetupResult, err error) HookInstallResult {
+	r := HookInstallResult{Agent: agent}
+	if err != nil {
+		r.Reason = err.Error()
+		return r
+	}
+	if res.Changed {
+		r.Installed = true
+		if len(res.Paths) > 0 {
+			r.Path = res.Paths[0]
+		}
+	} else {
+		r.Skipped = true
+		r.Reason = "already installed"
+	}
+	return r
 }

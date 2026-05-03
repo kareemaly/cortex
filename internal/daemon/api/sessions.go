@@ -93,8 +93,8 @@ func (h *SessionHandlers) List(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Overlay Hub-sourced status/tool if available.
-		if h.deps.HubManager != nil && sess.AgentSessionID != "" {
-			if ev, ok := h.deps.HubManager.GetEvent(sess.AgentSessionID); ok {
+		if h.deps.ReceiverManager != nil && sess.SessionID != "" {
+			if ev, ok := h.deps.ReceiverManager.GetEvent(sess.SessionID); ok {
 				item.Status = string(ev.Status)
 				if ev.Tool != "" {
 					tool := ev.Tool

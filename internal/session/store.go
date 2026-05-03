@@ -270,24 +270,6 @@ func (s *Store) EndBySessionID(sessionID string) error {
 	return s.save(sessions)
 }
 
-// SetAgentSessionID records the agent tool's internal session identifier
-// (Claude's --session-id UUID, Codex's rollout filename). Used by resume
-// so the decision machine can re-attach to the existing transcript.
-func (s *Store) SetAgentSessionID(sessionID, agentSessionID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sessions, err := s.load()
-	if err != nil {
-		return err
-	}
-	sess, ok := sessions[sessionID]
-	if !ok {
-		return &storage.NotFoundError{Resource: "session", ID: sessionID}
-	}
-	sess.AgentSessionID = agentSessionID
-	return s.save(sessions)
-}
-
 // UpdateStatusBySessionID updates status/tool/work by session UUID.
 func (s *Store) UpdateStatusBySessionID(sessionID string, status AgentStatus, tool, work *string) error {
 	s.mu.Lock()

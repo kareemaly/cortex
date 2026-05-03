@@ -1,41 +1,26 @@
 package spawn
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-
+	"github.com/hiveryn/agentruntime"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 )
 
-// MCPServerConfig represents the MCP server configuration for claude.
-type MCPServerConfig struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args"`
-	Env     map[string]string `json:"env,omitempty"`
-}
-
-// ClaudeMCPConfig represents the claude MCP configuration file format.
-type ClaudeMCPConfig struct {
-	MCPServers map[string]MCPServerConfig `json:"mcpServers"`
-}
-
-// MCPConfigParams contains parameters for generating MCP config.
+// MCPConfigParams contains parameters for generating MCP server config.
 type MCPConfigParams struct {
 	CortexdPath   string
-	TicketID      string // for ticket agents
-	TicketType    string // for ticket agents
+	TicketID      string
+	TicketType    string
 	TicketsDir    string
 	ArchitectPath string
 	TmuxSession   string
 	DaemonURL     string // optional; defaults to daemonconfig.DefaultDaemonURL
 	StartedAt     string // RFC3339 timestamp of when the session started
-	CollabID      string // for collab agents
+	CollabID      string
 }
 
-// GenerateMCPConfig creates an MCP configuration for a claude agent.
-func GenerateMCPConfig(params MCPConfigParams) *ClaudeMCPConfig {
+// BuildMCPServerConfig converts Cortex MCP params to an agentruntime
+// MCP server config consumed by all adapters.
+func BuildMCPServerConfig(params MCPConfigParams) agentruntime.MCPServerConfig {
 	args := []string{"mcp"}
 	if params.TicketID != "" {
 		args = append(args, "--ticket-id", params.TicketID)
@@ -44,72 +29,34 @@ func GenerateMCPConfig(params MCPConfigParams) *ClaudeMCPConfig {
 		}
 	}
 
-	serverConfig := MCPServerConfig{
-		Command: params.CortexdPath,
-		Args:    args,
-		Env:     make(map[string]string),
-	}
-
-	// Add environment variables
+	env := make(map[string]string)
 	if params.TicketsDir != "" {
-		serverConfig.Env["CORTEX_TICKETS_DIR"] = params.TicketsDir
+		env["CORTEX_TICKETS_DIR"] = params.TicketsDir
 	}
 	if params.ArchitectPath != "" {
-		serverConfig.Env["CORTEX_ARCHITECT_PATH"] = params.ArchitectPath
+		env["CORTEX_ARCHITECT_PATH"] = params.ArchitectPath
 	}
 	if params.TmuxSession != "" {
-		serverConfig.Env["CORTEX_TMUX_SESSION"] = params.TmuxSession
+		env["CORTEX_TMUX_SESSION"] = params.TmuxSession
 	}
 
-	// Pass daemon URL so sessions can route mutations through the HTTP API
 	daemonURL := params.DaemonURL
 	if daemonURL == "" {
 		daemonURL = daemonconfig.DefaultDaemonURL
 	}
-	serverConfig.Env["CORTEX_DAEMON_URL"] = daemonURL
+	env["CORTEX_DAEMON_URL"] = daemonURL
 
-	// Pass session start time so the MCP subprocess can include it in concludeSession
 	if params.StartedAt != "" {
-		serverConfig.Env["CORTEX_STARTED_AT"] = params.StartedAt
+		env["CORTEX_STARTED_AT"] = params.StartedAt
 	}
-
-	// Pass collab ID so the MCP subprocess knows it's a collab session
 	if params.CollabID != "" {
-		serverConfig.Env["CORTEX_COLLAB_ID"] = params.CollabID
+		env["CORTEX_COLLAB_ID"] = params.CollabID
 	}
 
-	return &ClaudeMCPConfig{
-		MCPServers: map[string]MCPServerConfig{
-			"cortex": serverConfig,
-		},
+	return agentruntime.MCPServerConfig{
+		Name:    "cortex",
+		Command: params.CortexdPath,
+		Args:    args,
+		Env:     env,
 	}
-}
-
-// WriteMCPConfig writes an MCP config to a file.
-// Returns the path to the written config file.
-func WriteMCPConfig(config *ClaudeMCPConfig, identifier, configDir string) (string, error) {
-	if configDir == "" {
-		configDir = os.TempDir()
-	}
-
-	path := filepath.Join(configDir, fmt.Sprintf("cortex-mcp-%s.json", identifier))
-
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("marshal MCP config: %w", err)
-	}
-
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return "", fmt.Errorf("write MCP config: %w", err)
-	}
-
-	return path, nil
-}
-
-// RemoveMCPConfig removes an MCP config file.
-func RemoveMCPConfig(path string) error {
-	if path == "" {
-		return nil
-	}
-	return os.Remove(path)
 }

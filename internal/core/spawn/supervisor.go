@@ -10,18 +10,16 @@ import (
 
 // agentSupervisorParams is the unified input for starting a per-session
 // status supervisor. The supervisor monitors liveness (process death) and
-// forwards Hub events to SSE. AgentSessionID, when set, is the agent tool's
-// internal session identifier used to filter Hub events for this session.
+// forwards Hub events to SSE.
 type agentSupervisorParams struct {
-	AgentSessionID string // agent-internal ID (e.g. Claude --session-id UUID)
-	LivenessPath   string
-	SessionID      string
-	TicketID       string
-	ArchitectPath  string
+	LivenessPath  string
+	SessionID     string
+	TicketID      string
+	ArchitectPath string
 
 	// HubEventSource, when non-nil, creates a filtered Hub event channel for
-	// the given agent session ID. Nil means liveness-only supervision.
-	HubEventSource func(ctx context.Context, agentSessionID string) <-chan agent.HubEvent
+	// the given cortex session ID. Nil means liveness-only supervision.
+	HubEventSource func(ctx context.Context, sessionID string) <-chan agent.HubEvent
 
 	Logger *slog.Logger
 }
@@ -46,10 +44,10 @@ func startAgentSupervisor(ctx context.Context, p agentSupervisorParams) (context
 	}
 
 	var hubEventSource func(ctx context.Context) <-chan agent.HubEvent
-	if p.HubEventSource != nil && p.AgentSessionID != "" {
-		agentSessionID := p.AgentSessionID
+	if p.HubEventSource != nil && p.SessionID != "" {
+		sessionID := p.SessionID
 		hubEventSource = func(ctx context.Context) <-chan agent.HubEvent {
-			return p.HubEventSource(ctx, agentSessionID)
+			return p.HubEventSource(ctx, sessionID)
 		}
 	}
 

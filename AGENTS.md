@@ -32,12 +32,14 @@ Single `cortexd` daemon serves all projects. **All clients communicate exclusive
 └─────────────────┘  │               │  ├─ HTTP API             │
 ┌─────────────────┐  │               │  ├─ StoreManager         │
 │  MCP Ticket     │──┘               │  ├─ SessionManager       │
-└─────────────────┘                  │  ├─ HubManager (hooks)   │
+└─────────────────┘                  │  ├─ ReceiverManager      │
 ┌──────────────────┐                 │  ├─ Tmux management      │
 │ Agent Hooks      │────────────────▶│  └─ SSE event bus        │
 │ (Claude/Codex/   │   POST /hook    └──────────────────────────┘
-│  OpenCode)       │
-└──────────────────┘
+│  OpenCode)       │                                     ▲
+└──────────────────┘                                     │
+                                              agentruntime
+                                         (adapter/claude,codex,opencode)
 ```
 
 Three session types: **architect** (project-scoped), **ticket** (ticket-scoped worker), **collab** (ticketless interactive). The architect spawns ticket and collab sessions. Each type gets a different MCP tool set (see `internal/daemon/mcp/server.go`).
@@ -62,7 +64,7 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 - **SessionManager**: Manages ephemeral session stores per architect. Located in `internal/daemon/api/session_manager.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 - **Agent status supervision**: Per-session supervisor per spawned agent, wired via `startAgentSupervisor` in `internal/core/spawn/supervisor.go`. **Hub is the sole status source — transcript parsing has been removed.** The supervisor does two things: (1) subscribe to Hub events for this session and forward them to `/agent/status` → SSE; (2) monitor liveness (file stat) and call `DELETE /sessions/{id}` when the agent disappears. Supervisors bind to daemon-root `SupervisorCtx` so they outlive the HTTP spawn handler. Sessions route by canonical `SessionID` UUID everywhere (store, events, `/agent/status`).
-- **Agent status from hooks**: `HubManager` in `internal/daemon/api/hub_manager.go` wraps the `agentstatus.Hub` library, maintaining an in-memory `sessionCache` (sync.Map) keyed by `session.AgentSessionID`. Hook payloads POST to `POST /hook/{agent}` (global, no architect header). The event loop drains `hub.Events()` into the cache. API responses overlay cached status/tool on ticket summaries and session lists. Per-session supervisors also subscribe via `HubManager.EventsFor(ctx, agentSessionID)` to forward Hub events to SSE in real time. Hub creation is non-fatal — daemon continues with liveness-only supervision if Hub fails.
+- **Agent status from hooks**: `ReceiverManager` in `internal/daemon/api/receiver_manager.go` wraps per-agent `ingest.Receiver` (from `agentruntime`), maintaining an in-memory cache (`sync.Map`) keyed by `Event.ID` (Cortex session UUID). Hook payloads POST to `POST /hook/{agent}` (global, no architect header). The event loop subscribes to all receiver hubs and populates the cache by `Event.ID`. API responses overlay cached status/tool on ticket summaries and session lists. Per-session supervisors subscribe via `ReceiverManager.EventsFor(ctx, cortexSessionID)` which uses `receiver.Hub().Subscribe(Filter{ID: cortexSessionID})` to forward Hub events to SSE in real time.
 
 ## Anti-Patterns
 
@@ -76,10 +78,11 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Import `internal/architect` in CLI code | Use HTTP API endpoints | Breaks daemon-as-authority architecture |
 | Call `architectconfig.Load()` in MCP tools | Call the daemon HTTP API via SDK client | MCP is a dumb client — all config resolution (including global agent merge) lives in the daemon |
 | Call `architectconfig.Load()` directly to resolve variants | Use `mergeProjectConfig()` in `internal/daemon/api/config_merge.go` | Direct load misses global agents from `~/.cortex/settings.yaml`; only the daemon merges project + global |
-| Add a per-agent status supervisor wrapper | Extend `startAgentSupervisor` in `internal/core/spawn/supervisor.go` and add a Hub adapter in the `agentstatus` library | The unified helper owns ctx-lifetime, logger wiring, and Hub subscription; per-agent wrappers in cortex drift |
+| Add a per-agent status supervisor wrapper | Extend `startAgentSupervisor` in `internal/core/spawn/supervisor.go` | The unified helper owns ctx-lifetime, logger wiring, and Hub subscription; per-agent wrappers in cortex drift |
 | Post `ended` to `POST /agent/status` | `ended` is produced by the liveness watcher via `DELETE /sessions/{id}` | This path calls `EndBySessionID` + emits `SessionEnded` — accepting `ended` via status POST bypasses clean teardown |
-| Mount `hub.Handler()` into chi router | Write a manual chi handler that reads `chi.URLParam("agent")` and calls `hubManager.Ingest()` | `hub.Handler()` uses stdlib mux `r.PathValue()` (Go 1.22), which returns `""` when called inside chi |
-| Pane-based status detection (removed) | Use Hook-based agentstatus Hub for agent status | Pane detection was unreliable; Hook provides ground-truth from agents themselves |
+| Build per-agent CLI args or config files in Cortex | Pass `StartRequest` to `adapter.PrepareLaunch()` and use the returned `LaunchSpec` | agentruntime owns agent-specific argument synthesis, MCP config generation, and env key management |
+| Cache or subscribe by native agent session ID | Cache/subscribe by `Event.ID` (Cortex session UUID) | agentruntime guarantees `Event.ID == StartRequest.ID`; native IDs are diagnostic metadata |
+| Pane-based status detection (removed) | Use Hook-based agentruntime receiver for agent status | Pane detection was unreliable; Hook provides ground-truth from agents themselves |
 
 ## Debugging
 
@@ -103,7 +106,7 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | SDK client | `internal/cli/sdk/client.go` |
 | Spawn orchestration | `internal/core/spawn/` |
 | Agent status | `internal/core/agent/` (`supervisor.go` — Hub forwarding + liveness; `adapter.go` — `HubEvent` type) |
-| Hub manager | `internal/daemon/api/hub_manager.go` (wraps agentstatus.Hub, maintains sessionCache) |
+| Receiver manager | `internal/daemon/api/receiver_manager.go` (wraps per-agent ingest.Receiver from agentruntime, caches by Event.ID) |
 | Hook endpoint | `internal/daemon/api/hook.go` (chi handler for `POST /hook/{agent}`) |
 | Tmux pane observer | `internal/tmux/observer/` (shared per-tick raw-hash goroutine) |
 | Architect config | `internal/architect/config/` |

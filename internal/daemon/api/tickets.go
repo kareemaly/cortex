@@ -61,9 +61,9 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	tmuxSession := projectCfg.GetTmuxSessionName()
 
 	resp := ListAllTicketsResponse{
-		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.HubManager),
-		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.HubManager),
-		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.HubManager),
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager),
 	}
 
 	sortByCreated := func(a, b TicketSummary) int {
@@ -115,7 +115,7 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	tmuxSession := projectCfg.GetTmuxSessionName()
 
 	resp := ListTicketsResponse{
-		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.HubManager),
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager),
 	}
 
 	slices.SortFunc(resp.Tickets, func(a, b TicketSummary) int {
@@ -509,7 +509,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		Logger:         h.deps.Logger,
 		CortexdPath:    h.deps.CortexdPath,
 		DefaultsDir:    h.deps.DefaultsDir,
-		HubEventSource: hubEventSource(h.deps.HubManager),
+		HubEventSource: hubEventSource(h.deps.ReceiverManager),
 	})
 	if err != nil {
 		switch {

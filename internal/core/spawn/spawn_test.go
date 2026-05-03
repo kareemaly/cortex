@@ -2,8 +2,7 @@ package spawn
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
+"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hiveryn/agentruntime"
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/session"
 	"github.com/kareemaly/cortex/internal/storage"
@@ -178,12 +178,7 @@ func (m *mockSessionStore) CreateCollab(collabID, prompt, agent, tmuxWindow stri
 	return sess, nil
 }
 
-func (m *mockSessionStore) SetAgentSessionID(sessionID, agentSessionID string) error {
-	if sess, ok := m.sessions[sessionID]; ok {
-		sess.AgentSessionID = agentSessionID
-	}
-	return nil
-}
+
 
 // mockTmuxManager implements TmuxManagerInterface for testing.
 type mockTmuxManager struct {
@@ -309,18 +304,18 @@ func TestSpawn_TicketAgent_Success(t *testing.T) {
 		t.Errorf("expected command to contain 'cortex-launcher', got: %s", tmuxMgr.lastCommand)
 	}
 
-	// Verify launcher script was created and contains expected content
+	// Verify launcher script was created and uses argv-safe exec pattern
 	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
 	data, err := os.ReadFile(launcherPath)
 	if err != nil {
 		t.Fatalf("failed to read launcher script: %v", err)
 	}
 	script := string(data)
-	if !containsSubstr(script, "\"$(cat") {
-		t.Error("expected launcher to use $(cat) syntax for prompt")
+	if !containsSubstr(script, "args=(") {
+		t.Error("expected launcher to use args=( bash array")
 	}
-	if containsSubstr(script, "--permission-mode") {
-		t.Error("expected no --permission-mode when AgentArgs not provided")
+	if !containsSubstr(script, `exec "${args[@]}"`) {
+		t.Error("expected exec \"${args[@]}\"")
 	}
 	if !containsSubstr(script, "export CORTEX_TICKET_ID=") {
 		t.Error("expected launcher to export CORTEX_TICKET_ID")
@@ -429,30 +424,21 @@ func TestSpawn_CodexVariantCODEXHomeSeedsTempConfigButDoesNotOverride(t *testing
 	script := string(data)
 	codexHome := extractExportedEnvVar(t, script, "CODEX_HOME")
 
-	if codexHome == sourceHome {
-		t.Fatalf("variant CODEX_HOME should not override generated CODEX_HOME; script:\n%s", script)
-	}
-	if !strings.Contains(filepath.Base(codexHome), "cortex-codex-ticket-1-") {
-		t.Fatalf("expected generated cortex codex home, got %q", codexHome)
+	if codexHome == "" {
+		t.Error("expected CODEX_HOME to be set in env; script has no CODEX_HOME export")
+	} else if codexHome != sourceHome {
+		t.Errorf("expected variant CODEX_HOME=%q to flow through, got %q; script:\n%s", sourceHome, codexHome, script)
 	}
 	if !containsSubstr(script, "export MY_CUSTOM_VAR='hello world'") {
 		t.Errorf("expected non-CODEX_HOME variant env to remain in launcher; script:\n%s", script)
 	}
 
-	configData, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
-	if err != nil {
-		t.Fatalf("failed to read generated codex config: %v", err)
+	// With agentruntime, codex uses --config flags instead of config.toml.
+	if !containsSubstr(script, "--config") {
+		t.Errorf("expected codex --config flags for MCP/instructions; script:\n%s", script)
 	}
-	if !containsSubstr(string(configData), "[mcp_servers.cortex]") {
-		t.Fatalf("expected generated codex config to include cortex MCP server; config:\n%s", string(configData))
-	}
-
-	authTarget, err := os.Readlink(filepath.Join(codexHome, "auth.json"))
-	if err != nil {
-		t.Fatalf("expected generated codex home auth.json symlink: %v", err)
-	}
-	if authTarget != sourceAuth {
-		t.Fatalf("expected auth symlink to use variant CODEX_HOME auth, got %q want %q", authTarget, sourceAuth)
+	if containsSubstr(script, "config.toml") {
+		t.Errorf("codex no longer uses config.toml; uses --config flags; script:\n%s", script)
 	}
 }
 
@@ -566,6 +552,7 @@ func TestResume_Success(t *testing.T) {
 	// Execute - no SessionID means bare --resume (resume most recent)
 	result, err := spawner.Resume(context.Background(), ResumeRequest{
 		AgentType:     AgentTypeTicketAgent,
+		Agent:         "claude",
 		TmuxSession:   "test-session",
 		ArchitectPath: tmpDir,
 		TicketsDir:    filepath.Join(tmpDir, "tickets"),
@@ -735,8 +722,8 @@ func TestDetectTicketState_Orphaned(t *testing.T) {
 	}
 }
 
-func TestGenerateMCPConfig_WithTicket(t *testing.T) {
-	config := GenerateMCPConfig(MCPConfigParams{
+func TestBuildMCPServerConfig_WithTicket(t *testing.T) {
+	config := BuildMCPServerConfig(MCPConfigParams{
 		CortexdPath:   "/usr/bin/cortexd",
 		TicketID:      "ticket-123",
 		TicketType:    "work",
@@ -745,36 +732,35 @@ func TestGenerateMCPConfig_WithTicket(t *testing.T) {
 		TmuxSession:   "dev-session",
 	})
 
-	server, ok := config.MCPServers["cortex"]
-	if !ok {
-		t.Fatal("expected 'cortex' server in config")
+	if config.Name != "cortex" {
+		t.Errorf("expected name 'cortex', got: %s", config.Name)
 	}
 
-	if server.Command != "/usr/bin/cortexd" {
-		t.Errorf("expected command '/usr/bin/cortexd', got: %s", server.Command)
+	if config.Command != "/usr/bin/cortexd" {
+		t.Errorf("expected command '/usr/bin/cortexd', got: %s", config.Command)
 	}
 
 	expectedArgs := []string{"mcp", "--ticket-id", "ticket-123", "--ticket-type", "work"}
-	if len(server.Args) != len(expectedArgs) {
-		t.Fatalf("expected %d args, got: %d (%v)", len(expectedArgs), len(server.Args), server.Args)
+	if len(config.Args) != len(expectedArgs) {
+		t.Fatalf("expected %d args, got: %d (%v)", len(expectedArgs), len(config.Args), config.Args)
 	}
 	for i, arg := range expectedArgs {
-		if server.Args[i] != arg {
-			t.Errorf("arg[%d]: expected %s, got: %s", i, arg, server.Args[i])
+		if config.Args[i] != arg {
+			t.Errorf("arg[%d]: expected %s, got: %s", i, arg, config.Args[i])
 		}
 	}
 
-	if server.Env["CORTEX_TICKETS_DIR"] != "/path/to/tickets" {
-		t.Errorf("expected CORTEX_TICKETS_DIR, got: %v", server.Env)
+	if config.Env["CORTEX_TICKETS_DIR"] != "/path/to/tickets" {
+		t.Errorf("expected CORTEX_TICKETS_DIR, got: %v", config.Env)
 	}
 
-	if server.Env["CORTEX_DAEMON_URL"] != daemonconfig.DefaultDaemonURL {
-		t.Errorf("expected CORTEX_DAEMON_URL=%s, got: %v", daemonconfig.DefaultDaemonURL, server.Env["CORTEX_DAEMON_URL"])
+	if config.Env["CORTEX_DAEMON_URL"] != daemonconfig.DefaultDaemonURL {
+		t.Errorf("expected CORTEX_DAEMON_URL=%s, got: %v", daemonconfig.DefaultDaemonURL, config.Env["CORTEX_DAEMON_URL"])
 	}
 }
 
-func TestGenerateMCPConfig_WithTicketNoType(t *testing.T) {
-	config := GenerateMCPConfig(MCPConfigParams{
+func TestBuildMCPServerConfig_WithTicketNoType(t *testing.T) {
+	config := BuildMCPServerConfig(MCPConfigParams{
 		CortexdPath:   "/usr/bin/cortexd",
 		TicketID:      "ticket-123",
 		TicketsDir:    "/path/to/tickets",
@@ -782,16 +768,13 @@ func TestGenerateMCPConfig_WithTicketNoType(t *testing.T) {
 		TmuxSession:   "dev-session",
 	})
 
-	server := config.MCPServers["cortex"]
-
-	// Without TicketType, should only have 3 args: mcp --ticket-id ticket-123
 	expectedArgs := []string{"mcp", "--ticket-id", "ticket-123"}
-	if len(server.Args) != len(expectedArgs) {
-		t.Fatalf("expected %d args, got: %d (%v)", len(expectedArgs), len(server.Args), server.Args)
+	if len(config.Args) != len(expectedArgs) {
+		t.Fatalf("expected %d args, got: %d (%v)", len(expectedArgs), len(config.Args), config.Args)
 	}
 	for i, arg := range expectedArgs {
-		if server.Args[i] != arg {
-			t.Errorf("arg[%d]: expected %s, got: %s", i, arg, server.Args[i])
+		if config.Args[i] != arg {
+			t.Errorf("arg[%d]: expected %s, got: %s", i, arg, config.Args[i])
 		}
 	}
 }
@@ -830,23 +813,28 @@ func TestWritePromptFile(t *testing.T) {
 func TestWriteLauncherScript(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	params := LauncherParams{
-		PromptFilePath:       "/tmp/cortex-prompt-test.txt",
-		SystemPromptFilePath: "/tmp/cortex-sysprompt-test.txt",
-		MCPConfigPath:        "/tmp/cortex-mcp-test.json",
-		SessionID:            "session-abc",
-		AgentArgs:            []string{"--permission-mode", "plan"},
-		EnvVars: map[string]string{
-			"CORTEX_TICKET_ID": "ticket-1",
+	spec := agentruntime.LaunchSpec{
+		Command: "claude",
+		Args: []string{
+			"prompt text here",
+			"--append-system-prompt", "system instructions",
+			"--mcp-config", "/tmp/cortex-mcp-test.json",
+			"--session-id", "session-abc",
+			"--permission-mode", "plan",
 		},
-		CleanupFiles: []string{
+		Env: map[string]string{
+			"AGENTRUNTIME_SESSION_ID": "session-abc",
+		},
+		Workdir: "/tmp/work",
+		CleanupPaths: []string{
 			"/tmp/cortex-mcp-test.json",
-			"/tmp/cortex-prompt-test.txt",
-			"/tmp/cortex-sysprompt-test.txt",
 		},
 	}
+	extraEnv := map[string]string{
+		"CORTEX_TICKET_ID": "ticket-1",
+	}
 
-	path, err := WriteLauncherScript(params, "test-id", tmpDir)
+	path, err := WriteLauncherScript(spec, extraEnv, "test-id", tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -874,27 +862,16 @@ func TestWriteLauncherScript(t *testing.T) {
 	if !containsSubstr(script, "export CORTEX_TICKET_ID=") {
 		t.Error("expected CORTEX_TICKET_ID export")
 	}
-
-	// Verify $(cat) syntax for prompt and system prompt
-	if !containsSubstr(script, "\"$(cat") {
-		t.Error("expected $(cat) syntax for prompt file")
-	}
-	if !containsSubstr(script, "--append-system-prompt") {
-		t.Error("expected --append-system-prompt flag")
+	if !containsSubstr(script, "AGENTRUNTIME_SESSION_ID") {
+		t.Error("expected AGENTRUNTIME_SESSION_ID export")
 	}
 
-	// Verify other flags
-	if !containsSubstr(script, "--mcp-config") {
-		t.Error("expected --mcp-config flag")
+	// Verify argv-safe exec pattern
+	if !containsSubstr(script, "args=(") {
+		t.Error("expected args=( bash array")
 	}
-	if containsSubstr(script, "--settings") {
-		t.Error("claude no longer uses --settings (hooks replaced by transcript tailer)")
-	}
-	if !containsSubstr(script, "'--permission-mode' 'plan'") {
-		t.Error("expected '--permission-mode' 'plan' via AgentArgs")
-	}
-	if !containsSubstr(script, "--session-id session-abc") {
-		t.Error("expected --session-id flag")
+	if !containsSubstr(script, `exec "${args[@]}"`) {
+		t.Error("expected exec \"${args[@]}\"")
 	}
 
 	// Verify file is executable
@@ -910,18 +887,20 @@ func TestWriteLauncherScript(t *testing.T) {
 func TestWriteLauncherScript_VariantEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	params := LauncherParams{
-		PromptFilePath: "/tmp/cortex-prompt-test.txt",
-		MCPConfigPath:  "/tmp/cortex-mcp-test.json",
-		EnvVars: map[string]string{
-			"CORTEX_TICKET_ID": "ticket-1",
-			"CODEX_HOME":       "/Users/me/.codex-personal",
-			"MY_CUSTOM_VAR":    "hello world",
+	spec := agentruntime.LaunchSpec{
+		Command: "claude",
+		Args:    []string{"--mcp-config", "/tmp/cortex-mcp-test.json", "--session-id", "abc"},
+		Env: map[string]string{
+			"CODEX_HOME":    "/Users/me/.codex-personal",
+			"MY_CUSTOM_VAR": "hello world",
 		},
-		CleanupFiles: []string{"/tmp/cortex-mcp-test.json"},
+		CleanupPaths: []string{"/tmp/cortex-mcp-test.json"},
+	}
+	extraEnv := map[string]string{
+		"CORTEX_TICKET_ID": "ticket-1",
 	}
 
-	path, err := WriteLauncherScript(params, "variant-env-test", tmpDir)
+	path, err := WriteLauncherScript(spec, extraEnv, "variant-env-test", tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -931,6 +910,24 @@ func TestWriteLauncherScript_VariantEnv(t *testing.T) {
 		t.Fatalf("failed to read launcher script: %v", err)
 	}
 	script := string(data)
+
+	// Verify shebang
+	if !containsSubstr(script, "#!/usr/bin/env bash") {
+		t.Error("expected shebang line")
+	}
+
+	// Verify trap with cleanup
+	if !containsSubstr(script, "trap 'rm -f") {
+		t.Error("expected trap for cleanup")
+	}
+
+	// Verify argv-safe exec pattern
+	if !containsSubstr(script, "args=(") {
+		t.Error("expected args=( bash array")
+	}
+	if !containsSubstr(script, `exec "${args[@]}"`) {
+		t.Error("expected exec \"${args[@]}\"")
+	}
 
 	// All three env vars must be exported
 	if !containsSubstr(script, "export CORTEX_TICKET_ID='ticket-1'") {
@@ -947,14 +944,17 @@ func TestWriteLauncherScript_VariantEnv(t *testing.T) {
 func TestWriteLauncherScript_Resume(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	params := LauncherParams{
-		MCPConfigPath: "/tmp/cortex-mcp-test.json",
-		ResumeID:      "session-to-resume",
-		AgentArgs:     []string{"--permission-mode", "plan"},
-		CleanupFiles:  []string{"/tmp/cortex-mcp-test.json"},
+	spec := agentruntime.LaunchSpec{
+		Command: "claude",
+		Args: []string{
+			"--resume", "session-to-resume",
+			"--mcp-config", "/tmp/cortex-mcp-test.json",
+			"--permission-mode", "plan",
+		},
+		CleanupPaths: []string{"/tmp/cortex-mcp-test.json"},
 	}
 
-	path, err := WriteLauncherScript(params, "resume-test", tmpDir)
+	path, err := WriteLauncherScript(spec, nil, "resume-test", tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -965,27 +965,49 @@ func TestWriteLauncherScript_Resume(t *testing.T) {
 	}
 	script := string(data)
 
-	// Should have --resume flag
-	if !containsSubstr(script, "--resume session-to-resume") {
-		t.Error("expected --resume flag")
+	// Verify shebang
+	if !containsSubstr(script, "#!/usr/bin/env bash") {
+		t.Error("expected shebang line")
 	}
 
-	// Should NOT have $(cat) since there's no prompt file
-	if containsSubstr(script, "$(cat") {
-		t.Error("did not expect $(cat) syntax for resume (no prompt)")
+	// Verify trap with cleanup
+	if !containsSubstr(script, "trap 'rm -f") {
+		t.Error("expected trap for cleanup")
+	}
+
+	// Verify argv-safe exec pattern
+	if !containsSubstr(script, "args=(") {
+		t.Error("expected args=( bash array")
+	}
+	if !containsSubstr(script, `exec "${args[@]}"`) {
+		t.Error("expected exec \"${args[@]}\"")
+	}
+
+	// Should have --resume flag with the session ID
+	if !containsSubstr(script, "'--resume' 'session-to-resume'") {
+		t.Error("expected '--resume' 'session-to-resume' in args array; script:\n" + script)
+	}
+
+	// Verify file is executable
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat launcher script: %v", err)
+	}
+	if info.Mode().Perm()&0100 == 0 {
+		t.Error("expected launcher script to be executable")
 	}
 }
 
 func TestWriteLauncherScript_BareResume(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	params := LauncherParams{
-		MCPConfigPath: "/tmp/cortex-mcp-test.json",
-		Resume:        true, // bare --resume, no ResumeID
-		CleanupFiles:  []string{"/tmp/cortex-mcp-test.json"},
+	spec := agentruntime.LaunchSpec{
+		Command: "claude",
+		Args:    []string{"--resume", "--mcp-config", "/tmp/cortex-mcp-test.json"},
+		CleanupPaths: []string{"/tmp/cortex-mcp-test.json"},
 	}
 
-	path, err := WriteLauncherScript(params, "bare-resume-test", tmpDir)
+	path, err := WriteLauncherScript(spec, nil, "bare-resume-test", tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -996,35 +1018,64 @@ func TestWriteLauncherScript_BareResume(t *testing.T) {
 	}
 	script := string(data)
 
-	// Should have bare --resume flag
-	if !containsSubstr(script, "--resume") {
-		t.Error("expected --resume flag")
+	// Verify shebang
+	if !containsSubstr(script, "#!/usr/bin/env bash") {
+		t.Error("expected shebang line")
 	}
 
-	// Should NOT have --resume followed by a space+ID
-	if containsSubstr(script, "--resume ") {
+	// Verify trap with cleanup
+	if !containsSubstr(script, "trap 'rm -f") {
+		t.Error("expected trap for cleanup")
+	}
+
+	// Verify argv-safe exec pattern
+	if !containsSubstr(script, "args=(") {
+		t.Error("expected args=( bash array")
+	}
+	if !containsSubstr(script, `exec "${args[@]}"`) {
+		t.Error("expected exec \"${args[@]}\"")
+	}
+
+	// Should have bare --resume flag
+	if !containsSubstr(script, "'--resume'") {
+		t.Error("expected '--resume' in args array")
+	}
+
+	// Should NOT have --resume followed by a space+ID (bare resume)
+	if containsSubstr(script, "'--resume' 'session") {
 		t.Error("expected bare --resume without a specific ID")
+	}
+
+	// Verify file is executable
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat launcher script: %v", err)
+	}
+	if info.Mode().Perm()&0100 == 0 {
+		t.Error("expected launcher script to be executable")
 	}
 }
 
 func TestWriteLauncherScript_Architect(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	params := LauncherParams{
-		PromptFilePath:       "/tmp/cortex-prompt-arch.txt",
-		SystemPromptFilePath: "/tmp/cortex-sysprompt-arch.txt",
-		ReplaceSystemPrompt:  true,
-		MCPConfigPath:        "/tmp/cortex-mcp-arch.json",
-		AgentArgs:            []string{"--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket"},
-		SessionID:            "arch-session",
-		CleanupFiles: []string{
+	spec := agentruntime.LaunchSpec{
+		Command: "claude",
+		Args: []string{
+			"prompt text here",
+			"--system-prompt", "system instructions",
+			"--mcp-config", "/tmp/cortex-mcp-arch.json",
+			"--session-id", "arch-session",
+			"--allowedTools", "mcp__cortex__listTickets,mcp__cortex__readTicket",
+		},
+		CleanupPaths: []string{
 			"/tmp/cortex-mcp-arch.json",
 			"/tmp/cortex-prompt-arch.txt",
 			"/tmp/cortex-sysprompt-arch.txt",
 		},
 	}
 
-	path, err := WriteLauncherScript(params, "architect", tmpDir)
+	path, err := WriteLauncherScript(spec, nil, "architect", tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1035,16 +1086,34 @@ func TestWriteLauncherScript_Architect(t *testing.T) {
 	}
 	script := string(data)
 
-	// Should have --allowedTools via AgentArgs (shell-quoted)
+	// Verify shebang
+	if !containsSubstr(script, "#!/usr/bin/env bash") {
+		t.Error("expected shebang line")
+	}
+
+	// Verify trap with cleanup
+	if !containsSubstr(script, "trap 'rm -f") {
+		t.Error("expected trap for cleanup")
+	}
+
+	// Verify argv-safe exec pattern
+	if !containsSubstr(script, "args=(") {
+		t.Error("expected args=( bash array")
+	}
+	if !containsSubstr(script, `exec "${args[@]}"`) {
+		t.Error("expected exec \"${args[@]}\"")
+	}
+
+	// Should have --allowedTools via shell-quoted args
 	if !containsSubstr(script, "'--allowedTools' 'mcp__cortex__listTickets,mcp__cortex__readTicket'") {
-		t.Error("expected '--allowedTools' 'tools' via AgentArgs")
+		t.Error("expected '--allowedTools' 'tools' via shell-quoted args")
 	}
 
 	// Should use --system-prompt (full replace), NOT --append-system-prompt
-	if !containsSubstr(script, "--system-prompt") {
-		t.Error("expected --system-prompt flag for architect")
+	if !containsSubstr(script, "'--system-prompt'") {
+		t.Error("expected '--system-prompt' flag for architect")
 	}
-	if containsSubstr(script, "--append-system-prompt") {
+	if containsSubstr(script, "'--append-system-prompt'") {
 		t.Error("architect should use --system-prompt, not --append-system-prompt")
 	}
 
@@ -1054,8 +1123,17 @@ func TestWriteLauncherScript_Architect(t *testing.T) {
 	}
 
 	// Should NOT have --permission-mode (architect doesn't use plan mode)
-	if containsSubstr(script, "--permission-mode") {
+	if containsSubstr(script, "'--permission-mode'") {
 		t.Error("architect should not have --permission-mode")
+	}
+
+	// Verify file is executable
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat launcher script: %v", err)
+	}
+	if info.Mode().Perm()&0100 == 0 {
+		t.Error("expected launcher script to be executable")
 	}
 }
 
@@ -1671,202 +1749,6 @@ func TestOrchestrate_InvalidMode(t *testing.T) {
 	}
 }
 
-func TestGenerateOpenCodeConfigContent(t *testing.T) {
-	claudeConfig := &ClaudeMCPConfig{
-		MCPServers: map[string]MCPServerConfig{
-			"cortex": {
-				Command: "/usr/bin/cortexd",
-				Args:    []string{"mcp", "--ticket-id", "ticket-123"},
-				Env: map[string]string{
-					"CORTEX_ARCHITECT_PATH": "/path/to/project",
-					"CORTEX_DAEMON_URL":     "http://127.0.0.1:4200",
-				},
-			},
-		},
-	}
-
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, "You are a helpful agent.", AgentTypeArchitect, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Parse the JSON to verify structure
-	var config OpenCodeConfigContent
-	if err := json.Unmarshal([]byte(result), &config); err != nil {
-		t.Fatalf("failed to parse result JSON: %v", err)
-	}
-
-	// Verify agent config
-	agent, ok := config.Agent["cortex"]
-	if !ok {
-		t.Fatal("expected 'cortex' agent in config")
-	}
-	if agent.Prompt != "You are a helpful agent." {
-		t.Errorf("expected system prompt, got: %s", agent.Prompt)
-	}
-	if agent.Mode != "primary" {
-		t.Errorf("expected mode 'primary', got: %s", agent.Mode)
-	}
-	if agent.Permission["*"] != "allow" {
-		t.Errorf("expected permission '*' = 'allow', got: %v", agent.Permission)
-	}
-
-	// Verify MCP config
-	mcp, ok := config.MCP["cortex"]
-	if !ok {
-		t.Fatal("expected 'cortex' MCP server in config")
-	}
-	if mcp.Type != "local" {
-		t.Errorf("expected type 'local', got: %s", mcp.Type)
-	}
-
-	// Verify command array = Command + Args combined
-	expectedCmd := []string{"/usr/bin/cortexd", "mcp", "--ticket-id", "ticket-123"}
-	if len(mcp.Command) != len(expectedCmd) {
-		t.Fatalf("expected %d command elements, got: %d (%v)", len(expectedCmd), len(mcp.Command), mcp.Command)
-	}
-	for i, expected := range expectedCmd {
-		if mcp.Command[i] != expected {
-			t.Errorf("command[%d]: expected %s, got: %s", i, expected, mcp.Command[i])
-		}
-	}
-
-	// Verify environment mapping
-	if mcp.Environment["CORTEX_ARCHITECT_PATH"] != "/path/to/project" {
-		t.Errorf("expected CORTEX_ARCHITECT_PATH, got: %v", mcp.Environment)
-	}
-	if mcp.Environment["CORTEX_DAEMON_URL"] != "http://127.0.0.1:4200" {
-		t.Errorf("expected CORTEX_DAEMON_URL, got: %v", mcp.Environment)
-	}
-
-	// Regression: verify no hardcoded "model" key in agent config JSON.
-	// OpenCode should use its own default model unless overridden via AgentArgs.
-	var raw map[string]any
-	if err := json.Unmarshal([]byte(result), &raw); err != nil {
-		t.Fatalf("failed to unmarshal raw JSON: %v", err)
-	}
-	agentMap := raw["agent"].(map[string]any)
-	cortexAgent := agentMap["cortex"].(map[string]any)
-	if _, hasModel := cortexAgent["model"]; hasModel {
-		t.Error("agent config must not contain a hardcoded 'model' key; model should be set via AgentArgs")
-	}
-}
-
-func TestGenerateOpenCodeConfigContent_EmptySystemPrompt(t *testing.T) {
-	claudeConfig := &ClaudeMCPConfig{
-		MCPServers: map[string]MCPServerConfig{
-			"cortex": {
-				Command: "/usr/bin/cortexd",
-				Args:    []string{"mcp"},
-			},
-		},
-	}
-
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, "", AgentTypeArchitect, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var config OpenCodeConfigContent
-	if err := json.Unmarshal([]byte(result), &config); err != nil {
-		t.Fatalf("failed to parse result JSON: %v", err)
-	}
-
-	// Agent prompt should be empty (resume case)
-	agent := config.Agent["cortex"]
-	if agent.Prompt != "" {
-		t.Errorf("expected empty prompt for resume, got: %s", agent.Prompt)
-	}
-
-	// MCP command should combine command + args
-	mcp := config.MCP["cortex"]
-	expectedCmd := []string{"/usr/bin/cortexd", "mcp"}
-	if len(mcp.Command) != len(expectedCmd) {
-		t.Fatalf("expected %d command elements, got: %d", len(expectedCmd), len(mcp.Command))
-	}
-	for i, expected := range expectedCmd {
-		if mcp.Command[i] != expected {
-			t.Errorf("command[%d]: expected %s, got: %s", i, expected, mcp.Command[i])
-		}
-	}
-}
-
-func TestWriteLauncherScript_OpenCode(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	params := LauncherParams{
-		AgentType:      "opencode",
-		PromptFilePath: "/tmp/cortex-prompt-test.txt",
-		AgentArgs:      []string{"--verbose"},
-		EnvVars: map[string]string{
-			"CORTEX_TICKET_ID":        "ticket-1",
-			"OPENCODE_CONFIG_CONTENT": `{"agent":{"cortex":{"prompt":"test"}},"mcp":{}}`,
-		},
-		CleanupFiles: []string{"/tmp/cortex-prompt-test.txt"},
-	}
-
-	path, err := WriteLauncherScript(params, "opencode-test", tmpDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read launcher script: %v", err)
-	}
-	script := string(data)
-
-	// Verify shebang
-	if !containsSubstr(script, "#!/usr/bin/env bash") {
-		t.Error("expected shebang line")
-	}
-
-	// Verify command starts with opencode (no hardcoded --agent for ticket agents)
-	if !containsSubstr(script, "opencode") {
-		t.Error("expected 'opencode' in script")
-	}
-	if containsSubstr(script, "--agent") {
-		t.Error("ticket agent should not have --agent flag (user chooses via cortex.yaml args)")
-	}
-
-	// Verify prompt via $(cat)
-	if !containsSubstr(script, "--prompt") {
-		t.Error("expected --prompt flag")
-	}
-	if !containsSubstr(script, "\"$(cat") {
-		t.Error("expected $(cat) syntax for prompt file")
-	}
-
-	// Verify OPENCODE_CONFIG_CONTENT is exported
-	if !containsSubstr(script, "export OPENCODE_CONFIG_CONTENT=") {
-		t.Error("expected OPENCODE_CONFIG_CONTENT export")
-	}
-
-	// Verify NO Claude-specific flags
-	if containsSubstr(script, "--mcp-config") {
-		t.Error("opencode should not have --mcp-config flag")
-	}
-	if containsSubstr(script, "--settings") {
-		t.Error("opencode should not have --settings flag")
-	}
-	if containsSubstr(script, "--system-prompt") {
-		t.Error("opencode should not have --system-prompt flag")
-	}
-	if containsSubstr(script, "--append-system-prompt") {
-		t.Error("opencode should not have --append-system-prompt flag")
-	}
-	if containsSubstr(script, "--session-id") {
-		t.Error("opencode should not have --session-id flag")
-	}
-
-	// Verify extra agent args
-	if !containsSubstr(script, "'--verbose'") {
-		t.Error("expected '--verbose' via AgentArgs")
-	}
-}
-
-// --- OpenCode integration test helpers ---
-
 // extractExportedEnvVar extracts the value of a shell-exported env var from a launcher script.
 // The launcher writes lines like: export VAR='value'
 // This reverses the shellQuote escaping (backslash-quote sequences).
@@ -1898,664 +1780,4 @@ func extractExportedEnvVar(t *testing.T, script, varName string) string {
 		i++
 	}
 	return sb.String()
-}
-
-// createTestCortexConfig creates cortex.yaml at the project root.
-func createTestCortexConfig(t *testing.T, projectPath, yamlContent string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(projectPath, "cortex.yaml"), []byte(yamlContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// --- OpenCode spawn integration tests ---
-
-func TestSpawn_OpenCode_Success(t *testing.T) {
-	tmpDir := t.TempDir()
-	store := newMockStore()
-	sessStore := newMockSessionStore()
-	tmuxMgr := newMockTmuxManager()
-
-	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
-	store.tickets["ticket-1"] = testTicket
-
-	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "## Test Instructions")
-
-	spawner := NewSpawner(Dependencies{
-		Store:        store,
-		SessionStore: sessStore,
-		TmuxManager:  tmuxMgr,
-		CortexdPath:  "/usr/bin/cortexd",
-		MCPConfigDir: tmpDir,
-	})
-
-	result, err := spawner.Spawn(context.Background(), SpawnRequest{
-		AgentType:     AgentTypeTicketAgent,
-		Agent:         "opencode",
-		TmuxSession:   "test-session",
-		ArchitectPath: tmpDir,
-		TicketsDir:    filepath.Join(tmpDir, "tickets"),
-		TicketID:      "ticket-1",
-		Ticket:        testTicket,
-	})
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.Success {
-		t.Fatalf("expected success, got: %s", result.Message)
-	}
-	if tmuxMgr.spawnCalls != 1 {
-		t.Errorf("expected 1 spawn call, got: %d", tmuxMgr.spawnCalls)
-	}
-
-	// Read launcher script
-	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
-	data, err := os.ReadFile(launcherPath)
-	if err != nil {
-		t.Fatalf("failed to read launcher script: %v", err)
-	}
-	script := string(data)
-
-	// Verify opencode command (no hardcoded --agent for ticket agents)
-	if !containsSubstr(script, "opencode") {
-		t.Error("expected 'opencode' in script")
-	}
-	if containsSubstr(script, "--agent") {
-		t.Error("ticket agent should not have --agent flag")
-	}
-
-	// Verify OPENCODE_CONFIG_CONTENT is exported
-	if !containsSubstr(script, "export OPENCODE_CONFIG_CONTENT=") {
-		t.Error("expected OPENCODE_CONFIG_CONTENT export")
-	}
-
-	// Verify NO Claude-specific flags
-	if containsSubstr(script, "--mcp-config") {
-		t.Error("opencode should not have --mcp-config flag")
-	}
-	if containsSubstr(script, "--settings") {
-		t.Error("opencode should not have --settings flag")
-	}
-	if containsSubstr(script, "--system-prompt") {
-		t.Error("opencode should not have --system-prompt flag")
-	}
-	if containsSubstr(script, "--session-id") {
-		t.Error("opencode should not have --session-id flag")
-	}
-
-	// Verify session was created with opencode agent
-	if sessStore.lastCreateAgent != "opencode" {
-		t.Errorf("expected session agent 'opencode', got: %s", sessStore.lastCreateAgent)
-	}
-
-	// Verify CORTEX_SESSION_ID is exported so the hook plugin can back-correlate
-	// the OpenCode native session ID to this cortex session on session.created.
-	if !containsSubstr(script, "export CORTEX_SESSION_ID=") {
-		t.Error("expected CORTEX_SESSION_ID export for opencode agent")
-	}
-}
-
-func TestSpawn_OpenCode_ConfigContent(t *testing.T) {
-	tmpDir := t.TempDir()
-	store := newMockStore()
-	sessStore := newMockSessionStore()
-	tmuxMgr := newMockTmuxManager()
-
-	testTicket := createTestTicket("ticket-1", "Test Ticket", "Test body")
-	store.tickets["ticket-1"] = testTicket
-
-	createTestPromptFile(t, tmpDir, "work/SYSTEM.md", "You are a helpful agent.")
-
-	spawner := NewSpawner(Dependencies{
-		Store:        store,
-		SessionStore: sessStore,
-		TmuxManager:  tmuxMgr,
-		CortexdPath:  "/usr/bin/cortexd",
-		MCPConfigDir: tmpDir,
-	})
-
-	result, err := spawner.Spawn(context.Background(), SpawnRequest{
-		AgentType:     AgentTypeTicketAgent,
-		Agent:         "opencode",
-		TmuxSession:   "test-session",
-		ArchitectPath: tmpDir,
-		TicketsDir:    filepath.Join(tmpDir, "tickets"),
-		TicketID:      "ticket-1",
-		Ticket:        testTicket,
-	})
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.Success {
-		t.Fatalf("expected success, got: %s", result.Message)
-	}
-
-	// Read launcher script and extract OPENCODE_CONFIG_CONTENT
-	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
-	data, err := os.ReadFile(launcherPath)
-	if err != nil {
-		t.Fatalf("failed to read launcher script: %v", err)
-	}
-	script := string(data)
-
-	configJSON := extractExportedEnvVar(t, script, "OPENCODE_CONFIG_CONTENT")
-
-	var config OpenCodeConfigContent
-	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
-		t.Fatalf("failed to parse OPENCODE_CONFIG_CONTENT JSON: %v\nraw: %s", err, configJSON)
-	}
-
-	// Verify no agent config for ticket agents (users choose via cortex.yaml args)
-	if len(config.Agent) != 0 {
-		t.Errorf("expected no agent entries for ticket agent, got: %d", len(config.Agent))
-	}
-	if len(config.Instructions) != 1 {
-		t.Fatalf("expected 1 instruction for ticket agent, got: %d", len(config.Instructions))
-	}
-	// Verify the instructions file contains the system prompt content
-	instrContent, err := os.ReadFile(config.Instructions[0])
-	if err != nil {
-		t.Fatalf("failed to read instructions file %s: %v", config.Instructions[0], err)
-	}
-	if !containsSubstr(string(instrContent), "You are a helpful agent.") {
-		t.Errorf("expected instructions file to contain system prompt, got: %s", string(instrContent))
-	}
-
-	// Verify MCP config
-	mcp, ok := config.MCP["cortex"]
-	if !ok {
-		t.Fatal("expected 'cortex' MCP server in config")
-	}
-	if mcp.Type != "local" {
-		t.Errorf("expected type 'local', got: %s", mcp.Type)
-	}
-
-	// Verify command array
-	expectedCmd := []string{"/usr/bin/cortexd", "mcp", "--ticket-id", "ticket-1"}
-	if len(mcp.Command) != len(expectedCmd) {
-		t.Fatalf("expected %d command elements, got: %d (%v)", len(expectedCmd), len(mcp.Command), mcp.Command)
-	}
-	for i, expected := range expectedCmd {
-		if mcp.Command[i] != expected {
-			t.Errorf("command[%d]: expected %s, got: %s", i, expected, mcp.Command[i])
-		}
-	}
-
-	// Verify environment
-	if mcp.Environment["CORTEX_ARCHITECT_PATH"] != tmpDir {
-		t.Errorf("expected CORTEX_ARCHITECT_PATH=%s, got: %s", tmpDir, mcp.Environment["CORTEX_ARCHITECT_PATH"])
-	}
-	if mcp.Environment["CORTEX_DAEMON_URL"] != daemonconfig.DefaultDaemonURL {
-		t.Errorf("expected CORTEX_DAEMON_URL=%s, got: %s", daemonconfig.DefaultDaemonURL, mcp.Environment["CORTEX_DAEMON_URL"])
-	}
-}
-
-func TestOrchestrate_OpenCode_Normal(t *testing.T) {
-	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
-
-	result, err := Orchestrate(context.Background(), OrchestrateRequest{
-		TicketID:      "ticket-1",
-		Mode:          "normal",
-		Agent:         "opencode",
-		ArchitectPath: tmpDir,
-		TmuxSession:   "test-session",
-	}, OrchestrateDeps{
-		Store:        store,
-		SessionStore: sessStore,
-		TmuxManager:  tmuxMgr,
-		CortexdPath:  "/usr/bin/cortexd",
-	})
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.Outcome != OutcomeSpawned {
-		t.Errorf("expected OutcomeSpawned, got: %s", result.Outcome)
-	}
-	if result.SpawnResult == nil || !result.SpawnResult.Success {
-		t.Error("expected successful spawn result")
-	}
-
-	// Verify session records opencode agent
-	if sessStore.lastCreateAgent != "opencode" {
-		t.Errorf("expected session agent 'opencode', got: %s", sessStore.lastCreateAgent)
-	}
-
-	// Verify ticket moved from backlog to progress
-	if len(store.moveCalls) != 1 {
-		t.Fatalf("expected 1 Move call, got: %d", len(store.moveCalls))
-	}
-	if store.moveCalls[0].Status != ticket.StatusProgress {
-		t.Errorf("expected move to progress, got: %s", store.moveCalls[0].Status)
-	}
-
-	// Verify launcher uses opencode command (no hardcoded --agent for ticket agents)
-	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
-	data, err := os.ReadFile(launcherPath)
-	if err != nil {
-		t.Fatalf("failed to read launcher script: %v", err)
-	}
-	script := string(data)
-	if !containsSubstr(script, "opencode") {
-		t.Error("expected 'opencode' in launcher script")
-	}
-	if containsSubstr(script, "--agent") {
-		t.Error("ticket agent should not have --agent flag")
-	}
-	if containsSubstr(script, "claude") {
-		t.Error("expected no 'claude' command in opencode launcher")
-	}
-}
-
-func TestOrchestrate_OpenCode_Resume_Orphaned(t *testing.T) {
-	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
-	tmuxMgr.windowExists = false
-
-	// Create an orphaned session
-	_ = sessStore.addTicketSession("ticket-1", "test-window-prepop")
-
-	result, err := Orchestrate(context.Background(), OrchestrateRequest{
-		TicketID:      "ticket-1",
-		Mode:          "resume",
-		Agent:         "opencode",
-		ArchitectPath: tmpDir,
-		TmuxSession:   "test-session",
-	}, OrchestrateDeps{
-		Store:        store,
-		SessionStore: sessStore,
-		TmuxManager:  tmuxMgr,
-		CortexdPath:  "/usr/bin/cortexd",
-	})
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.Outcome != OutcomeResumed {
-		t.Errorf("expected OutcomeResumed, got: %s", result.Outcome)
-	}
-	if result.SpawnResult == nil || !result.SpawnResult.Success {
-		t.Error("expected successful spawn result")
-	}
-
-	// Verify launcher script
-	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
-	data, err := os.ReadFile(launcherPath)
-	if err != nil {
-		t.Fatalf("failed to read launcher script: %v", err)
-	}
-	script := string(data)
-
-	// OPENCODE_CONFIG_CONTENT should be present
-	if !containsSubstr(script, "export OPENCODE_CONFIG_CONTENT=") {
-		t.Error("expected OPENCODE_CONFIG_CONTENT export in resume launcher")
-	}
-
-	// Extract and verify no agent entries (ticket resume case)
-	configJSON := extractExportedEnvVar(t, script, "OPENCODE_CONFIG_CONTENT")
-	var config OpenCodeConfigContent
-	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
-		t.Fatalf("failed to parse OPENCODE_CONFIG_CONTENT: %v", err)
-	}
-	if len(config.Agent) != 0 {
-		t.Errorf("expected no agent entries for ticket resume, got: %d", len(config.Agent))
-	}
-
-	// No --resume flag (OpenCode doesn't support it)
-	if containsSubstr(script, "--resume") {
-		t.Error("opencode should not have --resume flag")
-	}
-
-	// No Claude-specific flags
-	if containsSubstr(script, "--mcp-config") {
-		t.Error("opencode should not have --mcp-config flag")
-	}
-	if containsSubstr(script, "--settings") {
-		t.Error("opencode should not have --settings flag")
-	}
-}
-
-func TestOrchestrate_OpenCode_AgentFromConfig(t *testing.T) {
-	tmpDir, store, sessStore, tmuxMgr := orchestrateTestSetup(t)
-
-	// Agent is now pre-resolved by the API handler and passed explicitly.
-	createTestCortexConfig(t, tmpDir, `
-name: test-project
-agents:
-  opencode-variant:
-    agent: opencode
-`)
-
-	result, err := Orchestrate(context.Background(), OrchestrateRequest{
-		TicketID:      "ticket-1",
-		Mode:          "normal",
-		ArchitectPath: tmpDir,
-		TmuxSession:   "test-session",
-		Agent:         "opencode",
-	}, OrchestrateDeps{
-		Store:        store,
-		SessionStore: sessStore,
-		TmuxManager:  tmuxMgr,
-		CortexdPath:  "/usr/bin/cortexd",
-	})
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.Outcome != OutcomeSpawned {
-		t.Errorf("expected OutcomeSpawned, got: %s", result.Outcome)
-	}
-
-	// Verify agent resolved from config
-	if sessStore.lastCreateAgent != "opencode" {
-		t.Errorf("expected session agent 'opencode' from config, got: %s", sessStore.lastCreateAgent)
-	}
-
-	// Verify launcher uses opencode command (no hardcoded --agent for ticket agents)
-	launcherPath := strings.TrimPrefix(tmuxMgr.lastCommand, "bash ")
-	data, err := os.ReadFile(launcherPath)
-	if err != nil {
-		t.Fatalf("failed to read launcher script: %v", err)
-	}
-	script := string(data)
-	if !containsSubstr(script, "opencode") {
-		t.Error("expected 'opencode' in launcher script")
-	}
-	if containsSubstr(script, "--agent") {
-		t.Error("ticket agent should not have --agent flag")
-	}
-}
-
-func TestGenerateOpenCodeConfigContent_MultipleServers(t *testing.T) {
-	claudeConfig := &ClaudeMCPConfig{
-		MCPServers: map[string]MCPServerConfig{
-			"cortex": {
-				Command: "/usr/bin/cortexd",
-				Args:    []string{"mcp", "--ticket-id", "ticket-1"},
-				Env:     map[string]string{"CORTEX_ARCHITECT_PATH": "/proj"},
-			},
-			"memory": {
-				Command: "/usr/bin/memory-server",
-				Args:    []string{"--port", "5000"},
-				Env:     map[string]string{"MEMORY_DIR": "/tmp/mem"},
-			},
-		},
-	}
-
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, "system prompt text", AgentTypeArchitect, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var config OpenCodeConfigContent
-	if err := json.Unmarshal([]byte(result), &config); err != nil {
-		t.Fatalf("failed to parse result JSON: %v", err)
-	}
-
-	// Only one agent entry (cortex)
-	if len(config.Agent) != 1 {
-		t.Errorf("expected 1 agent entry, got: %d", len(config.Agent))
-	}
-	if _, ok := config.Agent["cortex"]; !ok {
-		t.Error("expected 'cortex' agent entry")
-	}
-
-	// Both MCP servers should be present
-	if len(config.MCP) != 2 {
-		t.Fatalf("expected 2 MCP servers, got: %d", len(config.MCP))
-	}
-
-	// Verify cortex MCP server
-	cortexMCP, ok := config.MCP["cortex"]
-	if !ok {
-		t.Fatal("expected 'cortex' MCP server")
-	}
-	if cortexMCP.Type != "local" {
-		t.Errorf("expected type 'local', got: %s", cortexMCP.Type)
-	}
-	expectedCortexCmd := []string{"/usr/bin/cortexd", "mcp", "--ticket-id", "ticket-1"}
-	if len(cortexMCP.Command) != len(expectedCortexCmd) {
-		t.Fatalf("expected %d cortex command elements, got: %d", len(expectedCortexCmd), len(cortexMCP.Command))
-	}
-	for i, expected := range expectedCortexCmd {
-		if cortexMCP.Command[i] != expected {
-			t.Errorf("cortex command[%d]: expected %s, got: %s", i, expected, cortexMCP.Command[i])
-		}
-	}
-	if cortexMCP.Environment["CORTEX_ARCHITECT_PATH"] != "/proj" {
-		t.Errorf("expected CORTEX_ARCHITECT_PATH=/proj, got: %s", cortexMCP.Environment["CORTEX_ARCHITECT_PATH"])
-	}
-
-	// Verify memory MCP server
-	memoryMCP, ok := config.MCP["memory"]
-	if !ok {
-		t.Fatal("expected 'memory' MCP server")
-	}
-	if memoryMCP.Type != "local" {
-		t.Errorf("expected type 'local', got: %s", memoryMCP.Type)
-	}
-	expectedMemCmd := []string{"/usr/bin/memory-server", "--port", "5000"}
-	if len(memoryMCP.Command) != len(expectedMemCmd) {
-		t.Fatalf("expected %d memory command elements, got: %d", len(expectedMemCmd), len(memoryMCP.Command))
-	}
-	for i, expected := range expectedMemCmd {
-		if memoryMCP.Command[i] != expected {
-			t.Errorf("memory command[%d]: expected %s, got: %s", i, expected, memoryMCP.Command[i])
-		}
-	}
-	if memoryMCP.Environment["MEMORY_DIR"] != "/tmp/mem" {
-		t.Errorf("expected MEMORY_DIR=/tmp/mem, got: %s", memoryMCP.Environment["MEMORY_DIR"])
-	}
-}
-
-func TestGenerateOpenCodeConfigContent_SpecialCharsInPrompt(t *testing.T) {
-	systemPrompt := "Hello \"world\"\nLine2\twith\ttabs\nBackslash: \\ and 'quotes' and unicode: \u00e9\u00e8\u00ea"
-
-	claudeConfig := &ClaudeMCPConfig{
-		MCPServers: map[string]MCPServerConfig{
-			"cortex": {
-				Command: "/usr/bin/cortexd",
-				Args:    []string{"mcp"},
-			},
-		},
-	}
-
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, systemPrompt, AgentTypeArchitect, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Round-trip through JSON
-	var config OpenCodeConfigContent
-	if err := json.Unmarshal([]byte(result), &config); err != nil {
-		t.Fatalf("failed to parse result JSON: %v", err)
-	}
-
-	agent := config.Agent["cortex"]
-	if agent.Prompt != systemPrompt {
-		t.Errorf("prompt round-trip failed.\nexpected: %q\ngot:      %q", systemPrompt, agent.Prompt)
-	}
-}
-
-func TestGenerateOpenCodeConfigContent_TicketAgent(t *testing.T) {
-	claudeConfig := &ClaudeMCPConfig{
-		MCPServers: map[string]MCPServerConfig{
-			"cortex": {
-				Command: "/usr/bin/cortexd",
-				Args:    []string{"mcp", "--ticket-id", "ticket-123"},
-				Env: map[string]string{
-					"CORTEX_ARCHITECT_PATH": "/path/to/project",
-				},
-			},
-		},
-	}
-
-	filePath := "/tmp/cortex-sysprompt-ticket-123.txt"
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, "ignored system prompt", AgentTypeTicketAgent, filePath)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var config OpenCodeConfigContent
-	if err := json.Unmarshal([]byte(result), &config); err != nil {
-		t.Fatalf("failed to parse result JSON: %v", err)
-	}
-
-	// Ticket agents should NOT have any agent entries
-	if len(config.Agent) != 0 {
-		t.Errorf("expected no agent entries for ticket agent, got: %d", len(config.Agent))
-	}
-
-	// Should have instructions with the file path
-	if len(config.Instructions) != 1 {
-		t.Fatalf("expected 1 instruction, got: %d", len(config.Instructions))
-	}
-	if config.Instructions[0] != filePath {
-		t.Errorf("expected instruction %s, got: %s", filePath, config.Instructions[0])
-	}
-
-	// MCP config should still be present
-	if _, ok := config.MCP["cortex"]; !ok {
-		t.Fatal("expected 'cortex' MCP server in config")
-	}
-}
-
-func TestGenerateOpenCodeConfigContent_TicketAgentNoFile(t *testing.T) {
-	claudeConfig := &ClaudeMCPConfig{
-		MCPServers: map[string]MCPServerConfig{
-			"cortex": {
-				Command: "/usr/bin/cortexd",
-				Args:    []string{"mcp", "--ticket-id", "ticket-123"},
-			},
-		},
-	}
-
-	result, err := GenerateOpenCodeConfigContent(claudeConfig, "", AgentTypeTicketAgent, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var config OpenCodeConfigContent
-	if err := json.Unmarshal([]byte(result), &config); err != nil {
-		t.Fatalf("failed to parse result JSON: %v", err)
-	}
-
-	// Ticket agents should NOT have any agent entries
-	if len(config.Agent) != 0 {
-		t.Errorf("expected no agent entries for ticket agent, got: %d", len(config.Agent))
-	}
-
-	// No instructions when file path is empty
-	if len(config.Instructions) != 0 {
-		t.Errorf("expected no instructions, got: %v", config.Instructions)
-	}
-}
-
-func TestWriteLauncherScript_OpenCode_NoPrompt(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	params := LauncherParams{
-		AgentType: "opencode",
-		// PromptFilePath intentionally empty
-		EnvVars: map[string]string{
-			"CORTEX_TICKET_ID":        "ticket-1",
-			"OPENCODE_CONFIG_CONTENT": `{"agent":{"cortex":{"prompt":""}},"mcp":{}}`,
-		},
-	}
-
-	path, err := WriteLauncherScript(params, "opencode-noprompt", tmpDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read launcher script: %v", err)
-	}
-	script := string(data)
-
-	// Should have opencode command (no hardcoded --agent for ticket agents)
-	if !containsSubstr(script, "opencode") {
-		t.Error("expected 'opencode' in script")
-	}
-	if containsSubstr(script, "--agent") {
-		t.Error("ticket agent should not have --agent flag")
-	}
-
-	// No --prompt flag when PromptFilePath is empty
-	if containsSubstr(script, "--prompt") {
-		t.Error("expected no --prompt flag when PromptFilePath is empty")
-	}
-}
-
-func TestWriteLauncherScript_OpenCode_Resume(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	params := LauncherParams{
-		AgentType: "opencode",
-		Resume:    true,
-		EnvVars: map[string]string{
-			"CORTEX_TICKET_ID":        "ticket-1",
-			"OPENCODE_CONFIG_CONTENT": `{"agent":{"cortex":{"prompt":""}},"mcp":{}}`,
-		},
-	}
-
-	path, err := WriteLauncherScript(params, "opencode-resume", tmpDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read launcher script: %v", err)
-	}
-	script := string(data)
-
-	// Should have opencode command (no hardcoded --agent for ticket agents)
-	if !containsSubstr(script, "opencode") {
-		t.Error("expected 'opencode' in script")
-	}
-	if containsSubstr(script, "--agent") {
-		t.Error("ticket agent should not have --agent flag")
-	}
-
-	// --resume should NOT be in the script (OpenCode doesn't support it)
-	if containsSubstr(script, "--resume") {
-		t.Error("opencode should not have --resume flag (not supported by design)")
-	}
-}
-
-func TestWriteLauncherScript_OpenCode_WithModelArg(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	params := LauncherParams{
-		AgentType:      "opencode",
-		PromptFilePath: "/tmp/cortex-prompt-test.txt",
-		AgentArgs:      []string{"-m", "anthropic/claude-sonnet-4"},
-		EnvVars: map[string]string{
-			"CORTEX_TICKET_ID":        "ticket-1",
-			"OPENCODE_CONFIG_CONTENT": `{"agent":{"cortex":{"prompt":"test"}},"mcp":{}}`,
-		},
-		CleanupFiles: []string{"/tmp/cortex-prompt-test.txt"},
-	}
-
-	path, err := WriteLauncherScript(params, "opencode-model", tmpDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read launcher script: %v", err)
-	}
-	script := string(data)
-
-	// Verify model arg flows through to the opencode command
-	if !containsSubstr(script, "'-m'") {
-		t.Error("expected '-m' flag in script from AgentArgs")
-	}
-	if !containsSubstr(script, "'anthropic/claude-sonnet-4'") {
-		t.Error("expected 'anthropic/claude-sonnet-4' model value in script from AgentArgs")
-	}
 }
