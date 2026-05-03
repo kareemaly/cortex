@@ -30,12 +30,12 @@ type TicketResponse struct {
 	Repo  string `json:"repo,omitempty"`
 	Path  string `json:"path,omitempty"`
 	// ConclusionID is the linked conclusion ID once the ticket is concluded.
-	ConclusionID string `json:"conclusion_id,omitempty"`
-	References []string   `json:"references,omitempty"`
-	Status     string     `json:"status"`
-	Created    time.Time  `json:"created"`
-	Updated    time.Time  `json:"updated"`
-	Due        *time.Time `json:"due,omitempty"`
+	ConclusionID string     `json:"conclusion_id,omitempty"`
+	References   []string   `json:"references,omitempty"`
+	Status       string     `json:"status"`
+	Created      time.Time  `json:"created"`
+	Updated      time.Time  `json:"updated"`
+	Due          *time.Time `json:"due,omitempty"`
 }
 
 // TicketSummary is a brief view of a ticket for lists.

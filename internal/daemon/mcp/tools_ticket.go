@@ -64,18 +64,18 @@ func (s *Server) handleConcludeSession(
 // ticketResponseToOutput converts an SDK TicketResponse to an MCP TicketOutput.
 func ticketResponseToOutput(r *types.TicketResponse) TicketOutput {
 	return TicketOutput{
-		ID:         r.ID,
-		Type:       r.Type,
-		Title:      r.Title,
-		Body:       r.Body,
-		Repo:       r.Repo,
-		Path:       r.Path,
+		ID:           r.ID,
+		Type:         r.Type,
+		Title:        r.Title,
+		Body:         r.Body,
+		Repo:         r.Repo,
+		Path:         r.Path,
 		ConclusionID: r.ConclusionID,
-		References: r.References,
-		Status:     r.Status,
-		Created:    r.Created,
-		Updated:    r.Updated,
-		Due:        r.Due,
+		References:   r.References,
+		Status:       r.Status,
+		Created:      r.Created,
+		Updated:      r.Updated,
+		Due:          r.Due,
 	}
 }
 

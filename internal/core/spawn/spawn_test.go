@@ -2,7 +2,7 @@ package spawn
 
 import (
 	"context"
-"errors"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -177,8 +177,6 @@ func (m *mockSessionStore) CreateCollab(collabID, prompt, agent, tmuxWindow stri
 	m.sessions[sess.SessionID] = sess
 	return sess, nil
 }
-
-
 
 // mockTmuxManager implements TmuxManagerInterface for testing.
 type mockTmuxManager struct {
@@ -1002,8 +1000,8 @@ func TestWriteLauncherScript_BareResume(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	spec := agentruntime.LaunchSpec{
-		Command: "claude",
-		Args:    []string{"--resume", "--mcp-config", "/tmp/cortex-mcp-test.json"},
+		Command:      "claude",
+		Args:         []string{"--resume", "--mcp-config", "/tmp/cortex-mcp-test.json"},
 		CleanupPaths: []string{"/tmp/cortex-mcp-test.json"},
 	}
 

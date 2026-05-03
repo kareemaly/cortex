@@ -27,18 +27,18 @@ func ToSessionResponse(s *session.Session) SessionResponse {
 // ToTicketResponse converts a ticket.Ticket and status to TicketResponse.
 func ToTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
 	return TicketResponse{
-		ID:         t.ID,
-		Type:       t.Type,
-		Title:      t.Title,
-		Body:       t.Body,
-		Repo:       t.Repo,
-		Path:       t.Path,
+		ID:           t.ID,
+		Type:         t.Type,
+		Title:        t.Title,
+		Body:         t.Body,
+		Repo:         t.Repo,
+		Path:         t.Path,
 		ConclusionID: t.ConclusionID,
-		References: t.References,
-		Status:     string(status),
-		Created:    t.Created,
-		Updated:    t.Updated,
-		Due:        t.Due,
+		References:   t.References,
+		Status:       string(status),
+		Created:      t.Created,
+		Updated:      t.Updated,
+		Due:          t.Due,
 	}
 }
 

@@ -35,11 +35,11 @@ type TicketMeta struct {
 	Repo  string `yaml:"repo,omitempty"`
 	Path  string `yaml:"path,omitempty"`
 	// ConclusionID stores the linked conclusion ID once the ticket is concluded.
-	ConclusionID string `yaml:"conclusion_id,omitempty"`
-	References []string   `yaml:"references,omitempty"`
-	Due        *time.Time `yaml:"due,omitempty"`
-	Created    time.Time  `yaml:"created"`
-	Updated    time.Time  `yaml:"updated"`
+	ConclusionID string     `yaml:"conclusion_id,omitempty"`
+	References   []string   `yaml:"references,omitempty"`
+	Due          *time.Time `yaml:"due,omitempty"`
+	Created      time.Time  `yaml:"created"`
+	Updated      time.Time  `yaml:"updated"`
 }
 
 // Ticket represents a work item with metadata and body.

@@ -457,7 +457,7 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 					s.logWarn("cleanup: failed to remove temp file", "path", path, "error", rmErr)
 				}
 			}
-			os.Remove(launcherPath)
+			_ = os.Remove(launcherPath)
 		}
 		return &SpawnResult{
 			Success: false,
@@ -568,17 +568,6 @@ func (s *Spawner) cleanupOnFailure(_ context.Context, agentType AgentType, ticke
 			s.logWarn("cleanup: failed to remove temp file", "path", path, "error", err)
 		}
 	}
-}
-
-// nonEmptyStrings filters out empty strings from the given values.
-func nonEmptyStrings(values ...string) []string {
-	result := make([]string, 0, len(values))
-	for _, v := range values {
-		if v != "" {
-			result = append(result, v)
-		}
-	}
-	return result
 }
 
 // adapterFor returns an agentruntime adapter for the given agent string.

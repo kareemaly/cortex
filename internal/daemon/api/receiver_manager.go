@@ -23,9 +23,9 @@ type receiverEntry struct {
 // ReceiverManager wraps per-agent ingest receivers and provides
 // normalized event access by Cortex session UUID (Event.ID).
 type ReceiverManager struct {
-	receivers   map[agentruntime.AgentKind]*receiverEntry
-	cache       sync.Map   // map[string]agentruntime.Event, key = Event.ID (Cortex session UUID)
-	logger      *slog.Logger
+	receivers map[agentruntime.AgentKind]*receiverEntry
+	cache     sync.Map // map[string]agentruntime.Event, key = Event.ID (Cortex session UUID)
+	logger    *slog.Logger
 }
 
 // NewReceiverManager creates receivers for claude, codex, and opencode.
