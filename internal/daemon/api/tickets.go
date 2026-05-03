@@ -736,10 +736,10 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		ConclusionMgr:   h.deps.ConclusionStoreManager,
 	})
 
-	// Update ticket with session back-reference
+	// Update ticket with conclusion back-reference
 	if conclusionID != "" {
-		if _, setErr := store.SetSession(id, conclusionID); setErr != nil {
-			h.deps.Logger.Warn("failed to set session back-reference", "error", setErr)
+		if _, setErr := store.SetConclusionID(id, conclusionID); setErr != nil {
+			h.deps.Logger.Warn("failed to set conclusion back-reference", "error", setErr)
 		}
 	}
 

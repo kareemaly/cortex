@@ -70,7 +70,7 @@ func ticketResponseToOutput(r *types.TicketResponse) TicketOutput {
 		Body:       r.Body,
 		Repo:       r.Repo,
 		Path:       r.Path,
-		Session:    r.Session,
+		ConclusionID: r.ConclusionID,
 		References: r.References,
 		Status:     r.Status,
 		Created:    r.Created,

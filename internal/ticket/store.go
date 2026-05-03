@@ -160,7 +160,7 @@ func (s *Store) Update(id string, title, body *string, references *[]string) (*T
 	return ticket, nil
 }
 
-func (s *Store) SetSession(id string, sessionID string) (*Ticket, error) {
+func (s *Store) SetConclusionID(id string, conclusionID string) (*Ticket, error) {
 	mu := s.ticketMu(id)
 	mu.Lock()
 	defer mu.Unlock()
@@ -175,7 +175,7 @@ func (s *Store) SetSession(id string, sessionID string) (*Ticket, error) {
 		return nil, err
 	}
 
-	ticket.Session = sessionID
+	ticket.ConclusionID = conclusionID
 	ticket.Updated = time.Now().UTC()
 
 	if err := s.writeIndex(entityDir, ticket); err != nil {

@@ -165,7 +165,7 @@ type TicketOutput struct {
 	Body       string            `json:"body"`
 	Repo       string            `json:"repo,omitempty"`
 	Path       string            `json:"path,omitempty"`
-	Session    string            `json:"session,omitempty"`
+	ConclusionID string          `json:"conclusion_id,omitempty"`
 	References []string          `json:"references,omitempty"`
 	Status     string            `json:"status"`
 	Created    time.Time         `json:"created"`

@@ -34,8 +34,8 @@ type TicketMeta struct {
 	Type  string `yaml:"type"`
 	Repo  string `yaml:"repo,omitempty"`
 	Path  string `yaml:"path,omitempty"`
-	// Session stores the linked conclusion ID once the ticket is concluded.
-	Session    string     `yaml:"session,omitempty"`
+	// ConclusionID stores the linked conclusion ID once the ticket is concluded.
+	ConclusionID string `yaml:"conclusion_id,omitempty"`
 	References []string   `yaml:"references,omitempty"`
 	Due        *time.Time `yaml:"due,omitempty"`
 	Created    time.Time  `yaml:"created"`

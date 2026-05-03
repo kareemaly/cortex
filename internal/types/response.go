@@ -29,8 +29,8 @@ type TicketResponse struct {
 	Body  string `json:"body"`
 	Repo  string `json:"repo,omitempty"`
 	Path  string `json:"path,omitempty"`
-	// Session stores the linked conclusion ID once the ticket is concluded.
-	Session    string     `json:"session,omitempty"`
+	// ConclusionID is the linked conclusion ID once the ticket is concluded.
+	ConclusionID string `json:"conclusion_id,omitempty"`
 	References []string   `json:"references,omitempty"`
 	Status     string     `json:"status"`
 	Created    time.Time  `json:"created"`

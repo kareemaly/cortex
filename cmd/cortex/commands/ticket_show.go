@@ -37,8 +37,8 @@ var ticketShowCmd = &cobra.Command{
 
 		var conclusionResp *sdk.ConclusionResponse
 		var conclusionWarning string
-		if ticketResp.Session != "" {
-			conclusionResp, err = client.GetConclusion(ticketResp.Session)
+		if ticketResp.ConclusionID != "" {
+			conclusionResp, err = client.GetConclusion(ticketResp.ConclusionID)
 			if err != nil {
 				conclusionWarning = err.Error()
 			}
@@ -116,10 +116,10 @@ func buildTicketOverview(ticketResp *sdk.TicketResponse, ticketSummary *sdk.Tick
 	}
 
 	b.WriteString("\n## Linked Conclusion\n")
-	if ticketResp.Session == "" {
+	if ticketResp.ConclusionID == "" {
 		b.WriteString("- Linked conclusion: none\n")
 	} else {
-		b.WriteString(fmt.Sprintf("- ID: `%s`\n", ticketResp.Session))
+		b.WriteString(fmt.Sprintf("- ID: `%s`\n", ticketResp.ConclusionID))
 		if conclusionResp != nil {
 			b.WriteString(fmt.Sprintf("- Type: `%s`\n", conclusionResp.Type))
 			b.WriteString(fmt.Sprintf("- Rejected: %s\n", yesNo(conclusionResp.Rejected)))
@@ -140,7 +140,7 @@ func buildTicketOverview(ticketResp *sdk.TicketResponse, ticketSummary *sdk.Tick
 
 func buildLinkedConclusionTab(ticketResp *sdk.TicketResponse, conclusionResp *sdk.ConclusionResponse, conclusionWarning string) string {
 	if conclusionResp == nil {
-		return fmt.Sprintf("Unable to load linked conclusion `%s`.\n\n%s", ticketResp.Session, conclusionWarning)
+		return fmt.Sprintf("Unable to load linked conclusion `%s`.\n\n%s", ticketResp.ConclusionID, conclusionWarning)
 	}
 
 	var b strings.Builder

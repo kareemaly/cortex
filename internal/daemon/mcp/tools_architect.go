@@ -157,11 +157,11 @@ func (s *Server) handleReadTicket(
 
 	out := ticketResponseToOutput(resp)
 
-	if resp.Session != "" {
-		conclusion, err := s.sdkClient.GetConclusion(resp.Session)
+	if resp.ConclusionID != "" {
+		conclusion, err := s.sdkClient.GetConclusion(resp.ConclusionID)
 		if err != nil {
 			if s.config.Logger != nil {
-				s.config.Logger.Warn("failed to fetch conclusion for ticket", "ticket_id", input.ID, "conclusion_id", resp.Session, "error", err)
+				s.config.Logger.Warn("failed to fetch conclusion for ticket", "ticket_id", input.ID, "conclusion_id", resp.ConclusionID, "error", err)
 			}
 		} else {
 			startedAtStr := ""
@@ -723,8 +723,8 @@ func (s *Server) handleSearch(
 			continue
 		}
 		out := ticketResponseToOutput(resp)
-		if resp.Session != "" {
-			conclusion, err := s.sdkClient.GetConclusion(resp.Session)
+		if resp.ConclusionID != "" {
+			conclusion, err := s.sdkClient.GetConclusion(resp.ConclusionID)
 			if err == nil {
 				startedAtStr := ""
 				if !conclusion.StartedAt.IsZero() {
