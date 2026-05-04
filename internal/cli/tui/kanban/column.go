@@ -293,23 +293,8 @@ func (c *Column) View(width int, isActive bool, maxHeight int, repoColors map[st
 	return columnStyle.Width(width).Height(maxHeight).Render(result)
 }
 
-// agentStatusIcon returns the icon character for the agent's current status.
-func agentStatusIcon(t sdk.TicketSummary) string {
-	// Orphaned sessions get a distinct icon.
-	if t.IsOrphaned {
-		return status.OrphanedIcon
-	}
-
-	if t.AgentStatus == nil {
-		return status.Icon("")
-	}
-
-	return status.Icon(*t.AgentStatus)
-}
-
-// agentStatusLabel returns the icon + truncated tool name (unstyled) for the metadata line.
 func agentStatusLabel(t sdk.TicketSummary) string {
-	icon := agentStatusIcon(t)
+	icon := status.TicketIcon(t)
 	if t.IsOrphaned {
 		return icon + " orphaned"
 	}

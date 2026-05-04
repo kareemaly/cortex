@@ -510,6 +510,7 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		CortexdPath:    h.deps.CortexdPath,
 		DefaultsDir:    h.deps.DefaultsDir,
 		HubEventSource: hubEventSource(h.deps.ReceiverManager),
+		DaemonEndpoint: h.deps.DaemonEndpoint,
 	})
 	if err != nil {
 		switch {

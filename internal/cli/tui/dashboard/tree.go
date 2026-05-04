@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
-	"github.com/kareemaly/cortex/internal/cli/tui/status"
 )
 
 func (m *Model) rebuildRows() {
@@ -70,7 +69,7 @@ func (m *Model) rebuildRows() {
 			if pd.sessions != nil {
 				var collabSessions []sdk.SessionListItem
 				for _, s := range pd.sessions.Sessions {
-					if s.SessionType == "collab" {
+					if s.SessionType == "collab" && s.Status != "ended" {
 						collabSessions = append(collabSessions, s)
 					}
 				}
@@ -217,16 +216,6 @@ func (m *Model) ensureCursorVisible(viewHeight int) {
 	if m.cursor >= m.scrollOffset+viewHeight {
 		m.scrollOffset = m.cursor - viewHeight + 1
 	}
-}
-
-func agentStatusIcon(t sdk.TicketSummary) string {
-	if t.IsOrphaned {
-		return status.OrphanedIcon
-	}
-	if t.AgentStatus == nil {
-		return status.Icon("")
-	}
-	return status.Icon(*t.AgentStatus)
 }
 
 func formatDuration(d time.Duration) string {

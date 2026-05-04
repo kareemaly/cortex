@@ -224,6 +224,7 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 		Logger:         h.deps.Logger,
 		DefaultsDir:    h.deps.DefaultsDir,
 		HubEventSource: hubEventSource(h.deps.ReceiverManager),
+		DaemonEndpoint: h.deps.DaemonEndpoint,
 	})
 
 	var result *spawn.SpawnResult

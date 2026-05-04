@@ -52,6 +52,13 @@ func (pd projectData) isActive() bool {
 			}
 		}
 	}
+	if pd.sessions != nil {
+		for _, s := range pd.sessions.Sessions {
+			if s.SessionType == "collab" && s.Status != "ended" {
+				return true
+			}
+		}
+	}
 	return false
 }
 

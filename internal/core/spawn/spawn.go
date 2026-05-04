@@ -73,6 +73,11 @@ type Dependencies struct {
 	// HubEventSource, when non-nil, supplies per-session Hub event streams to
 	// the supervisor. The supervisor forwards these to /agent/status → SSE.
 	HubEventSource func(ctx context.Context, sessionID string) <-chan agent.HubEvent
+
+	// DaemonEndpoint is the base daemon URL (e.g. "http://127.0.0.1:4200").
+	// Used to install agentruntime hook commands at spawn time so hooks always
+	// match the running daemon's bind address and port.
+	DaemonEndpoint string
 }
 
 // Spawner handles spawning agent sessions.
@@ -259,6 +264,8 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		return nil, err
 	}
 
+	s.ensureAgentHooks(ctx, adapter, req.Agent, req.EnvVars)
+
 	startReq := agentruntime.StartRequest{
 		ID:           sessionIDForStatus,
 		Agent:        s.agentKind(req.Agent),
@@ -375,6 +382,8 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	if err != nil {
 		return nil, err
 	}
+
+	s.ensureAgentHooks(ctx, adapter, req.Agent, req.EnvVars)
 
 	cortexEnv := map[string]string{
 		"CORTEX_STARTED_AT": startedAt,
@@ -646,4 +655,42 @@ func mergeEnvMaps(cortexEnv, variantEnv map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+// ensureAgentHooks installs agentruntime hook commands for the given agent.
+// Idempotent — only writes to the agent's config file when hooks are missing
+// or the endpoint has changed. Failures are logged but never block the spawn.
+func (s *Spawner) ensureAgentHooks(ctx context.Context, adapter agentruntime.Adapter, agent string, envVars map[string]string) {
+	if s.deps.DaemonEndpoint == "" {
+		s.logWarn("hook setup skipped: no daemon endpoint configured")
+		return
+	}
+
+	hookEndpoint := s.deps.DaemonEndpoint + "/hook"
+
+	var hook agentruntime.HookCommand
+	var configRoot string
+
+	switch agent {
+	case "claude":
+		hook = claude.HookCommand(hookEndpoint)
+	case "codex":
+		hook = codex.HookCommand(hookEndpoint)
+		if ch, ok := envVars["CODEX_HOME"]; ok && ch != "" {
+			configRoot = ch
+		}
+	case "opencode":
+		hook = agentruntime.HookCommand{Endpoint: hookEndpoint}
+	default:
+		return
+	}
+
+	_, err := adapter.EnsureSetup(ctx, agentruntime.SetupRequest{
+		Marker:     "cortex",
+		Hook:       hook,
+		ConfigRoot: configRoot,
+	})
+	if err != nil {
+		s.logWarn("hook setup failed", "agent", agent, "error", err)
+	}
 }

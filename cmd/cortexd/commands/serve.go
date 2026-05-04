@@ -106,6 +106,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		SupervisorCtx:          ctx,
 		DefaultsDir:            filepath.Join(homeDir, ".cortex", "defaults", "main"),
 		ReceiverManager:        receiverManager,
+		DaemonEndpoint:         fmt.Sprintf("http://%s:%d", cfg.BindAddress, cfg.Port),
 	}
 
 	// Create and run server

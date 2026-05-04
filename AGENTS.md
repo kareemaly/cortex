@@ -65,6 +65,7 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 - **Agent status supervision**: Per-session supervisor per spawned agent, wired via `startAgentSupervisor` in `internal/core/spawn/supervisor.go`. **Hub is the sole status source — transcript parsing has been removed.** The supervisor does two things: (1) subscribe to Hub events for this session and forward them to `/agent/status` → SSE; (2) monitor liveness (file stat) and call `DELETE /sessions/{id}` when the agent disappears. Supervisors bind to daemon-root `SupervisorCtx` so they outlive the HTTP spawn handler. Sessions route by canonical `SessionID` UUID everywhere (store, events, `/agent/status`).
 - **Agent status from hooks**: `ReceiverManager` in `internal/daemon/api/receiver_manager.go` wraps per-agent `ingest.Receiver` (from `agentruntime`), maintaining an in-memory cache (`sync.Map`) keyed by `Event.ID` (Cortex session UUID). Hook payloads POST to `POST /hook/{agent}` (global, no architect header). The event loop subscribes to all receiver hubs and populates the cache by `Event.ID`. API responses overlay cached status/tool on ticket summaries and session lists. Per-session supervisors subscribe via `ReceiverManager.EventsFor(ctx, cortexSessionID)` which uses `receiver.Hub().Subscribe(Filter{ID: cortexSessionID})` to forward Hub events to SSE in real time.
+- **Hook installation at spawn time**: `ensureAgentHooks` in `internal/core/spawn/spawn.go` installs agentruntime hook commands into each agent's config file before `PrepareLaunch`. Idempotent — only writes when missing or endpoint changed. Uses `Dependencies.DaemonEndpoint` (set from daemon `bind_address` + `port`) so hooks always match the running daemon. Respects per-variant paths like `CODEX_HOME`. Hooks are no longer installed during `cortex init`.
 
 ## Anti-Patterns
 
@@ -140,7 +141,7 @@ Agent variant resolution always merges global (`settings.yaml`) + project (`cort
 
 | Command | Description |
 |---------|-------------|
-| `cortex init <name>` | Initialize architect workspace in `./<name>/` (also installs agent hooks) |
+| `cortex init <name>` | Initialize architect workspace in `./<name>/` |
 | `cortex architect list` | List all registered architects (TUI or table) |
 | `cortex architect start [name] [--mode fresh\|resume]` | Start/attach architect session |
 | `cortex architect show [name]` | Open architect project TUI |

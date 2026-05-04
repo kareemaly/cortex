@@ -201,6 +201,8 @@ func (m Model) renderProjectRow(r row, selected bool) string {
 		archBadge = architectStatusBadge(pd.architect.Session)
 	}
 
+	actBadge := activityBadge(pd)
+
 	counts := ""
 	if pd.project.Counts != nil {
 		c := pd.project.Counts
@@ -223,16 +225,21 @@ func (m Model) renderProjectRow(r row, selected bool) string {
 		return staleStyle.Render(line)
 	}
 
+	isActive := pd.isActive()
+
 	if selected {
-		plainLine := fmt.Sprintf("%s%s %s%s %s", indent, indicator, title, archBadge, counts)
+		plainLine := fmt.Sprintf("%s%s %s%s%s %s", indent, indicator, title, archBadge, actBadge, counts)
 		return selectedStyle.Render(plainLine)
 	}
 
 	if architectOrphaned {
-		return indent + orphanedIconStyle.Render(indicator) + " " + projectStyle.Render(title) + orphanedIconStyle.Render(archBadge) + " " + countsStyle.Render(counts)
+		return indent + orphanedIconStyle.Render(indicator) + " " + projectStyle.Render(title) + orphanedIconStyle.Render(archBadge) + orphanedIconStyle.Render(actBadge) + " " + countsStyle.Render(counts)
 	}
 	if architectActive {
-		return indent + activeIconStyle.Render(indicator) + " " + projectStyle.Render(title) + activeIconStyle.Render(archBadge) + " " + countsStyle.Render(counts)
+		return indent + activeIconStyle.Render(indicator) + " " + projectStyle.Render(title) + activeIconStyle.Render(archBadge) + activeIconStyle.Render(actBadge) + " " + countsStyle.Render(counts)
+	}
+	if isActive {
+		return indent + activeIconStyle.Render(indicator) + " " + projectStyle.Render(title) + activeIconStyle.Render(actBadge) + " " + countsStyle.Render(counts)
 	}
 	return indent + mutedStyleRender.Render(indicator) + " " + dimmedProjectStyle.Render(title) + " " + countsStyle.Render(counts)
 }
@@ -273,6 +280,50 @@ func architectStatusBadge(sess *sdk.ArchitectSessionResponse) string {
 	return fmt.Sprintf(" [arch: %s]", dur)
 }
 
+func activityBadge(pd projectData) string {
+	if pd.tickets == nil && pd.sessions == nil {
+		return ""
+	}
+
+	var workerCount, collabCount int
+	if pd.tickets != nil {
+		for _, t := range pd.tickets.Progress {
+			if t.HasActiveSession {
+				workerCount++
+			}
+		}
+	}
+	if pd.sessions != nil {
+		for _, s := range pd.sessions.Sessions {
+			if s.SessionType == "collab" && s.Status != "ended" {
+				collabCount++
+			}
+		}
+	}
+
+	if workerCount == 0 && collabCount == 0 {
+		return ""
+	}
+
+	var parts []string
+	if workerCount > 0 {
+		if workerCount == 1 {
+			parts = append(parts, "1 worker")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d workers", workerCount))
+		}
+	}
+	if collabCount > 0 {
+		if collabCount == 1 {
+			parts = append(parts, "1 collab")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d collabs", collabCount))
+		}
+	}
+
+	return fmt.Sprintf(" [%s]", strings.Join(parts, " · "))
+}
+
 func (m Model) renderSessionRow(r row, selected bool) string {
 	pd := m.projects[r.projectIndex]
 	indent := "    "
@@ -298,15 +349,24 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 		nameWidth := m.width - len(indent) - 2 - 1 - agentLabelLen - 1 - len(badge) - 1 - len(dur)
 		name := truncateToWidth(session.TicketTitle, nameWidth)
 
-		icon := "●"
+		icon := status.Icon(session.Status)
 		styledIcon := activeIconStyle.Render(icon)
+		if status.IsEnded(session.Status) {
+			styledIcon = status.ApplyEnded(session.Status, icon)
+		}
 		badgeStyled := progressBadgeStyle.Render(badge)
+		if status.IsEnded(session.Status) {
+			badgeStyled = status.ApplyEnded(session.Status, badgeStyled)
+		}
 
 		if selected {
 			plain := fmt.Sprintf("%s%s %s %s %s %s", indent, icon, agentLabel, name, badge, dur)
 			return selectedStyle.Render(plain)
 		}
-
+		if status.IsEnded(session.Status) {
+			return status.ApplyEnded(session.Status,
+				fmt.Sprintf("%s%s %s %s %s %s", indent, styledIcon, agentLabel, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur)))
+		}
 		if agentLabelLen > 0 {
 			return fmt.Sprintf("%s%s %s %s %s %s", indent, styledIcon, agentLabel, sessionStyle.Render(name), badgeStyled, durationStyle.Render(dur))
 		}
@@ -318,7 +378,7 @@ func (m Model) renderSessionRow(r row, selected bool) string {
 		return indent + "???"
 	}
 
-	icon := agentStatusIcon(*ticket)
+	icon := status.TicketIcon(*ticket)
 	styledIcon := activeIconStyle.Render(icon)
 	if ticket.IsOrphaned {
 		styledIcon = orphanedIconStyle.Render(icon)

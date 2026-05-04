@@ -3,7 +3,10 @@
 // canonical status string (see session.AgentStatus).
 package status
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/kareemaly/cortex/internal/types"
+)
 
 // OrphanedIcon is rendered when a session tracking marker exists but the
 // process has gone away (see ticket orphan detection).
@@ -48,4 +51,17 @@ func ApplyEnded(status, rendered string) string {
 		return endedStyle.Render(rendered)
 	}
 	return rendered
+}
+
+// TicketIcon returns the status icon for a ticket summary, falling back to
+// the orphaned icon when the session has been orphaned.
+func TicketIcon(t types.TicketSummary) string {
+	if t.IsOrphaned {
+		return OrphanedIcon
+	}
+	s := ""
+	if t.AgentStatus != nil {
+		s = *t.AgentStatus
+	}
+	return Icon(s)
 }

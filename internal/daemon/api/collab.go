@@ -121,6 +121,7 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		Logger:         h.deps.Logger,
 		DefaultsDir:    h.deps.DefaultsDir,
 		HubEventSource: hubEventSource(h.deps.ReceiverManager),
+		DaemonEndpoint: h.deps.DaemonEndpoint,
 	})
 
 	result, err := spawner.SpawnCollab(r.Context(), spawn.CollabSpawnRequest{

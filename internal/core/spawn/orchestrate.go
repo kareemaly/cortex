@@ -65,6 +65,10 @@ type OrchestrateDeps struct {
 	// HubEventSource, when non-nil, supplies per-session Hub event streams to
 	// the supervisor. The supervisor forwards these to /agent/status → SSE.
 	HubEventSource func(ctx context.Context, agentSessionID string) <-chan agent.HubEvent
+
+	// DaemonEndpoint is the base daemon URL (e.g. "http://127.0.0.1:4200").
+	// Used to install agentruntime hook commands at spawn time.
+	DaemonEndpoint string
 }
 
 // Orchestrate is the single source of truth for spawning ticket agent sessions.
@@ -145,6 +149,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 		Logger:         deps.Logger,
 		DefaultsDir:    deps.DefaultsDir,
 		HubEventSource: deps.HubEventSource,
+		DaemonEndpoint: deps.DaemonEndpoint,
 	})
 
 	buildSpawnReq := func() SpawnRequest {

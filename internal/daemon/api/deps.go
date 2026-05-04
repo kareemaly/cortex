@@ -25,4 +25,5 @@ type Dependencies struct {
 	CortexdPath            string
 	DefaultsDir            string
 	ReceiverManager        *ReceiverManager
+	DaemonEndpoint         string // e.g. "http://127.0.0.1:4200", used for hook installation at spawn time
 }
