@@ -271,7 +271,9 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 
 	if req.AgentType == AgentTypeArchitect {
 		if req.Agent == "opencode" {
-			startReq.OpenCodeProfile = "cortex"
+			if !hasAgentFlag(startReq.Args) {
+				startReq.Args = append([]string{"--agent", "cortex"}, startReq.Args...)
+			}
 			startReq.OpenCodeAgentConfig = map[string]agentruntime.OpenCodeAgentConfig{
 				"cortex": {
 					Description: "Cortex architect agent",
@@ -418,7 +420,9 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 
 	if req.AgentType == AgentTypeArchitect {
 		if req.Agent == "opencode" {
-			startReq.OpenCodeProfile = "cortex"
+			if !hasAgentFlag(startReq.Args) {
+				startReq.Args = append([]string{"--agent", "cortex"}, startReq.Args...)
+			}
 		}
 	}
 
@@ -621,6 +625,15 @@ func (s *Spawner) buildCortexEnv(req SpawnRequest, startedAt string) map[string]
 		env["CORTEX_REPO"] = req.Repo
 	}
 	return env
+}
+
+func hasAgentFlag(args []string) bool {
+	for _, a := range args {
+		if a == "--agent" {
+			return true
+		}
+	}
+	return false
 }
 
 // mergeEnvMaps merges cortex env with variant env, where variant wins.
