@@ -87,6 +87,7 @@ type UpdateTicketInput struct {
 	ID         string    `json:"id" jsonschema:"The ticket ID to update"`
 	Title      *string   `json:"title,omitempty" jsonschema:"New title (optional)"`
 	Body       *string   `json:"body,omitempty" jsonschema:"New body (optional)"`
+	DueDate    *string   `json:"dueDate,omitempty" jsonschema:"Optional RFC3339 due date. Set to an RFC3339 timestamp to update the due date, or to an empty string to clear it."`
 	References *[]string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (optional, full replacement — plain ticket IDs only, no prefix scheme)"`
 }
 
@@ -122,17 +123,6 @@ type ListVariantsInput struct{}
 // ListVariantsOutput is the output for the listVariants tool.
 type ListVariantsOutput struct {
 	Variants []string `json:"variants"`
-}
-
-// UpdateDueDateInput is the input for the updateDueDate tool.
-type UpdateDueDateInput struct {
-	ID      string `json:"id" jsonschema:"The ticket ID (required)"`
-	DueDate string `json:"due_date" jsonschema:"The due date in RFC3339 format (required, e.g., '2024-12-31T23:59:59Z')"`
-}
-
-// ClearDueDateInput is the input for the clearDueDate tool.
-type ClearDueDateInput struct {
-	ID string `json:"id" jsonschema:"The ticket ID (required)"`
 }
 
 // ConcludeSessionInput is the input for the concludeSession tool.
@@ -234,16 +224,6 @@ type ConcludeSessionOutput struct {
 	Success  bool   `json:"success"`
 	TicketID string `json:"ticket_id"`
 	Message  string `json:"message,omitempty"`
-}
-
-// UpdateDueDateOutput is the output for the updateDueDate tool.
-type UpdateDueDateOutput struct {
-	Ticket TicketOutput `json:"ticket"`
-}
-
-// ClearDueDateOutput is the output for the clearDueDate tool.
-type ClearDueDateOutput struct {
-	Ticket TicketOutput `json:"ticket"`
 }
 
 // ArchitectConcludeOutput is the output for the architect concludeSession tool.

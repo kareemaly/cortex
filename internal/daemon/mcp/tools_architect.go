@@ -39,7 +39,7 @@ func (s *Server) registerArchitectTools() {
 	// Update ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
-		Description: "Update ticket fields. Only accepts: id (required), title, body, references. Use editTicketBody for targeted body edits; keep updateTicket for full rewrites. Does NOT support updating type, repo, path, status, due_date, or any other fields.",
+		Description: "Update mutable ticket fields. Accepts: id (required), title, body, dueDate, references. dueDate must be RFC3339 when set, and an explicit empty string clears it. Use editTicketBody for targeted body edits; keep updateTicket for full-body rewrites. Does NOT support updating type, repo, path, status, or any other fields.",
 	}, s.handleUpdateTicket)
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -70,18 +70,6 @@ func (s *Server) registerArchitectTools() {
 		Name:        "spawnSession",
 		Description: "Spawn a new agent session for a ticket. Use listVariants to see available agent variant names, then pass the chosen name as the variant parameter.",
 	}, s.handleSpawnSession)
-
-	// Update due date
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "updateDueDate",
-		Description: "Set or update the due date for a ticket",
-	}, s.handleUpdateDueDate)
-
-	// Clear due date
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "clearDueDate",
-		Description: "Remove the due date from a ticket",
-	}, s.handleClearDueDate)
 
 	// List conclusions (persistent conclusion records)
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -221,7 +209,7 @@ func (s *Server) handleCreateWorkTicket(
 	}, nil
 }
 
-// handleUpdateTicket updates a ticket's title, body, and/or references via the daemon HTTP API.
+// handleUpdateTicket updates a ticket's mutable fields via the daemon HTTP API.
 func (s *Server) handleUpdateTicket(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
@@ -231,9 +219,38 @@ func (s *Server) handleUpdateTicket(
 		return nil, UpdateTicketOutput{}, NewValidationError("id", "cannot be empty")
 	}
 
-	resp, err := s.sdkClient.UpdateTicket(input.ID, input.Title, input.Body, input.References)
-	if err != nil {
-		return nil, UpdateTicketOutput{}, wrapSDKError(err)
+	var (
+		resp *sdk.TicketResponse
+		err  error
+	)
+
+	if input.Title != nil || input.Body != nil || input.References != nil {
+		resp, err = s.sdkClient.UpdateTicket(input.ID, input.Title, input.Body, input.References)
+		if err != nil {
+			return nil, UpdateTicketOutput{}, wrapSDKError(err)
+		}
+	}
+
+	if input.DueDate != nil {
+		if *input.DueDate == "" {
+			resp, err = s.sdkClient.ClearDueDate(input.ID)
+		} else {
+			dueDate, parseErr := time.Parse(time.RFC3339, *input.DueDate)
+			if parseErr != nil {
+				return nil, UpdateTicketOutput{}, NewValidationError("dueDate", "must be empty or in RFC3339 format")
+			}
+			resp, err = s.sdkClient.SetDueDate(input.ID, dueDate)
+		}
+		if err != nil {
+			return nil, UpdateTicketOutput{}, wrapSDKError(err)
+		}
+	}
+
+	if resp == nil {
+		resp, err = s.sdkClient.GetTicketByID(input.ID)
+		if err != nil {
+			return nil, UpdateTicketOutput{}, wrapSDKError(err)
+		}
 	}
 
 	return nil, UpdateTicketOutput{
@@ -439,55 +456,6 @@ func parseStateFromError(code, message string) string {
 		}
 	}
 	return "unknown"
-}
-
-// handleUpdateDueDate sets or updates the due date for a ticket.
-func (s *Server) handleUpdateDueDate(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	input UpdateDueDateInput,
-) (*mcp.CallToolResult, UpdateDueDateOutput, error) {
-	if input.ID == "" {
-		return nil, UpdateDueDateOutput{}, NewValidationError("id", "cannot be empty")
-	}
-	if input.DueDate == "" {
-		return nil, UpdateDueDateOutput{}, NewValidationError("due_date", "cannot be empty")
-	}
-
-	// Parse due date
-	dueDate, err := time.Parse(time.RFC3339, input.DueDate)
-	if err != nil {
-		return nil, UpdateDueDateOutput{}, NewValidationError("due_date", "must be in RFC3339 format")
-	}
-
-	resp, err := s.sdkClient.SetDueDate(input.ID, dueDate)
-	if err != nil {
-		return nil, UpdateDueDateOutput{}, wrapSDKError(err)
-	}
-
-	return nil, UpdateDueDateOutput{
-		Ticket: ticketResponseToOutput(resp),
-	}, nil
-}
-
-// handleClearDueDate removes the due date from a ticket.
-func (s *Server) handleClearDueDate(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	input ClearDueDateInput,
-) (*mcp.CallToolResult, ClearDueDateOutput, error) {
-	if input.ID == "" {
-		return nil, ClearDueDateOutput{}, NewValidationError("id", "cannot be empty")
-	}
-
-	resp, err := s.sdkClient.ClearDueDate(input.ID)
-	if err != nil {
-		return nil, ClearDueDateOutput{}, wrapSDKError(err)
-	}
-
-	return nil, ClearDueDateOutput{
-		Ticket: ticketResponseToOutput(resp),
-	}, nil
 }
 
 // handleListConclusions lists persistent conclusion records (metadata only, no body).

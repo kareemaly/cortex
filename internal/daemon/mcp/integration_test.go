@@ -671,6 +671,89 @@ func TestIntegration_UpdateTicket_PartialUpdate(t *testing.T) {
 	}
 }
 
+func TestIntegration_UpdateTicket_DueDateSetAndClear(t *testing.T) {
+	skipIfCI(t)
+
+	env := setupTestEnv(t)
+	defer env.cleanup()
+
+	client := newMCPTestClient(t, env)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	createResult, err := client.callTool(ctx, "createTicket", map[string]any{
+		"title": "Due date ticket",
+		"body":  "Original body",
+	})
+	if err != nil {
+		t.Fatalf("createTicket failed: %v", err)
+	}
+	created := parseToolOutput[CreateTicketOutput](t, createResult)
+
+	const dueDate = "2026-12-31T23:59:59Z"
+
+	setResult, err := client.callTool(ctx, "updateTicket", map[string]any{
+		"id":      created.Ticket.ID,
+		"dueDate": dueDate,
+	})
+	if err != nil {
+		t.Fatalf("updateTicket with dueDate failed: %v", err)
+	}
+
+	setOutput := parseToolOutput[UpdateTicketOutput](t, setResult)
+	if setOutput.Ticket.Due == nil {
+		t.Fatal("expected due date to be set")
+	}
+	if got := setOutput.Ticket.Due.Format(time.RFC3339); got != dueDate {
+		t.Errorf("expected due date %q, got %q", dueDate, got)
+	}
+
+	clearResult, err := client.callTool(ctx, "updateTicket", map[string]any{
+		"id":      created.Ticket.ID,
+		"dueDate": "",
+	})
+	if err != nil {
+		t.Fatalf("updateTicket clearing dueDate failed: %v", err)
+	}
+
+	clearOutput := parseToolOutput[UpdateTicketOutput](t, clearResult)
+	if clearOutput.Ticket.Due != nil {
+		t.Errorf("expected due date to be cleared, got %v", clearOutput.Ticket.Due)
+	}
+}
+
+func TestIntegration_UpdateTicket_InvalidDueDate(t *testing.T) {
+	skipIfCI(t)
+
+	env := setupTestEnv(t)
+	defer env.cleanup()
+
+	client := newMCPTestClient(t, env)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	createResult, err := client.callTool(ctx, "createTicket", map[string]any{
+		"title": "Invalid due date ticket",
+	})
+	if err != nil {
+		t.Fatalf("createTicket failed: %v", err)
+	}
+	created := parseToolOutput[CreateTicketOutput](t, createResult)
+
+	result, err := client.callTool(ctx, "updateTicket", map[string]any{
+		"id":      created.Ticket.ID,
+		"dueDate": "not-a-date",
+	})
+	if err != nil {
+		t.Fatalf("callTool failed: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected invalid dueDate to return an error")
+	}
+}
+
 func TestIntegration_EditTicketBody(t *testing.T) {
 	skipIfCI(t)
 

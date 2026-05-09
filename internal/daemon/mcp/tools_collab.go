@@ -17,7 +17,7 @@ func (s *Server) registerCollabTools() {
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
-		Description: "Update ticket fields. Only accepts: id (required), title, body, references. Use editTicketBody for targeted body edits; keep updateTicket for full rewrites. Does NOT support updating type, repo, path, status, due_date, or any other fields.",
+		Description: "Update mutable ticket fields. Accepts: id (required), title, body, dueDate, references. dueDate must be RFC3339 when set, and an explicit empty string clears it. Use editTicketBody for targeted body edits; keep updateTicket for full-body rewrites. Does NOT support updating type, repo, path, status, or any other fields.",
 	}, s.handleUpdateTicket)
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
