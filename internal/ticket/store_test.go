@@ -185,6 +185,94 @@ func TestStoreUpdatePartial(t *testing.T) {
 	}
 }
 
+func TestStoreEditBodyExactMatch(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Original Title", "alpha\nbeta\ngamma", "", nil, nil, "", "")
+
+	updated, err := store.EditBody(ticket.ID, "beta", "delta", false)
+	if err != nil {
+		t.Fatalf("EditBody failed: %v", err)
+	}
+
+	if updated.Body != "alpha\ndelta\ngamma" {
+		t.Errorf("body = %q, want %q", updated.Body, "alpha\ndelta\ngamma")
+	}
+}
+
+func TestStoreEditBodyWhitespaceNormalized(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Original Title", "alpha\n  beta   gamma  \ndelta", "", nil, nil, "", "")
+
+	updated, err := store.EditBody(ticket.ID, "beta gamma", "beta zeta", false)
+	if err != nil {
+		t.Fatalf("EditBody failed: %v", err)
+	}
+
+	if updated.Body != "alpha\nbeta zeta\ndelta" {
+		t.Errorf("body = %q, want %q", updated.Body, "alpha\nbeta zeta\ndelta")
+	}
+}
+
+func TestStoreEditBodyReplaceAll(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Original Title", "repeat\nx\nrepeat", "", nil, nil, "", "")
+
+	updated, err := store.EditBody(ticket.ID, "repeat", "done", true)
+	if err != nil {
+		t.Fatalf("EditBody failed: %v", err)
+	}
+
+	if updated.Body != "done\nx\ndone" {
+		t.Errorf("body = %q, want %q", updated.Body, "done\nx\ndone")
+	}
+}
+
+func TestStoreEditBodyAmbiguousWithoutReplaceAll(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Original Title", "repeat\nx\nrepeat", "", nil, nil, "", "")
+
+	_, err := store.EditBody(ticket.ID, "repeat", "done", false)
+	if err == nil {
+		t.Fatal("expected error for ambiguous match")
+	}
+
+	validationErr, ok := err.(*ValidationError)
+	if !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+	if validationErr.Field != "oldString" {
+		t.Errorf("field = %q, want %q", validationErr.Field, "oldString")
+	}
+}
+
+func TestStoreEditBodyNotFound(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ticket, _ := store.Create("Original Title", "alpha\nbeta\ngamma", "", nil, nil, "", "")
+
+	_, err := store.EditBody(ticket.ID, "missing", "delta", false)
+	if err == nil {
+		t.Fatal("expected error for missing text")
+	}
+
+	validationErr, ok := err.(*ValidationError)
+	if !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+	if validationErr.Field != "oldString" {
+		t.Errorf("field = %q, want %q", validationErr.Field, "oldString")
+	}
+}
+
 func TestStoreUpdateTitleRename(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()

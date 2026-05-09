@@ -309,6 +309,28 @@ func TestUpdateTicket(t *testing.T) {
 	}
 }
 
+func TestEditTicketBody(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	created, _ := ts.store.Create("Original Title", "alpha\n  beta   gamma  \ndelta", "", nil, nil, "", "")
+
+	body := EditTicketBodyRequest{
+		OldString: "beta gamma",
+		NewString: "beta zeta",
+	}
+
+	resp := ts.request(t, http.MethodPatch, "/tickets/"+created.ID+"/body", body)
+	defer resp.Body.Close()
+
+	expectStatus(t, resp, http.StatusOK)
+
+	result := decodeJSON[TicketResponse](t, resp)
+	if result.Body != "alpha\nbeta zeta\ndelta" {
+		t.Errorf("expected body %q, got %q", "alpha\nbeta zeta\ndelta", result.Body)
+	}
+}
+
 func TestDeleteTicket(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.Close()

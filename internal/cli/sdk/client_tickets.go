@@ -205,6 +205,45 @@ func (c *Client) UpdateTicket(id string, title, body *string, references *[]stri
 	return &result, nil
 }
 
+// EditTicketBody updates part of a ticket body by targeted replacement.
+func (c *Client) EditTicketBody(id, oldString, newString string, replaceAll bool) (*TicketResponse, error) {
+	reqBody := map[string]any{
+		"oldString": oldString,
+		"newString": newString,
+	}
+	if replaceAll {
+		reqBody["replaceAll"] = true
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, c.baseURL+"/tickets/"+id+"/body", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result TicketResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // DeleteTicket deletes a ticket by ID (status-agnostic).
 func (c *Client) DeleteTicket(id string) error {
 	current, err := c.GetTicketByID(id)

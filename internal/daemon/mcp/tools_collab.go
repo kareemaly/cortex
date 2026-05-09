@@ -17,8 +17,13 @@ func (s *Server) registerCollabTools() {
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
-		Description: "Update ticket fields. Only accepts: id (required), title, body, references. Does NOT support updating type, repo, path, status, due_date, or any other fields.",
+		Description: "Update ticket fields. Only accepts: id (required), title, body, references. Use editTicketBody for targeted body edits; keep updateTicket for full rewrites. Does NOT support updating type, repo, path, status, due_date, or any other fields.",
 	}, s.handleUpdateTicket)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "editTicketBody",
+		Description: "Edit part of a ticket body using oldString/newString replacement. Preferred over updateTicket for body edits because it avoids full-body JSON serialization issues.",
+	}, s.handleEditTicketBody)
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "createFollowUpTicket",

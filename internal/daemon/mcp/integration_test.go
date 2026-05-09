@@ -671,6 +671,41 @@ func TestIntegration_UpdateTicket_PartialUpdate(t *testing.T) {
 	}
 }
 
+func TestIntegration_EditTicketBody(t *testing.T) {
+	skipIfCI(t)
+
+	env := setupTestEnv(t)
+	defer env.cleanup()
+
+	client := newMCPTestClient(t, env)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	createResult, err := client.callTool(ctx, "createTicket", map[string]any{
+		"title": "Original Title",
+		"body":  "alpha\n  beta   gamma  \ndelta",
+	})
+	if err != nil {
+		t.Fatalf("createTicket failed: %v", err)
+	}
+	created := parseToolOutput[CreateTicketOutput](t, createResult)
+
+	result, err := client.callTool(ctx, "editTicketBody", map[string]any{
+		"id":        created.Ticket.ID,
+		"oldString": "beta gamma",
+		"newString": "beta zeta",
+	})
+	if err != nil {
+		t.Fatalf("editTicketBody failed: %v", err)
+	}
+
+	output := parseToolOutput[EditTicketBodyOutput](t, result)
+	if output.Ticket.Body != "alpha\nbeta zeta\ndelta" {
+		t.Errorf("expected body %q, got %q", "alpha\nbeta zeta\ndelta", output.Ticket.Body)
+	}
+}
+
 func TestIntegration_DeleteTicket(t *testing.T) {
 	skipIfCI(t)
 

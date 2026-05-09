@@ -294,6 +294,42 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// EditBody handles PATCH /tickets/{id}/body - edits a ticket body using targeted string replacement.
+func (h *TicketHandlers) EditBody(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetArchitectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	var req EditTicketBodyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
+		return
+	}
+
+	_, status, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	updated, err := store.EditBody(id, req.OldString, req.NewString, req.ReplaceAll)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	resp, err := ticketResponse(store, updated, status)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // Delete handles DELETE /tickets/{status}/{id} - deletes a ticket.
 func (h *TicketHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	status := chi.URLParam(r, "status")

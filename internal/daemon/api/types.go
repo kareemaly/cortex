@@ -51,6 +51,13 @@ type UpdateTicketRequest struct {
 	References *[]string `json:"references,omitempty"`
 }
 
+// EditTicketBodyRequest is the request body for targeted ticket body edits.
+type EditTicketBodyRequest struct {
+	OldString  string `json:"oldString"`
+	NewString  string `json:"newString"`
+	ReplaceAll bool   `json:"replaceAll,omitempty"`
+}
+
 // MoveTicketRequest is the request body for moving a ticket.
 type MoveTicketRequest struct {
 	To string `json:"to"`

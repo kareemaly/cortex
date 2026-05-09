@@ -90,6 +90,14 @@ type UpdateTicketInput struct {
 	References *[]string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (optional, full replacement — plain ticket IDs only, no prefix scheme)"`
 }
 
+// EditTicketBodyInput is the input for the editTicketBody tool.
+type EditTicketBodyInput struct {
+	ID         string `json:"id" jsonschema:"The ticket ID to update"`
+	OldString  string `json:"oldString" jsonschema:"The body text to find and replace (required)"`
+	NewString  string `json:"newString" jsonschema:"Replacement text. May be empty, but must differ from oldString."`
+	ReplaceAll bool   `json:"replaceAll,omitempty" jsonschema:"Replace all matches instead of requiring a unique match. Defaults to false."`
+}
+
 // DeleteTicketInput is the input for the deleteTicket tool.
 type DeleteTicketInput struct {
 	ID string `json:"id" jsonschema:"The ticket ID to delete"`
@@ -196,6 +204,8 @@ type CreateTicketOutput struct {
 type UpdateTicketOutput struct {
 	Ticket TicketOutput `json:"ticket"`
 }
+
+type EditTicketBodyOutput = UpdateTicketOutput
 
 // DeleteTicketOutput is the output for the deleteTicket tool.
 type DeleteTicketOutput struct {

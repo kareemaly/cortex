@@ -79,6 +79,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Get("/{status}/{id}", ticketHandlers.Get)
 			r.Put("/{status}/{id}", ticketHandlers.Update)
 			r.Delete("/{status}/{id}", ticketHandlers.Delete)
+			r.Patch("/{id}/body", ticketHandlers.EditBody)
 			r.Post("/{status}/{id}/move", ticketHandlers.Move)
 			r.Post("/{status}/{id}/spawn", ticketHandlers.Spawn)
 			r.Post("/{id}/focus", ticketHandlers.Focus)

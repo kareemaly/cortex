@@ -39,8 +39,13 @@ func (s *Server) registerArchitectTools() {
 	// Update ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
-		Description: "Update ticket fields. Only accepts: id (required), title, body, references. Does NOT support updating type, repo, path, status, due_date, or any other fields.",
+		Description: "Update ticket fields. Only accepts: id (required), title, body, references. Use editTicketBody for targeted body edits; keep updateTicket for full rewrites. Does NOT support updating type, repo, path, status, due_date, or any other fields.",
 	}, s.handleUpdateTicket)
+
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name:        "editTicketBody",
+		Description: "Edit part of a ticket body using oldString/newString replacement. Preferred over updateTicket for body edits because it avoids full-body JSON serialization issues.",
+	}, s.handleEditTicketBody)
 
 	// Delete ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -232,6 +237,31 @@ func (s *Server) handleUpdateTicket(
 	}
 
 	return nil, UpdateTicketOutput{
+		Ticket: ticketResponseToOutput(resp),
+	}, nil
+}
+
+func (s *Server) handleEditTicketBody(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input EditTicketBodyInput,
+) (*mcp.CallToolResult, EditTicketBodyOutput, error) {
+	if input.ID == "" {
+		return nil, EditTicketBodyOutput{}, NewValidationError("id", "cannot be empty")
+	}
+	if input.OldString == "" {
+		return nil, EditTicketBodyOutput{}, NewValidationError("oldString", "cannot be empty")
+	}
+	if input.OldString == input.NewString {
+		return nil, EditTicketBodyOutput{}, NewValidationError("newString", "must differ from oldString")
+	}
+
+	resp, err := s.sdkClient.EditTicketBody(input.ID, input.OldString, input.NewString, input.ReplaceAll)
+	if err != nil {
+		return nil, EditTicketBodyOutput{}, wrapSDKError(err)
+	}
+
+	return nil, EditTicketBodyOutput{
 		Ticket: ticketResponseToOutput(resp),
 	}, nil
 }

@@ -326,6 +326,51 @@ func TestHandleUpdateTicket(t *testing.T) {
 	}
 }
 
+func TestHandleEditTicketBody(t *testing.T) {
+	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
+	defer cleanup()
+
+	created, _ := store.Create("Original", "alpha\nbeta\nalpha", "", nil, nil, "", "")
+
+	_, output, err := server.handleEditTicketBody(context.Background(), nil, EditTicketBodyInput{
+		ID:         created.ID,
+		OldString:  "alpha",
+		NewString:  "omega",
+		ReplaceAll: true,
+	})
+	if err != nil {
+		t.Fatalf("handleEditTicketBody failed: %v", err)
+	}
+
+	if output.Ticket.Body != "omega\nbeta\nomega" {
+		t.Errorf("body = %q, want %q", output.Ticket.Body, "omega\nbeta\nomega")
+	}
+}
+
+func TestHandleEditTicketBodyRejectsAmbiguousMatch(t *testing.T) {
+	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
+	defer cleanup()
+
+	created, _ := store.Create("Original", "alpha\nbeta\nalpha", "", nil, nil, "", "")
+
+	_, _, err := server.handleEditTicketBody(context.Background(), nil, EditTicketBodyInput{
+		ID:        created.ID,
+		OldString: "alpha",
+		NewString: "omega",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected ToolError, got %T", err)
+	}
+	if toolErr.Code != ErrorCodeValidation {
+		t.Errorf("error code = %q, want %q", toolErr.Code, ErrorCodeValidation)
+	}
+}
+
 func TestHandleDeleteTicket(t *testing.T) {
 	server, store, _, cleanup := setupArchitectWithDaemon(t, true)
 	defer cleanup()
