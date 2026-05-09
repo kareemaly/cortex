@@ -388,6 +388,31 @@ func (c *Client) GetTicketByID(id string) (*TicketResponse, error) {
 	return &result, nil
 }
 
+// GetTicketDiffs returns structured git diffs for the commits attached to a ticket conclusion.
+func (c *Client) GetTicketDiffs(ticketID string) (*DiffsResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/tickets/"+ticketID+"/diffs", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result DiffsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // FocusTicket focuses the tmux window of a ticket's active session.
 func (c *Client) FocusTicket(ticketID string) error {
 	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+ticketID+"/focus", nil)

@@ -17,6 +17,9 @@ type (
 	TicketSummary            = types.TicketSummary
 	ListTicketsResponse      = types.ListTicketsResponse
 	ListAllTicketsResponse   = types.ListAllTicketsResponse
+	DiffFileResponse         = types.DiffFileResponse
+	CommitDiffResponse       = types.CommitDiffResponse
+	DiffsResponse            = types.DiffsResponse
 	ArchitectSessionResponse = types.ArchitectSessionResponse
 	ArchitectStateResponse   = types.ArchitectStateResponse
 	ArchitectSpawnResponse   = types.ArchitectSpawnResponse

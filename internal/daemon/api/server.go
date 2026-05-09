@@ -75,6 +75,7 @@ func NewRouter(deps *Dependencies, logger *slog.Logger) chi.Router {
 			r.Get("/", ticketHandlers.ListAll)
 			r.Post("/", ticketHandlers.Create)
 			r.Get("/by-id/{id}", ticketHandlers.GetByID)
+			r.Get("/{id}/diffs", ticketHandlers.GetDiffs)
 			r.Get("/{status}", ticketHandlers.ListByStatus)
 			r.Get("/{status}/{id}", ticketHandlers.Get)
 			r.Put("/{status}/{id}", ticketHandlers.Update)

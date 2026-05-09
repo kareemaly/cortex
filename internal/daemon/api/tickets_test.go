@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kareemaly/cortex/internal/conclusion"
@@ -72,6 +74,67 @@ func decode[T any](t *testing.T, resp *http.Response) T {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	return result
+}
+
+func runGitCmd(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Test User",
+		"GIT_AUTHOR_EMAIL=test@example.com",
+		"GIT_COMMITTER_NAME=Test User",
+		"GIT_COMMITTER_EMAIL=test@example.com",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
+	}
+	return string(out)
+}
+
+func createGitRepoWithCommit(t *testing.T) (string, string) {
+	t.Helper()
+
+	repoDir := t.TempDir()
+	runGitCmd(t, repoDir, "init")
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("hello\nworld\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGitCmd(t, repoDir, "add", "file.txt")
+	runGitCmd(t, repoDir, "commit", "-m", "initial commit")
+	sha := strings.TrimSpace(runGitCmd(t, repoDir, "rev-parse", "HEAD"))
+	return repoDir, sha
+}
+
+func createGitRepoWithStructuredCommit(t *testing.T) (string, string) {
+	t.Helper()
+
+	repoDir := t.TempDir()
+	runGitCmd(t, repoDir, "init")
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("line1\nline2\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, "delete.txt"), []byte("remove me\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGitCmd(t, repoDir, "add", "file.txt", "delete.txt")
+	runGitCmd(t, repoDir, "commit", "-m", "base commit")
+
+	if err := os.WriteFile(filepath.Join(repoDir, "file.txt"), []byte("line1\nline2 changed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, "added.txt"), []byte("brand new\ncontent\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(repoDir, "delete.txt")); err != nil {
+		t.Fatal(err)
+	}
+	runGitCmd(t, repoDir, "add", "-A")
+	runGitCmd(t, repoDir, "commit", "-m", "structured diff commit")
+	sha := strings.TrimSpace(runGitCmd(t, repoDir, "rev-parse", "HEAD"))
+	return repoDir, sha
 }
 
 // --- Test server setup ---
@@ -273,6 +336,208 @@ func TestGetByID_NotFound(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 
 	assertStatus(t, resp, http.StatusNotFound)
+}
+
+func TestGetDiffs_Success(t *testing.T) {
+	ts := setupUnitServer(t)
+	defer ts.Close()
+
+	repoDir, sha := createGitRepoWithStructuredCommit(t)
+	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, repoDir, "")
+	concluded, err := ts.conclusionStore.Create(conclusion.CreateParams{
+		Type:     string(conclusion.TypeWork),
+		TicketID: created.ID,
+		Repo:     repoDir,
+		Body:     "done",
+		Commits:  []string{sha},
+	})
+	if err != nil {
+		t.Fatalf("failed to create conclusion: %v", err)
+	}
+	if _, err := ts.store.SetConclusionID(created.ID, concluded.ID); err != nil {
+		t.Fatalf("failed to set conclusion ID: %v", err)
+	}
+
+	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
+	defer func() { _ = resp.Body.Close() }()
+
+	assertStatus(t, resp, http.StatusOK)
+
+	result := decode[DiffsResponse](t, resp)
+	if result.TicketID != created.ID {
+		t.Fatalf("expected ticket ID %q, got %q", created.ID, result.TicketID)
+	}
+	if result.Repo != repoDir {
+		t.Fatalf("expected repo %q, got %q", repoDir, result.Repo)
+	}
+	if len(result.Commits) != 1 {
+		t.Fatalf("expected 1 commit diff, got %d", len(result.Commits))
+	}
+	commit := result.Commits[0]
+	if commit.SHA != sha {
+		t.Fatalf("expected SHA %q, got %q", sha, commit.SHA)
+	}
+	if commit.Subject != "structured diff commit" {
+		t.Fatalf("expected subject %q, got %q", "structured diff commit", commit.Subject)
+	}
+	if commit.AuthorName != "Test User" {
+		t.Fatalf("expected author name %q, got %q", "Test User", commit.AuthorName)
+	}
+	if len(commit.Files) != 3 {
+		t.Fatalf("expected 3 files, got %d", len(commit.Files))
+	}
+
+	byPath := make(map[string]DiffFileResponse, len(commit.Files))
+	for _, file := range commit.Files {
+		byPath[file.Path] = file
+	}
+
+	added := byPath["added.txt"]
+	if added.Status != "added" {
+		t.Fatalf("expected added.txt status added, got %q", added.Status)
+	}
+	if added.After == nil || *added.After != "brand new\ncontent\n" {
+		t.Fatalf("unexpected added.txt after content: %#v", added.After)
+	}
+	if added.Before != nil {
+		t.Fatalf("expected added.txt before to be nil")
+	}
+	if !strings.Contains(added.Patch, "+++ b/added.txt") {
+		t.Fatalf("expected added.txt patch header, got %q", added.Patch)
+	}
+
+	deleted := byPath["delete.txt"]
+	if deleted.Status != "deleted" {
+		t.Fatalf("expected delete.txt status deleted, got %q", deleted.Status)
+	}
+	if deleted.Before == nil || *deleted.Before != "remove me\n" {
+		t.Fatalf("unexpected delete.txt before content: %#v", deleted.Before)
+	}
+	if deleted.After != nil {
+		t.Fatalf("expected delete.txt after to be nil")
+	}
+
+	modified := byPath["file.txt"]
+	if modified.Status != "modified" {
+		t.Fatalf("expected file.txt status modified, got %q", modified.Status)
+	}
+	if modified.Additions != 1 || modified.Deletions != 1 {
+		t.Fatalf("expected file.txt additions/deletions to be 1/1, got %d/%d", modified.Additions, modified.Deletions)
+	}
+	if modified.Before != nil || modified.After != nil {
+		t.Fatalf("expected modified file snapshots to be nil")
+	}
+	if !strings.Contains(modified.Patch, "@@") {
+		t.Fatalf("expected file.txt patch hunks, got %q", modified.Patch)
+	}
+}
+
+func TestGetDiffs_NoConclusion(t *testing.T) {
+	ts := setupUnitServer(t)
+	defer ts.Close()
+
+	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, "", "")
+	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
+	defer func() { _ = resp.Body.Close() }()
+
+	assertStatus(t, resp, http.StatusNotFound)
+
+	result := decode[ErrorResponse](t, resp)
+	if result.Code != "no_conclusion" {
+		t.Fatalf("expected code no_conclusion, got %q", result.Code)
+	}
+}
+
+func TestGetDiffs_EmptyCommits(t *testing.T) {
+	ts := setupUnitServer(t)
+	defer ts.Close()
+
+	repoDir, _ := createGitRepoWithCommit(t)
+	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, repoDir, "")
+	concluded, err := ts.conclusionStore.Create(conclusion.CreateParams{
+		Type:     string(conclusion.TypeWork),
+		TicketID: created.ID,
+		Repo:     repoDir,
+		Body:     "done",
+	})
+	if err != nil {
+		t.Fatalf("failed to create conclusion: %v", err)
+	}
+	if _, err := ts.store.SetConclusionID(created.ID, concluded.ID); err != nil {
+		t.Fatalf("failed to set conclusion ID: %v", err)
+	}
+
+	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
+	defer func() { _ = resp.Body.Close() }()
+
+	assertStatus(t, resp, http.StatusOK)
+
+	result := decode[DiffsResponse](t, resp)
+	if len(result.Commits) != 0 {
+		t.Fatalf("expected 0 commit diffs, got %d", len(result.Commits))
+	}
+}
+
+func TestGetDiffs_InvalidRepo(t *testing.T) {
+	ts := setupUnitServer(t)
+	defer ts.Close()
+
+	repoDir := filepath.Join(t.TempDir(), "missing")
+	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, repoDir, "")
+	concluded, err := ts.conclusionStore.Create(conclusion.CreateParams{
+		Type:     string(conclusion.TypeWork),
+		TicketID: created.ID,
+		Repo:     repoDir,
+		Body:     "done",
+		Commits:  []string{"abc123"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create conclusion: %v", err)
+	}
+	if _, err := ts.store.SetConclusionID(created.ID, concluded.ID); err != nil {
+		t.Fatalf("failed to set conclusion ID: %v", err)
+	}
+
+	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
+	defer func() { _ = resp.Body.Close() }()
+
+	assertStatus(t, resp, http.StatusBadRequest)
+
+	result := decode[ErrorResponse](t, resp)
+	if result.Code != "invalid_repo" {
+		t.Fatalf("expected code invalid_repo, got %q", result.Code)
+	}
+}
+
+func TestGetDiffs_MissingCommit(t *testing.T) {
+	ts := setupUnitServer(t)
+	defer ts.Close()
+
+	repoDir, _ := createGitRepoWithCommit(t)
+	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, repoDir, "")
+	concluded, err := ts.conclusionStore.Create(conclusion.CreateParams{
+		Type:     string(conclusion.TypeWork),
+		TicketID: created.ID,
+		Repo:     repoDir,
+		Body:     "done",
+		Commits:  []string{"deadbeef"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create conclusion: %v", err)
+	}
+	if _, err := ts.store.SetConclusionID(created.ID, concluded.ID); err != nil {
+		t.Fatalf("failed to set conclusion ID: %v", err)
+	}
+
+	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
+	defer func() { _ = resp.Body.Close() }()
+
+	assertStatus(t, resp, http.StatusNotFound)
+
+	result := decode[ErrorResponse](t, resp)
+	if result.Code != "commit_not_found" {
+		t.Fatalf("expected code commit_not_found, got %q", result.Code)
+	}
 }
 
 // --- Conclude ---

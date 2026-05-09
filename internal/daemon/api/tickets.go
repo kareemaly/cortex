@@ -646,6 +646,74 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
+// GetDiffs handles GET /tickets/{id}/diffs - returns structured git diffs for conclusion commits.
+func (h *TicketHandlers) GetDiffs(w http.ResponseWriter, r *http.Request) {
+	projectPath := GetArchitectPath(r.Context())
+	store, err := h.deps.StoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	t, _, err := store.Get(id)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
+
+	if t.ConclusionID == "" || h.deps.ConclusionStoreManager == nil {
+		writeError(w, http.StatusNotFound, "no_conclusion", "ticket has no conclusion")
+		return
+	}
+
+	conclusionStore, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		return
+	}
+
+	c, err := conclusionStore.Get(t.ConclusionID)
+	if err != nil {
+		handleConclusionError(w, err, h.deps.Logger)
+		return
+	}
+
+	repoDir, err := resolveGitRepoDir(t.Repo)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_repo", err.Error())
+		return
+	}
+
+	resp := DiffsResponse{
+		TicketID: t.ID,
+		Repo:     repoDir,
+		Commits:  []CommitDiffResponse{},
+	}
+	if len(c.Commits) == 0 {
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
+	if invalid := validateCommitSHAs(repoDir, c.Commits); len(invalid) > 0 {
+		writeError(w, http.StatusNotFound, "commit_not_found",
+			fmt.Sprintf("commit %s does not exist in %s", invalid[0], repoDir))
+		return
+	}
+
+	resp.Commits = make([]CommitDiffResponse, 0, len(c.Commits))
+	for _, sha := range c.Commits {
+		diff, err := buildCommitDiff(repoDir, sha)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "git_error", err.Error())
+			return
+		}
+		resp.Commits = append(resp.Commits, *diff)
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // GetByID handles GET /tickets/by-id/{id} - gets a ticket by ID regardless of status.
 func (h *TicketHandlers) GetByID(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())

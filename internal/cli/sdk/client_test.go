@@ -363,6 +363,61 @@ func TestGetTicketByID(t *testing.T) {
 	}
 }
 
+func TestGetTicketDiffs(t *testing.T) {
+	srv, rs := newRoutedServer(t)
+	rs.setRoute("GET", "/tickets/abc123/diffs", http.StatusOK, DiffsResponse{
+		TicketID: "abc123",
+		Repo:     "/repo",
+		Commits: []CommitDiffResponse{
+			{
+				SHA:         "deadbeef",
+				Subject:     "test commit",
+				AuthorName:  "Test User",
+				AuthorEmail: "test@example.com",
+				Files: []DiffFileResponse{
+					{Path: "file.txt", Status: "modified", Patch: "@@"},
+				},
+			},
+		},
+	})
+
+	c := NewClient(srv.URL, "/p")
+	resp, err := c.GetTicketDiffs("abc123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.TicketID != "abc123" {
+		t.Errorf("expected ID abc123, got %q", resp.TicketID)
+	}
+	if len(resp.Commits) != 1 || resp.Commits[0].SHA != "deadbeef" {
+		t.Errorf("unexpected commits payload: %+v", resp.Commits)
+	}
+	if len(resp.Commits[0].Files) != 1 || resp.Commits[0].Files[0].Path != "file.txt" {
+		t.Errorf("unexpected file payload: %+v", resp.Commits[0].Files)
+	}
+}
+
+func TestGetTicketDiffs_Error(t *testing.T) {
+	srv, rs := newRoutedServer(t)
+	rs.setRoute("GET", "/tickets/missing/diffs", http.StatusNotFound, ErrorResponse{
+		Error: "ticket not found",
+		Code:  "not_found",
+	})
+
+	c := NewClient(srv.URL, "/p")
+	_, err := c.GetTicketDiffs("missing")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected APIError, got %T", err)
+	}
+	if apiErr.Status != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", apiErr.Status)
+	}
+}
+
 func TestCreateTicket_Success(t *testing.T) {
 	srv, rs := newRoutedServer(t)
 	rs.setRoute("POST", "/tickets", http.StatusCreated, TicketResponse{

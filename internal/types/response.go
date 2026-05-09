@@ -71,6 +71,36 @@ type ListAllTicketsResponse struct {
 	Done     []TicketSummary `json:"done"`
 }
 
+// DiffFileResponse describes one file changed by a commit.
+type DiffFileResponse struct {
+	Path      string  `json:"path"`
+	OldPath   *string `json:"old_path"`
+	Status    string  `json:"status"`
+	IsBinary  bool    `json:"is_binary"`
+	Additions int     `json:"additions"`
+	Deletions int     `json:"deletions"`
+	Patch     string  `json:"patch"`
+	Before    *string `json:"before"`
+	After     *string `json:"after"`
+}
+
+// CommitDiffResponse is the structured diff for a single commit.
+type CommitDiffResponse struct {
+	SHA         string             `json:"sha"`
+	Subject     string             `json:"subject"`
+	AuthorName  string             `json:"author_name"`
+	AuthorEmail string             `json:"author_email"`
+	AuthoredAt  time.Time          `json:"authored_at"`
+	Files       []DiffFileResponse `json:"files"`
+}
+
+// DiffsResponse is the response for GET /tickets/{id}/diffs.
+type DiffsResponse struct {
+	TicketID string               `json:"ticket_id"`
+	Repo     string               `json:"repo"`
+	Commits  []CommitDiffResponse `json:"commits"`
+}
+
 // ConclusionResponse is the full conclusion response.
 type ConclusionResponse struct {
 	ID              string    `json:"id"`
