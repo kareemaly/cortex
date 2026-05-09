@@ -15,12 +15,27 @@ type Tab struct {
 	Content string
 }
 
+type EditResult struct {
+	Title    string
+	Subtitle string
+	Tabs     []Tab
+}
+
+type EditFunc = tea.Cmd
+
+type Option func(*Model)
+
 type Model struct {
 	title    string
 	subtitle string
 	tabs     []Tab
 	offsets  []int
 	active   int
+
+	ticketID  string
+	indexPath string
+	onEdit    EditFunc
+	status    string
 
 	viewport   viewport.Model
 	mdRenderer *glamour.TermRenderer
@@ -50,7 +65,24 @@ var (
 	emptyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 )
 
-func New(title, subtitle string, tabs []Tab) Model {
+type editFinishedMsg struct {
+	result EditResult
+	err    error
+}
+
+func EditFinished(result EditResult, err error) tea.Msg {
+	return editFinishedMsg{result: result, err: err}
+}
+
+func WithEditableTicket(ticketID, indexPath string, onEdit EditFunc) Option {
+	return func(m *Model) {
+		m.ticketID = ticketID
+		m.indexPath = indexPath
+		m.onEdit = onEdit
+	}
+}
+
+func New(title, subtitle string, tabs []Tab, opts ...Option) Model {
 	if len(tabs) == 0 {
 		tabs = []Tab{{Label: "Overview", Content: "_No content available._"}}
 	}
@@ -60,13 +92,19 @@ func New(title, subtitle string, tabs []Tab) Model {
 		glamour.WithWordWrap(80),
 	)
 
-	return Model{
+	model := Model{
 		title:      title,
 		subtitle:   subtitle,
 		tabs:       tabs,
 		offsets:    make([]int, len(tabs)),
 		mdRenderer: renderer,
 	}
+
+	for _, opt := range opts {
+		opt(&model)
+	}
+
+	return model
 }
 
 func (m Model) Init() tea.Cmd {
@@ -82,6 +120,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateRendererWidth()
 		m.syncViewportSize()
 		m.renderActiveTab()
+		return m, nil
+
+	case editFinishedMsg:
+		if msg.err != nil {
+			m.status = fmt.Sprintf("Edit failed: %v", msg.err)
+			return m, nil
+		}
+
+		m.applyEditResult(msg.result)
+		m.status = fmt.Sprintf("Reloaded ticket %s", m.ticketID)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -110,6 +158,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingG = true
 			}
 			return m, nil
+		case "e":
+			if m.canEdit() {
+				m.pendingG = false
+				m.status = ""
+				return m, m.onEdit
+			}
 		}
 
 		m.pendingG = false
@@ -150,9 +204,42 @@ func (m Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(m.viewport.View())
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("tab/h/l tabs  j/k scroll  ctrl+d/u page  gg/G jump  q close"))
+	if m.status != "" {
+		b.WriteString(helpStyle.Render(m.status))
+		b.WriteString("\n")
+	}
+	b.WriteString(helpStyle.Render(m.helpText()))
 
 	return b.String()
+}
+
+func (m Model) canEdit() bool {
+	return m.ticketID != "" && m.indexPath != "" && m.onEdit != nil
+}
+
+func (m *Model) applyEditResult(result EditResult) {
+	currentLabel := ""
+	if len(m.tabs) > 0 && m.active < len(m.tabs) {
+		currentLabel = m.tabs[m.active].Label
+	}
+
+	m.title = result.Title
+	m.subtitle = result.Subtitle
+	m.tabs = result.Tabs
+	if len(m.tabs) == 0 {
+		m.tabs = []Tab{{Label: "Overview", Content: "_No content available._"}}
+	}
+
+	m.offsets = make([]int, len(m.tabs))
+	m.active = 0
+	for i, tab := range m.tabs {
+		if tab.Label == currentLabel {
+			m.active = i
+			break
+		}
+	}
+
+	m.renderActiveTab()
 }
 
 func (m *Model) updateRendererWidth() {
@@ -208,10 +295,14 @@ func (m *Model) syncViewportSize() {
 }
 
 func (m Model) headerLineCount() int {
-	if m.subtitle == "" {
-		return 3
+	lines := 3
+	if m.subtitle != "" {
+		lines++
 	}
-	return 4
+	if m.status != "" {
+		lines++
+	}
+	return lines
 }
 
 func (m *Model) clampYOffset(offset int) {
@@ -240,6 +331,15 @@ func (m Model) renderTabBar() string {
 		parts = append(parts, inactiveTabStyle.Render(label))
 	}
 	return strings.Join(parts, "")
+}
+
+func (m Model) helpText() string {
+	parts := []string{"tab/h/l tabs", "j/k scroll", "ctrl+d/u page", "gg/G jump"}
+	if m.canEdit() {
+		parts = append(parts, "e edit")
+	}
+	parts = append(parts, "q close")
+	return strings.Join(parts, "  ")
 }
 
 func max(a, b int) int {

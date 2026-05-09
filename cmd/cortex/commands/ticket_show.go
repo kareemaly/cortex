@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -27,25 +28,46 @@ var ticketShowCmd = &cobra.Command{
 		client := sdk.DefaultClient(architectPath)
 		ticketID := args[0]
 
-		ticketResp, err := client.GetTicketByID(ticketID)
+		initial, err := loadTicketDetail(client, ticketID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
-		ticketSummary, _ := fetchTicketSummary(client, ticketResp)
+		var program *tea.Program
+		model := detail.New(
+			initial.Title,
+			initial.Subtitle,
+			initial.Tabs,
+			detail.WithEditableTicket(ticketID, initial.IndexPath, func() tea.Msg {
+				if err := program.ReleaseTerminal(); err != nil {
+					return detail.EditFinished(detail.EditResult{}, err)
+				}
 
-		var conclusionResp *sdk.ConclusionResponse
-		var conclusionWarning string
-		if ticketResp.ConclusionID != "" {
-			conclusionResp, err = client.GetConclusion(ticketResp.ConclusionID)
-			if err != nil {
-				conclusionWarning = err.Error()
-			}
-		}
+				editErr := openEditor(initial.IndexPath)
 
-		tabs := buildTicketTabs(ticketResp, ticketSummary, conclusionResp, conclusionWarning)
-		program := tea.NewProgram(detail.New(ticketResp.Title, "", tabs), tea.WithAltScreen())
+				restoreErr := program.RestoreTerminal()
+				if editErr != nil {
+					return detail.EditFinished(detail.EditResult{}, editErr)
+				}
+				if restoreErr != nil {
+					return detail.EditFinished(detail.EditResult{}, restoreErr)
+				}
+
+				updated, err := loadTicketDetail(client, ticketID)
+				if err != nil {
+					return detail.EditFinished(detail.EditResult{}, err)
+				}
+
+				initial = updated
+				return detail.EditFinished(detail.EditResult{
+					Title:    updated.Title,
+					Subtitle: updated.Subtitle,
+					Tabs:     updated.Tabs,
+				}, nil)
+			}),
+		)
+		program = tea.NewProgram(model, tea.WithAltScreen())
 		if _, err := program.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -68,6 +90,50 @@ func fetchTicketSummary(client *sdk.Client, ticketResp *sdk.TicketResponse) (*sd
 		}
 	}
 	return nil, nil
+}
+
+type ticketDetailData struct {
+	Title     string
+	Subtitle  string
+	Tabs      []detail.Tab
+	IndexPath string
+}
+
+func loadTicketDetail(client *sdk.Client, ticketID string) (ticketDetailData, error) {
+	ticketResp, err := client.GetTicketByID(ticketID)
+	if err != nil {
+		return ticketDetailData{}, err
+	}
+
+	ticketSummary, _ := fetchTicketSummary(client, ticketResp)
+
+	var conclusionResp *sdk.ConclusionResponse
+	var conclusionWarning string
+	if ticketResp.ConclusionID != "" {
+		conclusionResp, err = client.GetConclusion(ticketResp.ConclusionID)
+		if err != nil {
+			conclusionWarning = err.Error()
+		}
+	}
+
+	return ticketDetailData{
+		Title:     ticketResp.Title,
+		Tabs:      buildTicketTabs(ticketResp, ticketSummary, conclusionResp, conclusionWarning),
+		IndexPath: ticketResp.IndexPath,
+	}, nil
+}
+
+func openEditor(path string) error {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim"
+	}
+
+	cmd := exec.Command("sh", "-c", "exec "+editor+` "$1"`, "sh", path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func buildTicketTabs(ticketResp *sdk.TicketResponse, ticketSummary *sdk.TicketSummary, conclusionResp *sdk.ConclusionResponse, conclusionWarning string) []detail.Tab {

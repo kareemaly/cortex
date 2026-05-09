@@ -28,6 +28,18 @@ func NewTicketHandlers(deps *Dependencies) *TicketHandlers {
 	return &TicketHandlers{deps: deps}
 }
 
+func ticketResponse(store *ticket.Store, t *ticket.Ticket, status ticket.Status) (types.TicketResponse, error) {
+	resp := types.ToTicketResponse(t, status)
+
+	indexPath, err := store.IndexPath(t.ID)
+	if err != nil {
+		return types.TicketResponse{}, err
+	}
+
+	resp.IndexPath = indexPath
+	return resp, nil
+}
+
 // ListAll handles GET /tickets - lists all tickets grouped by status.
 func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
@@ -190,7 +202,11 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := types.ToTicketResponse(t, ticket.StatusBacklog)
+	resp, err := ticketResponse(store, t, ticket.StatusBacklog)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
 	writeJSON(w, http.StatusCreated, resp)
 }
 
@@ -222,7 +238,11 @@ func (h *TicketHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := types.ToTicketResponse(t, actualStatus)
+	resp, err := ticketResponse(store, t, actualStatus)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -266,7 +286,11 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := types.ToTicketResponse(t, actualStatus)
+	resp, err := ticketResponse(store, t, actualStatus)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -356,7 +380,11 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := types.ToTicketResponse(t, newStatus)
+	resp, err := ticketResponse(store, t, newStatus)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -402,7 +430,11 @@ func (h *TicketHandlers) SetDueDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := types.ToTicketResponse(t, status)
+	resp, err := ticketResponse(store, t, status)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -430,7 +462,11 @@ func (h *TicketHandlers) ClearDueDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := types.ToTicketResponse(t, status)
+	resp, err := ticketResponse(store, t, status)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -533,6 +569,11 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result.Outcome == spawn.OutcomeAlreadyActive {
+		ticketResp, err := ticketResponse(store, result.Ticket, result.TicketStatus)
+		if err != nil {
+			handleTicketError(w, err, h.deps.Logger)
+			return
+		}
 		if result.StateInfo.Session != nil {
 			if err := h.deps.TmuxManager.FocusWindow(result.TmuxSession, result.StateInfo.Session.TmuxWindow); err != nil {
 				h.deps.Logger.Warn("failed to focus window", "error", err)
@@ -543,15 +584,20 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		}
 		resp := SpawnResponse{
 			Session: types.ToSessionResponse(result.StateInfo.Session),
-			Ticket:  types.ToTicketResponse(result.Ticket, result.TicketStatus),
+			Ticket:  ticketResp,
 		}
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
 	sess, _ := sessionStore.GetByTicketID(id)
+	ticketResp, err := ticketResponse(store, result.Ticket, result.TicketStatus)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
 	resp := SpawnResponse{
-		Ticket: types.ToTicketResponse(result.Ticket, result.TicketStatus),
+		Ticket: ticketResp,
 	}
 	if sess != nil {
 		resp.Session = types.ToSessionResponse(sess)
@@ -580,7 +626,11 @@ func (h *TicketHandlers) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := types.ToTicketResponse(t, status)
+	resp, err := ticketResponse(store, t, status)
+	if err != nil {
+		handleTicketError(w, err, h.deps.Logger)
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 

@@ -29,6 +29,8 @@ type TicketResponse struct {
 	Body  string `json:"body"`
 	Repo  string `json:"repo,omitempty"`
 	Path  string `json:"path,omitempty"`
+	// IndexPath is the daemon-resolved path to the ticket's backing index.md file.
+	IndexPath string `json:"index_path,omitempty"`
 	// ConclusionID is the linked conclusion ID once the ticket is concluded.
 	ConclusionID string     `json:"conclusion_id,omitempty"`
 	References   []string   `json:"references,omitempty"`
