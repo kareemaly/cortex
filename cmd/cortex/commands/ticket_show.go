@@ -66,6 +66,13 @@ var ticketShowCmd = &cobra.Command{
 					Tabs:     updated.Tabs,
 				}, nil)
 			}),
+			detail.WithChangesLoader(func() tea.Msg {
+				diffsResp, err := client.GetTicketDiffs(ticketID)
+				if err != nil {
+					return detail.ChangesLoaded(nil, err)
+				}
+				return detail.ChangesLoaded(buildChangesData(diffsResp), nil)
+			}),
 		)
 		program = tea.NewProgram(model, tea.WithAltScreen())
 		if _, err := program.Run(); err != nil {
@@ -138,11 +145,14 @@ func openEditor(path string) error {
 
 func buildTicketTabs(ticketResp *sdk.TicketResponse, ticketSummary *sdk.TicketSummary, conclusionResp *sdk.ConclusionResponse, conclusionWarning string) []detail.Tab {
 	tabs := []detail.Tab{
-		{Label: "Overview", Content: buildTicketOverview(ticketResp, ticketSummary, conclusionResp, conclusionWarning)},
-		{Label: "Ticket Body", Content: bodyContent(ticketResp.Body, "ticket")},
+		{Label: "Overview", Content: buildTicketOverview(ticketResp, ticketSummary, conclusionResp, conclusionWarning), Kind: detail.TabKindMarkdown},
+		{Label: "Ticket Body", Content: bodyContent(ticketResp.Body, "ticket"), Kind: detail.TabKindMarkdown},
 	}
 	if conclusionResp != nil || conclusionWarning != "" {
-		tabs = append(tabs, detail.Tab{Label: "Conclusion", Content: buildLinkedConclusionTab(ticketResp, conclusionResp, conclusionWarning)})
+		tabs = append(tabs, detail.Tab{Label: "Conclusion", Content: buildLinkedConclusionTab(ticketResp, conclusionResp, conclusionWarning), Kind: detail.TabKindMarkdown})
+	}
+	if conclusionResp != nil && len(conclusionResp.Commits) > 0 {
+		tabs = append(tabs, detail.Tab{Label: "Changes", Kind: detail.TabKindChanges})
 	}
 	return tabs
 }
@@ -242,4 +252,47 @@ func emptyDash(value string) string {
 		return "-"
 	}
 	return value
+}
+
+func buildChangesData(resp *sdk.DiffsResponse) *detail.ChangesData {
+	if resp == nil {
+		return nil
+	}
+
+	changes := &detail.ChangesData{
+		Repo:    resp.Repo,
+		Commits: make([]detail.ChangeCommit, 0, len(resp.Commits)),
+	}
+
+	for _, commit := range resp.Commits {
+		files := make([]detail.ChangeFile, 0, len(commit.Files))
+		for _, file := range commit.Files {
+			files = append(files, detail.ChangeFile{
+				Path:      file.Path,
+				OldPath:   stringOrEmpty(file.OldPath),
+				Status:    file.Status,
+				IsBinary:  file.IsBinary,
+				Additions: file.Additions,
+				Deletions: file.Deletions,
+				Patch:     file.Patch,
+			})
+		}
+
+		changes.Commits = append(changes.Commits, detail.ChangeCommit{
+			SHA:        commit.SHA,
+			Subject:    commit.Subject,
+			AuthorName: commit.AuthorName,
+			AuthoredAt: commit.AuthoredAt,
+			Files:      files,
+		})
+	}
+
+	return changes
+}
+
+func stringOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
