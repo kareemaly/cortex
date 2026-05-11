@@ -2,13 +2,13 @@ package spawn
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/prompt"
-	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -22,10 +22,10 @@ type promptInfo struct {
 // Dynamic content (ticket details, ticket lists) is embedded in the prompt.
 // Static instructions are loaded from file via --system-prompt (architect, full replace)
 // or --append-system-prompt (ticket agent, appended to default).
-func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
+func (s *Spawner) buildPrompt(req SpawnRequest, workingDir string) (*promptInfo, error) {
 	switch req.AgentType {
 	case AgentTypeTicketAgent:
-		return s.buildTicketAgentPrompt(req)
+		return s.buildTicketAgentPrompt(req, workingDir)
 	case AgentTypeArchitect:
 		return s.buildArchitectPrompt(req)
 	case AgentTypeCollabAgent:
@@ -36,7 +36,7 @@ func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
 }
 
 // buildTicketAgentPrompt creates the dynamic ticket prompt.
-func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) {
+func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest, workingDir string) (*promptInfo, error) {
 	ticketType := ticket.DefaultTicketType
 
 	resolver := prompt.NewPromptResolver(req.ArchitectPath, s.deps.DefaultsDir)
@@ -71,12 +71,15 @@ func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) 
 		TicketTitle: req.Ticket.Title,
 		TicketBody:  req.Ticket.Body,
 		References:  formatTicketReferences(req.Ticket.References),
-		Repo:        storage.ExpandHome(req.Ticket.Repo),
+		Repo:        req.Ticket.Repo,
+		RepoPath:    workingDir,
 	}
 
 	if cfg, cfgErr := architectconfig.Load(req.ArchitectPath); cfgErr == nil {
 		vars.ArchitectName = cfg.Name
-		vars.Repos = formatOtherRepos(cfg.Repos, req.Ticket.Repo)
+		vars.Repos = formatOtherRepos(cfg, req.Ticket.Repo)
+	} else if req.Ticket.Repo != "" {
+		return nil, cfgErr
 	}
 
 	promptText, err := prompt.RenderTemplate(kickoffTemplate, vars)
@@ -162,8 +165,12 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	if cfgErr == nil {
 		if len(projectCfg.Repos) > 0 {
 			var reposSB strings.Builder
-			for _, repo := range projectCfg.Repos {
-				reposSB.WriteString(fmt.Sprintf("- %s\n", repo))
+			for _, key := range projectCfg.RepoKeys() {
+				repoPath, err := projectCfg.ResolveRepoPath(key)
+				if err != nil {
+					return nil, err
+				}
+				reposSB.WriteString(fmt.Sprintf("- %s: %s\n", key, repoPath))
 			}
 			reposList = reposSB.String()
 		}
@@ -216,22 +223,24 @@ func formatTicketReferences(refs []string) string {
 	return sb.String()
 }
 
-// formatOtherRepos formats repos into a bulleted markdown list, excluding the current ticket's repo.
-// All paths are expanded to absolute paths.
-func formatOtherRepos(repos []string, currentRepo string) string {
-	expandedCurrent := storage.ExpandHome(currentRepo)
+// formatOtherRepos formats repos into a bulleted markdown list, excluding the current ticket's repo key.
+func formatOtherRepos(cfg *architectconfig.Config, currentRepo string) string {
+	keys := cfg.RepoKeys()
+	sort.Strings(keys)
 	var sb strings.Builder
 	first := true
-	for _, repo := range repos {
-		expanded := storage.ExpandHome(repo)
-		if expanded == expandedCurrent {
+	for _, key := range keys {
+		if key == currentRepo {
+			continue
+		}
+		repoPath, err := cfg.ResolveRepoPath(key)
+		if err != nil {
 			continue
 		}
 		if !first {
 			sb.WriteString("\n")
 		}
-		sb.WriteString("- ")
-		sb.WriteString(expanded)
+		sb.WriteString(fmt.Sprintf("- %s: %s", key, repoPath))
 		first = false
 	}
 	return sb.String()

@@ -232,9 +232,9 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	}
 
 	mcpServerConfig := BuildMCPServerConfig(MCPConfigParams{
-		CortexdPath: cortexdPath,
-		TicketID:    req.TicketID,
-		TicketType: ticket.DefaultTicketType,
+		CortexdPath:   cortexdPath,
+		TicketID:      req.TicketID,
+		TicketType:    ticket.DefaultTicketType,
 		TicketsDir:    req.TicketsDir,
 		ArchitectPath: req.ArchitectPath,
 		TmuxSession:   req.TmuxSession,
@@ -242,7 +242,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		CollabID:      req.CollabID,
 	})
 
-	pInfo, err := s.buildPrompt(req)
+	pInfo, err := s.buildPrompt(req, workingDir)
 	if err != nil {
 		s.cleanupOnFailure(ctx, req.AgentType, req.TicketID, nil)
 		return &SpawnResult{
@@ -292,7 +292,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 		}
 	}
 
-	cortexEnv := s.buildCortexEnv(req, startedAt)
+	cortexEnv := s.buildCortexEnv(req, startedAt, workingDir)
 	startReq.Env = mergeEnvMaps(req.EnvVars, cortexEnv)
 
 	spec, err := adapter.PrepareLaunch(ctx, startReq)
@@ -623,9 +623,10 @@ func (s *Spawner) agentKind(agent string) agentruntime.AgentKind {
 }
 
 // buildCortexEnv returns the per-session agent env vars set by Cortex.
-func (s *Spawner) buildCortexEnv(req SpawnRequest, startedAt string) map[string]string {
+func (s *Spawner) buildCortexEnv(req SpawnRequest, startedAt, workingDir string) map[string]string {
 	env := map[string]string{
 		"CORTEX_STARTED_AT": startedAt,
+		"CORTEX_WORKDIR":    workingDir,
 	}
 	switch req.AgentType {
 	case AgentTypeArchitect:
@@ -634,9 +635,9 @@ func (s *Spawner) buildCortexEnv(req SpawnRequest, startedAt string) map[string]
 		env["CORTEX_TICKET_ID"] = req.TicketID
 		env["CORTEX_TICKET_TYPE"] = ticket.DefaultTicketType
 		env["CORTEX_REPO"] = req.Ticket.Repo
+		env["CORTEX_REPO_PATH"] = workingDir
 	case AgentTypeCollabAgent:
 		env["CORTEX_COLLAB_ID"] = req.CollabID
-		env["CORTEX_REPO"] = req.Repo
 	}
 	return env
 }

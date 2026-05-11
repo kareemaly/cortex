@@ -43,7 +43,8 @@ func runMCP(cmd *cobra.Command, args []string) error {
 	// The MCP config explicitly passes --ticket-id for ticket sessions.
 	ticketID := mcpTicketID
 
-	// Get optional config from environment
+	// Get optional config from environment.
+	// CORTEX_REPO is a stable repo key for ticket sessions.
 	projectPath := os.Getenv("CORTEX_ARCHITECT_PATH")
 	tmuxSession := os.Getenv("CORTEX_TMUX_SESSION")
 	daemonURL := os.Getenv("CORTEX_DAEMON_URL")

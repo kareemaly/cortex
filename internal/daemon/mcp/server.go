@@ -45,7 +45,7 @@ type Config struct {
 	// This is primarily used for testing.
 	CortexdPath string
 
-	// Repo is the repository path for this session.
+	// Repo is the stable repo key for this session.
 	// Set from CORTEX_REPO env var for ticket sessions.
 	Repo string
 

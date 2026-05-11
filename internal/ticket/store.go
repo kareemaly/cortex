@@ -44,7 +44,7 @@ func NewStore(ticketsDir string, bus *events.Bus, projectPath string) (*Store, e
 	return s, nil
 }
 
-func (s *Store) Create(title, body string, dueDate *time.Time, references []string, repo, path string) (*Ticket, error) {
+func (s *Store) Create(title, body string, dueDate *time.Time, references []string, repo string) (*Ticket, error) {
 	if title == "" {
 		return nil, &ValidationError{Field: "title", Message: "cannot be empty"}
 	}
@@ -62,7 +62,6 @@ func (s *Store) Create(title, body string, dueDate *time.Time, references []stri
 		TicketMeta: TicketMeta{
 			Title:      title,
 			Repo:       repo,
-			Path:       path,
 			References: references,
 			Due:        dueDate,
 			Created:    now,
@@ -86,12 +85,16 @@ func (s *Store) Create(title, body string, dueDate *time.Time, references []stri
 func (s *Store) Get(id string) (*Ticket, Status, error) {
 	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
 		entityDir := filepath.Join(s.RootDir(), string(status), id)
-		ticket, err := s.loadFromDir(entityDir)
-		if err == nil {
-			ticket.ID = id
-			ticket.Status = status
-			return ticket, status, nil
+		if info, statErr := os.Stat(entityDir); statErr != nil || !info.IsDir() {
+			continue
 		}
+		ticket, err := s.loadFromDir(entityDir)
+		if err != nil {
+			return nil, "", err
+		}
+		ticket.ID = id
+		ticket.Status = status
+		return ticket, status, nil
 	}
 
 	return nil, "", &NotFoundError{Resource: "ticket", ID: id}
@@ -591,6 +594,14 @@ func (s *Store) loadFromDir(entityDir string) (*Ticket, error) {
 	data, err := s.LoadFileBytes(entityDir, ticketFileName)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", ticketFileName, err)
+	}
+
+	keys, err := storage.FrontmatterKeys(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s keys: %w", ticketFileName, err)
+	}
+	if _, ok := keys["path"]; ok {
+		return nil, fmt.Errorf("parse %s: legacy frontmatter field %q is no longer supported; migrate this ticket before using Cortex", ticketFileName, "path")
 	}
 
 	meta, body, err := storage.ParseFrontmatter[TicketMeta](data)

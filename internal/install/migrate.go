@@ -1,11 +1,14 @@
 package install
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/kareemaly/cortex/internal/daemon/config"
+	"github.com/kareemaly/cortex/internal/storage"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,6 +39,7 @@ type legacyConfig struct {
 	Docs struct {
 		Path string `yaml:"path,omitempty"`
 	} `yaml:"docs,omitempty"`
+	Repos []string `yaml:"repos,omitempty"`
 }
 
 // DetectAgentFromExtend returns the agent type based on the extend path.
@@ -100,7 +104,11 @@ func MigrateProjectConfig(projectPath string) *MigrationResult {
 	result.DetectedAgent = agent
 
 	// Generate new config with agents variant format
-	newConfig := generateMigratedConfig(result.ArchitectName, agent)
+	newConfig, err := generateMigratedConfig(result.ArchitectName, agent, old.Repos)
+	if err != nil {
+		result.Error = err
+		return result
+	}
 
 	// Write the migrated config
 	if err := os.WriteFile(configPath, []byte(newConfig), 0644); err != nil {
@@ -113,12 +121,33 @@ func MigrateProjectConfig(projectPath string) *MigrationResult {
 }
 
 // generateMigratedConfig produces a cortex.yaml in the new agents variant format.
-func generateMigratedConfig(name, agent string) string {
+func generateMigratedConfig(name, agent string, repos []string) (string, error) {
+	repoMap, err := deriveRepoMap(repos)
+	if err != nil {
+		return "", err
+	}
+
 	var sb strings.Builder
 
 	sb.WriteString("name: ")
 	sb.WriteString(name)
-	sb.WriteString("\nrepos: []\n")
+	if len(repoMap) == 0 {
+		sb.WriteString("\nrepos: {}\n")
+	} else {
+		sb.WriteString("\nrepos:\n")
+		keys := make([]string, 0, len(repoMap))
+		for key := range repoMap {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			sb.WriteString("  ")
+			sb.WriteString(key)
+			sb.WriteString(": ")
+			sb.WriteString(repoMap[key])
+			sb.WriteString("\n")
+		}
+	}
 
 	sb.WriteString("\nagents:\n")
 
@@ -142,7 +171,32 @@ func generateMigratedConfig(name, agent string) string {
 		sb.WriteString("    args: [\"--agent\", \"plan\"]\n")
 	}
 
-	return sb.String()
+	return sb.String(), nil
+}
+
+func deriveRepoMap(paths []string) (map[string]string, error) {
+	if len(paths) == 0 {
+		return map[string]string{}, nil
+	}
+
+	repoMap := make(map[string]string, len(paths))
+	for _, repoPath := range paths {
+		trimmed := strings.TrimSpace(repoPath)
+		if trimmed == "" {
+			return nil, fmt.Errorf("cannot derive repo key from empty repo path")
+		}
+
+		cleaned := strings.TrimRight(storage.ExpandHome(trimmed), string(os.PathSeparator))
+		key := filepath.Base(cleaned)
+		if key == "." || key == string(os.PathSeparator) || key == "" {
+			return nil, fmt.Errorf("cannot derive repo key from path %q", repoPath)
+		}
+		if existing, ok := repoMap[key]; ok && existing != trimmed {
+			return nil, fmt.Errorf("cannot derive unique repo key %q from configured repo paths %q and %q", key, existing, trimmed)
+		}
+		repoMap[key] = trimmed
+	}
+	return repoMap, nil
 }
 
 // MigrateAllProjects loads the global config and migrates all registered projects.

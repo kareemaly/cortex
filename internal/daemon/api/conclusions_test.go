@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/architectsession"
+	"github.com/kareemaly/cortex/internal/ticket"
 )
 
 func TestGetConclusion_ExposesCommitsAndRejection(t *testing.T) {
@@ -15,7 +15,7 @@ func TestGetConclusion_ExposesCommitsAndRejection(t *testing.T) {
 
 	projectPath := ts.projectRoot
 
-	created, _ := ts.store.Create("test-ticket", "body", nil, nil, "", "")
+	created, _ := ts.store.Create("test-ticket", "body", nil, nil, "")
 	meta := &ticket.TicketConclusionMeta{
 		StartedAt:       time.Now().UTC().Add(-2 * time.Minute),
 		ConcludedAt:     time.Now().UTC(),

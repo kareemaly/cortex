@@ -12,12 +12,12 @@ import (
 func (s *Server) registerCollabTools() {
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "createWorkTicket",
-		Description: "Create a new work ticket in backlog. Requires a repo field — the agent will spawn in that repo directory.",
+		Description: "Create a new work ticket in backlog. Requires a repo field — provide a stable repo key from cortex.yaml.",
 	}, s.handleCreateWorkTicket)
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
-		Description: "Update mutable ticket fields. Accepts: id (required), title, body, dueDate, references. dueDate must be RFC3339 when set, and an explicit empty string clears it. Use editTicketBody for targeted body edits; keep updateTicket for full-body rewrites. Does NOT support updating type, repo, path, status, or any other fields.",
+		Description: "Update mutable ticket fields. Accepts: id (required), title, body, dueDate, references. dueDate must be RFC3339 when set, and an explicit empty string clears it. Use editTicketBody for targeted body edits; keep updateTicket for full-body rewrites. Does NOT support updating type, repo, status, or any other fields.",
 	}, s.handleUpdateTicket)
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{

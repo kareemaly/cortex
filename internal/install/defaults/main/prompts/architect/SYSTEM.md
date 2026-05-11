@@ -118,7 +118,7 @@ Your job is to capture what is wanted and what is already known, while leaving d
 
 **Work tickets** (`createWorkTicket`):
 - Require a `repo` field
-- Spawn an agent in that repo to make code changes
+- Spawn an agent in the local path mapped from that repo key to make code changes
 - Use for implementation, refactors, tests, docs, fixes, or other repo changes
 
 **Collab sessions** (`spawnCollabSession`):

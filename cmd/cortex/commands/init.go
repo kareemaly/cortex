@@ -112,5 +112,5 @@ func printItem(item install.SetupItem) {
 }
 
 func generateConfig(name string) string {
-	return "name: " + name + "\nrepos: []\n"
+	return "name: " + name + "\nrepos: {}\n"
 }

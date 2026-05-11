@@ -2,7 +2,6 @@ package kanban
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -144,7 +143,7 @@ func (c *Column) renderAllTickets(width int, isActive bool, repoColors map[strin
 		plainPrefix := ""
 		colorCode, hasColor := repoColors[t.Repo]
 		if len(repoColors) > 1 && t.Repo != "" && hasColor {
-			plainPrefix = "[" + filepath.Base(t.Repo) + "] "
+			plainPrefix = "[" + t.Repo + "] "
 		}
 		wrappedTitle := wrapText(plainPrefix+t.Title, titleWidth)
 		if len(plainPrefix) > 0 && len(wrappedTitle) > 0 && len(wrappedTitle[0]) >= len(plainPrefix) {
@@ -348,7 +347,7 @@ func ticketHeight(t sdk.TicketSummary, titleWidth int, repoColors map[string]str
 	title := t.Title
 	if len(repoColors) > 1 && t.Repo != "" {
 		if _, ok := repoColors[t.Repo]; ok {
-			title = "[" + filepath.Base(t.Repo) + "] " + title
+			title = "[" + t.Repo + "] " + title
 		}
 	}
 	return len(wrapText(title, titleWidth)) + 1

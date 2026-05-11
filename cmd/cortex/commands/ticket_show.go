@@ -39,12 +39,12 @@ var ticketShowCmd = &cobra.Command{
 			initial.Title,
 			initial.Subtitle,
 			initial.Tabs,
-		detail.WithEditableTicket(ticketID, initial.FilePath, func() tea.Msg {
-			if err := program.ReleaseTerminal(); err != nil {
-				return detail.EditFinished(detail.EditResult{}, err)
-			}
+			detail.WithEditableTicket(ticketID, initial.FilePath, func() tea.Msg {
+				if err := program.ReleaseTerminal(); err != nil {
+					return detail.EditFinished(detail.EditResult{}, err)
+				}
 
-			editErr := openEditor(initial.FilePath)
+				editErr := openEditor(initial.FilePath)
 
 				restoreErr := program.RestoreTerminal()
 				if editErr != nil {
@@ -100,10 +100,10 @@ func fetchTicketSummary(client *sdk.Client, ticketResp *sdk.TicketResponse) (*sd
 }
 
 type ticketDetailData struct {
-	Title     string
-	Subtitle  string
-	Tabs      []detail.Tab
-	FilePath  string
+	Title    string
+	Subtitle string
+	Tabs     []detail.Tab
+	FilePath string
 }
 
 func loadTicketDetail(client *sdk.Client, ticketID string) (ticketDetailData, error) {
@@ -163,7 +163,6 @@ func buildTicketOverview(ticketResp *sdk.TicketResponse, ticketSummary *sdk.Tick
 	b.WriteString(fmt.Sprintf("- ID: `%s`\n", ticketResp.ID))
 	b.WriteString(fmt.Sprintf("- Status: `%s`\n", ticketResp.Status))
 	b.WriteString(fmt.Sprintf("- Repo: `%s`\n", emptyDash(ticketResp.Repo)))
-	b.WriteString(fmt.Sprintf("- Path: `%s`\n", emptyDash(ticketResp.Path)))
 	b.WriteString(fmt.Sprintf("- Created: %s\n", formatDetailTime(ticketResp.Created)))
 	b.WriteString(fmt.Sprintf("- Updated: %s\n", formatDetailTime(ticketResp.Updated)))
 	b.WriteString(fmt.Sprintf("- Due: %s\n", formatDetailOptionalTime(ticketResp.Due)))

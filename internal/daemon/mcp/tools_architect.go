@@ -33,13 +33,13 @@ func (s *Server) registerArchitectTools() {
 	// Create work ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "createWorkTicket",
-		Description: "Create a new work ticket in backlog. Requires a repo field — the agent will spawn in that repo directory.",
+		Description: "Create a new work ticket in backlog. Requires a repo field — provide a stable repo key from cortex.yaml.",
 	}, s.handleCreateWorkTicket)
 
 	// Update ticket
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name:        "updateTicket",
-		Description: "Update mutable ticket fields. Accepts: id (required), title, body, dueDate, references. dueDate must be RFC3339 when set, and an explicit empty string clears it. Use editTicketBody for targeted body edits; keep updateTicket for full-body rewrites. Does NOT support updating type, repo, path, status, or any other fields.",
+		Description: "Update mutable ticket fields. Accepts: id (required), title, body, dueDate, references. dueDate must be RFC3339 when set, and an explicit empty string clears it. Use editTicketBody for targeted body edits; keep updateTicket for full-body rewrites. Does NOT support updating type, repo, status, or any other fields.",
 	}, s.handleUpdateTicket)
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
@@ -192,7 +192,7 @@ func (s *Server) handleCreateWorkTicket(
 		dueDate = &parsed
 	}
 
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Repo, "", dueDate, input.References)
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Repo, dueDate, input.References)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
@@ -613,7 +613,7 @@ func (s *Server) handleCreateFollowUpTicket(
 		references = []string{originID}
 	}
 
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Repo, "", dueDate, references)
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Repo, dueDate, references)
 	if err != nil {
 		return nil, CreateFollowUpTicketOutput{}, wrapSDKError(err)
 	}

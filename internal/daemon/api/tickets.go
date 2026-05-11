@@ -145,6 +145,10 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing_title", "title is required")
 		return
 	}
+	if req.Repo == "" {
+		writeError(w, http.StatusBadRequest, "missing_repo", "repo is required")
+		return
+	}
 
 	var dueDate *time.Time
 	if req.DueDate != nil && *req.DueDate != "" {
@@ -156,12 +160,14 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		dueDate = &parsed
 	}
 
-	projectCfg, _ := architectconfig.Load(projectPath)
-	if projectCfg != nil && req.Repo != "" {
-		if err := projectCfg.ValidateRepo(req.Repo); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_repo", err.Error())
-			return
-		}
+	projectCfg, err := architectconfig.Load(projectPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
+		return
+	}
+	if err := projectCfg.ValidateRepo(req.Repo); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_repo", err.Error())
+		return
 	}
 
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -170,7 +176,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := store.Create(req.Title, req.Body, dueDate, req.References, req.Repo, req.Path)
+	t, err := store.Create(req.Title, req.Body, dueDate, req.References, req.Repo)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -631,7 +637,7 @@ func (h *TicketHandlers) GetDiffs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoDir, err := resolveGitRepoDir(t.Repo)
+	repoDir, err := resolveTicketRepoDir(projectPath, t.Repo)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_repo", err.Error())
 		return
@@ -755,7 +761,14 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repo := t.Repo
+	repoDir := ""
+	if len(req.Commits) > 0 {
+		repoDir, err = resolveTicketRepoDir(projectPath, t.Repo)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_repo", err.Error())
+			return
+		}
+	}
 
 	if !req.Rejected {
 		if len(req.Commits) == 0 {
@@ -763,9 +776,9 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 				"Cannot conclude: commits array is required with at least one SHA. If this session produced no work, pass rejected: true with a rejection_reason.")
 			return
 		}
-		if invalid := validateCommitSHAs(repo, req.Commits); len(invalid) > 0 {
+		if invalid := validateCommitSHAs(repoDir, req.Commits); len(invalid) > 0 {
 			writeError(w, http.StatusBadRequest, "validation_error",
-				"Cannot conclude: commit "+invalid[0]+" does not exist in "+repo+".")
+				"Cannot conclude: commit "+invalid[0]+" does not exist in "+repoDir+".")
 			return
 		}
 	} else {
@@ -774,9 +787,9 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 				"Cannot conclude: rejection_reason is required when rejected: true.")
 			return
 		}
-		if invalid := validateCommitSHAs(repo, req.Commits); len(invalid) > 0 {
+		if invalid := validateCommitSHAs(repoDir, req.Commits); len(invalid) > 0 {
 			writeError(w, http.StatusBadRequest, "validation_error",
-				"Cannot conclude: commit "+invalid[0]+" does not exist in "+repo+".")
+				"Cannot conclude: commit "+invalid[0]+" does not exist in "+repoDir+".")
 			return
 		}
 	}

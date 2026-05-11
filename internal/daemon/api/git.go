@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 )
 
 // validateCommitSHAs returns the subset of shas that don't resolve in repoDir.
@@ -59,6 +61,24 @@ func resolveGitRepoDir(repoDir string) (string, error) {
 	}
 
 	return absDir, nil
+}
+
+func resolveTicketRepoDir(projectPath, repoKey string) (string, error) {
+	if repoKey == "" {
+		return "", fmt.Errorf("ticket repo key is empty")
+	}
+
+	cfg, err := architectconfig.Load(projectPath)
+	if err != nil {
+		return "", fmt.Errorf("load project config: %w", err)
+	}
+
+	repoPath, err := cfg.ResolveRepoPath(repoKey)
+	if err != nil {
+		return "", err
+	}
+
+	return resolveGitRepoDir(repoPath)
 }
 
 type gitCommitMeta struct {

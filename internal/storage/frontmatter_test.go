@@ -107,3 +107,18 @@ func TestFrontmatterNoTags(t *testing.T) {
 		t.Errorf("Tags = %v, want nil", parsed.Tags)
 	}
 }
+
+func TestFrontmatterKeys(t *testing.T) {
+	data := []byte("---\ntitle: Test\nrepo: cortex1\nreferences:\n  - abc\n---\nbody")
+
+	keys, err := FrontmatterKeys(data)
+	if err != nil {
+		t.Fatalf("FrontmatterKeys failed: %v", err)
+	}
+
+	for _, key := range []string{"title", "repo", "references"} {
+		if _, ok := keys[key]; !ok {
+			t.Fatalf("expected key %q to be present", key)
+		}
+	}
+}

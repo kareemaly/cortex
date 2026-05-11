@@ -12,7 +12,8 @@ type TicketVars struct {
 	TicketTitle   string
 	TicketBody    string
 	References    string // pre-formatted references block
-	Repo          string // repo path for the ticket
+	Repo          string // stable repo key for the ticket
+	RepoPath      string // resolved local path for the ticket repo key
 	ArchitectName string // architect name from config
 	Repos         string // formatted list of other repos in the ecosystem (excluding current repo)
 }

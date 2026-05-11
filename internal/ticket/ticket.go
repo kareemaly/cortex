@@ -26,7 +26,6 @@ var IsNotFound = storage.IsNotFound
 type TicketMeta struct {
 	Title      string     `yaml:"title"`
 	Repo       string     `yaml:"repo,omitempty"`
-	Path       string     `yaml:"path,omitempty"`
 	References []string   `yaml:"references,omitempty"`
 	Due        *time.Time `yaml:"due,omitempty"`
 	Created    time.Time  `yaml:"created"`

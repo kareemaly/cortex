@@ -27,7 +27,6 @@ type TicketResponse struct {
 	Title         string     `json:"title"`
 	Body          string     `json:"body"`
 	Repo          string     `json:"repo,omitempty"`
-	Path          string     `json:"path,omitempty"`
 	FilePath      string     `json:"file_path,omitempty"`
 	HasConclusion bool       `json:"has_conclusion"`
 	References    []string   `json:"references,omitempty"`
@@ -42,7 +41,6 @@ type TicketSummary struct {
 	ID               string     `json:"id"`
 	Title            string     `json:"title"`
 	Repo             string     `json:"repo,omitempty"`
-	Path             string     `json:"path,omitempty"`
 	Status           string     `json:"status"`
 	Created          time.Time  `json:"created"`
 	Updated          time.Time  `json:"updated"`

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
 	"github.com/kareemaly/cortex/internal/storage"
 )
 
@@ -76,16 +77,18 @@ func getWorkingDirectory(req SpawnRequest) (string, error) {
 	}
 
 	if req.Ticket.Repo != "" {
-		repo := req.Ticket.Repo
-		if strings.HasPrefix(repo, "~/") {
-			if home, err := os.UserHomeDir(); err == nil {
-				repo = filepath.Join(home, repo[2:])
-			}
-		}
-		if err := validateGitRepository(repo); err != nil {
+		cfg, err := architectconfig.Load(req.ArchitectPath)
+		if err != nil {
 			return "", err
 		}
-		return repo, nil
+		repoPath, err := cfg.ResolveRepoPath(req.Ticket.Repo)
+		if err != nil {
+			return "", &ConfigError{Field: "Repo", Message: err.Error()}
+		}
+		if err := validateGitRepository(repoPath); err != nil {
+			return "", err
+		}
+		return repoPath, nil
 	}
 
 	return req.ArchitectPath, nil

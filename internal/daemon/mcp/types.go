@@ -21,7 +21,7 @@ type Session struct {
 	TicketID   string // Only set for ticket sessions
 	TicketType string // Only set for ticket sessions
 	CollabID   string // Only set for collab sessions
-	Repo       string // from CORTEX_REPO env var
+	Repo       string // stable repo key from CORTEX_REPO for ticket sessions
 }
 
 // SpawnCollabSessionInput is the input for the spawnCollabSession tool.
@@ -65,7 +65,7 @@ type ReadTicketInput struct {
 type CreateWorkTicketInput struct {
 	Title      string   `json:"title" jsonschema:"The ticket title (required)"`
 	Body       string   `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Repo       string   `json:"repo" jsonschema:"Repository path for this ticket (required). Must be from the configured repos list in cortex.yaml."`
+	Repo       string   `json:"repo" jsonschema:"Stable repo key for this ticket (required). Must be a key from the configured repos map in cortex.yaml."`
 	DueDate    string   `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')."`
 	References []string `json:"references,omitempty" jsonschema:"Ticket IDs to reference (plain ticket IDs only, no prefix scheme)"`
 }
@@ -74,7 +74,7 @@ type CreateWorkTicketInput struct {
 type CreateFollowUpTicketInput struct {
 	Title   string `json:"title" jsonschema:"The follow-up ticket title (required)"`
 	Body    string `json:"body,omitempty" jsonschema:"The ticket body/description"`
-	Repo    string `json:"repo" jsonschema:"Repository path for this ticket (required). Must be in the architect's repos whitelist."`
+	Repo    string `json:"repo" jsonschema:"Stable repo key for this ticket (required). Must be in the architect's configured repos map."`
 	DueDate string `json:"due_date,omitempty" jsonschema:"Optional due date in RFC3339 format (e.g., '2024-12-31T23:59:59Z')"`
 }
 

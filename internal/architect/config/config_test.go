@@ -354,25 +354,25 @@ func TestLoadFromPath_NotFound(t *testing.T) {
 }
 
 func TestValidateRepo(t *testing.T) {
-	t.Run("empty repos allows any", func(t *testing.T) {
+	t.Run("empty repos rejects unknown key", func(t *testing.T) {
 		cfg := &Config{}
-		if err := cfg.ValidateRepo("any-repo"); err != nil {
-			t.Fatalf("expected no error for empty repos list, got: %v", err)
+		if err := cfg.ValidateRepo("any-repo"); err == nil {
+			t.Fatal("expected error for empty repos map, got nil")
 		}
 	})
 
-	t.Run("repo in list is allowed", func(t *testing.T) {
+	t.Run("repo key in map is allowed", func(t *testing.T) {
 		cfg := &Config{
-			Repos: []string{"repo-a", "repo-b", "repo-c"},
+			Repos: map[string]string{"repo-a": "~/work/repo-a", "repo-b": "~/work/repo-b", "repo-c": "~/work/repo-c"},
 		}
 		if err := cfg.ValidateRepo("repo-b"); err != nil {
 			t.Fatalf("expected no error for valid repo, got: %v", err)
 		}
 	})
 
-	t.Run("repo not in list is rejected", func(t *testing.T) {
+	t.Run("repo key not in map is rejected", func(t *testing.T) {
 		cfg := &Config{
-			Repos: []string{"repo-a", "repo-b"},
+			Repos: map[string]string{"repo-a": "~/work/repo-a", "repo-b": "~/work/repo-b"},
 		}
 		err := cfg.ValidateRepo("repo-c")
 		if err == nil {
@@ -386,9 +386,9 @@ func TestLoad_WithRepos(t *testing.T) {
 	writeConfig(t, projectRoot, `
 name: multi-repo
 repos:
-  - frontend
-  - backend
-  - shared
+  frontend: ~/work/frontend
+  backend: ~/work/backend
+  shared: ~/work/shared
 `)
 
 	cfg, err := Load(projectRoot)
@@ -402,14 +402,35 @@ repos:
 	if len(cfg.Repos) != 3 {
 		t.Fatalf("expected 3 repos, got %d", len(cfg.Repos))
 	}
-	if cfg.Repos[0] != "frontend" {
-		t.Errorf("expected first repo 'frontend', got %q", cfg.Repos[0])
+	if cfg.Repos["frontend"] != "~/work/frontend" {
+		t.Errorf("expected frontend repo path '~/work/frontend', got %q", cfg.Repos["frontend"])
 	}
 	if err := cfg.ValidateRepo("backend"); err != nil {
 		t.Errorf("expected 'backend' to be valid, got: %v", err)
 	}
 	if err := cfg.ValidateRepo("unknown"); err == nil {
 		t.Error("expected error for unknown repo, got nil")
+	}
+}
+
+func TestResolveRepoPath(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir failed: %v", err)
+	}
+
+	cfg := &Config{
+		Repos: map[string]string{"frontend": "~/work/frontend"},
+	}
+
+	resolved, err := cfg.ResolveRepoPath("frontend")
+	if err != nil {
+		t.Fatalf("ResolveRepoPath failed: %v", err)
+	}
+
+	want := filepath.Join(home, "work", "frontend")
+	if resolved != want {
+		t.Fatalf("resolved path = %q, want %q", resolved, want)
 	}
 }
 

@@ -129,14 +129,16 @@ Ephemeral session tracking is stored in `{projectRoot}/.sessions.json` (hidden f
 
 ## Configuration
 
-**Architect** (`cortex.yaml`): Optional `repos` list, optional `companion`, optional per-project agent overrides. See `internal/architect/config/config.go` for schema.
+**Architect** (`cortex.yaml`): Optional `repos` map of stable repo keys to local paths, optional `companion`, optional per-project agent overrides. See `internal/architect/config/config.go` for schema.
 
 ```yaml
 name: my-project
 repos:
-  - /path/to/repo
+  my-repo: /path/to/repo
 # agents: only needed for project-specific overrides; global variants live in settings.yaml
 ```
+
+Ticket `repo` frontmatter and API fields must use the stable repo key from this map, not a filesystem path. Runtime resolution (spawn, diff, commit validation) must resolve key -> path through the explicit `repos` map only. Missing repo keys are hard errors; do not fall back to basename/path guessing.
 
 **Global** (`~/.cortex/settings.yaml`): Daemon port, bind address (default `127.0.0.1`), log level, architect registry, and **default agent variants** (auto-populated on `cortex init`/`cortex upgrade`). See `internal/daemon/config/config.go` for schema.
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	daemonconfig "github.com/kareemaly/cortex/internal/daemon/config"
 	"github.com/kareemaly/cortex/internal/storage"
@@ -30,7 +31,7 @@ type AgentVariant struct {
 // Config holds the architect configuration.
 type Config struct {
 	Name      string                  `yaml:"name"`
-	Repos     []string                `yaml:"repos,omitempty"`
+	Repos     map[string]string       `yaml:"repos,omitempty"`
 	Companion string                  `yaml:"companion,omitempty"`
 	Agents    map[string]AgentVariant `yaml:"agents,omitempty"`
 }
@@ -99,19 +100,42 @@ func (c *Config) VariantNames() []string {
 	return names
 }
 
-// ValidateRepo checks if a repo is in the architect's repos list.
-// If Repos is empty, any repo is allowed.
-func (c *Config) ValidateRepo(repo string) error {
-	if len(c.Repos) == 0 {
+// RepoKeys returns the configured repo keys in sorted order.
+func (c *Config) RepoKeys() []string {
+	keys := make([]string, 0, len(c.Repos))
+	for key := range c.Repos {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// ValidateRepo checks that a repo key exists in the architect's repos map.
+func (c *Config) ValidateRepo(repoKey string) error {
+	if repoKey == "" {
+		return fmt.Errorf("repo key cannot be empty")
+	}
+	if _, ok := c.Repos[repoKey]; ok {
 		return nil
 	}
-	expanded := storage.ExpandHome(repo)
-	for _, r := range c.Repos {
-		if storage.ExpandHome(r) == expanded {
-			return nil
-		}
+	if len(c.Repos) == 0 {
+		return fmt.Errorf("unknown repo key %q in cortex.yaml repos map: no repos are configured", repoKey)
 	}
-	return fmt.Errorf("repo %q not in architect repos list", repo)
+	return fmt.Errorf("unknown repo key %q in cortex.yaml repos map", repoKey)
+}
+
+// ResolveRepoPath resolves a configured repo key to a local filesystem path.
+func (c *Config) ResolveRepoPath(repoKey string) (string, error) {
+	if err := c.ValidateRepo(repoKey); err != nil {
+		return "", err
+	}
+
+	path := storage.ExpandHome(strings.TrimSpace(c.Repos[repoKey]))
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve repo path for key %q: %w", repoKey, err)
+	}
+	return absPath, nil
 }
 
 // DefaultConfig returns a Config with default values.
@@ -200,6 +224,19 @@ func ConfigPath(architectRoot string) string {
 
 // Validate checks that the config is valid.
 func (c *Config) Validate() error {
+	for _, key := range c.RepoKeys() {
+		path := strings.TrimSpace(c.Repos[key])
+		if key == "" {
+			return &ValidationError{Field: "repos", Message: "repo key cannot be empty"}
+		}
+		if strings.ContainsRune(key, os.PathSeparator) {
+			return &ValidationError{Field: fmt.Sprintf("repos.%s", key), Message: "repo key cannot contain path separators"}
+		}
+		if path == "" {
+			return &ValidationError{Field: fmt.Sprintf("repos.%s", key), Message: "repo path cannot be empty"}
+		}
+	}
+
 	for name, variant := range c.Agents {
 		if variant.Agent != "" && variant.Agent != AgentClaude && variant.Agent != AgentOpenCode && variant.Agent != AgentCodex {
 			return &ValidationError{

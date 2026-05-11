@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -153,9 +154,9 @@ func TestListAllTicketsWithData(t *testing.T) {
 	defer ts.Close()
 
 	// Create tickets in different statuses
-	_, _ = ts.store.Create("Backlog Ticket", "body1", nil, nil, "", "")
-	ticket2, _ := ts.store.Create("Progress Ticket", "body2", nil, nil, "", "")
-	ticket3, _ := ts.store.Create("Done Ticket", "body3", nil, nil, "", "")
+	_, _ = ts.store.Create("Backlog Ticket", "body1", nil, nil, "")
+	ticket2, _ := ts.store.Create("Progress Ticket", "body2", nil, nil, "")
+	ticket3, _ := ts.store.Create("Done Ticket", "body3", nil, nil, "")
 
 	_ = ts.store.Move(ticket2.ID, ticket.StatusProgress)
 	_ = ts.store.Move(ticket3.ID, ticket.StatusDone)
@@ -184,6 +185,10 @@ func TestCreateTicket(t *testing.T) {
 	body := CreateTicketRequest{
 		Title: "New API Ticket",
 		Body:  "Created via API",
+		Repo:  "test-repo",
+	}
+	if err := os.WriteFile(filepath.Join(ts.projectRoot, "cortex.yaml"), []byte("name: test\nrepos:\n  test-repo: /tmp/test-repo\n"), 0644); err != nil {
+		t.Fatalf("failed to write cortex.yaml: %v", err)
 	}
 
 	resp := ts.request(t, http.MethodPost, "/tickets", body)
@@ -228,11 +233,31 @@ func TestCreateTicketInvalidJSON(t *testing.T) {
 	}
 }
 
+func TestCreateTicketMissingRepo(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	body := CreateTicketRequest{
+		Title: "New API Ticket",
+		Body:  "Created via API",
+	}
+
+	resp := ts.request(t, http.MethodPost, "/tickets", body)
+	defer resp.Body.Close()
+
+	expectStatus(t, resp, http.StatusBadRequest)
+
+	result := decodeJSON[ErrorResponse](t, resp)
+	if result.Code != "missing_repo" {
+		t.Errorf("expected code 'missing_repo', got %q", result.Code)
+	}
+}
+
 func TestGetTicket(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Test Get Ticket", "Test body", nil, nil, "", "")
+	created, _ := ts.store.Create("Test Get Ticket", "Test body", nil, nil, "")
 
 	resp := ts.request(t, http.MethodGet, "/tickets/backlog/"+created.ID, nil)
 	defer resp.Body.Close()
@@ -268,7 +293,7 @@ func TestGetTicketWrongStatus(t *testing.T) {
 	defer ts.Close()
 
 	// Create ticket in backlog
-	created, _ := ts.store.Create("Backlog Ticket", "body", nil, nil, "", "")
+	created, _ := ts.store.Create("Backlog Ticket", "body", nil, nil, "")
 
 	// Try to get it from progress
 	resp := ts.request(t, http.MethodGet, "/tickets/progress/"+created.ID, nil)
@@ -286,7 +311,7 @@ func TestUpdateTicket(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Original Title", "Original body", nil, nil, "", "")
+	created, _ := ts.store.Create("Original Title", "Original body", nil, nil, "")
 
 	newTitle := "Updated Title"
 	newBody := "Updated body"
@@ -313,7 +338,7 @@ func TestEditTicketBody(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Original Title", "alpha\n  beta   gamma  \ndelta", nil, nil, "", "")
+	created, _ := ts.store.Create("Original Title", "alpha\n  beta   gamma  \ndelta", nil, nil, "")
 
 	body := EditTicketBodyRequest{
 		OldString: "beta gamma",
@@ -335,7 +360,7 @@ func TestDeleteTicket(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("To Be Deleted", "body", nil, nil, "", "")
+	created, _ := ts.store.Create("To Be Deleted", "body", nil, nil, "")
 
 	resp := ts.request(t, http.MethodDelete, "/tickets/backlog/"+created.ID, nil)
 	defer resp.Body.Close()
@@ -353,7 +378,7 @@ func TestMoveTicket(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Movable Ticket", "body", nil, nil, "", "")
+	created, _ := ts.store.Create("Movable Ticket", "body", nil, nil, "")
 
 	body := MoveTicketRequest{To: "progress"}
 
@@ -378,7 +403,7 @@ func TestMoveTicketInvalidStatus(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Test Ticket", "body", nil, nil, "", "")
+	created, _ := ts.store.Create("Test Ticket", "body", nil, nil, "")
 
 	body := MoveTicketRequest{To: "invalid"}
 
@@ -398,9 +423,9 @@ func TestListByStatus(t *testing.T) {
 	defer ts.Close()
 
 	// Create tickets
-	ts.store.Create("Backlog 1", "body", nil, nil, "", "")
-	ts.store.Create("Backlog 2", "body", nil, nil, "", "")
-	ticket3, _ := ts.store.Create("Progress Ticket", "body", nil, nil, "", "")
+	ts.store.Create("Backlog 1", "body", nil, nil, "")
+	ts.store.Create("Backlog 2", "body", nil, nil, "")
+	ticket3, _ := ts.store.Create("Progress Ticket", "body", nil, nil, "")
 	ts.store.Move(ticket3.ID, ticket.StatusProgress)
 
 	resp := ts.request(t, http.MethodGet, "/tickets/backlog", nil)

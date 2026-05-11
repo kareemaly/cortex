@@ -45,6 +45,9 @@ git:
 	if !strings.Contains(content, "name: myproject") {
 		t.Error("migrated config should preserve project name")
 	}
+	if !strings.Contains(content, "repos: {}") {
+		t.Error("migrated config should emit an explicit empty repos map")
+	}
 	if !strings.Contains(content, "claude:\n    agent: claude") {
 		t.Error("migrated config should have claude variant")
 	}
@@ -91,6 +94,9 @@ git:
 	content := string(data)
 	if !strings.Contains(content, "name: myproject") {
 		t.Error("migrated config should preserve project name")
+	}
+	if !strings.Contains(content, "repos: {}") {
+		t.Error("migrated config should emit an explicit empty repos map")
 	}
 	if !strings.Contains(content, "opencode:\n    agent: opencode") {
 		t.Error("migrated config should have opencode variant")
@@ -183,6 +189,39 @@ tickets:
 	content := string(data)
 	if strings.Contains(content, "tickets:") {
 		t.Error("migrated config should not contain tickets section")
+	}
+}
+
+func TestMigrateProjectConfig_DerivesRepoMap(t *testing.T) {
+	dir := t.TempDir()
+
+	oldConfig := `name: myproject
+extend: ~/.cortex/defaults/claude-code
+architect:
+  agent: claude
+repos:
+  - ~/projects/cortex1
+  - ~/projects/agentstatus
+`
+	if err := os.WriteFile(filepath.Join(dir, "cortex.yaml"), []byte(oldConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := MigrateProjectConfig(dir)
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "cortex.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "  cortex1: ~/projects/cortex1") {
+		t.Fatalf("migrated config should include derived cortex1 repo key, got:\n%s", content)
+	}
+	if !strings.Contains(content, "  agentstatus: ~/projects/agentstatus") {
+		t.Fatalf("migrated config should include derived agentstatus repo key, got:\n%s", content)
 	}
 }
 
