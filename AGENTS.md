@@ -48,20 +48,26 @@ Architect context: `X-Cortex-Architect` header (HTTP) or `CORTEX_ARCHITECT_PATH`
 
 ## Storage Format
 
-Tickets and conclusions use **YAML frontmatter + markdown body** stored as `index.md` within a directory-per-entity:
+Tickets, conclusions, and collabs use **YAML frontmatter + markdown body** in a Hiveryn-compatible filesystem layout:
 
-- **Tickets**: `tickets/{status}/{slug}-{shortid}/index.md` (statuses: backlog, progress, done)
-- **Conclusions**: `sessions/{slug}-{shortid}/index.md` (persistent session records)
+- **Tickets**: `tickets/{status}/{YYYY-MM-DD-HHMM-slug}/ticket.md` (statuses: backlog, progress, done)
+- **Ticket conclusions**: colocated `conclusion.md` inside done ticket folder
+- **Architect sessions**: `architect-sessions/{YYYY-MM-DD-HHMM}/conclusion.md`
+- **Collabs**: `collabs/{YYYY-MM-DD-HHMM-slug}/prompt.md` + optional `conclusion.md`
 
-Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is stored in `{projectRoot}/.sessions.json` (hidden file at workspace root — see `internal/daemon/api/session_manager.go:50`).
+IDs are folder names (timestamp-based with `-2`, `-3` collision suffixes). Status is inferred from the parent directory. Conclusion type is inferred from location (architect-sessions → architect, collabs → collab, tickets → work). Frontmatter must not duplicate fields (no `id`, `type`, `status`, `session`, or `conclusion` fields). Conclusion files use `started_at` and `concluded_at` (required).
+
+Ephemeral session tracking is stored in `{projectRoot}/.sessions.json` (hidden file at workspace root — see `internal/daemon/api/session_manager.go:50`).
 
 ## Critical Implementation Notes
 
 - **HTTP-only communication**: All clients (CLI, TUI, MCP) communicate via HTTP to daemon. No direct filesystem access to ticket store.
 - **Architect context**: Always use `X-Cortex-Architect` header (HTTP) or `CORTEX_ARCHITECT_PATH` env (MCP).
 - **StoreManager**: Single source of truth for ticket state. Located in `internal/daemon/api/store_manager.go`.
-- **ConclusionStoreManager**: Manages conclusion stores per architect. Located in `internal/daemon/api/conclusion_store_manager.go`.
 - **SessionManager**: Manages ephemeral session stores per architect. Located in `internal/daemon/api/session_manager.go`.
+- **Architect session store**: Persistent architect session conclusions at `architect-sessions/{id}/conclusion.md`. See `internal/architectsession/store.go`.
+- **Collab store**: Persistent collab prompts at `collabs/{id}/prompt.md` and conclusions at `collabs/{id}/conclusion.md`. See `internal/collab/store.go`.
+- **Conclusion aggregation**: Cross-store list/search scans all three locations (ticket conclusions, architect-sessions, collabs). See `aggregateConclusions` in `internal/daemon/api/conclusions.go`.
 - **Spawn state detection**: Three states (normal/active/orphaned) with mode matrix (normal/resume/fresh). See `internal/core/spawn/orchestrate.go`.
 - **Agent status supervision**: Per-session supervisor per spawned agent, wired via `startAgentSupervisor` in `internal/core/spawn/supervisor.go`. **Hub is the sole status source — transcript parsing has been removed.** The supervisor does two things: (1) subscribe to Hub events for this session and forward them to `/agent/status` → SSE; (2) monitor liveness (file stat) and call `DELETE /sessions/{id}` when the agent disappears. Supervisors bind to daemon-root `SupervisorCtx` so they outlive the HTTP spawn handler. Sessions route by canonical `SessionID` UUID everywhere (store, events, `/agent/status`).
 - **Agent status from hooks**: `ReceiverManager` in `internal/daemon/api/receiver_manager.go` wraps per-agent `ingest.Receiver` (from `agentruntime`), maintaining an in-memory cache (`sync.Map`) keyed by `Event.ID` (Cortex session UUID). Hook payloads POST to `POST /hook/{agent}` (global, no architect header). The event loop subscribes to all receiver hubs and populates the cache by `Event.ID`. API responses overlay cached status/tool on ticket summaries and session lists. Per-session supervisors subscribe via `ReceiverManager.EventsFor(ctx, cortexSessionID)` which uses `receiver.Hub().Subscribe(Filter{ID: cortexSessionID})` to forward Hub events to SSE in real time.
@@ -84,6 +90,8 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Build per-agent CLI args or config files in Cortex | Pass `StartRequest` to `adapter.PrepareLaunch()` and use the returned `LaunchSpec` | agentruntime owns agent-specific argument synthesis, MCP config generation, and env key management |
 | Cache or subscribe by native agent session ID | Cache/subscribe by `Event.ID` (Cortex session UUID) | agentruntime guarantees `Event.ID == StartRequest.ID`; native IDs are diagnostic metadata |
 | Pane-based status detection (removed) | Use Hook-based agentruntime receiver for agent status | Pane detection was unreliable; Hook provides ground-truth from agents themselves |
+| Write conclusions to a separate store | Write ticket conclusions colocated in `tickets/done/{id}/conclusion.md`; architect sessions to `architect-sessions/{id}/conclusion.md`; collabs to `collabs/{id}/conclusion.md` | Conclusions are inferred by location, not a separate UUID-keyed store |
+| Duplicate id/type/status in ticket frontmatter | Infer from folder name (id), parent directory (status), and location (conclusion type) | Avoids inconsistency when tickets are moved/renamed manually |
 
 ## Debugging
 
@@ -103,9 +111,6 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | HTTP API handlers | `internal/daemon/api/` |
 | MCP tools | `internal/daemon/mcp/` |
 | Ticket store | `internal/ticket/` |
-| Conclusion store | `internal/conclusion/` |
-| SDK client | `internal/cli/sdk/client.go` |
-| Spawn orchestration | `internal/core/spawn/` |
 | Agent status | `internal/core/agent/` (`supervisor.go` — Hub forwarding + liveness; `adapter.go` — `HubEvent` type) |
 | Receiver manager | `internal/daemon/api/receiver_manager.go` (wraps per-agent ingest.Receiver from agentruntime, caches by Event.ID) |
 | Hook endpoint | `internal/daemon/api/hook.go` (chi handler for `POST /hook/{agent}`) |
@@ -118,6 +123,8 @@ Ticket path is always `{projectRoot}/tickets/`. Ephemeral session tracking is st
 | Agent defaults | `internal/install/defaults/main/` (shared prompts for all agents) |
 | Shared storage | `internal/storage/` |
 | Session store | `internal/session/` |
+| Architect session store | `internal/architectsession/` |
+| Collab store | `internal/collab/` |
 | Response types | `internal/types/` |
 
 ## Configuration
@@ -178,7 +185,7 @@ Defined in `internal/daemon/mcp/`. Three session types with different tool acces
 | `updateDueDate` | Set or update ticket due date |
 | `clearDueDate` | Remove due date from ticket |
 | `spawnSession` | Spawn agent session for ticket (modes: normal, resume, fresh) |
-| `spawnCollabSession` | Spawn a ticketless collab session in a repo with a kickoff prompt |
+| `spawnCollabSession` | Spawn a ticketless collab session at a path with a kickoff prompt and required slug |
 | `search` | Search across all tickets and conclusions by case-insensitive substring query |
 | `listConclusions` | List persistent conclusion records (session records metadata) |
 | `readConclusion` | Read a conclusion record by ID |
