@@ -75,20 +75,17 @@ func getWorkingDirectory(req SpawnRequest) (string, error) {
 		return req.ArchitectPath, nil
 	}
 
-	if req.Ticket.Type == "work" {
-		if req.Ticket.Repo != "" {
-			repo := req.Ticket.Repo
-			if strings.HasPrefix(repo, "~/") {
-				if home, err := os.UserHomeDir(); err == nil {
-					repo = filepath.Join(home, repo[2:])
-				}
+	if req.Ticket.Repo != "" {
+		repo := req.Ticket.Repo
+		if strings.HasPrefix(repo, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				repo = filepath.Join(home, repo[2:])
 			}
-			if err := validateGitRepository(repo); err != nil {
-				return "", err
-			}
-			return repo, nil
 		}
-		return req.ArchitectPath, nil
+		if err := validateGitRepository(repo); err != nil {
+			return "", err
+		}
+		return repo, nil
 	}
 
 	return req.ArchitectPath, nil

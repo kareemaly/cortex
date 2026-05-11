@@ -1,264 +1,257 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
-	"github.com/kareemaly/cortex/internal/conclusion"
+	"github.com/kareemaly/cortex/internal/architectsession"
+	"github.com/kareemaly/cortex/internal/collab"
+	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
 )
 
-// ConclusionHandlers provides HTTP handlers for conclusion operations.
 type ConclusionHandlers struct {
 	deps *Dependencies
 }
 
-// NewConclusionHandlers creates a new ConclusionHandlers with the given dependencies.
 func NewConclusionHandlers(deps *Dependencies) *ConclusionHandlers {
 	return &ConclusionHandlers{deps: deps}
 }
 
-// parseIntQuery parses an integer query parameter, returning defaultVal on missing or invalid input.
-func parseIntQuery(r *http.Request, key string, defaultVal int) int {
-	s := r.URL.Query().Get(key)
-	if s == "" {
-		return defaultVal
-	}
-	v, err := strconv.Atoi(s)
-	if err != nil || v < 0 {
-		return defaultVal
-	}
-	return v
+type conclusionEntry struct {
+	id              string
+	conclusionType  string // "architect", "work", or "collab"
+	collabID        string
+	ticketID        string
+	agent           string
+	profile         string
+	startedAt       time.Time
+	concludedAt     time.Time
+	rejected        bool
+	body            string
+	commits         []string
+	rejectionReason string
 }
 
-// List handles GET /conclusions - lists conclusions with optional type filter and pagination.
+func aggregateConclusions(projectPath string, ticketStore *ticket.Store) ([]conclusionEntry, error) {
+	var entries []conclusionEntry
+
+	asList, _ := architectsession.List(projectPath)
+	for _, c := range asList {
+		entries = append(entries, conclusionEntry{
+			id:             c.ID,
+			conclusionType: "architect",
+			agent:          c.Meta.Agent,
+			profile:        c.Meta.Profile,
+			startedAt:      c.Meta.StartedAt,
+			concludedAt:    c.Meta.ConcludedAt,
+			body:           c.Body,
+		})
+	}
+
+	collabList, _ := collab.List(projectPath)
+	for _, c := range collabList {
+		if c.ConclusionMeta != nil {
+			entries = append(entries, conclusionEntry{
+				id:             c.ID,
+				conclusionType: "collab",
+				collabID:       c.ID,
+				agent:          c.ConclusionMeta.Agent,
+				profile:        c.ConclusionMeta.Profile,
+				startedAt:      c.ConclusionMeta.StartedAt,
+				concludedAt:    c.ConclusionMeta.ConcludedAt,
+				body:           c.ConclusionBody,
+			})
+		}
+	}
+
+	if ticketStore != nil {
+		doneTickets, err := ticketStore.List(ticket.StatusDone)
+		if err == nil {
+			for _, t := range doneTickets {
+				if ok, _ := ticketStore.HasConclusion(t.ID); !ok {
+					continue
+				}
+				meta, body, readErr := ticketStore.ReadConclusion(t.ID)
+				if readErr != nil {
+					continue
+				}
+				entries = append(entries, conclusionEntry{
+					id:              t.ID,
+					conclusionType:  "work",
+					ticketID:        t.ID,
+					agent:           meta.Agent,
+					profile:         meta.Profile,
+					startedAt:       meta.StartedAt,
+					concludedAt:     meta.ConcludedAt,
+					rejected:        meta.Rejected,
+					body:            body,
+					commits:         meta.Commits,
+					rejectionReason: meta.RejectionReason,
+				})
+			}
+		}
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].concludedAt.After(entries[j].concludedAt)
+	})
+
+	return entries, nil
+}
+
 func (h *ConclusionHandlers) List(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 
-	if h.deps.ConclusionStoreManager == nil {
-		writeJSON(w, http.StatusOK, types.ListConclusionsResponse{Conclusions: []types.ConclusionSummary{}, Total: 0})
-		return
+	var ticketStore *ticket.Store
+	if h.deps.StoreManager != nil {
+		if ts, tsErr := h.deps.StoreManager.GetStore(projectPath); tsErr == nil {
+			ticketStore = ts
+		}
 	}
 
-	store, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
+	entries, err := aggregateConclusions(projectPath, ticketStore)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
 		return
 	}
 
 	query := strings.ToLower(r.URL.Query().Get("query"))
+	typeFilter := r.URL.Query().Get("type")
 
-	var opts conclusion.ListOptions
+	filtered := entries
 	if query != "" {
-		// Load all so we can filter by body text, then paginate manually.
-		opts = conclusion.ListOptions{Type: r.URL.Query().Get("type")}
-	} else {
-		opts = conclusion.ListOptions{
-			Type:   r.URL.Query().Get("type"),
-			Limit:  parseIntQuery(r, "limit", 0),
-			Offset: parseIntQuery(r, "offset", 0),
-		}
-	}
-
-	conclusions, total, err := store.ListWithOptions(opts)
-	if err != nil {
-		handleConclusionError(w, err, h.deps.Logger)
-		return
-	}
-
-	if query != "" {
-		filtered := conclusions[:0]
-		for _, c := range conclusions {
-			if strings.Contains(strings.ToLower(c.Body), query) {
-				filtered = append(filtered, c)
-			}
-		}
-		conclusions = filtered
-		total = len(conclusions)
-		offset := parseIntQuery(r, "offset", 0)
-		limit := parseIntQuery(r, "limit", 0)
-		if offset > 0 {
-			if offset >= len(conclusions) {
-				conclusions = nil
-			} else {
-				conclusions = conclusions[offset:]
-			}
-		}
-		if limit > 0 && len(conclusions) > limit {
-			conclusions = conclusions[:limit]
-		}
-	}
-
-	// Try to resolve ticket titles for work conclusions.
-	var ticketTitles map[string]string
-	if h.deps.StoreManager != nil {
-		if ts, tsErr := h.deps.StoreManager.GetStore(projectPath); tsErr == nil {
-			ticketTitles = make(map[string]string)
-			for _, c := range conclusions {
-				if c.Ticket == "" {
-					continue
-				}
-				if _, seen := ticketTitles[c.Ticket]; seen {
-					continue
-				}
-				t, _, err := ts.Get(c.Ticket)
-				if err == nil && t != nil {
-					ticketTitles[c.Ticket] = t.Title
-				} else {
-					ticketTitles[c.Ticket] = "" // not found; cache to avoid re-lookup
-				}
+		filtered = entries[:0]
+		for _, e := range entries {
+			if strings.Contains(strings.ToLower(e.body), query) {
+				filtered = append(filtered, e)
 			}
 		}
 	}
+	if typeFilter != "" {
+		var typeFiltered []conclusionEntry
+		for _, e := range filtered {
+			if e.conclusionType == typeFilter {
+				typeFiltered = append(typeFiltered, e)
+			}
+		}
+		filtered = typeFiltered
+	}
 
-	summaries := make([]types.ConclusionSummary, len(conclusions))
-	for i, c := range conclusions {
-		summary := types.ConclusionSummary{
-			ID:          c.ID,
-			Type:        string(c.Type),
-			Ticket:      c.Ticket,
-			Repo:        c.Repo,
-			Prompt:      c.Prompt,
-			ConcludedAt: c.ConcludedAt,
-			StartedAt:   c.StartedAt,
+	total := len(filtered)
+
+	offset := 0
+	limit := 0
+	if q := r.URL.Query().Get("offset"); q != "" {
+		offset, _ = strconv.Atoi(q)
+	}
+	if q := r.URL.Query().Get("limit"); q != "" {
+		limit, _ = strconv.Atoi(q)
+	}
+
+	if offset > 0 {
+		if offset >= len(filtered) {
+			filtered = nil
+		} else {
+			filtered = filtered[offset:]
 		}
-		if ticketTitles != nil && c.Ticket != "" {
-			summary.TicketTitle = ticketTitles[c.Ticket]
+	}
+	if limit > 0 && len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+
+	summaries := make([]types.ConclusionSummary, len(filtered))
+	for i, e := range filtered {
+		summaries[i] = types.ConclusionSummary{
+			ID:          e.id,
+			TicketID:    e.ticketID,
+			CollabID:    e.collabID,
+			Agent:       e.agent,
+			Profile:     e.profile,
+			StartedAt:   e.startedAt,
+			ConcludedAt: e.concludedAt,
+			Rejected:    e.rejected,
 		}
-		summaries[i] = summary
 	}
 
 	writeJSON(w, http.StatusOK, types.ListConclusionsResponse{Conclusions: summaries, Total: total})
 }
 
-// Get handles GET /conclusions/{id} - gets a conclusion by ID.
 func (h *ConclusionHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 
-	if h.deps.ConclusionStoreManager == nil {
-		writeError(w, http.StatusNotFound, "not_found", "conclusion store not available")
-		return
-	}
-
-	store, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
 	id := chi.URLParam(r, "id")
-	c, err := store.Get(id)
-	if err != nil {
-		handleConclusionError(w, err, h.deps.Logger)
+
+	asConc, asErr := architectsession.ReadConclusion(projectPath, id)
+	if asErr == nil && asConc != nil {
+		resp := types.ConclusionResponse{
+			ID:          asConc.ID,
+			Agent:       asConc.Meta.Agent,
+			Profile:     asConc.Meta.Profile,
+			Body:        asConc.Body,
+			StartedAt:   asConc.Meta.StartedAt,
+			ConcludedAt: asConc.Meta.ConcludedAt,
+		}
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
-	resp := types.ConclusionResponse{
-		ID:              c.ID,
-		Type:            string(c.Type),
-		Ticket:          c.Ticket,
-		Repo:            c.Repo,
-		Prompt:          c.Prompt,
-		Body:            c.Body,
-		Commits:         c.Commits,
-		Rejected:        c.Rejected,
-		RejectionReason: c.RejectionReason,
-		ConcludedAt:     c.ConcludedAt,
-		StartedAt:       c.StartedAt,
-	}
-
-	writeJSON(w, http.StatusOK, resp)
-}
-
-// Create handles POST /conclusions - creates a new conclusion.
-func (h *ConclusionHandlers) Create(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetArchitectPath(r.Context())
-
-	if h.deps.ConclusionStoreManager == nil {
-		writeError(w, http.StatusInternalServerError, "store_error", "conclusion store not available")
+	collabConc, _, collabErr := collab.ReadConclusion(projectPath, id)
+	if collabErr == nil && collabConc != nil {
+		resp := types.ConclusionResponse{
+			ID:          id,
+			CollabID:    id,
+			Agent:       collabConc.Agent,
+			Profile:     collabConc.Profile,
+			Body:        "",
+			StartedAt:   collabConc.StartedAt,
+			ConcludedAt: collabConc.ConcludedAt,
+		}
+		fullCollab, _ := collab.ReadPrompt(projectPath, id)
+		if fullCollab != nil && fullCollab.ConclusionMeta != nil {
+			resp.Body = fullCollab.ConclusionBody
+		}
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
-	store, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
-	var req CreateConclusionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON in request body")
-		return
-	}
-
-	if req.Body == "" {
-		writeError(w, http.StatusBadRequest, "validation_error", "body cannot be empty")
-		return
-	}
-
-	var startedAt time.Time
-	if req.StartedAt != "" {
-		if parsed, parseErr := time.Parse(time.RFC3339, req.StartedAt); parseErr == nil {
-			startedAt = parsed
+	if h.deps.StoreManager != nil {
+		store, err := h.deps.StoreManager.GetStore(projectPath)
+		if err == nil {
+			hasConc, _ := store.HasConclusion(id)
+			if hasConc {
+				meta, body, readErr := store.ReadConclusion(id)
+				if readErr == nil {
+					resp := types.ConclusionResponse{
+						ID:              id,
+						TicketID:        id,
+						Agent:           meta.Agent,
+						Profile:         meta.Profile,
+						Body:            body,
+						Commits:         meta.Commits,
+						Rejected:        meta.Rejected,
+						RejectionReason: meta.RejectionReason,
+						StartedAt:       meta.StartedAt,
+						ConcludedAt:     meta.ConcludedAt,
+					}
+					writeJSON(w, http.StatusOK, resp)
+					return
+				}
+			}
 		}
 	}
 
-	c, err := store.Create(conclusion.CreateParams{
-		Type:      req.Type,
-		TicketID:  req.Ticket,
-		Repo:      req.Repo,
-		Body:      req.Body,
-		StartedAt: startedAt,
-	})
-	if err != nil {
-		handleConclusionError(w, err, h.deps.Logger)
-		return
-	}
-
-	resp := types.ConclusionResponse{
-		ID:              c.ID,
-		Type:            string(c.Type),
-		Ticket:          c.Ticket,
-		Repo:            c.Repo,
-		Prompt:          c.Prompt,
-		Body:            c.Body,
-		Commits:         c.Commits,
-		Rejected:        c.Rejected,
-		RejectionReason: c.RejectionReason,
-		ConcludedAt:     c.ConcludedAt,
-		StartedAt:       c.StartedAt,
-	}
-
-	writeJSON(w, http.StatusCreated, resp)
+	writeError(w, http.StatusNotFound, "not_found", "conclusion not found")
 }
 
-// Show handles POST /conclusions/{id}/show - opens the read-only conclusion viewer in a tmux popup.
 func (h *ConclusionHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
-
-	if h.deps.ConclusionStoreManager == nil {
-		writeError(w, http.StatusInternalServerError, "store_error", "conclusion store not available")
-		return
-	}
-
-	store, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
 	id := chi.URLParam(r, "id")
-	if _, err := store.Get(id); err != nil {
-		handleConclusionError(w, err, h.deps.Logger)
-		return
-	}
 
 	if h.deps.TmuxManager == nil {
 		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
@@ -273,124 +266,5 @@ func (h *ConclusionHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ExecuteActionResponse{
 		Success: true,
 		Message: "Conclusion viewer opened",
-	})
-}
-
-// EditByTicket handles POST /tickets/{id}/conclusion/edit - finds the most recent conclusion for a ticket and opens it.
-func (h *ConclusionHandlers) EditByTicket(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetArchitectPath(r.Context())
-	ticketID := chi.URLParam(r, "id")
-
-	if h.deps.ConclusionStoreManager == nil {
-		writeError(w, http.StatusNotFound, "not_found", "no conclusion found for ticket")
-		return
-	}
-
-	store, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
-	conclusions, _, err := store.ListWithOptions(conclusion.ListOptions{})
-	if err != nil {
-		handleConclusionError(w, err, h.deps.Logger)
-		return
-	}
-
-	var match *conclusion.Conclusion
-	for _, c := range conclusions { // ListWithOptions returns newest-first
-		if c.Ticket == ticketID {
-			match = c
-			break
-		}
-	}
-	if match == nil {
-		writeError(w, http.StatusNotFound, "not_found", "no conclusion found for ticket")
-		return
-	}
-
-	indexPath, err := store.IndexPath(match.ID)
-	if err != nil {
-		handleConclusionError(w, err, h.deps.Logger)
-		return
-	}
-
-	if h.deps.TmuxManager == nil {
-		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
-		return
-	}
-
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vim"
-	}
-	command := fmt.Sprintf("%s %q", editor, indexPath)
-
-	projectCfg, cfgErr := architectconfig.Load(projectPath)
-	tmuxSession := "cortex"
-	if cfgErr == nil && projectCfg.Name != "" {
-		tmuxSession = projectCfg.Name
-	}
-
-	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, "", command); err != nil {
-		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
-		return
-	}
-
-	writeJSON(w, http.StatusOK, ExecuteActionResponse{
-		Success: true,
-		Message: "Editor opened",
-	})
-}
-
-// Edit handles POST /conclusions/{id}/edit - opens the conclusion's index.md in $EDITOR via tmux popup.
-func (h *ConclusionHandlers) Edit(w http.ResponseWriter, r *http.Request) {
-	projectPath := GetArchitectPath(r.Context())
-
-	if h.deps.ConclusionStoreManager == nil {
-		writeError(w, http.StatusInternalServerError, "store_error", "conclusion store not available")
-		return
-	}
-
-	store, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
-	id := chi.URLParam(r, "id")
-
-	indexPath, err := store.IndexPath(id)
-	if err != nil {
-		handleConclusionError(w, err, h.deps.Logger)
-		return
-	}
-
-	if h.deps.TmuxManager == nil {
-		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
-		return
-	}
-
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vim"
-	}
-	command := fmt.Sprintf("%s %q", editor, indexPath)
-
-	projectCfg, cfgErr := architectconfig.Load(projectPath)
-	tmuxSession := "cortex"
-	if cfgErr == nil && projectCfg.Name != "" {
-		tmuxSession = projectCfg.Name
-	}
-
-	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, "", command); err != nil {
-		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
-		return
-	}
-
-	writeJSON(w, http.StatusOK, ExecuteActionResponse{
-		Success: true,
-		Message: "Editor opened",
 	})
 }

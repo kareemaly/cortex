@@ -132,9 +132,11 @@ func (s *Store) EndCollab(collabID string) error {
 	return &storage.NotFoundError{Resource: "session", ID: collabID}
 }
 
-// CreateArchitect adds the architect session. There is at most one
-// architect session per store; any existing architect is replaced.
-func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
+// CreateArchitect adds the architect session with the given sessionID.
+// There is at most one architect session per store; any existing architect
+// is replaced. sessionID must be a Hiveryn-compatible timestamp ID
+// (YYYY-MM-DD-HHMM).
+func (s *Store) CreateArchitect(sessionID, agent, tmuxWindow string) (*Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -151,7 +153,7 @@ func (s *Store) CreateArchitect(agent, tmuxWindow string) (*Session, error) {
 	}
 
 	sess := &Session{
-		SessionID:  NewSessionID(),
+		SessionID:  sessionID,
 		Type:       SessionTypeArchitect,
 		Agent:      agent,
 		TmuxWindow: tmuxWindow,

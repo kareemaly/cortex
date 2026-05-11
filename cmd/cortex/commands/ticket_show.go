@@ -39,12 +39,12 @@ var ticketShowCmd = &cobra.Command{
 			initial.Title,
 			initial.Subtitle,
 			initial.Tabs,
-			detail.WithEditableTicket(ticketID, initial.IndexPath, func() tea.Msg {
-				if err := program.ReleaseTerminal(); err != nil {
-					return detail.EditFinished(detail.EditResult{}, err)
-				}
+		detail.WithEditableTicket(ticketID, initial.FilePath, func() tea.Msg {
+			if err := program.ReleaseTerminal(); err != nil {
+				return detail.EditFinished(detail.EditResult{}, err)
+			}
 
-				editErr := openEditor(initial.IndexPath)
+			editErr := openEditor(initial.FilePath)
 
 				restoreErr := program.RestoreTerminal()
 				if editErr != nil {
@@ -103,7 +103,7 @@ type ticketDetailData struct {
 	Title     string
 	Subtitle  string
 	Tabs      []detail.Tab
-	IndexPath string
+	FilePath  string
 }
 
 func loadTicketDetail(client *sdk.Client, ticketID string) (ticketDetailData, error) {
@@ -116,17 +116,17 @@ func loadTicketDetail(client *sdk.Client, ticketID string) (ticketDetailData, er
 
 	var conclusionResp *sdk.ConclusionResponse
 	var conclusionWarning string
-	if ticketResp.ConclusionID != "" {
-		conclusionResp, err = client.GetConclusion(ticketResp.ConclusionID)
+	if ticketResp.HasConclusion {
+		conclusionResp, err = client.GetConclusion(ticketResp.ID)
 		if err != nil {
 			conclusionWarning = err.Error()
 		}
 	}
 
 	return ticketDetailData{
-		Title:     ticketResp.Title,
-		Tabs:      buildTicketTabs(ticketResp, ticketSummary, conclusionResp, conclusionWarning),
-		IndexPath: ticketResp.IndexPath,
+		Title:    ticketResp.Title,
+		Tabs:     buildTicketTabs(ticketResp, ticketSummary, conclusionResp, conclusionWarning),
+		FilePath: ticketResp.FilePath,
 	}, nil
 }
 
@@ -162,7 +162,6 @@ func buildTicketOverview(ticketResp *sdk.TicketResponse, ticketSummary *sdk.Tick
 	b.WriteString("## Ticket\n")
 	b.WriteString(fmt.Sprintf("- ID: `%s`\n", ticketResp.ID))
 	b.WriteString(fmt.Sprintf("- Status: `%s`\n", ticketResp.Status))
-	b.WriteString(fmt.Sprintf("- Type: `%s`\n", ticketResp.Type))
 	b.WriteString(fmt.Sprintf("- Repo: `%s`\n", emptyDash(ticketResp.Repo)))
 	b.WriteString(fmt.Sprintf("- Path: `%s`\n", emptyDash(ticketResp.Path)))
 	b.WriteString(fmt.Sprintf("- Created: %s\n", formatDetailTime(ticketResp.Created)))
@@ -192,12 +191,14 @@ func buildTicketOverview(ticketResp *sdk.TicketResponse, ticketSummary *sdk.Tick
 	}
 
 	b.WriteString("\n## Linked Conclusion\n")
-	if ticketResp.ConclusionID == "" {
+	if !ticketResp.HasConclusion {
 		b.WriteString("- Linked conclusion: none\n")
 	} else {
-		b.WriteString(fmt.Sprintf("- ID: `%s`\n", ticketResp.ConclusionID))
+		b.WriteString(fmt.Sprintf("- ID: `%s`\n", ticketResp.ID))
 		if conclusionResp != nil {
-			b.WriteString(fmt.Sprintf("- Type: `%s`\n", conclusionResp.Type))
+			b.WriteString(fmt.Sprintf("- Agent: `%s`\n", emptyDash(conclusionResp.Agent)))
+			b.WriteString(fmt.Sprintf("- Started: %s\n", formatDetailTime(conclusionResp.StartedAt)))
+			b.WriteString(fmt.Sprintf("- Concluded: %s\n", formatDetailTime(conclusionResp.ConcludedAt)))
 			b.WriteString(fmt.Sprintf("- Rejected: %s\n", yesNo(conclusionResp.Rejected)))
 			if conclusionResp.RejectionReason != "" {
 				b.WriteString(fmt.Sprintf("- Rejection reason: %s\n", conclusionResp.RejectionReason))
@@ -205,7 +206,6 @@ func buildTicketOverview(ticketResp *sdk.TicketResponse, ticketSummary *sdk.Tick
 			if len(conclusionResp.Commits) > 0 {
 				b.WriteString(fmt.Sprintf("- Commits: %d\n", len(conclusionResp.Commits)))
 			}
-			b.WriteString(fmt.Sprintf("- Concluded: %s\n", formatDetailTime(conclusionResp.ConcludedAt)))
 		} else if conclusionWarning != "" {
 			b.WriteString(fmt.Sprintf("- Load error: %s\n", conclusionWarning))
 		}
@@ -216,13 +216,13 @@ func buildTicketOverview(ticketResp *sdk.TicketResponse, ticketSummary *sdk.Tick
 
 func buildLinkedConclusionTab(ticketResp *sdk.TicketResponse, conclusionResp *sdk.ConclusionResponse, conclusionWarning string) string {
 	if conclusionResp == nil {
-		return fmt.Sprintf("Unable to load linked conclusion `%s`.\n\n%s", ticketResp.ConclusionID, conclusionWarning)
+		return fmt.Sprintf("Unable to load linked conclusion `%s`.\n\n%s", ticketResp.ID, conclusionWarning)
 	}
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("- ID: `%s`\n", conclusionResp.ID))
-	b.WriteString(fmt.Sprintf("- Type: `%s`\n", conclusionResp.Type))
-	b.WriteString(fmt.Sprintf("- Repo: `%s`\n", emptyDash(conclusionResp.Repo)))
+	b.WriteString(fmt.Sprintf("- Agent: `%s`\n", emptyDash(conclusionResp.Agent)))
+	b.WriteString(fmt.Sprintf("- Profile: `%s`\n", emptyDash(conclusionResp.Profile)))
 	b.WriteString(fmt.Sprintf("- Started: %s\n", formatDetailTime(conclusionResp.StartedAt)))
 	b.WriteString(fmt.Sprintf("- Concluded: %s\n", formatDetailTime(conclusionResp.ConcludedAt)))
 	b.WriteString(fmt.Sprintf("- Duration: %s\n", formatDetailDuration(conclusionResp.StartedAt, conclusionResp.ConcludedAt)))

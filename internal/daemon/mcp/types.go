@@ -28,6 +28,7 @@ type Session struct {
 type SpawnCollabSessionInput struct {
 	Path    string `json:"path" jsonschema:"Any valid filesystem path where the collab agent will spawn (required). The path must exist on disk."`
 	Prompt  string `json:"prompt" jsonschema:"Brief question or topic to discuss. Keep it minimal — the collab agent starts in the directory with its own AGENTS.md context."`
+	Slug    string `json:"slug" jsonschema:"Short readable slug for the collab folder name (required). Lowercase, hyphen-separated words."`
 	Variant string `json:"variant" jsonschema:"Agent variant name from the agents map in cortex.yaml (required). Use listVariants to see available names."`
 }
 
@@ -139,9 +140,7 @@ type ConcludeSessionInput struct {
 type TicketSummary struct {
 	ID      string     `json:"id"`
 	Title   string     `json:"title"`
-	Type    string     `json:"type"`
 	Repo    string     `json:"repo,omitempty"`
-	Path    string     `json:"path,omitempty"`
 	Due     *time.Time `json:"due,omitempty"`
 	Created time.Time  `json:"created"`
 	Updated time.Time  `json:"updated"`
@@ -157,19 +156,17 @@ type SessionOutput struct {
 
 // TicketOutput is the full ticket representation.
 type TicketOutput struct {
-	ID           string            `json:"id"`
-	Type         string            `json:"type"`
-	Title        string            `json:"title"`
-	Body         string            `json:"body"`
-	Repo         string            `json:"repo,omitempty"`
-	Path         string            `json:"path,omitempty"`
-	ConclusionID string            `json:"conclusion_id,omitempty"`
-	References   []string          `json:"references,omitempty"`
-	Status       string            `json:"status"`
-	Created      time.Time         `json:"created"`
-	Updated      time.Time         `json:"updated"`
-	Due          *time.Time        `json:"due,omitempty"`
-	Conclusion   *ConclusionOutput `json:"conclusion,omitempty"`
+	ID            string            `json:"id"`
+	Title         string            `json:"title"`
+	Body          string            `json:"body"`
+	Repo          string            `json:"repo,omitempty"`
+	HasConclusion bool              `json:"has_conclusion"`
+	References    []string          `json:"references,omitempty"`
+	Status        string            `json:"status"`
+	Created       time.Time         `json:"created"`
+	Updated       time.Time         `json:"updated"`
+	Due           *time.Time        `json:"due,omitempty"`
+	Conclusion    *ConclusionOutput `json:"conclusion,omitempty"`
 }
 
 // Tool output wrappers
@@ -249,22 +246,21 @@ type ReadConclusionInput struct {
 // ConclusionListItem is a metadata-only conclusion record for list responses (no body).
 type ConclusionListItem struct {
 	ID          string `json:"id"`
-	Type        string `json:"type"`
-	Ticket      string `json:"ticket,omitempty"`
-	Repo        string `json:"repo,omitempty"`
+	TicketID    string `json:"ticket_id,omitempty"`
+	CollabID    string `json:"collab_id,omitempty"`
+	Agent       string `json:"agent"`
+	Profile     string `json:"profile,omitempty"`
+	StartedAt   string `json:"started_at"`
 	ConcludedAt string `json:"concluded_at"`
-	StartedAt   string `json:"started_at,omitempty"`
+	Rejected    bool   `json:"rejected,omitempty"`
 }
 
 // ConclusionOutput is a full conclusion record including the body.
 type ConclusionOutput struct {
 	ID          string `json:"id"`
-	Type        string `json:"type"`
-	Ticket      string `json:"ticket,omitempty"`
-	Repo        string `json:"repo,omitempty"`
 	Body        string `json:"body"`
+	StartedAt   string `json:"started_at"`
 	ConcludedAt string `json:"concluded_at"`
-	StartedAt   string `json:"started_at,omitempty"`
 }
 
 // ListConclusionsOutput is the output for the listConclusions tool.
@@ -302,7 +298,6 @@ func ticketSummaryResponseToMCP(s *types.TicketSummary) TicketSummary {
 	return TicketSummary{
 		ID:      s.ID,
 		Title:   s.Title,
-		Type:    s.Type,
 		Due:     s.Due,
 		Created: s.Created,
 		Updated: s.Updated,

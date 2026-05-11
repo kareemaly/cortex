@@ -10,32 +10,21 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
+	"github.com/kareemaly/cortex/internal/collab"
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/types"
 )
 
-// SpawnCollabRequest is the request body for spawning a collab session.
-type SpawnCollabRequest struct {
-	Path    string `json:"path"`
-	Prompt  string `json:"prompt"`
-	Mode    string `json:"mode,omitempty"`
-	Variant string `json:"variant,omitempty"`
-}
-
-// CollabHandlers provides HTTP handlers for collab session operations.
 type CollabHandlers struct {
 	deps *Dependencies
 }
 
-// NewCollabHandlers creates a new CollabHandlers with the given dependencies.
 func NewCollabHandlers(deps *Dependencies) *CollabHandlers {
 	return &CollabHandlers{deps: deps}
 }
 
-// Spawn handles POST /collab/spawn - spawns a collab session.
 func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 
@@ -53,8 +42,11 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "validation_error", "prompt cannot be empty")
 		return
 	}
+	if req.Slug == "" {
+		writeError(w, http.StatusBadRequest, "validation_error", "slug is required")
+		return
+	}
 
-	// Validate path exists
 	expandedPath := req.Path
 	if strings.HasPrefix(expandedPath, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
@@ -66,14 +58,12 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load project config merged with global agents
 	projectCfg, err := mergeProjectConfig(projectPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "config_error", "failed to load project config")
 		return
 	}
 
-	// Check tmux is available
 	if h.deps.TmuxManager == nil {
 		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
 		return
@@ -81,7 +71,6 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	sessionName := projectCfg.GetTmuxSessionName()
 
-	// Resolve variant — required
 	variantName := req.Variant
 	if variantName == "" {
 		names := projectCfg.VariantNames()
@@ -104,7 +93,26 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		collabAgent = "claude"
 	}
 
-	collabID := uuid.New().String()
+	if err := collab.EnsureDir(projectPath); err != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", "failed to create collabs directory")
+		return
+	}
+
+	now := time.Now().UTC()
+	collabID, idErr := collab.NewID(collab.Dir(projectPath), now, req.Slug)
+	if idErr != nil {
+		writeError(w, http.StatusInternalServerError, "store_error", "failed to generate collab ID")
+		return
+	}
+
+	promptMeta := collab.PromptMeta{
+		Created: now,
+		Agent:   collabAgent,
+		Profile: variantName,
+	}
+	if err := collab.WritePrompt(projectPath, collabID, promptMeta, req.Prompt); err != nil {
+		h.deps.Logger.Warn("failed to persist collab prompt", "error", err)
+	}
 
 	ticketsDir := projectCfg.TicketsPath(projectPath)
 
@@ -148,14 +156,13 @@ func (h *CollabHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusCreated, types.SpawnCollabResponse{
-		CollabID:    result.CollabID,
+		CollabID:    collabID,
 		TmuxWindow:  result.TmuxWindow,
 		TmuxSession: result.TmuxSession,
 		State:       "active",
 	})
 }
 
-// Conclude handles POST /collab/{id}/conclude - concludes a collab session.
 func (h *CollabHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	collabID := chi.URLParam(r, "id")
@@ -171,52 +178,53 @@ func (h *CollabHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get session info before ending. Repo is only available from the
-	// request body — the session record carries CollabID, not the working
-	// directory the collab was started against.
 	var tmuxWindow string
-	var prompt string
+	var agent string
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
 		if sess, err := sessStore.GetByCollabID(collabID); err == nil && sess != nil {
 			tmuxWindow = sess.TmuxWindow
-			prompt = sess.Prompt
+			agent = sess.Agent
 		}
 		if endErr := sessStore.EndCollab(collabID); endErr != nil {
 			h.deps.Logger.Warn("failed to end collab session", "error", endErr)
 		}
 	}
 
-	repo := req.Repo
-
 	h.deps.Bus.Emit(events.Event{
 		Type:          events.SessionEnded,
 		ArchitectPath: projectPath,
 	})
 
-	// Parse startedAt
 	var startedAt time.Time
 	if req.StartedAt != "" {
 		if parsed, parseErr := time.Parse(time.RFC3339, req.StartedAt); parseErr == nil {
 			startedAt = parsed
 		}
 	}
+	if startedAt.IsZero() {
+		startedAt = time.Now().UTC()
+	}
 
-	// Create conclusion record and kill tmux window
-	CreateConclusionAndKillWindow(ConcludeParams{
-		ProjectPath:   projectPath,
-		EntityType:    "collab",
-		EntityID:      collabID,
-		TmuxWindow:    tmuxWindow,
-		Content:       req.Content,
-		StartedAt:     startedAt,
-		Repo:          repo,
-		Prompt:        prompt,
-		Commits:       req.Commits,
-		Logger:        h.deps.Logger,
-		TmuxManager:   h.deps.TmuxManager,
-		ConclusionMgr: h.deps.ConclusionStoreManager,
-	})
+	concludedAt := time.Now().UTC()
+	concMeta := collab.ConclusionMeta{
+		StartedAt:   startedAt,
+		ConcludedAt: concludedAt,
+		Agent:       agent,
+		Profile:     "",
+	}
+
+	if err := collab.WriteConclusion(projectPath, collabID, concMeta, req.Content); err != nil {
+		h.deps.Logger.Warn("failed to write collab conclusion", "error", err)
+	}
+
+	if tmuxWindow != "" && h.deps.TmuxManager != nil {
+		projectCfg, _ := architectconfig.Load(projectPath)
+		tmuxSession := projectCfg.GetTmuxSessionName()
+		if killErr := h.deps.TmuxManager.KillWindow(tmuxSession, tmuxWindow); killErr != nil {
+			h.deps.Logger.Warn("failed to kill tmux window", "window", tmuxWindow, "error", killErr)
+		}
+	}
 
 	writeJSON(w, http.StatusOK, ConcludeSessionResponse{
 		Success:  true,
@@ -225,7 +233,6 @@ func (h *CollabHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Focus handles POST /collab/{id}/focus - focuses the tmux window of a collab session.
 func (h *CollabHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	sessionID := chi.URLParam(r, "id")

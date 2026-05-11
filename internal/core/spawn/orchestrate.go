@@ -222,7 +222,7 @@ func Orchestrate(ctx context.Context, req OrchestrateRequest, deps OrchestrateDe
 				TicketsDir:    ticketsDir,
 				WindowName:    stateInfo.Session.TmuxWindow,
 				TicketID:      req.TicketID,
-				TicketType:    t.Type,
+				TicketType:    ticket.DefaultTicketType,
 				Companion:     req.Companion,
 				AgentArgs:     req.AgentArgs,
 				EnvVars:       req.EnvVars,

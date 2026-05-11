@@ -23,27 +23,23 @@ type SessionResponse struct {
 
 // TicketResponse is the full ticket response with status.
 type TicketResponse struct {
-	ID    string `json:"id"`
-	Type  string `json:"type"`
-	Title string `json:"title"`
-	Body  string `json:"body"`
-	Repo  string `json:"repo,omitempty"`
-	Path  string `json:"path,omitempty"`
-	// IndexPath is the daemon-resolved path to the ticket's backing index.md file.
-	IndexPath string `json:"index_path,omitempty"`
-	// ConclusionID is the linked conclusion ID once the ticket is concluded.
-	ConclusionID string     `json:"conclusion_id,omitempty"`
-	References   []string   `json:"references,omitempty"`
-	Status       string     `json:"status"`
-	Created      time.Time  `json:"created"`
-	Updated      time.Time  `json:"updated"`
-	Due          *time.Time `json:"due,omitempty"`
+	ID            string     `json:"id"`
+	Title         string     `json:"title"`
+	Body          string     `json:"body"`
+	Repo          string     `json:"repo,omitempty"`
+	Path          string     `json:"path,omitempty"`
+	FilePath      string     `json:"file_path,omitempty"`
+	HasConclusion bool       `json:"has_conclusion"`
+	References    []string   `json:"references,omitempty"`
+	Status        string     `json:"status"`
+	Created       time.Time  `json:"created"`
+	Updated       time.Time  `json:"updated"`
+	Due           *time.Time `json:"due,omitempty"`
 }
 
 // TicketSummary is a brief view of a ticket for lists.
 type TicketSummary struct {
 	ID               string     `json:"id"`
-	Type             string     `json:"type"`
 	Title            string     `json:"title"`
 	Repo             string     `json:"repo,omitempty"`
 	Path             string     `json:"path,omitempty"`
@@ -52,6 +48,7 @@ type TicketSummary struct {
 	Updated          time.Time  `json:"updated"`
 	Due              *time.Time `json:"due,omitempty"`
 	HasActiveSession bool       `json:"has_active_session"`
+	HasConclusion    bool       `json:"has_conclusion,omitempty"`
 	AgentStatus      *string    `json:"agent_status,omitempty"`
 	AgentTool        *string    `json:"agent_tool,omitempty"`
 	Agent            string     `json:"agent,omitempty"`
@@ -104,30 +101,28 @@ type DiffsResponse struct {
 // ConclusionResponse is the full conclusion response.
 type ConclusionResponse struct {
 	ID              string    `json:"id"`
-	Type            string    `json:"type"`
-	Ticket          string    `json:"ticket,omitempty"`
-	Repo            string    `json:"repo,omitempty"`
-	Prompt          string    `json:"prompt,omitempty"`
+	TicketID        string    `json:"ticket_id,omitempty"`
 	CollabID        string    `json:"collab_id,omitempty"`
+	Agent           string    `json:"agent"`
+	Profile         string    `json:"profile,omitempty"`
 	Body            string    `json:"body"`
 	Commits         []string  `json:"commits,omitempty"`
 	Rejected        bool      `json:"rejected,omitempty"`
 	RejectionReason string    `json:"rejection_reason,omitempty"`
+	StartedAt       time.Time `json:"started_at"`
 	ConcludedAt     time.Time `json:"concluded_at"`
-	StartedAt       time.Time `json:"started_at,omitempty"`
 }
 
 // ConclusionSummary is metadata-only (no body) for list responses.
 type ConclusionSummary struct {
 	ID          string    `json:"id"`
-	Type        string    `json:"type"`
-	Ticket      string    `json:"ticket,omitempty"`
-	TicketTitle string    `json:"ticket_title,omitempty"`
-	Repo        string    `json:"repo,omitempty"`
-	Prompt      string    `json:"prompt,omitempty"`
+	TicketID    string    `json:"ticket_id,omitempty"`
 	CollabID    string    `json:"collab_id,omitempty"`
+	Agent       string    `json:"agent"`
+	Profile     string    `json:"profile,omitempty"`
+	StartedAt   time.Time `json:"started_at"`
 	ConcludedAt time.Time `json:"concluded_at"`
-	StartedAt   time.Time `json:"started_at,omitempty"`
+	Rejected    bool      `json:"rejected,omitempty"`
 }
 
 // SpawnCollabResponse is the response for spawning a collab session.

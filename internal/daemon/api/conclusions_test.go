@@ -5,26 +5,31 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kareemaly/cortex/internal/conclusion"
+	"github.com/kareemaly/cortex/internal/ticket"
+	"github.com/kareemaly/cortex/internal/architectsession"
 )
 
 func TestGetConclusion_ExposesCommitsAndRejection(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, err := ts.conclusionStore.Create(conclusion.CreateParams{
-		Type:            "work",
-		TicketID:        "ticket-1",
-		Repo:            "/repo",
-		Body:            "done report",
+	projectPath := ts.projectRoot
+
+	created, _ := ts.store.Create("test-ticket", "body", nil, nil, "", "")
+	meta := &ticket.TicketConclusionMeta{
 		StartedAt:       time.Now().UTC().Add(-2 * time.Minute),
+		ConcludedAt:     time.Now().UTC(),
+		Agent:           "codex",
 		Commits:         []string{"abc123", "def456"},
 		Rejected:        true,
 		RejectionReason: "no shippable change",
-	})
-	if err != nil {
+	}
+
+	if err := ts.store.WriteConclusion(created.ID, meta, "done report"); err != nil {
 		t.Fatal(err)
 	}
+
+	_ = architectsession.EnsureDir(projectPath)
 
 	resp := ts.makeRequest(t, http.MethodGet, "/conclusions/"+created.ID, nil)
 	defer func() { _ = resp.Body.Close() }()

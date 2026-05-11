@@ -85,7 +85,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	sessionManager := api.NewSessionManager(logger)
-	conclusionStoreManager := api.NewConclusionStoreManager(logger, bus)
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -97,16 +96,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 	receiverManager.StartEventLoop(ctx)
 
 	deps := &api.Dependencies{
-		StoreManager:           storeManager,
-		ConclusionStoreManager: conclusionStoreManager,
-		SessionManager:         sessionManager,
-		TmuxManager:            tmuxManager,
-		Bus:                    bus,
-		Logger:                 logger,
-		SupervisorCtx:          ctx,
-		DefaultsDir:            filepath.Join(homeDir, ".cortex", "defaults", "main"),
-		ReceiverManager:        receiverManager,
-		DaemonEndpoint:         fmt.Sprintf("http://%s:%d", cfg.BindAddress, cfg.Port),
+		StoreManager:    storeManager,
+		SessionManager:  sessionManager,
+		TmuxManager:     tmuxManager,
+		Bus:             bus,
+		Logger:          logger,
+		SupervisorCtx:   ctx,
+		DefaultsDir:     filepath.Join(homeDir, ".cortex", "defaults", "main"),
+		ReceiverManager: receiverManager,
+		DaemonEndpoint:  fmt.Sprintf("http://%s:%d", cfg.BindAddress, cfg.Port),
 	}
 
 	// Create and run server

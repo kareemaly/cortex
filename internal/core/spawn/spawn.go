@@ -12,6 +12,7 @@ import (
 	"github.com/hiveryn/agentruntime/adapter/claude"
 	"github.com/hiveryn/agentruntime/adapter/codex"
 	"github.com/hiveryn/agentruntime/adapter/opencode"
+	"github.com/kareemaly/cortex/internal/architectsession"
 	"github.com/kareemaly/cortex/internal/binpath"
 	"github.com/kareemaly/cortex/internal/core/agent"
 	"github.com/kareemaly/cortex/internal/session"
@@ -46,7 +47,7 @@ type SessionStoreInterface interface {
 	EndBySessionID(sessionID string) error
 	EndByTicketID(ticketID string) error
 	GetByTicketID(ticketID string) (*session.Session, error)
-	CreateArchitect(agent, tmuxWindow string) (*session.Session, error)
+	CreateArchitect(sessionID, agent, tmuxWindow string) (*session.Session, error)
 	GetArchitect() (*session.Session, error)
 	EndArchitect() error
 	CreateCollab(collabID, prompt, agent, tmuxWindow string) (*session.Session, error)
@@ -208,7 +209,11 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 				sessionIDForStatus = sess.SessionID
 			}
 		case AgentTypeArchitect:
-			sess, err := s.deps.SessionStore.CreateArchitect(req.Agent, windowName)
+			archSessionID, genErr := s.generateArchitectSessionID(req.ArchitectPath)
+			if genErr != nil {
+				return nil, genErr
+			}
+			sess, err := s.deps.SessionStore.CreateArchitect(archSessionID, req.Agent, windowName)
 			if err != nil {
 				return nil, err
 			}
@@ -229,12 +234,7 @@ func (s *Spawner) Spawn(ctx context.Context, req SpawnRequest) (*SpawnResult, er
 	mcpServerConfig := BuildMCPServerConfig(MCPConfigParams{
 		CortexdPath: cortexdPath,
 		TicketID:    req.TicketID,
-		TicketType: func() string {
-			if req.Ticket != nil {
-				return req.Ticket.Type
-			}
-			return ""
-		}(),
+		TicketType: ticket.DefaultTicketType,
 		TicketsDir:    req.TicketsDir,
 		ArchitectPath: req.ArchitectPath,
 		TmuxSession:   req.TmuxSession,
@@ -401,7 +401,14 @@ func (s *Spawner) Resume(ctx context.Context, req ResumeRequest) (*SpawnResult, 
 	if s.deps.SessionStore != nil {
 		switch req.AgentType {
 		case AgentTypeArchitect:
-			if sess, createErr := s.deps.SessionStore.CreateArchitect(req.Agent, req.WindowName); createErr != nil {
+			archSessionID, genErr := s.generateArchitectSessionID(req.ArchitectPath)
+			if genErr != nil {
+				s.logWarn("resume: failed to generate architect session ID", "error", genErr)
+			}
+			if archSessionID == "" {
+				archSessionID = newResumeSessionID()
+			}
+			if sess, createErr := s.deps.SessionStore.CreateArchitect(archSessionID, req.Agent, req.WindowName); createErr != nil {
 				s.logWarn("resume: failed to create architect session", "error", createErr)
 			} else if sess != nil {
 				resumeSessionID = sess.SessionID
@@ -625,10 +632,8 @@ func (s *Spawner) buildCortexEnv(req SpawnRequest, startedAt string) map[string]
 		env["CORTEX_TICKET_ID"] = session.ArchitectSessionKey
 	case AgentTypeTicketAgent:
 		env["CORTEX_TICKET_ID"] = req.TicketID
-		if req.Ticket != nil {
-			env["CORTEX_TICKET_TYPE"] = req.Ticket.Type
-			env["CORTEX_REPO"] = req.Ticket.Repo
-		}
+		env["CORTEX_TICKET_TYPE"] = ticket.DefaultTicketType
+		env["CORTEX_REPO"] = req.Ticket.Repo
 	case AgentTypeCollabAgent:
 		env["CORTEX_COLLAB_ID"] = req.CollabID
 		env["CORTEX_REPO"] = req.Repo
@@ -693,4 +698,10 @@ func (s *Spawner) ensureAgentHooks(ctx context.Context, adapter agentruntime.Ada
 	if err != nil {
 		s.logWarn("hook setup failed", "agent", agent, "error", err)
 	}
+}
+
+func (s *Spawner) generateArchitectSessionID(projectPath string) (string, error) {
+	_ = architectsession.EnsureDir(projectPath)
+	checker := storage.MakeDirCollisionChecker(architectsession.Dir(projectPath))
+	return storage.NewArchitectSessionID(checker, time.Now())
 }

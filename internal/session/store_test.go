@@ -232,7 +232,7 @@ func TestCreateArchitectSetsType(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	sess, err := store.CreateArchitect("claude", "architect-window")
+	sess, err := store.CreateArchitect("2026-05-11-1200", "claude", "architect-window")
 	if err != nil {
 		t.Fatalf("CreateArchitect failed: %v", err)
 	}
@@ -249,13 +249,10 @@ func TestCreateArchitectReplacesExisting(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	first, _ := store.CreateArchitect("claude", "w1")
-	second, _ := store.CreateArchitect("codex", "w2")
+	_, _ = store.CreateArchitect("2026-05-11-1200", "claude", "w1")
+	_, _ = store.CreateArchitect("2026-05-11-1201", "codex", "w2")
 
-	if first.SessionID == second.SessionID {
-		t.Error("architect session IDs should differ across recreations")
-	}
-
+	// Architect session IDs are provided externally — they may differ or not
 	sessions, _ := store.List()
 	archCount := 0
 	for _, s := range sessions {

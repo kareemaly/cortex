@@ -18,29 +18,29 @@ import (
 	"github.com/kareemaly/cortex/internal/types"
 )
 
-// TicketHandlers provides HTTP handlers for ticket operations.
 type TicketHandlers struct {
 	deps *Dependencies
 }
 
-// NewTicketHandlers creates a new TicketHandlers with the given dependencies.
 func NewTicketHandlers(deps *Dependencies) *TicketHandlers {
 	return &TicketHandlers{deps: deps}
 }
 
 func ticketResponse(store *ticket.Store, t *ticket.Ticket, status ticket.Status) (types.TicketResponse, error) {
-	resp := types.ToTicketResponse(t, status)
+	hasConclusion := false
+	if ok, err := store.HasConclusion(t.ID); err == nil && ok {
+		hasConclusion = true
+	}
+	resp := types.ToTicketResponse(t, status, hasConclusion)
 
-	indexPath, err := store.IndexPath(t.ID)
+	filePath, err := store.FilePath(t.ID)
 	if err != nil {
 		return types.TicketResponse{}, err
 	}
-
-	resp.IndexPath = indexPath
+	resp.FilePath = filePath
 	return resp, nil
 }
 
-// ListAll handles GET /tickets - lists all tickets grouped by status.
 func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -55,10 +55,8 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Apply query filter if specified
 	query := strings.ToLower(r.URL.Query().Get("query"))
 
-	// Parse due_before filter if specified (RFC3339 format)
 	var dueBefore *time.Time
 	if dueBeforeStr := r.URL.Query().Get("due_before"); dueBeforeStr != "" {
 		parsed, err := time.Parse(time.RFC3339, dueBeforeStr)
@@ -73,9 +71,9 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	tmuxSession := projectCfg.GetTmuxSessionName()
 
 	resp := ListAllTicketsResponse{
-		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager),
-		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager),
-		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager),
+		Backlog:  filterSummaryList(all[ticket.StatusBacklog], ticket.StatusBacklog, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager, store),
+		Progress: filterSummaryList(all[ticket.StatusProgress], ticket.StatusProgress, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager, store),
+		Done:     filterSummaryList(all[ticket.StatusDone], ticket.StatusDone, query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager, store),
 	}
 
 	sortByCreated := func(a, b TicketSummary) int {
@@ -88,7 +86,6 @@ func (h *TicketHandlers) ListAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// ListByStatus handles GET /tickets/{status} - lists tickets with a specific status.
 func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	status := chi.URLParam(r, "status")
 	if !validStatus(status) {
@@ -109,10 +106,8 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Apply query filter if specified
 	query := strings.ToLower(r.URL.Query().Get("query"))
 
-	// Parse due_before filter if specified (RFC3339 format)
 	var dueBefore *time.Time
 	if dueBeforeStr := r.URL.Query().Get("due_before"); dueBeforeStr != "" {
 		parsed, err := time.Parse(time.RFC3339, dueBeforeStr)
@@ -127,7 +122,7 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	tmuxSession := projectCfg.GetTmuxSessionName()
 
 	resp := ListTicketsResponse{
-		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager),
+		Tickets: filterSummaryList(tickets, ticket.Status(status), query, dueBefore, tmuxSession, h.deps.TmuxManager, h.deps.SessionManager, projectPath, h.deps.ReceiverManager, store),
 	}
 
 	slices.SortFunc(resp.Tickets, func(a, b TicketSummary) int {
@@ -137,7 +132,6 @@ func (h *TicketHandlers) ListByStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Create handles POST /tickets - creates a new ticket.
 func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateTicketRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -147,23 +141,11 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	projectPath := GetArchitectPath(r.Context())
 
-	// Validate ticket type
-	ticketType := req.Type
-	if ticketType == "" {
-		ticketType = "work"
-	}
-	if ticketType != "work" {
-		writeError(w, http.StatusBadRequest, "invalid_type",
-			fmt.Sprintf("invalid ticket type %q, valid types: work", ticketType))
-		return
-	}
-
 	if req.Title == "" {
 		writeError(w, http.StatusBadRequest, "missing_title", "title is required")
 		return
 	}
 
-	// Parse due date if provided (RFC3339 format)
 	var dueDate *time.Time
 	if req.DueDate != nil && *req.DueDate != "" {
 		parsed, err := time.Parse(time.RFC3339, *req.DueDate)
@@ -174,19 +156,11 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		dueDate = &parsed
 	}
 
-	// Validate repo/path based on ticket type
 	projectCfg, _ := architectconfig.Load(projectPath)
-	if projectCfg != nil {
-		switch ticketType {
-		case "work":
-			if req.Repo == "" {
-				writeError(w, http.StatusBadRequest, "missing_repo", "repo is required for work tickets")
-				return
-			}
-			if err := projectCfg.ValidateRepo(req.Repo); err != nil {
-				writeError(w, http.StatusBadRequest, "invalid_repo", err.Error())
-				return
-			}
+	if projectCfg != nil && req.Repo != "" {
+		if err := projectCfg.ValidateRepo(req.Repo); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_repo", err.Error())
+			return
 		}
 	}
 
@@ -196,7 +170,7 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := store.Create(req.Title, req.Body, ticketType, dueDate, req.References, req.Repo, req.Path)
+	t, err := store.Create(req.Title, req.Body, dueDate, req.References, req.Repo, req.Path)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
@@ -210,7 +184,6 @@ func (h *TicketHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-// Get handles GET /tickets/{status}/{id} - gets a specific ticket.
 func (h *TicketHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	status := chi.URLParam(r, "status")
 	if !validStatus(status) {
@@ -232,7 +205,6 @@ func (h *TicketHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the ticket is in the expected status
 	if string(actualStatus) != status {
 		writeError(w, http.StatusNotFound, "not_found", "ticket not found in specified status")
 		return
@@ -246,7 +218,6 @@ func (h *TicketHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Update handles PUT /tickets/{status}/{id} - updates a ticket.
 func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	status := chi.URLParam(r, "status")
 	if !validStatus(status) {
@@ -263,7 +234,6 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 
-	// Check ticket exists and is in the expected status
 	_, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
@@ -294,7 +264,6 @@ func (h *TicketHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// EditBody handles PATCH /tickets/{id}/body - edits a ticket body using targeted string replacement.
 func (h *TicketHandlers) EditBody(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -330,7 +299,6 @@ func (h *TicketHandlers) EditBody(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Delete handles DELETE /tickets/{status}/{id} - deletes a ticket.
 func (h *TicketHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	status := chi.URLParam(r, "status")
 	if !validStatus(status) {
@@ -347,7 +315,6 @@ func (h *TicketHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 
-	// Check ticket exists and is in the expected status
 	_, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
@@ -366,7 +333,6 @@ func (h *TicketHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Move handles POST /tickets/{status}/{id}/move - moves a ticket to a different status.
 func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 	status := chi.URLParam(r, "status")
 	if !validStatus(status) {
@@ -383,7 +349,6 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 
-	// Check ticket exists and is in the expected status
 	_, actualStatus, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
@@ -424,7 +389,6 @@ func (h *TicketHandlers) Move(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// SetDueDate handles PATCH /tickets/{id}/due-date - sets the due date for a ticket.
 func (h *TicketHandlers) SetDueDate(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -446,7 +410,6 @@ func (h *TicketHandlers) SetDueDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse due date (RFC3339 format)
 	dueDate, err := time.Parse(time.RFC3339, req.DueDate)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_due_date", "due_date must be in RFC3339 format")
@@ -459,7 +422,6 @@ func (h *TicketHandlers) SetDueDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get status for response
 	_, status, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
@@ -474,7 +436,6 @@ func (h *TicketHandlers) SetDueDate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// ClearDueDate handles DELETE /tickets/{id}/due-date - removes the due date from a ticket.
 func (h *TicketHandlers) ClearDueDate(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -491,7 +452,6 @@ func (h *TicketHandlers) ClearDueDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get status for response
 	_, status, err := store.Get(id)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
@@ -506,7 +466,6 @@ func (h *TicketHandlers) ClearDueDate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Spawn handles POST /tickets/{status}/{id}/spawn - spawns a session.
 func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	status := chi.URLParam(r, "status")
 	if !validStatus(status) {
@@ -542,7 +501,6 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 
 	projectCfg, _ := mergeProjectConfig(projectPath)
 
-	// Resolve variant — required
 	if variantName == "" {
 		names := projectCfg.VariantNames()
 		var msg string
@@ -646,7 +604,6 @@ func (h *TicketHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-// GetDiffs handles GET /tickets/{id}/diffs - returns structured git diffs for conclusion commits.
 func (h *TicketHandlers) GetDiffs(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -662,20 +619,15 @@ func (h *TicketHandlers) GetDiffs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if t.ConclusionID == "" || h.deps.ConclusionStoreManager == nil {
+	hasConclusion, _ := store.HasConclusion(id)
+	if !hasConclusion {
 		writeError(w, http.StatusNotFound, "no_conclusion", "ticket has no conclusion")
 		return
 	}
 
-	conclusionStore, err := h.deps.ConclusionStoreManager.GetStore(projectPath)
+	concMeta, _, err := store.ReadConclusion(id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
-		return
-	}
-
-	c, err := conclusionStore.Get(t.ConclusionID)
-	if err != nil {
-		handleConclusionError(w, err, h.deps.Logger)
+		writeError(w, http.StatusNotFound, "no_conclusion", "failed to read ticket conclusion")
 		return
 	}
 
@@ -690,19 +642,19 @@ func (h *TicketHandlers) GetDiffs(w http.ResponseWriter, r *http.Request) {
 		Repo:     repoDir,
 		Commits:  []CommitDiffResponse{},
 	}
-	if len(c.Commits) == 0 {
+	if len(concMeta.Commits) == 0 {
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
-	if invalid := validateCommitSHAs(repoDir, c.Commits); len(invalid) > 0 {
+	if invalid := validateCommitSHAs(repoDir, concMeta.Commits); len(invalid) > 0 {
 		writeError(w, http.StatusNotFound, "commit_not_found",
 			fmt.Sprintf("commit %s does not exist in %s", invalid[0], repoDir))
 		return
 	}
 
-	resp.Commits = make([]CommitDiffResponse, 0, len(c.Commits))
-	for _, sha := range c.Commits {
+	resp.Commits = make([]CommitDiffResponse, 0, len(concMeta.Commits))
+	for _, sha := range concMeta.Commits {
 		diff, err := buildCommitDiff(repoDir, sha)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "git_error", err.Error())
@@ -714,7 +666,6 @@ func (h *TicketHandlers) GetDiffs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// GetByID handles GET /tickets/by-id/{id} - gets a ticket by ID regardless of status.
 func (h *TicketHandlers) GetByID(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -738,12 +689,10 @@ func (h *TicketHandlers) GetByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Focus handles POST /tickets/{id}/focus - focuses the tmux window of a ticket's active session.
 func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	id := chi.URLParam(r, "id")
 
-	// Look up session from session manager
 	if h.deps.SessionManager == nil {
 		writeError(w, http.StatusNotFound, "no_active_session", "no session manager available")
 		return
@@ -780,7 +729,6 @@ func (h *TicketHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Conclude handles POST /tickets/{id}/conclude - concludes a session and moves ticket to done.
 func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -807,13 +755,8 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve repo early — needed for commit validation.
-	repo := req.Repo
-	if repo == "" {
-		repo = t.Repo
-	}
+	repo := t.Repo
 
-	// Validate commits / rejection fields.
 	if !req.Rejected {
 		if len(req.Commits) == 0 {
 			writeError(w, http.StatusBadRequest, "validation_error",
@@ -838,17 +781,16 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Capture session info before ending
 	var tmuxWindow string
-
+	var agent string
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
 		if sess, sessErr := sessStore.GetByTicketID(id); sessErr == nil && sess != nil {
 			tmuxWindow = sess.TmuxWindow
+			agent = sess.Agent
 		}
 	}
 
-	// End ephemeral session
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
 		if endErr := sessStore.EndByTicketID(id); endErr != nil && !storage.IsNotFound(endErr) {
@@ -862,46 +804,43 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		TicketID:      id,
 	})
 
-	// Create conclusion record and kill tmux window
-	conclusionType := req.Type
-	if conclusionType == "" {
-		conclusionType = t.Type
-	}
-
 	var startedAt time.Time
 	if req.StartedAt != "" {
 		if parsed, parseErr := time.Parse(time.RFC3339, req.StartedAt); parseErr == nil {
 			startedAt = parsed
 		}
 	}
-
-	conclusionID := CreateConclusionAndKillWindow(ConcludeParams{
-		ProjectPath:     projectPath,
-		EntityType:      conclusionType,
-		EntityID:        id,
-		TmuxWindow:      tmuxWindow,
-		Content:         req.Content,
-		StartedAt:       startedAt,
-		Repo:            repo,
-		Commits:         req.Commits,
-		Rejected:        req.Rejected,
-		RejectionReason: req.RejectionReason,
-		Logger:          h.deps.Logger,
-		TmuxManager:     h.deps.TmuxManager,
-		ConclusionMgr:   h.deps.ConclusionStoreManager,
-	})
-
-	// Update ticket with conclusion back-reference
-	if conclusionID != "" {
-		if _, setErr := store.SetConclusionID(id, conclusionID); setErr != nil {
-			h.deps.Logger.Warn("failed to set conclusion back-reference", "error", setErr)
-		}
+	if startedAt.IsZero() {
+		startedAt = time.Now().UTC()
 	}
 
-	// Move the ticket to done
+	concludedAt := time.Now().UTC()
+
+	conclusionMeta := &ticket.TicketConclusionMeta{
+		StartedAt:       startedAt,
+		ConcludedAt:     concludedAt,
+		Agent:           agent,
+		Profile:         "",
+		Rejected:        req.Rejected,
+		RejectionReason: req.RejectionReason,
+		Commits:         req.Commits,
+	}
+
+	if writeErr := store.WriteConclusion(id, conclusionMeta, req.Content); writeErr != nil {
+		h.deps.Logger.Warn("failed to write conclusion", "error", writeErr)
+	}
+
 	if err := store.Move(id, ticket.StatusDone); err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
+	}
+
+	if tmuxWindow != "" && h.deps.TmuxManager != nil {
+		projectCfg, _ := architectconfig.Load(projectPath)
+		tmuxSession := projectCfg.GetTmuxSessionName()
+		if killErr := h.deps.TmuxManager.KillWindow(tmuxSession, tmuxWindow); killErr != nil {
+			h.deps.Logger.Warn("failed to kill tmux window", "window", tmuxWindow, "error", killErr)
+		}
 	}
 
 	resp := ConcludeSessionResponse{
@@ -912,7 +851,6 @@ func (h *TicketHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Show handles POST /tickets/{id}/show - opens the read-only ticket viewer in a tmux popup.
 func (h *TicketHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -943,7 +881,6 @@ func (h *TicketHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Edit handles POST /tickets/{id}/edit - opens the ticket's index.md in $EDITOR via tmux popup.
 func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	store, err := h.deps.StoreManager.GetStore(projectPath)
@@ -954,31 +891,26 @@ func (h *TicketHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 
 	ticketID := chi.URLParam(r, "id")
 
-	// Get the file path for the ticket's index.md
-	indexPath, err := store.IndexPath(ticketID)
+	filePath, err := store.FilePath(ticketID)
 	if err != nil {
 		handleTicketError(w, err, h.deps.Logger)
 		return
 	}
 
-	// Check tmux is available
 	if h.deps.TmuxManager == nil {
 		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
 		return
 	}
 
-	// Build editor command
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vim"
 	}
-	command := fmt.Sprintf("%s %q", editor, indexPath)
+	command := fmt.Sprintf("%s %q", editor, filePath)
 
-	// Get tmux session name
 	projectCfg, _ := architectconfig.Load(projectPath)
 	tmuxSession := projectCfg.GetTmuxSessionName()
 
-	// Execute popup
 	if err := h.deps.TmuxManager.DisplayPopup(tmuxSession, "", command); err != nil {
 		writeError(w, http.StatusInternalServerError, "tmux_error", fmt.Sprintf("failed to display popup: %s", err.Error()))
 		return

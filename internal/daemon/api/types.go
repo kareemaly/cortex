@@ -9,7 +9,6 @@ import (
 	"github.com/kareemaly/cortex/internal/types"
 )
 
-// Re-export shared types for API consumers
 type (
 	ErrorResponse            = types.ErrorResponse
 	SessionResponse          = types.SessionResponse
@@ -36,97 +35,79 @@ type (
 	SpawnCollabResponse      = types.SpawnCollabResponse
 )
 
-// CreateTicketRequest is the request body for creating a ticket.
 type CreateTicketRequest struct {
 	Title      string   `json:"title"`
 	Body       string   `json:"body"`
-	Type       string   `json:"type,omitempty"`
 	Repo       string   `json:"repo,omitempty"`
 	Path       string   `json:"path,omitempty"`
 	DueDate    *string  `json:"due_date,omitempty"`
 	References []string `json:"references,omitempty"`
 }
 
-// UpdateTicketRequest is the request body for updating a ticket.
 type UpdateTicketRequest struct {
 	Title      *string   `json:"title,omitempty"`
 	Body       *string   `json:"body,omitempty"`
 	References *[]string `json:"references,omitempty"`
 }
 
-// EditTicketBodyRequest is the request body for targeted ticket body edits.
 type EditTicketBodyRequest struct {
 	OldString  string `json:"oldString"`
 	NewString  string `json:"newString"`
 	ReplaceAll bool   `json:"replaceAll,omitempty"`
 }
 
-// MoveTicketRequest is the request body for moving a ticket.
 type MoveTicketRequest struct {
 	To string `json:"to"`
 }
 
-// SetDueDateRequest is the request body for setting a ticket's due date.
 type SetDueDateRequest struct {
 	DueDate string `json:"due_date"`
 }
 
-// SpawnResponse is the response for the spawn endpoint.
 type SpawnResponse struct {
 	Session SessionResponse `json:"session,omitempty"`
 	Ticket  TicketResponse  `json:"ticket"`
 }
 
-// ConcludeSessionRequest is the request body for concluding a session.
 type ConcludeSessionRequest struct {
 	Content         string   `json:"content"`
-	Type            string   `json:"type,omitempty"`
-	Repo            string   `json:"repo,omitempty"`
 	StartedAt       string   `json:"started_at,omitempty"`
 	Commits         []string `json:"commits,omitempty"`
 	Rejected        bool     `json:"rejected,omitempty"`
 	RejectionReason string   `json:"rejection_reason,omitempty"`
 }
 
-// FocusResponse is the response for the focus endpoint.
 type FocusResponse struct {
 	Success bool   `json:"success"`
 	Window  string `json:"window"`
 }
 
-// ExecuteActionResponse is the response for executing a comment action.
 type ExecuteActionResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
-// EjectPromptRequest is the request body for ejecting a prompt.
 type EjectPromptRequest struct {
 	Path string `json:"path"`
 }
 
-// EditPromptRequest is the request body for editing a prompt in $EDITOR.
 type EditPromptRequest struct {
 	Path string `json:"path"`
 }
 
-// ResetPromptRequest is the request body for resetting an ejected prompt to default.
 type ResetPromptRequest struct {
 	Path string `json:"path"`
 }
 
-// CreateConclusionRequest is the request body for creating a conclusion.
-type CreateConclusionRequest struct {
-	Type      string `json:"type"`
-	Ticket    string `json:"ticket,omitempty"`
-	Repo      string `json:"repo,omitempty"`
-	Body      string `json:"body"`
-	StartedAt string `json:"started_at,omitempty"`
+type SpawnCollabRequest struct {
+	Path    string `json:"path"`
+	Prompt  string `json:"prompt"`
+	Slug    string `json:"slug"`
+	Mode    string `json:"mode,omitempty"`
+	Variant string `json:"variant,omitempty"`
 }
 
-// filterSummaryList converts tickets to summaries with optional query and dueBefore filters.
-// Looks up session from session manager for each ticket.
-func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string, receiverMgr *ReceiverManager) []TicketSummary {
+func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query string, dueBefore *time.Time, tmuxSession string, checker types.TmuxChecker, sessionMgr *SessionManager, projectPath string, receiverMgr *ReceiverManager, ticketStore *ticket.Store) []TicketSummary {
 	var summaries []TicketSummary
 
 	var sessStore *session.Store
@@ -153,7 +134,14 @@ func filterSummaryList(tickets []*ticket.Ticket, status ticket.Status, query str
 
 		summary := types.ToTicketSummary(t, status, sess, tmuxSession, checker)
 
-		// Overlay Hub-sourced status/tool if available.
+		hasConclusion := false
+		if ticketStore != nil && status == ticket.StatusDone {
+			if ok, err := ticketStore.HasConclusion(t.ID); err == nil && ok {
+				hasConclusion = true
+			}
+		}
+		summary.HasConclusion = hasConclusion
+
 		if receiverMgr != nil && sess != nil && sess.SessionID != "" {
 			if ev, ok := receiverMgr.GetEvent(sess.SessionID); ok {
 				s := string(ev.Status)

@@ -325,7 +325,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			c := m.dateGroups[m.dateIdx].sessions[m.cursor]
 			m.statusMsg = "Opening viewer..."
 			m.statusIsError = false
-			if c.Ticket != "" {
+			if c.TicketID != "" {
 				return m, m.openTicketViewer(c)
 			}
 			return m, m.openConclusionViewer(c)
@@ -548,7 +548,7 @@ func (m Model) renderSessionList(height int) string {
 	var lines []string
 	for i, c := range sessions {
 		timeRaw := c.ConcludedAt.Local().Format("15:04")
-		typeRaw := typeShortLabel(c.Type)
+		typeRaw := typeShortLabel(conclusionType(c))
 		titleRaw := truncateToWidth(sessionTitle(c), titleWidth)
 		dur := formatDuration(c.StartedAt, c.ConcludedAt)
 
@@ -556,7 +556,7 @@ func (m Model) renderSessionList(height int) string {
 			// Selected: full-width highlight with inline color changes for type
 			gutter := "▸ "
 			timePart := fmt.Sprintf("%-*s", colTime, timeRaw)
-			typePart := inlineFgColor(typeColorCode(c.Type)) + fmt.Sprintf("%-*s", colType, typeRaw) + resetFg()
+			typePart := inlineFgColor(typeColorCode(conclusionType(c))) + fmt.Sprintf("%-*s", colType, typeRaw) + resetFg()
 			titlePart := fmt.Sprintf("%-*s", titleWidth, titleRaw)
 			durPart := fmt.Sprintf("%*s", colDuration, dur)
 
@@ -566,7 +566,7 @@ func (m Model) renderSessionList(height int) string {
 			// Unselected: each column individually styled
 			gutter := "  "
 			timePart := timeStyle.Render(fmt.Sprintf("%-*s", colTime, timeRaw))
-			typePart := typeLabelColorStyle(c.Type).Render(typeRaw)
+			typePart := typeLabelColorStyle(conclusionType(c)).Render(typeRaw)
 			titlePart := fmt.Sprintf("%-*s", titleWidth, titleRaw)
 			durPart := durationStyle.Render(fmt.Sprintf("%*s", colDuration, dur))
 
@@ -598,12 +598,15 @@ func (m Model) renderDetailView(height int) string {
 	var header strings.Builder
 
 	// Title line: badge + title
-	header.WriteString(typeBadgeStyle(c.Type).Render(c.Type))
+	header.WriteString(typeBadgeStyle(conclusionType(c)).Render(conclusionType(c)))
 	header.WriteString("  ")
 	header.WriteString(detailHeaderStyle.Render(sessionTitle(c)))
 	header.WriteString("\n\n")
 
-	// Metadata rows
+	startedLabel := detailLabelStyle.Render("Started")
+	startedVal := detailValueStyle.Render(c.StartedAt.Local().Format("Jan 2, 2006 at 15:04"))
+	header.WriteString(startedLabel + startedVal + "\n")
+
 	concludedLabel := detailLabelStyle.Render("Concluded")
 	concludedVal := detailValueStyle.Render(c.ConcludedAt.Local().Format("Jan 2, 2006 at 15:04"))
 	header.WriteString(concludedLabel + concludedVal + "\n")
@@ -615,13 +618,9 @@ func (m Model) renderDetailView(height int) string {
 		header.WriteString(durationLabel + durationVal + "\n")
 	}
 
-	if c.TicketTitle != "" {
+	if c.TicketID != "" {
 		ticketLabel := detailLabelStyle.Render("Ticket")
-		ticketVal := ticketRefStyle.Render(c.TicketTitle)
-		header.WriteString(ticketLabel + ticketVal + "\n")
-	} else if c.Ticket != "" {
-		ticketLabel := detailLabelStyle.Render("Ticket")
-		ticketVal := ticketRefStyle.Render(c.Ticket)
+		ticketVal := ticketRefStyle.Render(c.TicketID)
 		header.WriteString(ticketLabel + ticketVal + "\n")
 	}
 
@@ -667,7 +666,7 @@ func (m Model) openConclusionViewer(c sdk.ConclusionSummary) tea.Cmd {
 // openTicketViewer returns a Cmd that opens the ticket viewer in a tmux popup.
 func (m Model) openTicketViewer(c sdk.ConclusionSummary) tea.Cmd {
 	return func() tea.Msg {
-		if err := m.client.ShowTicket(c.Ticket); err != nil {
+		if err := m.client.ShowTicket(c.TicketID); err != nil {
 			return openViewerErrMsg{Err: fmt.Errorf("open ticket viewer: %w", err)}
 		}
 		return openViewerMsg{}
@@ -680,7 +679,7 @@ func groupByDate(conclusions []sdk.ConclusionSummary) []dateGroup {
 	var order []string
 
 	for _, c := range conclusions {
-		local := c.ConcludedAt.Local()
+		local := c.StartedAt.Local()
 		key := local.Format("2006-01-02")
 		if _, exists := byDate[key]; !exists {
 			dayStart := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
@@ -714,7 +713,7 @@ func typeShortLabel(t string) string {
 	switch t {
 	case "architect":
 		return "arch"
-	case "work":
+	case "ticket":
 		return "work"
 	case "collab":
 		return "collab"
@@ -723,22 +722,23 @@ func typeShortLabel(t string) string {
 	}
 }
 
+func conclusionType(c sdk.ConclusionSummary) string {
+	if c.CollabID != "" {
+		return "collab"
+	}
+	if c.TicketID != "" {
+		return "ticket"
+	}
+	return "architect"
+}
+
 // sessionTitle returns the display title for a conclusion.
 func sessionTitle(c sdk.ConclusionSummary) string {
-	if c.Type == "collab" {
-		if c.Prompt != "" {
-			return c.Prompt
-		}
-		return "Collab session"
+	if c.CollabID != "" {
+		return "Collab " + c.CollabID
 	}
-	if c.TicketTitle != "" {
-		return c.TicketTitle
-	}
-	if c.Type == "architect" {
-		return "Architect session"
-	}
-	if c.Ticket != "" {
-		return c.Ticket
+	if c.TicketID != "" {
+		return c.TicketID
 	}
 	return c.ID
 }

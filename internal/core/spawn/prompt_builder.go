@@ -37,10 +37,7 @@ func (s *Spawner) buildPrompt(req SpawnRequest) (*promptInfo, error) {
 
 // buildTicketAgentPrompt creates the dynamic ticket prompt.
 func (s *Spawner) buildTicketAgentPrompt(req SpawnRequest) (*promptInfo, error) {
-	ticketType := req.Ticket.Type
-	if ticketType == "" {
-		ticketType = ticket.DefaultTicketType
-	}
+	ticketType := ticket.DefaultTicketType
 
 	resolver := prompt.NewPromptResolver(req.ArchitectPath, s.deps.DefaultsDir)
 
@@ -145,7 +142,7 @@ func (s *Spawner) buildArchitectPrompt(req SpawnRequest) (*promptInfo, error) {
 	if conclusionsErr == nil && len(conclusionsResp.Conclusions) > 0 {
 		var sessionsSB strings.Builder
 		for _, c := range conclusionsResp.Conclusions {
-			sessionsSB.WriteString(fmt.Sprintf("- [%s] %s (%s)\n", c.ID, c.Ticket, c.Type))
+			sessionsSB.WriteString(fmt.Sprintf("- [%s] %s (%s)\n", c.ID, c.TicketID, c.Agent))
 		}
 		sessionsList = sessionsSB.String()
 	}

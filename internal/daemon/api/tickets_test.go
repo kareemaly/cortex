@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/kareemaly/cortex/internal/conclusion"
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
@@ -23,9 +23,8 @@ import (
 // unitServer wraps httptest.Server with test dependencies.
 type unitServer struct {
 	*httptest.Server
-	store           *ticket.Store
-	conclusionStore *conclusion.Store
-	projectRoot     string
+	store       *ticket.Store
+	projectRoot string
 }
 
 // makeRequest makes an HTTP request to the test server with the project header.
@@ -163,26 +162,19 @@ func setupUnitServer(t *testing.T) *unitServer {
 	storeManager.stores[tmpDir] = store
 
 	sessionManager := NewSessionManager(logger)
-	conclusionManager := NewConclusionStoreManager(logger, bus)
-	conclusionStore, err := conclusionManager.GetStore(tmpDir)
-	if err != nil {
-		t.Fatalf("failed to create conclusion store: %v", err)
-	}
 
 	deps := &Dependencies{
-		StoreManager:           storeManager,
-		SessionManager:         sessionManager,
-		ConclusionStoreManager: conclusionManager,
-		TmuxManager:            nil,
-		Bus:                    bus,
-		Logger:                 logger,
+		StoreManager:    storeManager,
+		SessionManager:  sessionManager,
+		TmuxManager:     nil,
+		Bus:             bus,
+		Logger:          logger,
 	}
 
 	return &unitServer{
-		Server:          httptest.NewServer(NewRouter(deps, deps.Logger)),
-		store:           store,
-		conclusionStore: conclusionStore,
-		projectRoot:     tmpDir,
+		Server:      httptest.NewServer(NewRouter(deps, deps.Logger)),
+		store:       store,
+		projectRoot: tmpDir,
 	}
 }
 
@@ -192,7 +184,7 @@ func TestSetDueDate_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Due Date Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Due Date Ticket", "body", nil, nil, "", "")
 
 	body := SetDueDateRequest{DueDate: "2025-06-01T00:00:00Z"}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
@@ -210,7 +202,7 @@ func TestSetDueDate_InvalidJSON(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Ticket", "body", nil, nil, "", "")
 
 	req, _ := http.NewRequest(http.MethodPatch, ts.URL+"/tickets/"+created.ID+"/due-date", bytes.NewReader([]byte("bad json")))
 	req.Header.Set("Content-Type", "application/json")
@@ -234,7 +226,7 @@ func TestSetDueDate_EmptyDueDate(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Ticket", "body", nil, nil, "", "")
 
 	body := SetDueDateRequest{DueDate: ""}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
@@ -252,7 +244,7 @@ func TestSetDueDate_InvalidFormat(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Ticket", "body", nil, nil, "", "")
 
 	body := SetDueDateRequest{DueDate: "not-a-date"}
 	resp := ts.makeRequest(t, http.MethodPatch, "/tickets/"+created.ID+"/due-date", body)
@@ -283,7 +275,7 @@ func TestClearDueDate_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Ticket", "body", nil, nil, "", "")
 
 	resp := ts.makeRequest(t, http.MethodDelete, "/tickets/"+created.ID+"/due-date", nil)
 	defer func() { _ = resp.Body.Close() }()
@@ -312,7 +304,7 @@ func TestGetByID_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Test Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Test Ticket", "body", nil, nil, "", "")
 
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/by-id/"+created.ID, nil)
 	defer func() { _ = resp.Body.Close() }()
@@ -343,19 +335,15 @@ func TestGetDiffs_Success(t *testing.T) {
 	defer ts.Close()
 
 	repoDir, sha := createGitRepoWithStructuredCommit(t)
-	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, repoDir, "")
-	concluded, err := ts.conclusionStore.Create(conclusion.CreateParams{
-		Type:     string(conclusion.TypeWork),
-		TicketID: created.ID,
-		Repo:     repoDir,
-		Body:     "done",
-		Commits:  []string{sha},
-	})
-	if err != nil {
-		t.Fatalf("failed to create conclusion: %v", err)
+	created, _ := ts.store.Create("Diff Ticket", "body", nil, nil, repoDir, "")
+	meta := &ticket.TicketConclusionMeta{
+		StartedAt:   time.Now().UTC().Add(-time.Minute),
+		ConcludedAt: time.Now().UTC(),
+		Agent:       "codex",
+		Commits:     []string{sha},
 	}
-	if _, err := ts.store.SetConclusionID(created.ID, concluded.ID); err != nil {
-		t.Fatalf("failed to set conclusion ID: %v", err)
+	if err := ts.store.WriteConclusion(created.ID, meta, "done"); err != nil {
+		t.Fatalf("failed to write conclusion: %v", err)
 	}
 
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
@@ -436,7 +424,7 @@ func TestGetDiffs_NoConclusion(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Diff Ticket", "body", nil, nil, "", "")
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
 	defer func() { _ = resp.Body.Close() }()
 
@@ -453,18 +441,14 @@ func TestGetDiffs_EmptyCommits(t *testing.T) {
 	defer ts.Close()
 
 	repoDir, _ := createGitRepoWithCommit(t)
-	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, repoDir, "")
-	concluded, err := ts.conclusionStore.Create(conclusion.CreateParams{
-		Type:     string(conclusion.TypeWork),
-		TicketID: created.ID,
-		Repo:     repoDir,
-		Body:     "done",
-	})
-	if err != nil {
-		t.Fatalf("failed to create conclusion: %v", err)
+	created, _ := ts.store.Create("Diff Ticket", "body", nil, nil, repoDir, "")
+	meta := &ticket.TicketConclusionMeta{
+		StartedAt:   time.Now().UTC().Add(-time.Minute),
+		ConcludedAt: time.Now().UTC(),
+		Agent:       "codex",
 	}
-	if _, err := ts.store.SetConclusionID(created.ID, concluded.ID); err != nil {
-		t.Fatalf("failed to set conclusion ID: %v", err)
+	if err := ts.store.WriteConclusion(created.ID, meta, "done"); err != nil {
+		t.Fatalf("failed to write conclusion: %v", err)
 	}
 
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
@@ -483,19 +467,15 @@ func TestGetDiffs_InvalidRepo(t *testing.T) {
 	defer ts.Close()
 
 	repoDir := filepath.Join(t.TempDir(), "missing")
-	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, repoDir, "")
-	concluded, err := ts.conclusionStore.Create(conclusion.CreateParams{
-		Type:     string(conclusion.TypeWork),
-		TicketID: created.ID,
-		Repo:     repoDir,
-		Body:     "done",
-		Commits:  []string{"abc123"},
-	})
-	if err != nil {
-		t.Fatalf("failed to create conclusion: %v", err)
+	created, _ := ts.store.Create("Diff Ticket", "body", nil, nil, repoDir, "")
+	meta := &ticket.TicketConclusionMeta{
+		StartedAt:   time.Now().UTC().Add(-time.Minute),
+		ConcludedAt: time.Now().UTC(),
+		Agent:       "codex",
+		Commits:     []string{"abc123"},
 	}
-	if _, err := ts.store.SetConclusionID(created.ID, concluded.ID); err != nil {
-		t.Fatalf("failed to set conclusion ID: %v", err)
+	if err := ts.store.WriteConclusion(created.ID, meta, "done"); err != nil {
+		t.Fatalf("failed to write conclusion: %v", err)
 	}
 
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
@@ -514,19 +494,15 @@ func TestGetDiffs_MissingCommit(t *testing.T) {
 	defer ts.Close()
 
 	repoDir, _ := createGitRepoWithCommit(t)
-	created, _ := ts.store.Create("Diff Ticket", "body", "", nil, nil, repoDir, "")
-	concluded, err := ts.conclusionStore.Create(conclusion.CreateParams{
-		Type:     string(conclusion.TypeWork),
-		TicketID: created.ID,
-		Repo:     repoDir,
-		Body:     "done",
-		Commits:  []string{"deadbeef"},
-	})
-	if err != nil {
-		t.Fatalf("failed to create conclusion: %v", err)
+	created, _ := ts.store.Create("Diff Ticket", "body", nil, nil, repoDir, "")
+	meta := &ticket.TicketConclusionMeta{
+		StartedAt:   time.Now().UTC().Add(-time.Minute),
+		ConcludedAt: time.Now().UTC(),
+		Agent:       "codex",
+		Commits:     []string{"deadbeef"},
 	}
-	if _, err := ts.store.SetConclusionID(created.ID, concluded.ID); err != nil {
-		t.Fatalf("failed to set conclusion ID: %v", err)
+	if err := ts.store.WriteConclusion(created.ID, meta, "done"); err != nil {
+		t.Fatalf("failed to write conclusion: %v", err)
 	}
 
 	resp := ts.makeRequest(t, http.MethodGet, "/tickets/"+created.ID+"/diffs", nil)
@@ -546,7 +522,7 @@ func TestConclude_Success(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Conclude Ticket", "body", nil, nil, "", "")
 
 	// Use rejected=true to avoid needing a real git repo in the unit test.
 	body := ConcludeSessionRequest{
@@ -578,7 +554,7 @@ func TestConclude_MissingCommits(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Conclude Ticket", "body", nil, nil, "", "")
 
 	body := ConcludeSessionRequest{Content: "done report"}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
@@ -596,7 +572,7 @@ func TestConclude_Rejected_NoReason(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Conclude Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Conclude Ticket", "body", nil, nil, "", "")
 
 	body := ConcludeSessionRequest{Content: "done report", Rejected: true}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
@@ -614,7 +590,7 @@ func TestConclude_InvalidJSON(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Ticket", "body", nil, nil, "", "")
 
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/tickets/"+created.ID+"/conclude", bytes.NewReader([]byte("bad")))
 	req.Header.Set("Content-Type", "application/json")
@@ -633,7 +609,7 @@ func TestConclude_EmptyContent(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Ticket", "body", nil, nil, "", "")
 
 	body := ConcludeSessionRequest{Content: ""}
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/conclude", body)
@@ -685,7 +661,7 @@ func TestFocus_NoSessionManager(t *testing.T) {
 	srv := httptest.NewServer(NewRouter(deps, deps.Logger))
 	defer srv.Close()
 
-	created, _ := store.Create("Focus Ticket", "body", "", nil, nil, "", "")
+	created, _ := store.Create("Focus Ticket", "body", nil, nil, "", "")
 
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/tickets/"+created.ID+"/focus", nil)
 	req.Header.Set(ArchitectHeader, tmpDir)
@@ -704,7 +680,7 @@ func TestFocus_NoActiveSession(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	created, _ := ts.store.Create("Focus Ticket", "body", "", nil, nil, "", "")
+	created, _ := ts.store.Create("Focus Ticket", "body", nil, nil, "", "")
 
 	resp := ts.makeRequest(t, http.MethodPost, "/tickets/"+created.ID+"/focus", nil)
 	defer func() { _ = resp.Body.Close() }()
@@ -744,8 +720,8 @@ func TestListAll_WithQueryFilter(t *testing.T) {
 	ts := setupUnitServer(t)
 	defer ts.Close()
 
-	_, _ = ts.store.Create("Alpha Ticket", "body1", "", nil, nil, "", "")
-	_, _ = ts.store.Create("Beta Ticket", "body2", "", nil, nil, "", "")
+	_, _ = ts.store.Create("Alpha Ticket", "body1", nil, nil, "", "")
+	_, _ = ts.store.Create("Beta Ticket", "body2", nil, nil, "", "")
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/tickets?query=alpha", nil)
 	req.Header.Set(ArchitectHeader, ts.projectRoot)

@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-
-	"github.com/kareemaly/cortex/internal/storage"
 )
 
 func setupTestStore(t *testing.T) (*Store, func()) {
@@ -50,7 +48,7 @@ func TestStoreCreate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, err := store.Create("Test Ticket", "Test body", "", nil, nil, "", "")
+	ticket, err := store.Create("Test Ticket", "Test body", nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -64,9 +62,6 @@ func TestStoreCreate(t *testing.T) {
 	if ticket.Body != "Test body" {
 		t.Errorf("body = %q, want %q", ticket.Body, "Test body")
 	}
-	if ticket.Type != DefaultTicketType {
-		t.Errorf("type = %q, want %q", ticket.Type, DefaultTicketType)
-	}
 	if ticket.Created.IsZero() {
 		t.Error("created date should be set")
 	}
@@ -79,7 +74,7 @@ func TestStoreCreateEmptyTitle(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, err := store.Create("", "body", "", nil, nil, "", "")
+	_, err := store.Create("", "body", nil, nil, "", "")
 	if err == nil {
 		t.Error("expected error for empty title")
 	}
@@ -93,7 +88,7 @@ func TestStoreCreateWithReferences(t *testing.T) {
 	defer cleanup()
 
 	refs := []string{"doc:abc123"}
-	ticket, err := store.Create("Test", "body", "", nil, refs, "", "")
+	ticket, err := store.Create("Test", "body", nil, refs, "", "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -107,7 +102,7 @@ func TestStoreGet(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	created, err := store.Create("Test Ticket", "body", "", nil, nil, "", "")
+	created, err := store.Create("Test Ticket", "body", nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -148,7 +143,7 @@ func TestStoreUpdate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, "", "")
+	ticket, _ := store.Create("Original Title", "Original body", nil, nil, "", "")
 
 	newTitle := "Updated Title"
 	newBody := "Updated body"
@@ -169,7 +164,7 @@ func TestStoreUpdatePartial(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "Original body", "", nil, nil, "", "")
+	ticket, _ := store.Create("Original Title", "Original body", nil, nil, "", "")
 
 	newTitle := "Updated Title"
 	updated, err := store.Update(ticket.ID, &newTitle, nil, nil)
@@ -189,7 +184,7 @@ func TestStoreEditBodyExactMatch(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "alpha\nbeta\ngamma", "", nil, nil, "", "")
+	ticket, _ := store.Create("Original Title", "alpha\nbeta\ngamma", nil, nil, "", "")
 
 	updated, err := store.EditBody(ticket.ID, "beta", "delta", false)
 	if err != nil {
@@ -205,7 +200,7 @@ func TestStoreEditBodyWhitespaceNormalized(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "alpha\n  beta   gamma  \ndelta", "", nil, nil, "", "")
+	ticket, _ := store.Create("Original Title", "alpha\n  beta   gamma  \ndelta", nil, nil, "", "")
 
 	updated, err := store.EditBody(ticket.ID, "beta gamma", "beta zeta", false)
 	if err != nil {
@@ -221,7 +216,7 @@ func TestStoreEditBodyReplaceAll(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "repeat\nx\nrepeat", "", nil, nil, "", "")
+	ticket, _ := store.Create("Original Title", "repeat\nx\nrepeat", nil, nil, "", "")
 
 	updated, err := store.EditBody(ticket.ID, "repeat", "done", true)
 	if err != nil {
@@ -237,7 +232,7 @@ func TestStoreEditBodyAmbiguousWithoutReplaceAll(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "repeat\nx\nrepeat", "", nil, nil, "", "")
+	ticket, _ := store.Create("Original Title", "repeat\nx\nrepeat", nil, nil, "", "")
 
 	_, err := store.EditBody(ticket.ID, "repeat", "done", false)
 	if err == nil {
@@ -257,7 +252,7 @@ func TestStoreEditBodyNotFound(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Original Title", "alpha\nbeta\ngamma", "", nil, nil, "", "")
+	ticket, _ := store.Create("Original Title", "alpha\nbeta\ngamma", nil, nil, "", "")
 
 	_, err := store.EditBody(ticket.ID, "missing", "delta", false)
 	if err == nil {
@@ -277,17 +272,17 @@ func TestStoreUpdateTitleRename(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Old Title", "body", "", nil, nil, "", "")
-	shortID := storage.ShortID(ticket.ID)
+	ticket, _ := store.Create("Old Title", "body", nil, nil, "", "")
+	oldID := ticket.ID
 
-	// Verify old directory exists
-	oldDir := filepath.Join(store.RootDir(), "backlog", "old-title-"+shortID)
+	// Verify old directory exists (new format: YYYY-MM-DD-HHMM-old-title)
+	oldDir := filepath.Join(store.RootDir(), "backlog", oldID)
 	if _, err := os.Stat(oldDir); err != nil {
-		t.Fatalf("old dir should exist: %v", err)
+		t.Fatalf("old dir should exist at %s: %v", oldDir, err)
 	}
 
 	newTitle := "New Title"
-	_, err := store.Update(ticket.ID, &newTitle, nil, nil)
+	updated, err := store.Update(oldID, &newTitle, nil, nil)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -297,14 +292,14 @@ func TestStoreUpdateTitleRename(t *testing.T) {
 		t.Error("old dir should be removed after title change")
 	}
 
-	// New dir should exist
-	newDir := filepath.Join(store.RootDir(), "backlog", "new-title-"+shortID)
+	// New dir should exist with updated ID
+	newDir := filepath.Join(store.RootDir(), "backlog", updated.ID)
 	if _, err := os.Stat(newDir); err != nil {
-		t.Errorf("new dir should exist: %v", err)
+		t.Errorf("new dir should exist at %s: %v", newDir, err)
 	}
 
-	// Should still be retrievable
-	retrieved, _, err := store.Get(ticket.ID)
+	// Should be retrievable with new ID
+	retrieved, _, err := store.Get(updated.ID)
 	if err != nil {
 		t.Fatalf("Get after rename failed: %v", err)
 	}
@@ -317,7 +312,7 @@ func TestStoreDelete(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, "", "")
+	ticket, _ := store.Create("Test Ticket", "body", nil, nil, "", "")
 
 	if err := store.Delete(ticket.ID); err != nil {
 		t.Fatalf("Delete failed: %v", err)
@@ -333,8 +328,8 @@ func TestStoreList(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	_, _ = store.Create("Ticket 1", "", "", nil, nil, "", "")
-	_, _ = store.Create("Ticket 2", "", "", nil, nil, "", "")
+	_, _ = store.Create("Ticket 1", "", nil, nil, "", "")
+	_, _ = store.Create("Ticket 2", "", nil, nil, "", "")
 
 	tickets, err := store.List(StatusBacklog)
 	if err != nil {
@@ -350,8 +345,8 @@ func TestStoreListAll(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	t1, _ := store.Create("Backlog Ticket", "", "", nil, nil, "", "")
-	t2, _ := store.Create("Progress Ticket", "", "", nil, nil, "", "")
+	t1, _ := store.Create("Backlog Ticket", "", nil, nil, "", "")
+	t2, _ := store.Create("Progress Ticket", "", nil, nil, "", "")
 	_ = store.Move(t2.ID, StatusProgress)
 
 	all, err := store.ListAll()
@@ -374,7 +369,7 @@ func TestStoreMove(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, "", "")
+	ticket, _ := store.Create("Test Ticket", "body", nil, nil, "", "")
 
 	if err := store.Move(ticket.ID, StatusProgress); err != nil {
 		t.Fatalf("Move failed: %v", err)
@@ -394,7 +389,7 @@ func TestStoreMoveSameStatus(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test Ticket", "body", "", nil, nil, "", "")
+	ticket, _ := store.Create("Test Ticket", "body", nil, nil, "", "")
 
 	if err := store.Move(ticket.ID, StatusBacklog); err != nil {
 		t.Fatalf("Move to same status failed: %v", err)
@@ -413,10 +408,11 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	tk, err := store.Create("Concurrent Ticket", "initial body", "", nil, nil, "", "")
+	tk, err := store.Create("Concurrent Ticket", "initial body", nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
+	currentID := tk.ID
 
 	const goroutines = 10
 	const updatesPerGoroutine = 10
@@ -428,11 +424,10 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 		go func(g int) {
 			defer wg.Done()
 			for i := 0; i < updatesPerGoroutine; i++ {
-				title := fmt.Sprintf("Title-%d-%d", g, i)
 				body := fmt.Sprintf("Body-%d-%d", g, i)
-				_, err := store.Update(tk.ID, &title, &body, nil)
-				if err != nil {
-					t.Errorf("Update goroutine %d iter %d failed: %v", g, i, err)
+				_, updateErr := store.Update(currentID, nil, &body, nil)
+				if updateErr != nil {
+					t.Errorf("Update goroutine %d iter %d failed: %v", g, i, updateErr)
 					return
 				}
 			}
@@ -441,15 +436,15 @@ func TestStoreConcurrentUpdates(t *testing.T) {
 
 	wg.Wait()
 
-	retrieved, status, err := store.Get(tk.ID)
+	retrieved, status, err := store.Get(currentID)
 	if err != nil {
 		t.Fatalf("Get after concurrent updates failed: %v", err)
 	}
 	if status != StatusBacklog {
 		t.Errorf("status = %q, want %q", status, StatusBacklog)
 	}
-	if retrieved.Title == "" {
-		t.Error("title should not be empty after concurrent updates")
+	if retrieved.Body == "" {
+		t.Error("body should not be empty after concurrent updates")
 	}
 }
 
@@ -457,18 +452,17 @@ func TestStoreDirLayout(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Fix Auth Bug", "body", "", nil, nil, "", "")
-	shortID := storage.ShortID(ticket.ID)
+	ticket, _ := store.Create("Fix Auth Bug", "body", nil, nil, "", "")
 
-	// Verify directory structure
-	entityDir := filepath.Join(store.RootDir(), "backlog", "fix-auth-bug-"+shortID)
+	// Verify directory structure with new ticket.md file
+	entityDir := filepath.Join(store.RootDir(), "backlog", ticket.ID)
 	if _, err := os.Stat(entityDir); err != nil {
 		t.Fatalf("entity dir should exist: %v", err)
 	}
 
-	indexPath := filepath.Join(entityDir, "index.md")
-	if _, err := os.Stat(indexPath); err != nil {
-		t.Fatalf("index.md should exist: %v", err)
+	ticketPath := filepath.Join(entityDir, ticketFileName)
+	if _, err := os.Stat(ticketPath); err != nil {
+		t.Fatalf("ticket.md should exist: %v", err)
 	}
 }
 
@@ -476,7 +470,7 @@ func TestStoreSetDueDate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test", "body", "", nil, nil, "", "")
+	ticket, _ := store.Create("Test", "body", nil, nil, "", "")
 
 	due := ticket.Created.AddDate(0, 0, 7)
 	updated, err := store.SetDueDate(ticket.ID, &due)
@@ -493,7 +487,7 @@ func TestStoreClearDueDate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ticket, _ := store.Create("Test", "body", "", nil, nil, "", "")
+	ticket, _ := store.Create("Test", "body", nil, nil, "", "")
 
 	d := ticket.Created.AddDate(0, 0, 7)
 	_, _ = store.SetDueDate(ticket.ID, &d)

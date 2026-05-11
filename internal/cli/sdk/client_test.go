@@ -427,7 +427,7 @@ func TestCreateTicket_Success(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	resp, err := c.CreateTicket("New Ticket", "body", "", "", "", nil, nil)
+	resp, err := c.CreateTicket("New Ticket", "body", "", "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,7 +447,7 @@ func TestCreateTicket_WithAllFields(t *testing.T) {
 
 	c := NewClient(srv.URL, "/p")
 	due := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
-	_, err := c.CreateTicket("T", "B", "bug", "", "", &due, []string{"ref1"})
+	_, err := c.CreateTicket("T", "B", "", "", &due, []string{"ref1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,9 +455,6 @@ func TestCreateTicket_WithAllFields(t *testing.T) {
 	last := rs.lastRequest()
 	var body map[string]any
 	_ = json.Unmarshal(last.Body, &body)
-	if body["type"] != "bug" {
-		t.Errorf("expected type bug, got %v", body["type"])
-	}
 	if body["due_date"] == nil {
 		t.Error("expected due_date in body")
 	}
@@ -471,7 +468,7 @@ func TestCreateTicket_Error(t *testing.T) {
 	})
 
 	c := NewClient(srv.URL, "/p")
-	_, err := c.CreateTicket("", "", "", "", "", nil, nil)
+	_, err := c.CreateTicket("", "", "", "", nil, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -629,8 +626,8 @@ func TestListConclusions_Success(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	rs.setRoute("GET", "/conclusions", http.StatusOK, ListConclusionsResponse{
 		Conclusions: []ConclusionSummary{
-			{ID: "c1", Type: "work", Ticket: "t1", ConcludedAt: now},
-			{ID: "c2", Type: "collab", ConcludedAt: now},
+			{ID: "c1", TicketID: "t1", Agent: "codex", StartedAt: now, ConcludedAt: now},
+			{ID: "c2", CollabID: "c2", Agent: "claude", StartedAt: now, ConcludedAt: now},
 		},
 		Total: 2,
 	})
@@ -687,15 +684,14 @@ func TestGetConclusion_Success(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	rs.setRoute("GET", "/conclusions/c1", http.StatusOK, ConclusionResponse{
 		ID:              "c1",
-		Type:            "work",
-		Ticket:          "t1",
-		Repo:            "/repo",
+		TicketID:        "t1",
+		Agent:           "codex",
 		Body:            "done",
 		Commits:         []string{"abc123", "def456"},
 		Rejected:        true,
 		RejectionReason: "no code changes",
-		ConcludedAt:     now,
 		StartedAt:       now.Add(-time.Minute),
+		ConcludedAt:     now,
 	})
 
 	c := NewClient(srv.URL, "/p")

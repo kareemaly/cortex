@@ -51,9 +51,9 @@ func init() {
 func buildConclusionOverview(conclusionResp *sdk.ConclusionResponse) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("- ID: `%s`\n", conclusionResp.ID))
-	b.WriteString(fmt.Sprintf("- Type: `%s`\n", conclusionResp.Type))
-	b.WriteString(fmt.Sprintf("- Repo: `%s`\n", emptyDash(conclusionResp.Repo)))
-	b.WriteString(fmt.Sprintf("- Ticket: `%s`\n", emptyDash(conclusionResp.Ticket)))
+	b.WriteString(fmt.Sprintf("- Agent: `%s`\n", emptyDash(conclusionResp.Agent)))
+	b.WriteString(fmt.Sprintf("- Profile: `%s`\n", emptyDash(conclusionResp.Profile)))
+	b.WriteString(fmt.Sprintf("- Ticket: `%s`\n", emptyDash(conclusionResp.TicketID)))
 	b.WriteString(fmt.Sprintf("- Started: %s\n", formatDetailTime(conclusionResp.StartedAt)))
 	b.WriteString(fmt.Sprintf("- Concluded: %s\n", formatDetailTime(conclusionResp.ConcludedAt)))
 	b.WriteString(fmt.Sprintf("- Duration: %s\n", formatDetailDuration(conclusionResp.StartedAt, conclusionResp.ConcludedAt)))
@@ -62,9 +62,6 @@ func buildConclusionOverview(conclusionResp *sdk.ConclusionResponse) string {
 		b.WriteString(fmt.Sprintf("- Rejection reason: %s\n", conclusionResp.RejectionReason))
 	}
 
-	if conclusionResp.Prompt != "" {
-		b.WriteString(fmt.Sprintf("- Prompt: %s\n", conclusionResp.Prompt))
-	}
 	if conclusionResp.CollabID != "" {
 		b.WriteString(fmt.Sprintf("- Collab ID: `%s`\n", conclusionResp.CollabID))
 	}
@@ -76,11 +73,11 @@ func buildConclusionOverview(conclusionResp *sdk.ConclusionResponse) string {
 }
 
 func conclusionTitle(conclusionResp *sdk.ConclusionResponse) string {
-	if conclusionResp.Ticket != "" {
-		return fmt.Sprintf("Ticket Conclusion %s", shortID(conclusionResp.Ticket))
+	if conclusionResp.TicketID != "" {
+		return fmt.Sprintf("Ticket Conclusion %s", shortID(conclusionResp.TicketID))
 	}
-	if conclusionResp.Prompt != "" {
-		return conclusionResp.Prompt
+	if conclusionResp.CollabID != "" {
+		return fmt.Sprintf("Collab %s", shortID(conclusionResp.CollabID))
 	}
 	return "Conclusion"
 }

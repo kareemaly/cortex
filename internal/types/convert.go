@@ -5,12 +5,10 @@ import (
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
-// TmuxChecker allows checking if a tmux window exists.
 type TmuxChecker interface {
 	WindowExists(session, windowName string) (bool, error)
 }
 
-// ToSessionResponse converts a session.Session to SessionResponse.
 func ToSessionResponse(s *session.Session) SessionResponse {
 	return SessionResponse{
 		Type:       string(s.Type),
@@ -24,31 +22,25 @@ func ToSessionResponse(s *session.Session) SessionResponse {
 	}
 }
 
-// ToTicketResponse converts a ticket.Ticket and status to TicketResponse.
-func ToTicketResponse(t *ticket.Ticket, status ticket.Status) TicketResponse {
+func ToTicketResponse(t *ticket.Ticket, status ticket.Status, hasConclusion bool) TicketResponse {
 	return TicketResponse{
-		ID:           t.ID,
-		Type:         t.Type,
-		Title:        t.Title,
-		Body:         t.Body,
-		Repo:         t.Repo,
-		Path:         t.Path,
-		ConclusionID: t.ConclusionID,
-		References:   t.References,
-		Status:       string(status),
-		Created:      t.Created,
-		Updated:      t.Updated,
-		Due:          t.Due,
+		ID:            t.ID,
+		Title:         t.Title,
+		Body:          t.Body,
+		Repo:          t.Repo,
+		Path:          t.Path,
+		HasConclusion: hasConclusion,
+		References:    t.References,
+		Status:        string(status),
+		Created:       t.Created,
+		Updated:       t.Updated,
+		Due:           t.Due,
 	}
 }
 
-// ToTicketSummary converts a ticket.Ticket and status to TicketSummary.
-// If sess is non-nil, populates session-related fields (HasActiveSession, AgentStatus, AgentTool).
-// If tmuxSession and checker are provided, detects orphaned sessions.
 func ToTicketSummary(t *ticket.Ticket, status ticket.Status, sess *session.Session, tmuxSession string, checker TmuxChecker) TicketSummary {
 	summary := TicketSummary{
 		ID:               t.ID,
-		Type:             t.Type,
 		Title:            t.Title,
 		Repo:             t.Repo,
 		Path:             t.Path,
@@ -67,7 +59,6 @@ func ToTicketSummary(t *ticket.Ticket, status ticket.Status, sess *session.Sessi
 		summary.SessionStartedAt = &sess.StartedAt
 	}
 
-	// Detect orphaned sessions: active session but tmux window no longer exists.
 	if sess != nil && tmuxSession != "" && checker != nil && sess.TmuxWindow != "" {
 		exists, err := checker.WindowExists(tmuxSession, sess.TmuxWindow)
 		if err == nil && !exists {

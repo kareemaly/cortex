@@ -8,8 +8,8 @@ import (
 )
 
 // SpawnCollabSession spawns a collab session via POST /collab/spawn.
-func (c *Client) SpawnCollabSession(path, prompt, mode, variant string) (*SpawnCollabResponse, error) {
-	reqBody := map[string]string{"path": path, "prompt": prompt}
+func (c *Client) SpawnCollabSession(path, prompt, slug, mode, variant string) (*SpawnCollabResponse, error) {
+	reqBody := map[string]string{"path": path, "prompt": prompt, "slug": slug}
 	if mode != "" {
 		reqBody["mode"] = mode
 	}

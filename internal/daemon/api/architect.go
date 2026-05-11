@@ -8,22 +8,20 @@ import (
 	"time"
 
 	architectconfig "github.com/kareemaly/cortex/internal/architect/config"
+	"github.com/kareemaly/cortex/internal/architectsession"
 	"github.com/kareemaly/cortex/internal/core/spawn"
 	"github.com/kareemaly/cortex/internal/events"
 	"github.com/kareemaly/cortex/internal/session"
 )
 
-// ArchitectHandlers provides HTTP handlers for architect session operations.
 type ArchitectHandlers struct {
 	deps *Dependencies
 }
 
-// NewArchitectHandlers creates a new ArchitectHandlers with the given dependencies.
 func NewArchitectHandlers(deps *Dependencies) *ArchitectHandlers {
 	return &ArchitectHandlers{deps: deps}
 }
 
-// getSessionAndConfig is a helper that loads project config and retrieves the architect session.
 func (h *ArchitectHandlers) getSessionAndConfig(projectPath string) (sessionName string, sess *session.Session, projectCfg *architectconfig.Config, err error) {
 	projectCfg, err = mergeProjectConfig(projectPath)
 	if err != nil {
@@ -40,7 +38,6 @@ func (h *ArchitectHandlers) getSessionAndConfig(projectPath string) (sessionName
 	return sessionName, sess, projectCfg, nil
 }
 
-// GetState handles GET /architect - returns architect session state.
 func (h *ArchitectHandlers) GetState(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 
@@ -50,11 +47,9 @@ func (h *ArchitectHandlers) GetState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Detect state using session store + tmux
 	stateInfo, err := spawn.DetectArchitectState(sess, sessionName, h.deps.TmuxManager)
 	if err != nil {
 		h.deps.Logger.Warn("failed to detect architect state", "error", err)
-		// Fall back to basic state
 		writeJSON(w, http.StatusOK, ArchitectStateResponse{State: "normal"})
 		return
 	}
@@ -82,7 +77,6 @@ func (h *ArchitectHandlers) GetState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Spawn handles POST /architect/spawn - spawns an architect session.
 func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 	mode := r.URL.Query().Get("mode")
@@ -97,13 +91,11 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check tmux is available
 	if h.deps.TmuxManager == nil {
 		writeError(w, http.StatusServiceUnavailable, "tmux_unavailable", "tmux is not installed")
 		return
 	}
 
-	// Detect state
 	stateInfo, err := spawn.DetectArchitectState(sess, sessionName, h.deps.TmuxManager)
 	if err != nil {
 		h.deps.Logger.Error("failed to detect architect state", "error", err)
@@ -111,7 +103,6 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If already active, focus the existing window — no variant needed
 	if stateInfo.State == spawn.StateActive {
 		if err := h.deps.TmuxManager.FocusWindow(sessionName, "architect"); err != nil {
 			h.deps.Logger.Warn("failed to focus architect window", "error", err)
@@ -139,7 +130,6 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve variant — required for all spawn paths
 	if variantName == "" {
 		names := projectCfg.VariantNames()
 		var msg string
@@ -166,21 +156,17 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 	case spawn.StateOrphaned:
 		switch mode {
 		case "normal":
-			// Return 409 — client should choose fresh or resume
 			writeError(w, http.StatusConflict, "session_orphaned",
 				"session orphaned — use --mode=resume to continue or --mode=fresh to restart")
 			return
 		case "fresh":
-			// End old session, then spawn new
 			if h.deps.SessionManager != nil {
 				sessStore := h.deps.SessionManager.GetStore(projectPath)
 				if endErr := sessStore.EndArchitect(); endErr != nil {
 					h.deps.Logger.Warn("failed to end orphaned architect session", "error", endErr)
 				}
 			}
-			// Fall through to spawn below
 		case "resume":
-			// End old session record, spawn with --resume
 			if h.deps.SessionManager != nil {
 				sessStore := h.deps.SessionManager.GetStore(projectPath)
 				if endErr := sessStore.EndArchitect(); endErr != nil {
@@ -200,14 +186,11 @@ func (h *ArchitectHandlers) Spawn(w http.ResponseWriter, r *http.Request) {
 				"no existing session — --mode="+mode+" requires an active or orphaned session")
 			return
 		}
-		// Fall through to spawn below
 	}
 
-	// Spawn a new architect session
 	h.spawnArchitectSession(w, r, projectPath, sessionName, projectCfg, agent, av.Args, av.Env, "cortex architect show", false)
 }
 
-// spawnArchitectSession spawns an architect session (new or resumed).
 func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http.Request, projectPath, sessionName string, projectCfg *architectconfig.Config, agent string, agentArgs []string, agentEnv map[string]string, companion string, resume bool) {
 	ticketsDir := projectCfg.TicketsPath(projectPath)
 
@@ -283,7 +266,6 @@ func (h *ArchitectHandlers) spawnArchitectSession(w http.ResponseWriter, r *http
 	})
 }
 
-// Conclude handles POST /architect/conclude - concludes the architect session.
 func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 
@@ -298,15 +280,17 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get architect session info before ending
+	var archSessionID string
 	var tmuxWindow string
+	var agent string
 	if h.deps.SessionManager != nil {
 		sessStore := h.deps.SessionManager.GetStore(projectPath)
 		if sess, err := sessStore.GetArchitect(); err == nil && sess != nil {
+			archSessionID = sess.SessionID
 			tmuxWindow = sess.TmuxWindow
+			agent = sess.Agent
 		}
 
-		// End the session
 		if endErr := sessStore.EndArchitect(); endErr != nil {
 			h.deps.Logger.Warn("failed to end architect session", "error", endErr)
 		}
@@ -317,26 +301,40 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 		ArchitectPath: projectPath,
 	})
 
-	// Parse startedAt
 	var startedAt time.Time
 	if req.StartedAt != "" {
 		if parsed, parseErr := time.Parse(time.RFC3339, req.StartedAt); parseErr == nil {
 			startedAt = parsed
 		}
 	}
+	if startedAt.IsZero() {
+		startedAt = time.Now().UTC()
+	}
 
-	// Create conclusion record and kill tmux window
-	CreateConclusionAndKillWindow(ConcludeParams{
-		ProjectPath:   projectPath,
-		EntityType:    "architect",
-		EntityID:      "",
-		TmuxWindow:    tmuxWindow,
-		Content:       req.Content,
-		StartedAt:     startedAt,
-		Logger:        h.deps.Logger,
-		TmuxManager:   h.deps.TmuxManager,
-		ConclusionMgr: h.deps.ConclusionStoreManager,
-	})
+	concludedAt := time.Now().UTC()
+	concMeta := architectsession.ConclusionMeta{
+		StartedAt:   startedAt,
+		ConcludedAt: concludedAt,
+		Agent:       agent,
+		Profile:     "",
+	}
+
+	if err := architectsession.EnsureDir(projectPath); err != nil {
+		h.deps.Logger.Warn("failed to ensure architect-sessions dir", "error", err)
+	}
+	if archSessionID != "" {
+		if writeErr := architectsession.WriteConclusion(projectPath, archSessionID, concMeta, req.Content); writeErr != nil {
+			h.deps.Logger.Warn("failed to write architect conclusion", "error", writeErr)
+		}
+	}
+
+	if tmuxWindow != "" && h.deps.TmuxManager != nil {
+		projectCfg, _ := architectconfig.Load(projectPath)
+		tmuxSession := projectCfg.GetTmuxSessionName()
+		if killErr := h.deps.TmuxManager.KillWindow(tmuxSession, tmuxWindow); killErr != nil {
+			h.deps.Logger.Warn("failed to kill tmux window", "window", tmuxWindow, "error", killErr)
+		}
+	}
 
 	writeJSON(w, http.StatusOK, ConcludeSessionResponse{
 		Success:  true,
@@ -345,7 +343,6 @@ func (h *ArchitectHandlers) Conclude(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Focus handles POST /architect/focus - focuses the architect tmux window.
 func (h *ArchitectHandlers) Focus(w http.ResponseWriter, r *http.Request) {
 	projectPath := GetArchitectPath(r.Context())
 

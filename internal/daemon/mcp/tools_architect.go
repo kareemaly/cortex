@@ -150,25 +150,18 @@ func (s *Server) handleReadTicket(
 
 	out := ticketResponseToOutput(resp)
 
-	if resp.ConclusionID != "" {
-		conclusion, err := s.sdkClient.GetConclusion(resp.ConclusionID)
+	if resp.HasConclusion {
+		conclusion, err := s.sdkClient.GetConclusion(resp.ID)
 		if err != nil {
 			if s.config.Logger != nil {
-				s.config.Logger.Warn("failed to fetch conclusion for ticket", "ticket_id", input.ID, "conclusion_id", resp.ConclusionID, "error", err)
+				s.config.Logger.Warn("failed to fetch conclusion for ticket", "ticket_id", input.ID, "error", err)
 			}
 		} else {
-			startedAtStr := ""
-			if !conclusion.StartedAt.IsZero() {
-				startedAtStr = conclusion.StartedAt.Format(time.RFC3339)
-			}
 			out.Conclusion = &ConclusionOutput{
 				ID:          conclusion.ID,
-				Type:        conclusion.Type,
-				Ticket:      conclusion.Ticket,
-				Repo:        conclusion.Repo,
 				Body:        conclusion.Body,
+				StartedAt:   conclusion.StartedAt.Format(time.RFC3339),
 				ConcludedAt: conclusion.ConcludedAt.Format(time.RFC3339),
-				StartedAt:   startedAtStr,
 			}
 		}
 	}
@@ -199,7 +192,7 @@ func (s *Server) handleCreateWorkTicket(
 		dueDate = &parsed
 	}
 
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, "work", input.Repo, "", dueDate, input.References)
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Repo, "", dueDate, input.References)
 	if err != nil {
 		return nil, CreateTicketOutput{}, wrapSDKError(err)
 	}
@@ -480,17 +473,15 @@ func (s *Server) handleListConclusions(
 
 	items := make([]ConclusionListItem, len(resp.Conclusions))
 	for i, c := range resp.Conclusions {
-		startedAtStr := ""
-		if !c.StartedAt.IsZero() {
-			startedAtStr = c.StartedAt.Format(time.RFC3339)
-		}
 		items[i] = ConclusionListItem{
 			ID:          c.ID,
-			Type:        c.Type,
-			Ticket:      c.Ticket,
-			Repo:        c.Repo,
+			TicketID:    c.TicketID,
+			CollabID:    c.CollabID,
+			Agent:       c.Agent,
+			Profile:     c.Profile,
+			StartedAt:   c.StartedAt.Format(time.RFC3339),
 			ConcludedAt: c.ConcludedAt.Format(time.RFC3339),
-			StartedAt:   startedAtStr,
+			Rejected:    c.Rejected,
 		}
 	}
 
@@ -515,19 +506,12 @@ func (s *Server) handleReadConclusion(
 		return nil, ReadConclusionOutput{}, wrapSDKError(err)
 	}
 
-	startedAtStr := ""
-	if !resp.StartedAt.IsZero() {
-		startedAtStr = resp.StartedAt.Format(time.RFC3339)
-	}
 	return nil, ReadConclusionOutput{
 		Conclusion: ConclusionOutput{
 			ID:          resp.ID,
-			Type:        resp.Type,
-			Ticket:      resp.Ticket,
-			Repo:        resp.Repo,
 			Body:        resp.Body,
+			StartedAt:   resp.StartedAt.Format(time.RFC3339),
 			ConcludedAt: resp.ConcludedAt.Format(time.RFC3339),
-			StartedAt:   startedAtStr,
 		},
 	}, nil
 }
@@ -544,11 +528,14 @@ func (s *Server) handleSpawnCollabSession(
 	if input.Prompt == "" {
 		return nil, SpawnCollabSessionOutput{}, NewValidationError("prompt", "cannot be empty")
 	}
+	if input.Slug == "" {
+		return nil, SpawnCollabSessionOutput{}, NewValidationError("slug", "is required")
+	}
 	if input.Variant == "" {
 		return nil, SpawnCollabSessionOutput{}, NewValidationError("variant", "is required — use listVariants to see available names")
 	}
 
-	resp, err := s.sdkClient.SpawnCollabSession(input.Path, input.Prompt, "normal", input.Variant)
+	resp, err := s.sdkClient.SpawnCollabSession(input.Path, input.Prompt, input.Slug, "normal", input.Variant)
 	if err != nil {
 		return nil, SpawnCollabSessionOutput{}, wrapSDKError(err)
 	}
@@ -626,7 +613,7 @@ func (s *Server) handleCreateFollowUpTicket(
 		references = []string{originID}
 	}
 
-	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, "work", input.Repo, "", dueDate, references)
+	resp, err := s.sdkClient.CreateTicket(input.Title, input.Body, input.Repo, "", dueDate, references)
 	if err != nil {
 		return nil, CreateFollowUpTicketOutput{}, wrapSDKError(err)
 	}
@@ -698,9 +685,8 @@ func (s *Server) handleSearch(
 	// 4. Process conclusion matches: ticketed ones add parent; ticketless are bare conclusions.
 	var bareConclusions []types.ConclusionSummary
 	for _, c := range allConclusions.Conclusions {
-		if c.Ticket != "" {
-			// Always include parent ticket, even if title/body didn't match.
-			ticketIDSet[c.Ticket] = true
+		if c.TicketID != "" {
+			ticketIDSet[c.TicketID] = true
 		} else {
 			bareConclusions = append(bareConclusions, c)
 		}
@@ -721,21 +707,14 @@ func (s *Server) handleSearch(
 			continue
 		}
 		out := ticketResponseToOutput(resp)
-		if resp.ConclusionID != "" {
-			conclusion, err := s.sdkClient.GetConclusion(resp.ConclusionID)
+		if resp.HasConclusion {
+			conclusion, err := s.sdkClient.GetConclusion(resp.ID)
 			if err == nil {
-				startedAtStr := ""
-				if !conclusion.StartedAt.IsZero() {
-					startedAtStr = conclusion.StartedAt.Format(time.RFC3339)
-				}
 				out.Conclusion = &ConclusionOutput{
 					ID:          conclusion.ID,
-					Type:        conclusion.Type,
-					Ticket:      conclusion.Ticket,
-					Repo:        conclusion.Repo,
 					Body:        conclusion.Body,
+					StartedAt:   conclusion.StartedAt.Format(time.RFC3339),
 					ConcludedAt: conclusion.ConcludedAt.Format(time.RFC3339),
-					StartedAt:   startedAtStr,
 				}
 			}
 		}
@@ -751,18 +730,11 @@ func (s *Server) handleSearch(
 		if err != nil {
 			continue
 		}
-		startedAtStr := ""
-		if !resp.StartedAt.IsZero() {
-			startedAtStr = resp.StartedAt.Format(time.RFC3339)
-		}
 		cOut := ConclusionOutput{
 			ID:          resp.ID,
-			Type:        resp.Type,
-			Ticket:      resp.Ticket,
-			Repo:        resp.Repo,
 			Body:        resp.Body,
+			StartedAt:   resp.StartedAt.Format(time.RFC3339),
 			ConcludedAt: resp.ConcludedAt.Format(time.RFC3339),
-			StartedAt:   startedAtStr,
 		}
 		combined = append(combined, resultWithTime{
 			item: SearchResultItem{Conclusion: &cOut},

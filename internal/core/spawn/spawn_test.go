@@ -119,7 +119,7 @@ func (m *mockSessionStore) GetByTicketID(ticketID string) (*session.Session, err
 	return nil, &storage.NotFoundError{Resource: "session", ID: ticketID}
 }
 
-func (m *mockSessionStore) CreateArchitect(agent, tmuxWindow string) (*session.Session, error) {
+func (m *mockSessionStore) CreateArchitect(sessionID, agent, tmuxWindow string) (*session.Session, error) {
 	if m.createErr != nil {
 		return nil, m.createErr
 	}
@@ -228,8 +228,8 @@ func (m *mockTmuxManager) SpawnArchitect(session, windowName, agentCommand, comp
 
 func createTestTicket(id, title, body string) *ticket.Ticket {
 	return &ticket.Ticket{
+		ID: id,
 		TicketMeta: ticket.TicketMeta{
-			ID:    id,
 			Title: title,
 		},
 		Body: body,

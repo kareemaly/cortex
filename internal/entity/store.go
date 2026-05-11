@@ -65,12 +65,39 @@ func (s *BaseStore) FindEntityDir(resource, id string, subdirs ...string) (strin
 	return "", &storage.NotFoundError{Resource: resource, ID: id}
 }
 
+func (s *BaseStore) FindEntityDirByName(id string, subdirs ...string) (string, error) {
+	searchDirs := []string{s.rootDir}
+	if len(subdirs) > 0 {
+		for _, subdir := range subdirs {
+			searchDirs = append(searchDirs, filepath.Join(s.rootDir, subdir))
+		}
+	}
+
+	for _, dir := range searchDirs {
+		target := filepath.Join(dir, id)
+		if info, err := os.Stat(target); err == nil && info.IsDir() {
+			return target, nil
+		}
+	}
+
+	return "", &storage.NotFoundError{Resource: "entity", ID: id}
+}
+
 func (s *BaseStore) LoadIndexBytes(entityDir string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(entityDir, "index.md"))
 }
 
 func (s *BaseStore) WriteIndexBytes(entityDir string, data []byte) error {
 	target := filepath.Join(entityDir, "index.md")
+	return storage.AtomicWriteFile(target, data)
+}
+
+func (s *BaseStore) LoadFileBytes(entityDir, filename string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(entityDir, filename))
+}
+
+func (s *BaseStore) WriteFileBytes(entityDir, filename string, data []byte) error {
+	target := filepath.Join(entityDir, filename)
 	return storage.AtomicWriteFile(target, data)
 }
 

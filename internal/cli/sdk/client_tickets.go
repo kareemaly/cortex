@@ -113,11 +113,8 @@ func (c *Client) GetTicket(status, id string) (*TicketResponse, error) {
 }
 
 // CreateTicket creates a new ticket.
-func (c *Client) CreateTicket(title, body, ticketType, repo, path string, dueDate *time.Time, references []string) (*TicketResponse, error) {
+func (c *Client) CreateTicket(title, body, repo, path string, dueDate *time.Time, references []string) (*TicketResponse, error) {
 	reqBody := map[string]any{"title": title, "body": body}
-	if ticketType != "" {
-		reqBody["type"] = ticketType
-	}
 	if repo != "" {
 		reqBody["repo"] = repo
 	}
@@ -450,28 +447,11 @@ func (c *Client) ShowTicket(ticketID string) error {
 		return c.parseError(resp)
 	}
 
-	return nil
+		return nil
 }
 
-// EditTicketConclusion opens the most recent conclusion for a ticket in $EDITOR via tmux popup.
-func (c *Client) EditTicketConclusion(ticketID string) error {
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/tickets/"+ticketID+"/conclusion/edit", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
 
-	resp, err := c.doRequest(req)
-	if err != nil {
-		return fmt.Errorf("failed to connect to daemon: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
-		return c.parseError(resp)
-	}
-
-	return nil
-}
 
 // EditTicket opens the ticket's index.md in $EDITOR via tmux popup.
 func (c *Client) EditTicket(ticketID string) error {
