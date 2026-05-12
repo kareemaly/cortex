@@ -8,7 +8,7 @@ import (
 	"unicode"
 )
 
-const maxSlugLength = 20
+const maxSlugLength = 60
 
 const maxTmuxNameLength = 128
 

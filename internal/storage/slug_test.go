@@ -10,17 +10,18 @@ func TestGenerateSlug(t *testing.T) {
 		want     string
 	}{
 		{name: "simple title", title: "Add login", fallback: "ticket", want: "add-login"},
-		{name: "spaces become hyphens", title: "Add login functionality", fallback: "ticket", want: "add-login"},
+		{name: "spaces become hyphens", title: "Add login functionality", fallback: "ticket", want: "add-login-functionality"},
 		{name: "underscores become hyphens", title: "add_login_func", fallback: "ticket", want: "add-login-func"},
 		{name: "removes special characters", title: "Fix bug #123!", fallback: "ticket", want: "fix-bug-123"},
 		{name: "collapses multiple hyphens", title: "fix---bug", fallback: "ticket", want: "fix-bug"},
 		{name: "trims hyphens from ends", title: "-fix bug-", fallback: "ticket", want: "fix-bug"},
-		{name: "truncates long title at word boundary", title: "This is a very long ticket title that exceeds the limit", fallback: "ticket", want: "this-is-a-very-long"},
+		{name: "truncates long title at word boundary", title: "This is a very long ticket title that exceeds the sixty character slug limit for collab names", fallback: "ticket", want: "this-is-a-very-long-ticket-title-that-exceeds-the-sixty"},
+		{name: "preserves descriptive collab slug", title: "investigate-opencode-false-working-status", fallback: "collab", want: "investigate-opencode-false-working-status"},
 		{name: "empty title returns ticket fallback", title: "", fallback: "ticket", want: "ticket"},
 		{name: "empty title returns doc fallback", title: "", fallback: "doc", want: "doc"},
 		{name: "special chars only returns fallback", title: "!@#$%", fallback: "ticket", want: "ticket"},
 		{name: "mixed case becomes lowercase", title: "Fix BUG in Login", fallback: "ticket", want: "fix-bug-in-login"},
-		{name: "single long word truncates at max", title: "supercalifragilisticexpialidocious", fallback: "ticket", want: "supercalifragilistic"},
+		{name: "single long word truncates at max", title: "pneumonoultramicroscopicsilicovolcanoconiosissupercalifragilisticexpialidocious", fallback: "ticket", want: "pneumonoultramicroscopicsilicovolcanoconiosissupercalifragil"},
 	}
 
 	for _, tt := range tests {
