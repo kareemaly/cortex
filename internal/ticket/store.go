@@ -219,6 +219,11 @@ func findBodyEditMatches(content, oldString string) []bodyEditMatch {
 	return nil
 }
 
+// CountBodyEditMatches reports how many body regions the EditBody matcher would replace.
+func CountBodyEditMatches(content, oldString string) int {
+	return len(findBodyEditMatches(content, oldString))
+}
+
 func findExactBodyEditMatches(content, oldString string) []bodyEditMatch {
 	var matches []bodyEditMatch
 	for offset := 0; ; {

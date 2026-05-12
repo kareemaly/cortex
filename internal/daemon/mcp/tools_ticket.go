@@ -77,6 +77,16 @@ func ticketResponseToOutput(r *types.TicketResponse) TicketOutput {
 	}
 }
 
+func ticketResponseToMetadataOutput(r *types.TicketResponse) TicketMetadataOutput {
+	return TicketMetadataOutput{
+		ID:      r.ID,
+		Title:   r.Title,
+		Repo:    r.Repo,
+		Status:  r.Status,
+		Created: r.Created,
+	}
+}
+
 // wrapSDKError converts an SDK error to an MCP ToolError.
 func wrapSDKError(err error) *ToolError {
 	if err == nil {

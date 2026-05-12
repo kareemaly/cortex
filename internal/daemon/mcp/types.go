@@ -154,6 +154,15 @@ type SessionOutput struct {
 	Tool       *string `json:"tool,omitempty"`
 }
 
+// TicketMetadataOutput is a body-less ticket representation for lightweight responses.
+type TicketMetadataOutput struct {
+	ID      string    `json:"id"`
+	Title   string    `json:"title"`
+	Repo    string    `json:"repo,omitempty"`
+	Status  string    `json:"status"`
+	Created time.Time `json:"created"`
+}
+
 // TicketOutput is the full ticket representation.
 type TicketOutput struct {
 	ID            string            `json:"id"`
@@ -182,9 +191,9 @@ type ReadTicketOutput struct {
 	Ticket TicketOutput `json:"ticket"`
 }
 
-// CreateTicketOutput is the output for the createTicket tool.
+// CreateTicketOutput is the output for the createWorkTicket tool.
 type CreateTicketOutput struct {
-	Ticket TicketOutput `json:"ticket"`
+	Ticket TicketMetadataOutput `json:"ticket"`
 }
 
 // UpdateTicketOutput is the output for the updateTicket tool.
@@ -192,7 +201,12 @@ type UpdateTicketOutput struct {
 	Ticket TicketOutput `json:"ticket"`
 }
 
-type EditTicketBodyOutput = UpdateTicketOutput
+// EditTicketBodyOutput is the output for the editTicketBody tool.
+type EditTicketBodyOutput struct {
+	Success  bool   `json:"success"`
+	ID       string `json:"id"`
+	Replaced int    `json:"replaced"`
+}
 
 // DeleteTicketOutput is the output for the deleteTicket tool.
 type DeleteTicketOutput struct {

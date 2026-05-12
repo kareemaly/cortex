@@ -342,8 +342,52 @@ func TestHandleEditTicketBody(t *testing.T) {
 		t.Fatalf("handleEditTicketBody failed: %v", err)
 	}
 
-	if output.Ticket.Body != "omega\nbeta\nomega" {
-		t.Errorf("body = %q, want %q", output.Ticket.Body, "omega\nbeta\nomega")
+	if !output.Success {
+		t.Error("success = false, want true")
+	}
+	if output.ID != created.ID {
+		t.Errorf("id = %q, want %q", output.ID, created.ID)
+	}
+	if output.Replaced != 2 {
+		t.Errorf("replaced = %d, want %d", output.Replaced, 2)
+	}
+
+	updated, _, err := store.Get(created.ID)
+	if err != nil {
+		t.Fatalf("store.Get failed: %v", err)
+	}
+	if updated.Body != "omega\nbeta\nomega" {
+		t.Errorf("body = %q, want %q", updated.Body, "omega\nbeta\nomega")
+	}
+}
+
+func TestHandleCreateWorkTicketOmitsBody(t *testing.T) {
+	server, _, _, cleanup := setupArchitectWithDaemon(t, true)
+	defer cleanup()
+
+	_, output, err := server.handleCreateWorkTicket(context.Background(), nil, CreateWorkTicketInput{
+		Title: "Created",
+		Body:  "Large body",
+		Repo:  "some-repo",
+	})
+	if err != nil {
+		t.Fatalf("handleCreateWorkTicket failed: %v", err)
+	}
+
+	if output.Ticket.ID == "" {
+		t.Fatal("expected ticket ID to be set")
+	}
+	if output.Ticket.Title != "Created" {
+		t.Errorf("title = %q, want %q", output.Ticket.Title, "Created")
+	}
+	if output.Ticket.Status != "backlog" {
+		t.Errorf("status = %q, want %q", output.Ticket.Status, "backlog")
+	}
+	if output.Ticket.Repo != "some-repo" {
+		t.Errorf("repo = %q, want %q", output.Ticket.Repo, "some-repo")
+	}
+	if output.Ticket.Created.IsZero() {
+		t.Error("expected created timestamp to be set")
 	}
 }
 

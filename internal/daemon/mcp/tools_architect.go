@@ -12,6 +12,7 @@ import (
 
 	"github.com/kareemaly/cortex/internal/cli/sdk"
 	"github.com/kareemaly/cortex/internal/daemon/api"
+	"github.com/kareemaly/cortex/internal/ticket"
 	"github.com/kareemaly/cortex/internal/types"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -198,7 +199,7 @@ func (s *Server) handleCreateWorkTicket(
 	}
 
 	return nil, CreateTicketOutput{
-		Ticket: ticketResponseToOutput(resp),
+		Ticket: ticketResponseToMetadataOutput(resp),
 	}, nil
 }
 
@@ -266,13 +267,25 @@ func (s *Server) handleEditTicketBody(
 		return nil, EditTicketBodyOutput{}, NewValidationError("newString", "must differ from oldString")
 	}
 
+	current, err := s.sdkClient.GetTicketByID(input.ID)
+	if err != nil {
+		return nil, EditTicketBodyOutput{}, wrapSDKError(err)
+	}
+
+	replaced := 1
+	if input.ReplaceAll {
+		replaced = ticket.CountBodyEditMatches(current.Body, input.OldString)
+	}
+
 	resp, err := s.sdkClient.EditTicketBody(input.ID, input.OldString, input.NewString, input.ReplaceAll)
 	if err != nil {
 		return nil, EditTicketBodyOutput{}, wrapSDKError(err)
 	}
 
 	return nil, EditTicketBodyOutput{
-		Ticket: ticketResponseToOutput(resp),
+		Success:  true,
+		ID:       resp.ID,
+		Replaced: replaced,
 	}, nil
 }
 

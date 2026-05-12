@@ -274,11 +274,11 @@ func TestIntegration_CreateTicket(t *testing.T) {
 	if output.Ticket.Title != "Test Integration Ticket" {
 		t.Errorf("expected title 'Test Integration Ticket', got %q", output.Ticket.Title)
 	}
-	if output.Ticket.Body != "This is a test body" {
-		t.Errorf("expected body 'This is a test body', got %q", output.Ticket.Body)
-	}
 	if output.Ticket.Status != "backlog" {
 		t.Errorf("expected status 'backlog', got %q", output.Ticket.Status)
+	}
+	if output.Ticket.Created.IsZero() {
+		t.Error("expected created timestamp to be set")
 	}
 }
 
@@ -784,8 +784,25 @@ func TestIntegration_EditTicketBody(t *testing.T) {
 	}
 
 	output := parseToolOutput[EditTicketBodyOutput](t, result)
-	if output.Ticket.Body != "alpha\nbeta zeta\ndelta" {
-		t.Errorf("expected body %q, got %q", "alpha\nbeta zeta\ndelta", output.Ticket.Body)
+	if !output.Success {
+		t.Error("expected success to be true")
+	}
+	if output.ID != created.Ticket.ID {
+		t.Errorf("expected ID %s, got %s", created.Ticket.ID, output.ID)
+	}
+	if output.Replaced != 1 {
+		t.Errorf("expected replaced count 1, got %d", output.Replaced)
+	}
+
+	readResult, err := client.callTool(ctx, "readTicket", map[string]any{
+		"id": created.Ticket.ID,
+	})
+	if err != nil {
+		t.Fatalf("readTicket failed: %v", err)
+	}
+	readOutput := parseToolOutput[ReadTicketOutput](t, readResult)
+	if readOutput.Ticket.Body != "alpha\nbeta zeta\ndelta" {
+		t.Errorf("expected body %q, got %q", "alpha\nbeta zeta\ndelta", readOutput.Ticket.Body)
 	}
 }
 
