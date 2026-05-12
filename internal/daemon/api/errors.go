@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/kareemaly/cortex/internal/storage"
 	"github.com/kareemaly/cortex/internal/ticket"
 )
 
@@ -33,19 +32,6 @@ func handleTicketError(w http.ResponseWriter, err error, logger *slog.Logger) {
 		writeError(w, http.StatusBadRequest, "validation_error", e.Error())
 	default:
 		logger.Error("internal ticket store error", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
-	}
-}
-
-// handleConclusionError converts conclusion store errors to HTTP responses.
-func handleConclusionError(w http.ResponseWriter, err error, logger *slog.Logger) {
-	switch e := err.(type) {
-	case *storage.NotFoundError:
-		writeError(w, http.StatusNotFound, "not_found", e.Error())
-	case *storage.ValidationError:
-		writeError(w, http.StatusBadRequest, "validation_error", e.Error())
-	default:
-		logger.Error("internal conclusion store error", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
 	}
 }

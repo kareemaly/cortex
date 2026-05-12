@@ -146,7 +146,6 @@ func (s *Store) Update(id string, title, body *string, references *[]string) (*T
 			return nil, fmt.Errorf("rename entity dir: %w", err)
 		}
 		entityDir = newDir
-		id = newID
 		ticket.ID = newID
 	}
 
@@ -618,16 +617,6 @@ func (s *Store) loadFromDir(entityDir string) (*Ticket, error) {
 		TicketMeta: *meta,
 		Body:       body,
 	}, nil
-}
-
-func (s *Store) findEntityDir(id string) (string, error) {
-	for _, status := range []Status{StatusBacklog, StatusProgress, StatusDone} {
-		target := filepath.Join(s.RootDir(), string(status), id)
-		if info, err := os.Stat(target); err == nil && info.IsDir() {
-			return target, nil
-		}
-	}
-	return "", &NotFoundError{Resource: "ticket", ID: id}
 }
 
 func (s *Store) findEntityDirAllStatuses(id string) (string, Status, error) {

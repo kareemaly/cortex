@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -69,32 +68,4 @@ func NewTicketIDFromCreated(created time.Time, title string, rootDir string) (st
 func NewCollabIDFromPrompt(collabsDir string, created time.Time, prompt string) (string, error) {
 	slug := GenerateSlug(prompt, "collab")
 	return NewCollabID(MakeDirCollisionChecker(collabsDir), created, slug)
-}
-
-func slugFromPrompt(prompt string) string {
-	slug := strings.ToLower(prompt)
-	slug = strings.ReplaceAll(slug, " ", "-")
-	slug = strings.ReplaceAll(slug, "_", "-")
-	var result strings.Builder
-	for _, r := range slug {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
-			result.WriteRune(r)
-		}
-	}
-	slug = result.String()
-	for strings.Contains(slug, "--") {
-		slug = strings.ReplaceAll(slug, "--", "-")
-	}
-	slug = strings.Trim(slug, "-")
-	if len(slug) > 40 {
-		slug = slug[:40]
-		lastHyphen := strings.LastIndex(slug, "-")
-		if lastHyphen > 0 {
-			slug = slug[:lastHyphen]
-		}
-	}
-	if slug == "" {
-		return "collab"
-	}
-	return slug
 }
